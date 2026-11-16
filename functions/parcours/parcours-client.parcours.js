@@ -46,6 +46,20 @@ test('commande, famille préparée au paiement, envoi, la tablette entre seule d
   // Famille préparée tout de suite (05/11) : nom d'attente, aucun responsable, Paul invité à son e-mail.
   assert.ok(c.fid, 'famille créée au paiement');
   assert.strictEqual(c.famillePreparee, true);
+  // Badge « Couverture à vérifier » (12/11) : Saint-Martin-de-Valamas a moins de 2 000 habitants.
+  assert.deepStrictEqual(c.couvertureAVerifier.raisons, ['petite-commune']);
+  assert.strictEqual(c.couvertureAVerifier.commune, 'Saint-Martin-de-Valamas');
+  assert.strictEqual(c.couvertureAVerifier.carte, 'https://monreseaumobile.arcep.fr/');
+  await assert.rejects(s.appeler('gestionCommande', { commande: id, action: 'couvertureVue' }, paul), /admin|Papote|permission/i, 'réservé à Tanguy');
+  // « Vu » coché deux fois (double clic) : une seule date ; décoché, puis recoché.
+  await Promise.all([1, 2].map(() => s.appeler('gestionCommande', { commande: id, action: 'couvertureVue', vu: true }, a.TANGUY)));
+  assert.ok((await commande(id)).couvertureVueLe, 'vu noté');
+  assert.deepStrictEqual(await s.appeler('gestionCommande', { commande: id, action: 'couvertureVue', vu: false }, a.TANGUY), { ok: true, vu: false });
+  assert.strictEqual((await commande(id)).couvertureVueLe, undefined, 'coche retirée');
+  await s.appeler('gestionCommande', { commande: id, action: 'couvertureVue' }, a.TANGUY);
+  const vue = (await s.appeler('gestionDonnees', {}, a.TANGUY)).commandes.find((x) => x.id === id);
+  assert.deepStrictEqual(vue.couvertureAVerifier.raisons, ['petite-commune'], 'l\'admin reçoit le badge');
+  assert.ok(vue.couvertureVueLe && vue.proche && vue.proche.adresse, 'et la coche, avec l\'adresse du proche');
   const fid = c.fid;
   let fam = await s.lire(`families/${fid}`);
   assert.strictEqual(fam.nomAChoisir, true);
@@ -66,6 +80,10 @@ test('commande, famille préparée au paiement, envoi, la tablette entre seule d
   // merci.html affiche le code de commande.
   const merci = await s.requete('codeCommande', { query: { session } });
   assert.strictEqual(merci.json.code.replace('-', ''), c.code);
+  // A40 (12/11) : le bouton « Ouvrir l'appli » de merci.html porte le code de la famille préparée, comme l'e-mail.
+  const codeFamille = (await s.lire(`families/${fid}`)).code;
+  assert.strictEqual(merci.json.famille.replace('-', ''), `https://app.mapapote.fr/?code=${codeFamille}`);
+  assert.match(JSON.stringify(confirmation), new RegExp(merci.json.famille.replace(/[.?]/g, '\\$&')), 'même lien que l\'e-mail');
 
   // 3. Avant l'arrivée de la tablette, Paul ouvre l'appli : il entre par son invitation, devient responsable,
   //    donne le nom et envoie une première photo.

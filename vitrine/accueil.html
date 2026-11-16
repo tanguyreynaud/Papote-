@@ -3,6 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<!-- Stock (Tanguy, 12/11 : « passer de Commander à Être prévenu est moche ») : demandé dès le début de la page, au
+     cache du site (/api/stock, gardé 60 s). Les boutons « Commander » restent invisibles, à leur place, jusqu'à la
+     réponse : le bon bouton apparaît directement, sans bascule. Au plus 1,5 s : sans réponse, « Commander » s'affiche
+     (la page de commande et le serveur revérifient le stock). -->
+<style>.stock-attente .js-commander { visibility: hidden; }</style>
+<script>
+  document.documentElement.classList.add('stock-attente');
+  window.papoteStock = fetch('/api/stock').then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  window.papoteStock.catch(function () {});
+  setTimeout(function () { document.documentElement.classList.remove('stock-attente'); }, 1500);
+</script>
 <title>Papote · La tablette qui rapproche vos aînés de toute la famille</title>
 <meta name="description" content="Papote garde le lien entre vos aînés et toute la famille : photos, vidéos, messages et appels vidéo arrivent tout seuls sur une tablette simple, sans rien à toucher.">
 <meta name="theme-color" content="#fdfaf5">
@@ -20,7 +31,7 @@
 <!-- Polices servies par le site lui-même et demandées tout de suite : elles arrivent avant l'affichage
      dans la plupart des cas. Sinon, le texte s'affiche d'abord en police du téléphone, agrandie ou réduite (« … repli »)
      pour prendre la même place : rien ne saute quand la vraie police arrive. -->
-<link rel="preload" href="ecran-accueil.webp" as="image" type="image/webp" fetchpriority="high">
+<link rel="preload" as="image" type="image/webp" imagesrcset="ecran-accueil-600.webp 600w, ecran-accueil-900.webp 900w, ecran-accueil.webp 1200w" imagesizes="(max-width: 900px) 80vw, 560px" fetchpriority="high">
 <link rel="preload" href="/polices/bricolage.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/polices/atkinson-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/polices/atkinson-700.woff2" as="font" type="font/woff2" crossorigin>
@@ -193,12 +204,18 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 #prevenir { scroll-margin-top: 4.5rem; }
 .attente { display: grid; gap: 1rem; max-width: 34rem; background: var(--surface); border: 2px solid var(--accent); border-radius: 20px; padding: clamp(1.25rem, 3vw, 1.75rem); }
 .attente label { display: grid; gap: .35rem; font-weight: 700; }
+/* « Vouliez-vous dire … ? » sous l'e-mail (email-correcteur.js, Tanguy 12/11). */
+.mel-suggestion { margin: .4rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; font-size: 1rem; color: var(--text); }
+.mel-suggestion[hidden] { display: none; }
+.mel-suggestion button { font: inherit; font-weight: 700; color: var(--accent); background: none; border: 1px solid var(--accent); border-radius: 999px; padding: .25rem .9rem; min-height: 2.5rem; cursor: pointer; }
 .attente input[type="email"], .attente input[type="tel"] { font: inherit; font-weight: 400; color: var(--text); min-height: 3.25rem; padding: .5rem .9rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); min-width: 0; }
 .attente .muted { font-weight: 400; color: var(--muted); }
 .attente .attente-accord { display: flex; gap: .6rem; align-items: flex-start; font-weight: 400; color: var(--muted); cursor: pointer; }
 .attente-accord input { width: 1.5rem; height: 1.5rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
 .attente-msg { margin: 0; font-weight: 700; }
 .attente [hidden] { display: none; }
+/* Champ piège anti-robot (audit sécurité 11/11, L1) : hors de l'écran, jamais vu ni atteint au clavier par une personne. */
+.attente-piege { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
 .plans-note { margin-top: 1.25rem; color: var(--muted); font-size: 1rem; max-width: 46rem; }
 /* FAQ : huit questions visibles, les autres sur demande. */
 .faq { display: grid; gap: .6rem; max-width: 48rem; }
@@ -274,7 +291,7 @@ footer a { color: var(--muted); }
           </svg>
           <div class="appareil">
             <div class="tablet" role="img" aria-label="La tablette Papote sur son support : l'heure, la date, la météo, le bouton Appeler et la dernière photo reçue">
-              <picture><source type="image/webp" srcset="ecran-accueil.webp"><img class="screen" src="ecran-accueil.jpg" alt="" width="1200" height="750" fetchpriority="high"></picture>
+              <picture><source type="image/webp" srcset="ecran-accueil-600.webp 600w, ecran-accueil-900.webp 900w, ecran-accueil.webp 1200w" sizes="(max-width: 900px) 80vw, 560px"><img class="screen" src="ecran-accueil.jpg" alt="" width="1200" height="750" fetchpriority="high"></picture>
             </div>
             <div class="stand"></div>
           </div>
@@ -323,17 +340,17 @@ footer a { color: var(--muted); }
         <div class="step">
           <h3>Vous envoyez une photo</h3>
           <p>Depuis l'appli Papote sur votre téléphone, Android ou iPhone, sans rien installer depuis un magasin d'applis.</p>
-          <figure class="visuel"><div class="tel"><picture><source type="image/webp" srcset="ecran-envoi.webp"><img src="ecran-envoi.jpg" alt="L'appli famille : deux photos choisies, une légende, le bouton Envoyer" width="600" height="1298" loading="lazy"></picture></div></figure>
+          <figure class="visuel"><div class="tel"><picture><source type="image/webp" srcset="ecran-envoi-340.webp 340w, ecran-envoi-450.webp 450w, ecran-envoi.webp 600w" sizes="168px"><img src="ecran-envoi.jpg" alt="L'appli famille : deux photos choisies, une légende, le bouton Envoyer" width="600" height="1298" loading="lazy"></picture></div></figure>
         </div>
         <div class="step">
           <h3>Elle apparaît en grand sur la tablette</h3>
           <p>Avec votre prénom et votre mot. Le reste du temps, la tablette fait défiler les photos de la famille comme un cadre.</p>
-          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-reception.webp"><img src="ecran-reception.jpg" alt="La tablette affiche la photo et le mot reçus, avec un bouton OK" width="1000" height="625" loading="lazy"></picture></div></figure>
+          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-reception-500.webp 500w, ecran-reception-720.webp 720w, ecran-reception-900.webp 900w, ecran-reception.webp 1000w" sizes="(max-width: 420px) calc(100vw - 4.5rem), 22rem"><img src="ecran-reception.jpg" alt="La tablette affiche la photo et le mot reçus, avec un bouton OK" width="1000" height="625" loading="lazy"></picture></div></figure>
         </div>
         <div class="step">
           <h3>Vous l'appelez en vidéo</h3>
           <p>La tablette sonne, et l'appel démarre dès qu'elle regarde l'écran, sans rien toucher. Et elle peut vous appeler en touchant votre photo.</p>
-          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-appel.webp"><img src="ecran-appel.jpg" alt="La tablette en appel vidéo avec Tanguy, bouton Raccrocher" width="1000" height="625" loading="lazy"></picture></div></figure>
+          <figure class="visuel"><div class="tab"><picture><source type="image/webp" srcset="ecran-appel-500.webp 500w, ecran-appel-720.webp 720w, ecran-appel-900.webp 900w, ecran-appel.webp 1000w" sizes="(max-width: 420px) calc(100vw - 4.5rem), 22rem"><img src="ecran-appel.jpg" alt="La tablette en appel vidéo avec Tanguy, bouton Raccrocher" width="1000" height="625" loading="lazy"></picture></div></figure>
         </div>
       </div>
     </div>
@@ -371,7 +388,7 @@ footer a { color: var(--muted); }
         <h2>Une personne, pas une plateforme.</h2>
       </div>
       <div class="qui-carte">
-        <picture><source srcset="tanguy.webp" type="image/webp"><img class="portrait" src="tanguy.jpg" alt="Tanguy Reynaud" width="600" height="600"></picture>
+        <picture><source srcset="tanguy-300.webp 300w, tanguy-400.webp 400w, tanguy.webp 600w" sizes="144px" type="image/webp"><img class="portrait" src="tanguy.jpg" alt="Tanguy Reynaud" width="600" height="600"></picture>
         <div class="qui-texte">
           <blockquote>« Ma grand-mère a 93 ans et n'a jamais touché un ordinateur. Je voulais qu'elle voie les photos de la famille et nos visages, sans rien avoir à apprendre. Papote, c'est la tablette que j'ai faite pour elle. Aujourd'hui, je la propose à d'autres familles. »</blockquote>
           <p><b>Tanguy Reynaud</b>, fondateur de Papote, à Lyon</p>
@@ -433,6 +450,8 @@ footer a { color: var(--muted); }
           <input name="email" id="attente-email" type="email" autocomplete="email" required maxlength="120"></label>
         <label><span>Votre portable <span class="muted">(facultatif, pour que je vous appelle)</span></span>
           <input name="telephone" id="attente-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="20"></label>
+        <div class="attente-piege" aria-hidden="true"><label>Adresse (laissez vide)
+          <input name="adresse2" type="text" tabindex="-1" autocomplete="off"></label></div>
         <label class="attente-accord"><input type="checkbox" name="accord">
           <span>Être prévenu par e-mail ou par téléphone, puis recevoir les nouvelles de Papote</span></label>
         <button class="btn btn-primary" type="submit">Me prévenir</button>
@@ -529,7 +548,9 @@ footer a { color: var(--muted); }
     <p><b>Papote</b> · Tanguy Reynaud, Lyon · <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
     <div class="liens">
       <a href="cgv.html">Conditions de vente</a>
-      <a href="mentions.html">Mentions légales et confidentialité</a>
+      <a href="mentions.html">Mentions légales</a>
+      <a href="confidentialite.html">Confidentialité</a>
+      <a href="resilier.html">Résilier mon abonnement</a>
       <a href="https://app.mapapote.fr">Déjà client ? Ouvrir l'appli famille</a>
     </div>
     <span>© 2026 Papote</span>
@@ -569,9 +590,9 @@ footer a { color: var(--muted); }
       });
     }
     var q = new URLSearchParams(location.search);
-    if (q.get('complet') === '1') prevenir();
-    fetch('https://europe-west1-papote-famille.cloudfunctions.net/stockDisponible')
-      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    var montrer = function () { document.documentElement.classList.remove('stock-attente'); };
+    if (q.get('complet') === '1') { prevenir(); montrer(); }
+    window.papoteStock
       .then(function (d) {
         // Paiement ouvert depuis moins de 32 minutes dans cet onglet : la tablette « manquante » est celle de ce
         // client, mise de côté pendant son paiement (commande.html). « Commander » reste : il retrouve sa page.
@@ -579,7 +600,8 @@ footer a { color: var(--muted); }
         try { sienne = Date.now() - Number(sessionStorage.getItem('papote-paiement') || 0) < 32 * 60000; } catch (_) {}
         if (d.disponible === false && !sienne) { prevenir(); if (location.hash === '#prevenir') section.scrollIntoView(); }
       })
-      .catch(function () {});
+      .catch(function () {})
+      .then(montrer);
 
     var form = document.getElementById('attente');
     var msg = document.getElementById('attente-msg');
@@ -591,16 +613,16 @@ footer a { color: var(--muted); }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { dire('Indiquez votre e-mail.'); form.email.focus(); return; }
       if (tel && !/^0[67]\d{8}$/.test(tel)) { dire('Un numéro de portable français, en 06 ou 07.'); form.telephone.focus(); return; }
       if (!form.accord.checked) { dire('Cochez la case pour être prévenu.'); form.accord.focus(); return; }
-      var bouton = form.querySelector('button');
+      var bouton = form.querySelector('button[type="submit"]');
       bouton.disabled = true;
       msg.hidden = true;
       fetch('https://europe-west1-papote-famille.cloudfunctions.net/listeAttente', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, telephone: tel, accord: true }),
+        body: JSON.stringify({ email: email, telephone: tel, accord: true, adresse2: form.adresse2.value }),
       }).then(function (r) {
         if (!r.ok) throw new Error(r.status);
-        form.querySelectorAll('label').forEach(function (l) { l.hidden = true; });
+        form.querySelectorAll('label, .mel-suggestion').forEach(function (l) { l.hidden = true; });
         bouton.hidden = true;
         dire('C\u2019est noté, merci ! Vous serez prévenu dès qu\u2019une tablette est prête.');
         section.scrollIntoView({ block: 'start' });
@@ -631,6 +653,8 @@ footer a { color: var(--muted); }
   })();
 </script>
 <script>compter('accueil');</script>
+<script src="email-correcteur.js" defer></script>
+<script>addEventListener('DOMContentLoaded', function () { if (window.papoteEmail) papoteEmail.brancher(document.getElementById('attente-email')); });</script>
 <script src="chat-support.js" defer></script>
 </body>
 </html>

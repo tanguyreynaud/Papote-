@@ -9,12 +9,14 @@
 //   migrer-europe.bat         : compte ce qui serait copié
 //   migrer-europe.bat --oui   : copie
 // Options : --base europe  --bucket papote-famille-eu  --ancien-bucket papote-famille.firebasestorage.app
+// Refusé dès qu'une commande payée avec la clé réelle de Stripe existe (commandes-reelles.js) : rien n'est copié.
 // Clé d'administration : %USERPROFILE%\.papote\cle-admin-firebase.json (jamais dans le dépôt).
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const admin = require('firebase-admin');
 const { getFirestore } = require('firebase-admin/firestore');
+const { refuserSiCommandesReelles } = require('./commandes-reelles');
 
 function option(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -96,6 +98,9 @@ async function copyFiles() {
 }
 
 (async () => {
+  // Jamais après la première vente : relancée par erreur, la copie réécrirait la base Europe avec l'ancienne
+  // (audit 12/11, N4). Une commande payée en clé réelle de Stripe, d'un côté ou de l'autre, arrête tout.
+  if (await refuserSiCommandesReelles(target, 'migrer-europe') || await refuserSiCommandesReelles(source, 'migrer-europe')) process.exit(1);
   console.log(`Base : (default) -> ${targetDb}`);
   console.log(`Fichiers : ${oldBucketName} -> ${newBucketName}\n`);
   const writer = confirmed ? target.bulkWriter() : null;

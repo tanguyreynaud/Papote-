@@ -27,16 +27,19 @@
 // refusées depuis les applis), pièces jointes dans Storage sous gestion/ (idem). Réservé au badge admin.
 
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
-const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+// Déclencheurs coupés pendant une restauration (base.js, sansRestauration).
+const { onDocumentUpdated } = require('./base').declencheurs;
 const { logger } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const mail = require('./mail');
 const sendcloud = require('./sendcloud');
+const livraison = require('./livraison');
 
 const STRIPE_SECRET = defineSecret('STRIPE_SECRET');
 const regles = require('./abonnement');
 const statuts = require('./statuts');
+const simInstallation = require('./sim-installation');
 // Même clé que le chat de support (outils/support/installer-support.bat), jamais dans le dépôt.
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 // Sonnet : recopier montant, date et vendeur d'une facture est simple, et chaque fiche reste « à vérifier ».
@@ -434,7 +437,9 @@ function stockAJour(tablette, commande) {
   if (ETATS_PARTIS.includes(tablette.etat)) {
     if (retour === 'facturee') return { etat: 'perdue' };
     if (retour === 'rendue') return { etat: 'revenue' };
-    if (tablette.etat === 'envoyee' && commande.fid) return { etat: 'chez-client' };
+    // Famille préparée : la commande a sa famille dès le paiement, la tablette n'est chez le client qu'une fois
+    // entrée dans la famille (tabletteRelieeLe, famille-preparee.js). Avant : la commande reliée.
+    if (tablette.etat === 'envoyee' && require('./famille-preparee').regles.tabletteDansLaFamille(commande)) return { etat: 'chez-client' };
   }
   // Commande annulée avant le départ : la tablette mise de côté redevient libre.
   if (commande.expedition === 'annulee' && ['en-stock', 'preparee'].includes(tablette.etat)) {
@@ -785,7 +790,7 @@ exports.gestionDonnees = onCall(async (request) => {
   // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
   // deux allers-retours de plus vers la base après les autres lectures.
   const lectureStock = db().collection('stock').get();
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes, courrielsPerdus, sauvegarde, pannesSim, membres] = await Promise.all([
     db().collection('commandes').get(),
     lectureStock,
     db().collection('depenses').get(),
@@ -804,6 +809,14 @@ exports.gestionDonnees = onCall(async (request) => {
     db().collection('alertes').where('le', '>', new Date(Date.now() - ALERTES_JOURS * 86400000)).orderBy('le', 'desc').limit(2000).get()
       .catch((e) => { logger.warn('Alertes', e.message); return { docs: [] }; }),
     lectureStock.then((s) => lireGardeFous(s.docs)).catch((e) => { logger.warn('Garde-fous', e.message); return new Map(); }),
+    // E-mails perdus (courriels-perdus.js) : en attente d'un nouvel essai, ou ligne « À faire ».
+    require('./courriels-perdus').enAttente(db()).catch((e) => { logger.warn('E-mails perdus', e.message); return []; }),
+    // Sauvegarde du dimanche (sauvegarde-alerte.js) : une lecture.
+    db().doc(require('./sauvegarde-alerte').DOCUMENT).get().catch((e) => { logger.warn('Sauvegarde', e.message); return null; }),
+    // Cartes SIM sans réseau depuis plus de 2 h, déjà signalées (sim-hors-service.js) : une lecture.
+    db().doc(require('./sim-hors-service').DOCUMENT).get().catch((e) => { logger.warn('Cartes SIM sans réseau', e.message); return null; }),
+    // Fiches des membres de toutes les familles, trois champs seulement (tel-unique.js : numéro en double).
+    db().collectionGroup('members').select('name', 'role', 'telephone').get().catch((e) => { logger.warn('Numéros en double', e.message); return { docs: [] }; }),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   // Compte de la tablette -> sa fiche de stock (T-…), pour compter les alertes sur la page de la tablette.
@@ -829,6 +842,10 @@ exports.gestionDonnees = onCall(async (request) => {
         envoyeeLe: c.envoyeeLe || null,
         creeLe: c.creeLe || null,
         fid: c.fid || null,
+        // Famille préparée : la commande a sa famille dès le paiement ; la tablette n'y est entrée qu'à tabletteRelieeLe.
+        // L'admin lit « installée » avec la même règle que le serveur (famille-preparee.js, tabletteDansLaFamille).
+        famillePreparee: c.famillePreparee === true,
+        tabletteRelieeLe: c.tabletteRelieeLe || null,
         famille: famille ? famille.name || null : null,
         // Commande dont l'abonnement est celui de la famille : l'état de la famille ; une autre (2e commande pour la
         // même famille) : son propre état chez Stripe et son propre arrêt prévu.
@@ -837,7 +854,12 @@ exports.gestionDonnees = onCall(async (request) => {
         // Date du prochain prélèvement (fin de la période Stripe), affichée dans « Pause hospitalisation… ».
         prochainPrelevement: estCourante(famille, d.id) ? ms(famille.abonnement.finPeriode) || null : null,
         restitution: c.restitution ? { statut: c.restitution.statut || null, avant: c.restitution.avant || null, mainPropreLe: c.restitution.mainPropreLe || null,
-          anticipe: c.restitution.anticipe === true } : null,
+          anticipe: c.restitution.anticipe === true, prolongations: (c.restitution.prolongations || []).length,
+          rembourse: c.restitution.rembourse ? { statut: c.restitution.rembourse.statut || null, montant: c.restitution.rembourse.montant || null } : null } : null,
+        // Tablette en panne en attente de retour (A9), mois remboursés (A9), hospitalisations passées (A8).
+        remplacement: c.remplacement ? { statut: c.remplacement.statut || null, raison: c.remplacement.raison || null, le: c.remplacement.le || null, kit: c.remplacement.kit || null } : null,
+        moisRembourses: c.moisRembourses || null,
+        hospitalisations: c.hospitalisations || null,
         remboursement: c.remboursement || null,
         restitutionErreur: c.restitution && c.restitution.erreur ? c.restitution.erreur : null,
         retractation: c.retractation || null,
@@ -845,6 +867,10 @@ exports.gestionDonnees = onCall(async (request) => {
         contestations: c.contestations || null,
         pause: c.pause || null,
         alerteDoublon: c.alerteDoublon || null,
+        // Adresse du proche (vérification 4G) et badge « Couverture à vérifier » (Tanguy, 12/11).
+        proche: c.proche ? { adresse: c.proche.adresse || null, lat: c.proche.lat ?? null, lon: c.proche.lon ?? null, couverture4g: c.proche.couverture4g || null } : null,
+        couvertureAVerifier: c.couvertureAVerifier || null,
+        couvertureVueLe: c.couvertureVueLe || null,
         titulaire: (c.empreinte && c.empreinte.titulaire) || null,
         etiquettes: c.etiquettes || null,
         preparation: c.preparation || null,
@@ -853,6 +879,9 @@ exports.gestionDonnees = onCall(async (request) => {
         remise: c.remise || null,
         annulation: c.annulation || null,
         reprise: c.reprise === true,
+        // E-mail perdu pour cette commande (colis parti, rejet signalé par Brevo, envoi raté : courriels-perdus.js).
+        mailErreur: c.mailErreur || null,
+        mailErreurLe: c.mailErreurLe || null,
       });
     }),
     stock: stock.docs.map((d) => {
@@ -884,6 +913,20 @@ exports.gestionDonnees = onCall(async (request) => {
     genresAlerte: require('./journal-alertes').GENRES,
     genresGardeFou: GARDE_FOUS,
     alertesJours: ALERTES_JOURS,
+    // E-mails perdus : [{ id, origine ('brevo' | 'smtp'), a, sujet, raison, erreur, statut, commande, nom, le }], et les
+    // lignes « À faire » qu'ils donnent (mêmes textes que le récap). « Réglé » : gestionCourrielTraite({ id }).
+    courrielsPerdus: courrielsPerdus.map(aplatir),
+    courrielsAFaire: require('./courriels-perdus').lignesAFaire(courrielsPerdus),
+    // Plus de 8 jours sans sauvegarde réussie : la ligne « À faire » (même texte que le récap), sinon null.
+    sauvegardeAFaire: require('./sauvegarde-alerte').ligneAFaire(sauvegarde && sauvegarde.exists ? sauvegarde.data() : null, Date.now()),
+    // Cartes SIM sans réseau depuis plus de 2 h (sim-hors-service.js) : une ligne par panne, levée au retour du réseau.
+    simAFaire: require('./sim-hors-service').lignesAFaire(pannesSim && pannesSim.exists ? pannesSim.data() : null),
+    // Même numéro de portable pour deux proches d'une famille (tel-unique.js) : [{ fid, numero (masqué), prenoms, texte }],
+    // une ligne « À faire » chacun et un mot sur la page de la famille.
+    telDoubles: (() => {
+      const tu = require('./tel-unique');
+      return tu.doublons(tu.membresDe(membres.docs)).map((d) => ({ ...d, texte: tu.texte(d, (parFid.get(d.fid) || {}).name) }));
+    })(),
   };
 });
 const ALERTES_JOURS = 90;
@@ -1083,6 +1126,66 @@ async function preleverRemplacement({ commande, kit, raison, montant, cmd, qui }
   }
 }
 
+// Tablette en panne (Tanguy, 12/11, A9) : la nouvelle ne part qu'une fois l'ancienne REÇUE chez Papote.
+//   1er temps (sans ancienneRecue) : la panne est notée (remplacement « attente-retour »), l'ancienne passe « en retour »
+//     mais reste la tablette prêtée de la commande : jamais reçue, elle compte dans les 140 € à l'arrêt, comme avant.
+//     L'étiquette de retour se fait ensuite (gestionEtiquette). Rejoué (double clic) : rien de plus.
+//   2e temps ({ ancienneRecue: true, nouveau }) : l'ancienne est notée « revenue » (à vérifier) et quitte la commande,
+//     la nouvelle part avec la carte SIM de l'ancienne. Rejoué juste après : la même réponse, rien ne bouge deux fois.
+//   Tablette déjà dans les mains de Papote (rapportée en main propre) : le 2e temps directement.
+async function remplacerPanne(d, qui, kit, commande, motif) {
+  const ref = db().doc(`commandes/${commande}`);
+  const trace = (etat, extra = {}) => ({ le: Date.now(), etat, par: qui, commande, motif, remplacement: true, raison: 'panne', ...extra });
+  if (d.ancienneRecue !== true) {
+    const deja = await db().runTransaction(async (tx) => {
+      const [c, k] = await Promise.all([tx.get(ref), tx.get(kit.ref)]);
+      const r = c.get('remplacement') || {};
+      if (r.statut === 'attente-retour' && r.kit === kit.id) return true;
+      tx.update(ref, { remplacement: { kit: kit.id, raison: 'panne', montant: 0, statut: 'attente-retour', le: Date.now(), par: qui, motif: motif || null } });
+      tx.update(kit.ref, {
+        etat: 'en-retour', remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
+        historique: FieldValue.arrayUnion(trace('en-retour', { attenteRetour: true, avant: k.get('etat') || null })),
+      });
+      return false;
+    });
+    return { ok: true, montant: 0, retour: true, attente: true, deja };
+  }
+  const neuve = await db().doc(`stock/${d.nouveau || '-'}`).get();
+  // Rejoué (double clic) : la nouvelle est déjà partie pour cette commande, et l'ancienne n'y est plus.
+  const fait = await ref.get().then((c) => c.get('remplacement') || {});
+  if (fait.statut === 'fait' && fait.nouvelle === kit.id && kit.id === d.nouveau) return { ok: true, montant: 0, retour: false, deja: true };
+  if (!neuve.exists || neuve.get('commande') || !['en-stock', 'preparee'].includes(neuve.get('etat'))) {
+    throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
+  }
+  if (neuve.get('fid')) throw new HttpsError('failed-precondition', 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.');
+  const avecSim = neuve.get('simId') ? neuve.data() : { ...neuve.data(), simId: kit.get('simId') || null };
+  const refusSim = await refusSimAvantDepart(commande, avecSim);
+  if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+  await db().runTransaction(async (tx) => {
+    const [c, k, n] = await Promise.all([tx.get(ref), tx.get(kit.ref), tx.get(neuve.ref)]);
+    if (k.get('commande') !== commande) throw new HttpsError('already-exists', 'Le remplacement est déjà fait : rechargez la page.');
+    if (n.get('commande') || !['en-stock', 'preparee'].includes(n.get('etat'))) throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
+    const r = c.get('remplacement') || {};
+    tx.update(ref, { remplacement: { kit: kit.id, nouvelle: neuve.id, raison: 'panne', montant: 0, statut: 'fait', le: Date.now(), par: qui,
+      motif: motif || r.motif || null, demandeLe: r.statut === 'attente-retour' ? r.le || null : null } });
+    tx.update(kit.ref, {
+      etat: 'revenue', commande: null, remplaceePour: commande, majLe: FieldValue.serverTimestamp(),
+      historique: FieldValue.arrayUnion(trace('revenue', { ancienneRecue: true })),
+    });
+    tx.update(neuve.ref, {
+      etat: 'envoyee', commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
+      historique: FieldValue.arrayUnion(trace('envoyee')),
+    });
+  });
+  // Revenue chez Papote : elle sort de la famille, comme une tablette notée « Revenue » à la main.
+  if (kit.get('fid')) {
+    await retirerDeLaFamille(kit.data(), kit.ref);
+    await kit.ref.update({ fid: null, tabletUid: null, callsUid: null, jumeleeLe: FieldValue.delete() });
+  }
+  if (kit.get('simId') && !neuve.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
+  return { ok: true, montant: 0, retour: false };
+}
+
 // Remplacement d'un élément du kit chez un client : la tablette, la carte SIM ou un accessoire.
 // La tablette remplacée passe « en retour » (à récupérer) et laisse sa carte SIM à la nouvelle ;
 // la carte SIM remplacée passe « suspendue » (à résilier) ; l'accessoire sort du stock.
@@ -1094,6 +1197,7 @@ async function remplacer(d, qui) {
   if (!kit) throw new HttpsError('failed-precondition', 'Aucune tablette n\'est notée chez ce client.');
   const trace = (etat, extra = {}) => ({ le: Date.now(), etat, par: qui, commande, motif, ...extra });
 
+  if (d.element === 'tablette' && d.raison === 'panne') return remplacerPanne(d, qui, kit, commande, motif);
   if (d.element === 'tablette') {
     const neuve = await db().doc(`stock/${d.nouveau || '-'}`).get();
     if (!neuve.exists || neuve.get('commande') || !['en-stock', 'preparee'].includes(neuve.get('etat'))) {
@@ -1125,6 +1229,8 @@ async function remplacer(d, qui) {
     });
     if (perdue && kit.get('simId')) await enregistrerSim(kit.get('simId'), { statut: 'suspendue', tablette: null }, qui);
     else if (kit.get('simId') && !neuve.get('simId')) await enregistrerSim(kit.get('simId'), { tablette: neuve.id }, qui);
+    // La nouvelle tablette est notée sur la commande : son étiquette d'envoi est à part (etiquetteRemplacement).
+    await db().doc(`commandes/${commande}`).set({ remplacement: { kit: kit.id, nouvelle: neuve.id, raison, envoiLe: Date.now() } }, { merge: true });
     return { ok: true, montant, retour: !perdue };
   }
 
@@ -1160,6 +1266,11 @@ exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, a
   if (reveil(request)) return { ok: true };
   const d = request.data || {};
   const qui = request.auth.token.email || request.auth.uid;
+
+  // « Installer la carte SIM » (Préparer l'envoi) : ordre à la tablette (tester la carte, retirer le code PIN), puis
+  // relecture du résultat toutes les 3 s (sim-installation.js).
+  if (d.action === 'simOrdre') return simTablette().ordonner({ stock: d.stock || d.id, type: d.type }, qui);
+  if (d.action === 'simEtat') return simTablette().etat({ stock: d.stock || d.id });
 
   // Tablette reçue avant sa facture (« Pas dans la liste » à la réception) : fiche sans achat, que l'installation
   // reprend et que la facture complétera (fichesARattacher).
@@ -1537,6 +1648,10 @@ async function completerNumeroTablette(fid, uid) {
 }
 exports.completerNumeroTablette = completerNumeroTablette;
 
+let simBranche = null;
+const simTablette = () => (simBranche = simBranche || simInstallation.brancher({ db, logger }));
+exports.simTablette = simTablette;
+
 exports.gestionSim = onCall(async (request) => {
   verifierAdmin(request);
   if (reveil(request)) return { ok: true };
@@ -1904,6 +2019,55 @@ exports.gestionStripe = onCall({ secrets: [STRIPE_SECRET], timeoutSeconds: 120 }
   };
 });
 
+// Dernier mois payé de la commande : facture d'un mois d'abonnement (pas la mise en service de 60 €), ou celle du
+// dernier mois prélevé à l'arrêt (metadata.dernierMois). → la facture Stripe, ou null.
+async function dernierMoisPaye(commande, client) {
+  const factures = client ? await tout(stripe().invoices.list({ customer: client, status: 'paid', limit: 100 }))
+    : await tout(stripe().invoices.list({ subscription: commande, status: 'paid', limit: 100 }));
+  return factures
+    .filter((f) => (f.subscription === commande || (f.metadata && f.metadata.commande === commande)) && f.amount_paid > 0 && f.payment_intent
+      && (f.billing_reason === 'subscription_cycle' || (f.metadata && f.metadata.dernierMois === '1')))
+    .sort((x, y) => y.created - x.created)[0] || null;
+}
+const MOIS_CENTIMES = 2500;
+async function rembourserMois(snap, qui) {
+  const commande = snap.id;
+  if (snap.get('offerte')) throw new HttpsError('failed-precondition', 'Commande offerte : rien n\'a été payé.');
+  if (!commande.startsWith('sub_')) throw new HttpsError('failed-precondition', 'Pas d\'abonnement Stripe pour cette commande.');
+  let facture;
+  try {
+    facture = await dernierMoisPaye(commande, snap.get('stripeCustomerId'));
+  } catch (e) {
+    throw new HttpsError('unavailable', `Stripe ne répond pas (${e.message}) : réessayez.`);
+  }
+  if (!facture) throw new HttpsError('failed-precondition', 'Aucun mois payé à rembourser pour cette commande.');
+  const deja = (snap.get('moisRembourses') || []).find((m) => m.facture === facture.id);
+  if (deja) return { ok: true, deja: true, montant: deja.montant, facture: facture.id, le: deja.le };
+  const pi = typeof facture.payment_intent === 'string' ? facture.payment_intent : facture.payment_intent.id;
+  let remb;
+  try {
+    // Toujours le même montant pour la même facture : avec la même clé, Stripe rend le même remboursement (double
+    // appui, deux onglets) au lieu d'en faire un second.
+    const montant = Math.min(MOIS_CENTIMES, facture.amount_paid);
+    remb = await stripe().refunds.create({
+      payment_intent: pi, amount: montant, reason: 'requested_by_customer', metadata: { commande, motif: 'un mois remboursé' },
+    }, { idempotencyKey: `mois-rembourse-${facture.id}` });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    if (/already been refunded|exceeds/i.test(e.message || '')) {
+      throw new HttpsError('failed-precondition', 'Le dernier mois payé est déjà remboursé (depuis Stripe).');
+    }
+    throw new HttpsError('unavailable', `Remboursement refusé par Stripe (${e.message}) : rien n'a été remboursé deux fois, réessayez.`);
+  }
+  const note = { facture: facture.id, montant: remb.amount, remboursement: remb.id, le: Date.now(), par: qui };
+  await db().runTransaction(async (tx) => {
+    const liste = (await tx.get(snap.ref)).get('moisRembourses') || [];
+    if (!liste.some((m) => m.facture === facture.id)) tx.update(snap.ref, { moisRembourses: [...liste, note] });
+  });
+  logger.info(`Commande ${commande} : un mois remboursé (${mail.euros(remb.amount)}, facture ${facture.id}).`);
+  return { ok: true, montant: remb.amount, facture: facture.id, le: note.le };
+}
+
 // Factures (créées par Stripe à chaque paiement de l'abonnement) et autres paiements d'une commande.
 exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   verifierAdmin(request);
@@ -1920,6 +2084,45 @@ exports.gestionCommande = onCall({ secrets: [STRIPE_SECRET] }, async (request) =
     const main = request.data.main === true;
     await snap.ref.update({ 'restitution.mainPropreLe': main ? FieldValue.serverTimestamp() : FieldValue.delete() });
     return { ok: true, main };
+  }
+  // { action: 'plusDeTemps', avant } : « Laisser plus de temps » (Tanguy, 12/11, A7) : la date limite du retour (et du
+  // prélèvement du matériel non rendu) recule de 15 jours. avant : la date limite que l'admin a vue ; si elle a déjà
+  // changé (double clic, deux onglets), rien ne recule une deuxième fois et la date actuelle est rendue.
+  if (request.data.action === 'plusDeTemps') {
+    const vue = Number(request.data.avant);
+    const qui = request.auth.token.email || request.auth.uid;
+    return db().runTransaction(async (tx) => {
+      const r = (await tx.get(snap.ref)).get('restitution');
+      const actuelle = r && regles.enMillis(r.avant);
+      const refus = regles.refusPlusDeTemps(r);
+      if (refus) throw new HttpsError('failed-precondition', refus);
+      if (Number.isFinite(vue) && actuelle != null && actuelle !== vue && (r.prolongations || []).length) {
+        return { ok: true, avant: actuelle, deja: true };
+      }
+      const nouvelle = regles.limiteRepoussee(actuelle, Date.now());
+      tx.update(snap.ref, {
+        'restitution.avant': Timestamp.fromMillis(nouvelle),
+        // Le rappel « 7 jours avant » repartira avant la nouvelle date.
+        'restitution.rappelLe': FieldValue.delete(),
+        'restitution.prolongations': FieldValue.arrayUnion({ le: Date.now(), par: qui, de: actuelle, a: nouvelle }),
+        'restitution.majLe': FieldValue.serverTimestamp(),
+      });
+      return { ok: true, avant: nouvelle, jours: regles.PLUS_DE_TEMPS_JOURS };
+    });
+  }
+  // { action: 'rembourserMois' } : « Rembourser un mois » (Tanguy, 12/11, A9) : 25 € rendus sur le dernier mois payé
+  // de cette commande (remplacement trop long d'une tablette vraiment en panne, par exemple). Un seul remboursement par
+  // facture : clé d'idempotence Stripe et note sur la commande, le double clic ne rembourse pas deux fois.
+  if (request.data.action === 'rembourserMois') {
+    return rembourserMois(snap, request.auth.token.email || request.auth.uid);
+  }
+  // { action: 'couvertureVue', vu } : Tanguy a regardé la carte de l'ARCEP à l'adresse du proche (badge
+  // « Couverture à vérifier », 12/11). vu: false retire la coche.
+  if (request.data.action === 'couvertureVue') {
+    if (!snap.get('couvertureAVerifier')) throw new HttpsError('failed-precondition', 'Rien à vérifier pour cette commande.');
+    const vu = request.data.vu !== false;
+    await snap.ref.update({ couvertureVueLe: vu ? FieldValue.serverTimestamp() : FieldValue.delete() });
+    return { ok: true, vu };
   }
   // Commande offerte : ni facture ni paiement.
   if (snap.get('offerte')) return { factures: [], paiements: [] };
@@ -2505,6 +2708,57 @@ async function rangerEtiquette(commande, sens, colis, contenu, format = 'pdf') {
   return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(chemin)}?alt=media&token=${jeton}`;
 }
 
+// Étiquette d'envoi de la tablette de remplacement (Tanguy, 12/11) : une par remplacement (remplacement.nouvelle),
+// rangée dans etiquettes.remplacement. Déjà faite : la même est rendue (double clic, vieil onglet). Une seule
+// création à la fois : la demande est notée (deux minutes) avant d'appeler Sendcloud, levée en cas d'échec.
+async function etiquetteRemplacement(ref, c, qui, reglagesSnap) {
+  const commande = ref.id;
+  const nouvelle = c.remplacement.nouvelle;
+  const maintenant = Date.now();
+  const deja = await db().runTransaction(async (tx) => {
+    const x = (await tx.get(ref)).data() || {};
+    const e = x.etiquettes && x.etiquettes.remplacement;
+    if (e && e.pour === nouvelle) return e;
+    const demande = x.remplacement && x.remplacement.etiquetteDemandeLe;
+    if (demande && maintenant - demande < 2 * 60e3) throw new HttpsError('already-exists', 'L\'étiquette de la tablette de remplacement est en cours de création, un instant.');
+    tx.update(ref, { 'remplacement.etiquetteDemandeLe': maintenant });
+    return null;
+  });
+  if (deja) return { ok: true, suivi: deja.suivi || null, url: deja.url, deja: true };
+  const lever = () => ref.update({ 'remplacement.etiquetteDemandeLe': FieldValue.delete() }).catch(() => null);
+  try {
+    const fiche = await db().doc(`stock/${nouvelle}`).get();
+    if (!fiche.exists || fiche.get('commande') !== commande) throw new HttpsError('failed-precondition', 'La tablette de remplacement n\'est plus reliée à cette commande : rechargez la page.');
+    const refusSim = await refusSimAvantDepart(commande, fiche.data());
+    if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+    const reglages = lireReglages(reglagesSnap.data());
+    const papote = sendcloud.adressePapote(reglages.expediteur);
+    if (!papote) throw new HttpsError('failed-precondition', "Renseignez l'adresse d'expédition de Papote (Réglages, Étiquettes Sendcloud).");
+    const cl = sendcloud.adresseClient(c);
+    if (!cl) throw new HttpsError('failed-precondition', "Cette commande n'a pas d'adresse ni de point relais utilisable.");
+    let api;
+    try {
+      api = sendcloud.client(SENDCLOUD_API.value());
+    } catch (e) {
+      throw new HttpsError('failed-precondition', e.message);
+    }
+    const poids = Math.max(0.1, (reglages.poidsColis || 1500) / 1000);
+    const reference = `${c.code ? String(c.code) : commande.slice(-12)}-R`;
+    const r = await api.envoi({ de: papote, vers: cl.adresse, pointRelais: cl.pointRelais, poids, reference });
+    const url = await rangerEtiquette(commande, 'remplacement', r.colis, r.pdf);
+    const ancienne = c.etiquettes && c.etiquettes.remplacement;
+    await ref.update({
+      'etiquettes.remplacement': { colis: r.colis, suivi: r.suivi, url, le: Date.now(), par: qui, pour: nouvelle },
+      ...(ancienne ? { 'etiquettes.remplacementsPasses': FieldValue.arrayUnion(ancienne) } : {}),
+      'remplacement.etiquetteDemandeLe': FieldValue.delete(),
+    });
+    return { ok: true, suivi: r.suivi, url };
+  } catch (e) {
+    await lever();
+    throw e;
+  }
+}
+
 // Crée l'étiquette Mondial Relay chez Sendcloud. Erreur à montrer telle quelle : HttpsError ; panne Sendcloud : Error.
 // sansImpression : retour par QR code à montrer au point relais (demandé par le client dans l'appli).
 async function creerEtiquette(commande, sens, qui, { sansImpression = false } = {}) {
@@ -2512,6 +2766,8 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   const [snap, reglagesSnap] = await Promise.all([ref.get(), db().doc('gestion/reglages').get()]);
   if (!snap.exists) throw new HttpsError('not-found', 'Commande introuvable.');
   const c = snap.data();
+  // Envoi d'une tablette de remplacement (commande déjà partie) : sa propre étiquette, une seule par remplacement.
+  if (sens === 'aller' && statuts.remplacementAEnvoyer(c)) return etiquetteRemplacement(ref, c, qui, reglagesSnap);
   // Retour pour un remplacement : l'ancienne tablette de cette commande est notée « en retour ».
   const remplacee = sens === 'retour' && !(await db().collection('stock').where('remplaceePour', '==', commande)
     .where('etat', '==', 'en-retour').limit(1).get()).empty;
@@ -2527,6 +2783,10 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
     if (!t && c.formule !== 'wifi') throw new HttpsError('failed-precondition', "Reliez d'abord la tablette à cette commande (Stock).");
     const refusSim = t ? await refusSimAvantDepart(commande, t) : '';
     if (refusSim) throw new HttpsError('failed-precondition', refusSim);
+    // Carte testée dans la tablette (« Installer la carte SIM », 13/11).
+    const ligne = t && t.simId && c.formule !== 'wifi' ? (await db().doc(`sims/${t.simId}`).get()).data() : null;
+    const refusTest = ligne ? simInstallation.refusSimNonTestee(t, ligne) : '';
+    if (refusTest) throw new HttpsError('failed-precondition', refusTest);
   }
   const reglages = lireReglages(reglagesSnap.data());
   const papote = sendcloud.adressePapote(reglages.expediteur);
@@ -2554,7 +2814,8 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
   const suivi = await api.suivi(r.colis).catch(() => ({}));
   const maj = { 'etiquettes.retour': { colis: r.colis, url, qr, le: Date.now(), par: qui,
     suivi: suivi.suivi || null, lienSuivi: suivi.lien || null, etape: suivi.etape || null } };
-  const attendue = c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
+  // Matériel non rendu déjà prélevé (« facturee ») : le retour reste possible (Tanguy, 12/11, A6), remboursé à réception.
+  const attendue = c.restitution && ['attendue', 'echec', 'facturee'].includes(c.restitution.statut);
   if (attendue) {
     // Fin de contrat : l'e-mail au client part avec commandeModifiee, comme une étiquette collée à la main.
     maj['restitution.etiquette'] = url;
@@ -2566,7 +2827,8 @@ async function creerEtiquette(commande, sens, qui, { sansImpression = false } = 
     // Remplacement d'un élément du kit : l'étiquette part tout de suite.
     await mail.envoyer({
       smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
-      a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null }),
+      a: c.email, contenu: mail.etiquetteRetour({ nom: c.nom, lien: url, avant: null,
+        panne: (c.remplacement || {}).statut === 'attente-retour' }),
     });
   }
   return { ok: true, url, qr, envoyee: !!c.email };
@@ -2622,6 +2884,16 @@ exports.gestionAnnulerEtiquette = onCall({ secrets: [SENDCLOUD_API] }, async (re
 
 // { commande, email? } : renvoie au client le code de commande (rappel de jumelage), à l'e-mail de la commande
 // ou à une autre adresse donnée par téléphone.
+// Ligne « e-mail perdu » réglée par Tanguy (client appelé, adresse corrigée à la main…) : elle quitte « À faire ».
+exports.gestionCourrielTraite = onCall(async (request) => {
+  verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
+  const { id } = request.data || {};
+  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) throw new HttpsError('invalid-argument', 'E-mail perdu manquant.');
+  if (!await require('./courriels-perdus').traiter(db(), id)) throw new HttpsError('not-found', 'E-mail perdu introuvable.');
+  return { ok: true };
+});
+
 exports.gestionRenvoyerCode = onCall({ secrets: [MAIL_MOT_DE_PASSE] }, async (request) => {
   verifierAdmin(request);
   const d = request.data || {};
@@ -2742,7 +3014,7 @@ exports.gestionAnnulerCommande = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_P
     try {
       await mail.envoyer({
         smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(),
-        a: c.email, contenu: mail.commandeAnnulee({ nom: c.nom, rembourse }),
+        a: c.email, contenu: colisRevenu ? mail.colisRevenu({ nom: c.nom, rembourse }) : mail.commandeAnnulee({ nom: c.nom, rembourse }),
       });
       mailEnvoye = true;
     } catch (e) {
@@ -2999,7 +3271,10 @@ const sansFacture = (t, maintenant) => t.prixAchat == null && !t.acheteeLe && !t
 const suiteSuspendue = (f) => (f.resiliationLe ? ' : abonnement arrêté par Papote, la tablette doit revenir'
   : ' : arrêt automatique de l\'abonnement à 9 h (sinon « Arrêter l\'abonnement » sur la commande)');
 // familles : [{ id, nom, statut, graceJusqua, suspenduLe, resiliationLe, majLe }] (gestionDonnees, recapitulatif).
-function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [] }) {
+// courriels : e-mails perdus (courriels-perdus.js, enAttente) ; seuls ceux « a-faire » font une ligne.
+// sauvegarde : le relevé interne/sauvegarde (sauvegarde-alerte.js) ; plus de 8 jours sans sauvegarde réussie = une ligne.
+// pannesSim : interne/simHorsService (sim-hors-service.js) ; une ligne par carte SIM sans réseau depuis plus de 2 h.
+function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [], courriels = [], sauvegarde = null, pannesSim = null }) {
   const liste = [];
   // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
   const ajouter = (n, texte) => { if (n > 0) liste.push(`${n} ${texte.replace(/\(s\)/g, n > 1 ? 's' : '')}`); };
@@ -3018,7 +3293,9 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   ajouter(actives.filter((c) => c.restitution && c.restitution.statut === 'echec').length, 'prélèvement(s) du matériel non rendu refusé(s), à relancer depuis Stripe');
   ajouter(actives.filter((c) => c.expedition === 'paiement-en-attente' && ms(c.creeLe) && maintenant - ms(c.creeLe) > JOURS(10)).length, 'paiement(s) SEPA en attente depuis plus de 10 jours');
   ajouter(commandes.filter((c) => (c.contestations || []).length).length, 'commande(s) avec un prélèvement contesté à la banque');
-  const revenus = actives.filter((c) => c.expedition === 'envoyee' && !c.fid && c.etiquettes && c.etiquettes.aller && c.etiquettes.aller.retourExpediteur);
+  // Famille préparée : la commande a sa famille dès le paiement, c'est l'entrée de la tablette qui compte.
+  const horsFamille = (c) => c.expedition === 'envoyee' && !require('./famille-preparee').regles.tabletteDansLaFamille(c);
+  const revenus = actives.filter((c) => horsFamille(c) && c.etiquettes && c.etiquettes.aller && c.etiquettes.aller.retourExpediteur);
   for (const c of revenus) liste.push(`Colis de ${c.nom || c.email || c.id} en retour chez vous (jamais retiré) : « Colis revenu » sur la commande l'annule et rembourse`);
   const retour = (c) => c.restitution && ['attendue', 'echec'].includes(c.restitution.statut);
   const idsAEnvoyer = new Set(actives.filter((c) => c.expedition === 'a-preparer' && !retour(c)).map((c) => c.id));
@@ -3028,8 +3305,15 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   const dispo = stock.filter((t) => ['en-stock', 'preparee'].includes(t.etat) && (t.commande ? idsAEnvoyer.has(t.commande) : !t.fid)).length;
   ajouter(aEnvoyer, 'tablette(s) à envoyer');
   ajouter(Math.max(0, aEnvoyer - dispo), 'tablette(s) manquante(s) en stock pour les envoyer');
-  ajouter(actives.filter((c) => c.expedition === 'envoyee' && !c.fid && ms(c.envoyeeLe)
+  ajouter(actives.filter((c) => horsFamille(c) && ms(c.envoyeeLe)
     && maintenant - ms(c.envoyeeLe) > JOURS(20)).length, 'tablette(s) reçue(s) mais pas jumelée(s) après 20 jours');
+  for (const c of actives.filter((x) => x.alerteSansProche)) {
+    liste.push(`Tablette de ${c.nom || c.email || c.id} branchée depuis 5 jours, personne dans l'appli : appeler le client`);
+  }
+  for (const c of actives.filter((x) => horsFamille(x) && x.alerteConnexion && !(ms(x.envoyeeLe) && maintenant - ms(x.envoyeeLe) > JOURS(20)))) {
+    const arrivee = livraison.arriveeTablette(c);
+    liste.push(livraison.alerteConnexion(c, arrivee ? arrivee.comment : 'retrait').aFaire);
+  }
   ajouter(actives.filter(retour).length, 'tablette(s) à récupérer');
   ajouter(stock.filter((t) => t.etat === 'revenue').length, 'tablette(s) revenue(s) à vérifier');
   for (const t of stock.filter((x) => x.etat === 'revenue' && usureBatterie(x.batterie, debutTablette(x), maintenant))) {
@@ -3043,6 +3327,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   for (const c of actives.filter((x) => x.premierRepousseLe && ['a-preparer', 'paiement-en-attente'].includes(x.expedition))) {
     liste.push(`Commande de ${c.nom || c.email || c.id} payée mais toujours pas partie : premier prélèvement repoussé, à envoyer`);
   }
+  // E-mails perdus (audit des e-mails 11/11, point 2) : rejet signalé par Brevo, ou envoi raté deux fois.
+  liste.push(...require('./courriels-perdus').lignesAFaire(courriels));
   // Contrôle de nuit Stripe ↔ base (rapprocherStripe).
   liste.push(...((automatique && automatique.rapprochement) || []));
   const parId = new Map(commandes.map((c) => [c.id, c]));
@@ -3066,6 +3352,10 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
     liste.push(a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : plus que ${a.quantite || 0} en stock`);
   }
   ajouter(automatique && automatique.erreurs ? automatique.erreurs.length : 0, 'problème(s) lors du dernier passage automatique');
+  const ligneSauvegarde = require('./sauvegarde-alerte').ligneAFaire(sauvegarde, maintenant);
+  if (ligneSauvegarde) liste.push(ligneSauvegarde);
+  // Cartes SIM sans réseau depuis plus de 2 h (sim-hors-service.js, interne/simHorsService).
+  liste.push(...require('./sim-hors-service').lignesAFaire(pannesSim));
   return liste;
 }
 
@@ -3075,7 +3365,7 @@ async function recapitulatif() {
   const maintenant = Date.now();
   const debutAnnee = new Date(new Date(maintenant).getFullYear(), 0, 1).getTime();
   const [commandesSnap, stockSnap, depensesSnap, familles, automatique, reglagesSnap, semaine, annee, abonnes, simsSnap,
-    accessoiresSnap] = await Promise.all([
+    accessoiresSnap, courriels, sauvegarde, pannesSim] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
@@ -3087,6 +3377,9 @@ async function recapitulatif() {
     tout(stripe().subscriptions.list({ status: 'active', limit: 100 })),
     db().collection('sims').get(),
     db().collection('accessoires').get(),
+    require('./courriels-perdus').enAttente(db()).catch((e) => { logger.warn('E-mails perdus illisibles', e.message); return []; }),
+    db().doc(require('./sauvegarde-alerte').DOCUMENT).get(),
+    db().doc(require('./sim-hors-service').DOCUMENT).get(),
   ]);
   const statut = new Map(familles.docs.map((f) => [f.id, f.get('abonnement.statut') || null]));
   const commandes = commandesSnap.docs.map((d) => {
@@ -3102,6 +3395,9 @@ async function recapitulatif() {
     sims: simsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     accessoires: accessoiresSnap.docs.map((d) => d.data()),
     automatique: automatique.data(),
+    courriels,
+    sauvegarde: sauvegarde.exists ? sauvegarde.data() : null,
+    pannesSim: pannesSim.exists ? pannesSim.data() : null,
     maintenant,
   });
   const nouvelles = commandes.filter((c) => ms(c.creeLe) > maintenant - JOURS(7)).length;
@@ -3604,7 +3900,6 @@ exports.gestionCourrierMaintenant = onCall(OPTIONS_COURRIER, async (request) => 
 // champ marketing, ou accord noté par l'admin) et pas désinscrites. Chaque e-mail porte un lien de désinscription.
 // contacts/{cle} : { email, consentement, source, desinscritLe, jeton } ; campagnes/{id} : historique des envois.
 
-const URL_DESINSCRIPTION = 'https://europe-west1-papote-famille.cloudfunctions.net/desinscription';
 const ENVOIS_MAX = 300; // limite quotidienne de Brevo en offre gratuite
 const STATUTS_ACTIFS = ['actif', 'offert', 'impaye', 'suspendu'];
 
@@ -3717,7 +4012,7 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
   if (d.test) {
     const moi = emailPropre(request.auth.token.email);
     if (!moi) throw new HttpsError('failed-precondition', 'Votre compte admin n\'a pas d\'e-mail.');
-    await mail.envoyer({ ...smtp, a: moi, contenu: emailInformation({ objet: `[Test] ${objet}`, message, nom: 'Tanguy', lienDesinscription: `${URL_DESINSCRIPTION}?test=1` }) });
+    await mail.envoyer({ ...smtp, a: moi, contenu: emailInformation({ objet: `[Test] ${objet}`, message, nom: 'Tanguy', lienDesinscription: `${mail.DESINSCRIPTION}?test=1` }) });
     return { envoyes: 1, a: moi };
   }
   const voulus = new Set((Array.isArray(d.emails) ? d.emails : []).map(emailPropre).filter(Boolean));
@@ -3740,7 +4035,7 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
         jeton = require('node:crypto').randomBytes(16).toString('hex');
         await cref.set({ email: c.email, jeton }, { merge: true });
       }
-      const lien = `${URL_DESINSCRIPTION}?c=${cleContact(c.email)}&j=${jeton}`;
+      const lien = mail.lienDesinscription(cleContact(c.email), jeton);
       await mail.envoyer({ ...smtp, a: c.email, contenu: emailInformation({ objet, message, nom: c.nom, lienDesinscription: lien }), enNombre: true });
       envoyes++;
     } catch (e) {
@@ -3752,33 +4047,42 @@ exports.gestionCampagne = onCall({ secrets: [MAIL_MOT_DE_PASSE], timeoutSeconds:
   return { envoyes, ignores: voulus.size - destinataires.length, erreurs: erreurs.slice(0, 5) };
 });
 
-// Lien « Se désinscrire » : la page demande une confirmation (les antivirus ouvrent les liens) ;
-// le bouton, ou le désabonnement en un clic des messageries (POST), retire l'accord.
+// Désinscription des e-mails d'information (A4, Tanguy 12/11/2026), sur mapapote.fr/desinscription (réécrit vers
+// cette fonction par firebase.vitrine.json ; les anciens liens …cloudfunctions.net/desinscription marchent encore).
+//  - GET (lien de l'e-mail, ou antivirus qui ouvre les liens) : rien ne change, renvoi vers la page du site
+//    desinscription.html, qui dit ce qu'on quitte et porte le bouton.
+//  - POST : retire l'accord. Le bouton de la page (JSON, { ok }) ou le « Se désabonner » de la messagerie
+//    (List-Unsubscribe-Post, RFC 8058 : corps « List-Unsubscribe=One-Click », c et j dans l'adresse).
+// Seuls les e-mails d'information portent ce lien (mail.MARKETING) : les e-mails de service continuent d'arriver.
+const PAGE_DESINSCRIPTION = 'https://mapapote.fr/desinscription.html';
 exports.desinscription = onRequest(async (req, res) => {
   const p = { ...(req.query || {}), ...(typeof req.body === 'object' && req.body ? req.body : {}) };
-  const pageHtml = (titre, texte, formulaire) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${titre}</title></head>
-<body style="margin:0;background:#fdfaf5;color:#24212f;font:18px/1.6 Arial,sans-serif"><div style="max-width:520px;margin:0 auto;padding:40px 20px">
-<p style="font-weight:bold;font-size:22px;color:#4f46e5">Papote</p><h1 style="font-size:26px">${titre}</h1><p>${texte}</p>${formulaire || ''}</div></body></html>`;
   res.set('Cache-Control', 'no-store');
-  if (p.test) { res.send(pageHtml('Lien de test', "C'est ici que vos clients se désinscriront.")); return; }
   const c = typeof p.c === 'string' && /^[0-9a-f]{32}$/.test(p.c) ? p.c : null;
   const j = typeof p.j === 'string' && /^[0-9a-f]{32}$/.test(p.j) ? p.j : null;
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    const q = p.test ? '?test=1' : c && j ? `?c=${c}&j=${j}` : '';
+    res.redirect(303, `${PAGE_DESINSCRIPTION}${q}`);
+    return;
+  }
+  if (req.method !== 'POST') { res.status(405).set('Allow', 'GET, POST').end(); return; }
+  const json = /json/.test(String(req.get('accept') || '')) || /json/.test(String(req.get('content-type') || ''));
+  const repondre = (statut, corps, texte) => {
+    if (json) { res.status(statut).json(corps); return; }
+    res.status(statut).type('text/plain; charset=utf-8').send(texte);
+  };
+  if (p.test) { repondre(200, { ok: true, test: true }, 'Lien de test : rien n\'a changé.'); return; }
   const ref = c && db().doc(`contacts/${c}`);
   const snap = ref && j ? await ref.get() : null;
   if (!snap || !snap.exists || snap.get('jeton') !== j) {
-    res.status(404).send(pageHtml('Lien inconnu', 'Ce lien de désinscription n\'est pas valable. Répondez simplement à notre e-mail et nous vous retirerons de la liste.'));
+    repondre(404, { ok: false, erreur: 'lien-inconnu' }, 'Lien de désinscription inconnu.');
     return;
   }
-  if (req.method === 'POST') {
-    await ref.set({ consentement: false, desinscritLe: Date.now() }, { merge: true });
-    res.send(pageHtml('C\'est fait', 'Vous ne recevrez plus nos e-mails d\'information. Les messages liés à votre abonnement (livraison, facture) continuent d\'arriver.'));
-    return;
-  }
-  res.send(pageHtml('Se désinscrire', 'Vous ne recevrez plus les e-mails d\'information de Papote.',
-    `<form method="post" action="?c=${c}&j=${j}"><button type="submit" style="font:inherit;font-weight:bold;background:#4f46e5;color:#fff;border:0;border-radius:999px;padding:14px 26px;cursor:pointer">Me désinscrire</button></form>`));
+  // Deux clics, ou la page puis la messagerie : une seule désinscription, la première date reste.
+  if (!snap.get('desinscritLe')) await ref.set({ consentement: false, desinscritLe: Date.now() }, { merge: true });
+  else if (snap.get('consentement') !== false) await ref.set({ consentement: false }, { merge: true });
+  repondre(200, { ok: true }, 'Désinscription faite : plus d\'e-mails d\'information de Papote.');
 });
-
-
 
 // { fid, offerte } : famille offerte (celle de Tanguy) : jamais en pause, jamais supprimable ; ou retour à « aucun ».
 exports.gestionFamilleOfferte = onCall(async (request) => {
@@ -3809,6 +4113,25 @@ exports.gestionFamilleOfferte = onCall(async (request) => {
   });
   await closOffertes(offertes, recupere === true, qui);
   return { ok: true };
+});
+
+// Tablette de remplacement (famille, ⋮ « Préparer une tablette de remplacement ») : code d'installation à usage
+// unique, valable 7 jours (audit 8, R2 ; Tanguy 12/11). { fid, action: 'lire' | 'nouveau' }
+// -> { code, etat: 'valable' | 'utilise' | 'expire' | 'absent', creeLe, expire, utiliseLe, deja? }
+// Double appui sur « Nouveau code » : un seul code (le même est rendu dans la minute tant qu'il n'a pas servi).
+const codeRemplacement = require('./code-remplacement').brancher({ db, codeAuHasard: require('./installation').regles.codeAuHasard });
+exports.gestionCodeRemplacement = onCall(async (request) => {
+  verifierAdmin(request);
+  if (reveil(request)) return { ok: true };
+  const { fid, action } = request.data || {};
+  if (typeof fid !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(fid) || !['lire', 'nouveau'].includes(action)) {
+    throw new HttpsError('invalid-argument', 'Famille ou action manquante.');
+  }
+  if (action === 'lire') return codeRemplacement.lire(fid);
+  const r = await codeRemplacement.nouveau(fid, { uid: request.auth.uid, qui: request.auth.token.email || request.auth.uid });
+  if (!r) throw new HttpsError('not-found', 'Famille introuvable.');
+  if (!r.deja) logger.info(`Famille ${fid} : code de tablette de remplacement créé (7 jours, une seule tablette)`);
+  return r;
 });
 
 // Commande offerte (les mamies de Tanguy) : une vraie commande, sans Stripe, avec son code de commande.
@@ -3921,6 +4244,8 @@ async function effacerFamille({ fid, snap, commandes, par }) {
   // Jumelages de cette famille : sans eux, le rattrapage de nuit ne relie plus la tablette à une famille disparue.
   const jumelages = await db().collection('pairings').where('fid', '==', fid).get();
   await Promise.all(jumelages.docs.map((d) => d.ref.delete()));
+  // Codes de tablette de remplacement de cette famille (invites/, hors de la fiche).
+  await codeRemplacement.effacer(fid);
   await Promise.all(commandes.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
   await db().collection('suppressions').add({
     fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par,

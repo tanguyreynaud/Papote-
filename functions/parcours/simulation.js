@@ -4,7 +4,7 @@
 //   Stripe      simulé en mémoire (faux-stripe.js) : rien n'est payé, aucune clé n'est utilisée
 //   e-mails     gardés dans boite[] au lieu de partir
 //   push        notifications gardées dans notifications[]
-//   voix        lecture des messages désactivée (elle appellerait Google)
+//   voix        jamais Google : voixFaites[] note ce qui aurait été lu (limites des messages et rappels, A12)
 //   Storage     fichiers simulés (seules les suppressions comptent ici)
 //   horloge     avancer(jours) fait passer le temps pour Date.now() (rappels, 30 jours, restitution…)
 //
@@ -33,6 +33,7 @@ Object.assign(process.env, {
   ANTHROPIC_API_KEY: 'simulation',
   SENDCLOUD_API: 'simulation:simulation',
   FACTURES_MOT_DE_PASSE: 'simulation',
+  BREVO_WEBHOOK_SECRET: 'cle-brevo-simulation',
 });
 
 const erreurs = [];
@@ -123,15 +124,28 @@ require.cache[resoudre('stripe')] = {
 
 const boite = [];
 const mail = require('../mail');
-mail.envoyer = async ({ a, contenu }) => {
-  boite.push({ a, sujet: contenu.subject, texte: contenu.text, le: Date.now() });
+// Seul l'envoi lui-même est remplacé : le tri des e-mails de confort (mail.envoyer, quota-courriels.js) tourne pour de vrai.
+// Le compteur du quota Brevo (interne/courriels-…) n'avance pas en simulation : un scénario le remplit lui-même.
+// reglages.mailsEnPanne = n : les n prochains envois échouent (Brevo en panne ou qui refuse, courriels-perdus.js).
+mail.expedier = async ({ a, contenu }) => {
+  if (reglages.mailsEnPanne > 0) {
+    reglages.mailsEnPanne -= 1;
+    throw new Error('Simulation : serveur SMTP injoignable');
+  }
+  // A4 (Tanguy 12/11/2026) : la désinscription n'est que sur les e-mails d'information (mail.MARKETING). Un e-mail de
+  // service (commande, paiement, livraison, SOS…) qui en porterait une est une erreur, dans chaque scénario.
+  const entetes = contenu.headers || {};
+  if (!mail.estMarketing(contenu) && (entetes['List-Unsubscribe'] || entetes['List-Unsubscribe-Post'] || /\/desinscription|Se désinscrire/.test(`${contenu.html}\n${contenu.text}`))) {
+    erreurs.push(`E-mail de service avec une désinscription : « ${contenu.subject} » à ${a}`);
+  }
+  boite.push({ a, sujet: contenu.subject, texte: contenu.text, le: Date.now(), entetes, pieces: (contenu.attachments || []).map((p) => p.filename) });
 };
 
 const notifications = [];
 const push = require('../push');
 // reglages.telephones = false : aucun téléphone n'a de notifications (appli pas installée, refusées).
 // reglages.pushEnPanne = n : les n prochains envois échouent (service de notifications injoignable).
-const reglages = { telephones: true, pushEnPanne: 0 };
+const reglages = { telephones: true, pushEnPanne: 0, mailsEnPanne: 0, voixEcrite: false };
 push.envoyer = async (db, fid, uids, data) => {
   if (reglages.pushEnPanne > 0) {
     reglages.pushEnPanne -= 1;
@@ -141,7 +155,19 @@ push.envoyer = async (db, fid, uids, data) => {
   return reglages.telephones ? uids.length : 0;
 };
 
-require('../voix').voixDocument = async () => null;
+// Voix : jamais Google. voixFaites[] garde le chemin de chaque document qui aurait reçu sa voix (limites.js, A12).
+// reglages.voixEcrite = true : la fausse voix est aussi écrite sur le document, comme en ligne (« déjà lu » ensuite).
+const voixFaites = [];
+const vraieVoix = require('../voix');
+vraieVoix.voixDocument = async (db, ref, data, champ) => {
+  let texte = vraieVoix.texteDe(data, champ);
+  if (!texte && data.type === 'photo') texte = vraieVoix.motParDefaut(ref.id);
+  if (!texte) return 'rien à lire';
+  if (data.voix && data.voix.texte === texte) return 'déjà lu';
+  voixFaites.push(ref.path);
+  if (reglages.voixEcrite) await ref.update({ voix: { url: 'https://simulation/voix.mp3', texte, nom: 'simulation' } });
+  return null;
+};
 
 // Faux Sendcloud : offres Mondial Relay (dont le retour « QR » sans impression), annonce des retours,
 // étiquettes, suivi et annulation. sendcloud.colis : les colis créés, par id.
@@ -159,12 +185,19 @@ function fauxSendcloud(url, options = {}) {
     const f = (corps && corps.functionalities) || {};
     const offres = [{ code: 'mondial_relay:retour', carrier: { code: 'mondial_relay' }, functionalities: { returns: true }, weight: KG }];
     if (!sendcloud.sansQr) offres.push({ code: 'mondial_relay:retour-qr', carrier: { code: 'mondial_relay' }, functionalities: { returns: true, labelless: true }, weight: KG });
+    // Envoi vers un point relais (étiquette d'envoi, tablette de remplacement).
+    offres.push({ code: 'mondial_relay:relais', carrier: { code: 'mondial_relay' }, functionalities: { last_mile: 'service_point' }, weight: KG });
     return json({ data: offres.filter((o) => !f.labelless || o.functionalities.labelless) });
   }
   if (chemin === '/returns/announce-synchronously') {
     const id = sendcloud.prochain++;
     sendcloud.colis.set(id, { id, de: corps.from_address, livraison: corps.delivery_option, offre: corps.ship_with.shipping_option_code, statut: 1000, annule: false });
     return json({ return_id: id, parcel_id: id });
+  }
+  if (chemin === '/shipments/announce') {
+    const id = sendcloud.prochain++;
+    sendcloud.colis.set(id, { id, vers: corps.to_address, relais: corps.to_service_point || null, sens: 'aller', statut: 1000, annule: false });
+    return json({ data: { parcels: [{ id, tracking_number: `MR${id}`, tracking_url: `https://suivi/MR${id}` }] } });
   }
   let m = chemin.match(/^\/parcels\/(\d+)\/documents\/label$/);
   if (m) return new Response(Buffer.from(`etiquette ${m[1]}`), { status: 200 });
@@ -191,6 +224,10 @@ global.fetch = async (url, options) => {
   if (String(url).startsWith('https://pay.stripe.test/')) {
     if (reglages.pdfEnPanne > 0) { reglages.pdfEnPanne -= 1; return new Response('Erreur', { status: 502 }); }
     return new Response(Buffer.from(`%PDF-1.4 faux PDF ${url}`), { headers: { 'content-type': 'application/pdf' } });
+  }
+  // Commune du proche et sa population (badge « Couverture à vérifier », couverture.js communeDuPoint).
+  if (String(url).startsWith('https://data.geopf.fr/wfs/') && String(url).includes('population')) {
+    return new Response(JSON.stringify({ features: [{ properties: { code_insee: '07264', nom_officiel: 'Saint-Martin-de-Valamas', population: reglages.populationProche ?? 1150 } }] }));
   }
   if (String(url).startsWith('https://geo.api.gouv.fr/')) {
     return new Response(JSON.stringify([{ nom: 'Saint-Martin-de-Valamas', centre: { coordinates: [4.37, 44.94] } }]));
@@ -233,13 +270,13 @@ const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 // ---------- Déclencheurs Firestore rejoués ----------
 const DECLENCHEURS = [
   { chemin: 'families/{fid}', creation: ['nouvelleFamille'] },
-  { chemin: 'families/{fid}/members/{uid}', creation: ['nouveauMembre'], ecriture: ['compterProches'] },
-  { chemin: 'families/{fid}/members/{uid}/private/push', ecriture: ['telephoneAppels'] },
+  { chemin: 'families/{fid}/members/{uid}', creation: ['nouveauMembre'], modification: ['membreAccepte'], ecriture: ['compterProches'] },
+  { chemin: 'families/{fid}/members/{uid}/private/push', ecriture: ['telephoneAppels', 'jetonUnique'] },
   { chemin: 'families/{fid}/posts/{pid}', creation: ['quotaEnvois'], ecriture: ['voixEnvoi'] },
   { chemin: 'families/{fid}/reminders/{rid}', ecriture: ['voixRappel'] },
   { chemin: 'families/{fid}/calls/{cid}', creation: ['appelsSonnerie'], modification: ['appelsManques'] },
   { chemin: 'commandes/{id}', modification: ['commandeModifiee'] },
-  { chemin: 'pairings/{code}', creation: ['jumelageAutomatique'], modification: ['gestionJumelage'] },
+  { chemin: 'pairings/{code}', creation: ['jumelageAutomatique'], modification: ['gestionJumelage', 'simInstallation'] },
 ];
 
 function correspond(modele, chemin) {
@@ -273,9 +310,12 @@ function changement(avant, apres, ref) {
     const params = correspond(d.chemin, chemin);
     if (!params) continue;
     const change = { before: avant || absent(ref), after: apres || absent(ref) };
-    if (!avant && apres) (d.creation || []).forEach((n) => lancer(n, { data: apres, params, chemin }));
-    if (avant && apres) (d.modification || []).forEach((n) => lancer(n, { data: change, params, chemin }));
-    (d.ecriture || []).forEach((n) => lancer(n, { data: change, params, chemin }));
+    // time : heure de l'écriture selon le serveur (horloge réelle, comme les heures serverTimestamp de l'émulateur),
+    // comme les événements en ligne (base.js, restaurationEnCours).
+    const time = new Date(vraiMaintenant()).toISOString();
+    if (!avant && apres) (d.creation || []).forEach((n) => lancer(n, { data: apres, params, chemin, time }));
+    if (avant && apres) (d.modification || []).forEach((n) => lancer(n, { data: change, params, chemin, time }));
+    (d.ecriture || []).forEach((n) => lancer(n, { data: change, params, chemin, time }));
   }
 }
 
@@ -321,7 +361,13 @@ function demarrerServeur() {
     }
     const f = fonctions[req.params.nom];
     if (!f) return res.status(404).send('fonction inconnue');
-    return enFonction(req.params.nom, () => f(req, res));
+    // Suivie comme un déclencheur : le travail fait APRÈS la réponse (e-mail « C'est noté »…) compte pour calme().
+    const p = Promise.resolve()
+      .then(() => enFonction(req.params.nom, () => f(req, res)))
+      .catch((e) => { if (!res.headersSent) res.status(500).send(String(e && e.message)); })
+      .finally(() => { enCours.delete(p); derniereActivite = vraiMaintenant(); });
+    enCours.add(p);
+    return p;
   });
   return new Promise((pret) => {
     serveur = http.createServer(app).listen(0, '127.0.0.1', () => {
@@ -340,12 +386,12 @@ async function requete(nom, { query = {}, corps, entetes = {}, depuis = '203.0.1
   const r = await vraiFetch(url, {
     method: corps ? 'POST' : 'GET', redirect: 'manual',
     headers: { ...(corps ? { 'content-type': 'application/json' } : {}), ...entetes, 'x-forwarded-for': xff },
-    body: corps ? JSON.stringify(corps) : undefined,
+    body: corps == null ? undefined : typeof corps === 'string' ? corps : JSON.stringify(corps),
   });
   const texte = await r.text();
   let json = null;
   try { json = JSON.parse(texte); } catch (e) { /* page ou texte */ }
-  return { statut: r.status, redirection: r.headers.get('location'), texte, json };
+  return { statut: r.status, redirection: r.headers.get('location'), texte, json, entetes: Object.fromEntries(r.headers) };
 }
 
 // Événements Stripe en attente : envoyés au webhook, un par un, comme Stripe.
@@ -440,12 +486,15 @@ async function remettreAZero() {
   decalage = 0;
   reglages.telephones = true;
   reglages.pushEnPanne = 0;
+  reglages.mailsEnPanne = 0;
+  reglages.voixEcrite = false;
+  voixFaites.length = 0;
   reglages.pdfEnPanne = 0;
   fichiersGardes.length = 0;
 }
 
 module.exports = {
   demarrer, arreter, remettreAZero, calme, avancer, JOUR,
-  stripe, boite, notifications, erreurs, journal, fichiersEffaces, fichiersGardes, reglages, sendcloud,
+  stripe, boite, notifications, erreurs, journal, voixFaites, fichiersEffaces, fichiersGardes, reglages, sendcloud,
   fonctions, db, FieldValue, Timestamp, lire, compte, appeler, tache, requete, compteur,
 };

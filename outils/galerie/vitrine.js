@@ -70,7 +70,7 @@ const CORS = { 'Access-Control-Allow-Origin': '*' };
 async function stockVide(p, listeAttente = 204) {
   // Défilement immédiat vers « Être prévenu » : la capture ne tombe pas au milieu du défilement doux.
   await p.emulateMedia({ reducedMotion: 'reduce' });
-  await p.route('**/stockDisponible', (r) => r.fulfill({ contentType: 'application/json', headers: CORS, body: '{"disponible":false,"precommande":true,"attenteLongue":false}' }));
+  await p.route(/\/(stockDisponible|api\/stock)/, (r) => r.fulfill({ contentType: 'application/json', headers: CORS, body: '{"disponible":false,"precommande":true,"attenteLongue":false}' }));
   await p.route('**/listeAttente', (r) => r.fulfill({ status: listeAttente, headers: { ...CORS, 'Access-Control-Allow-Headers': 'Content-Type' }, body: '' }));
   // commande.html renvoie vers « / » : ici, pas de fonction accueil, la page elle-même.
   // WebKit (--iphone) refuse une redirection simulée : la page renvoie alors elle-même vers la bonne adresse.
@@ -85,7 +85,7 @@ async function prevenir(p, { email = '', tel = '', accord = true } = {}) {
   if (email) await p.fill('#attente-email', email);
   if (tel) await p.fill('#attente-tel', tel);
   if (accord) await p.check('#attente input[name="accord"]');
-  await p.locator('#attente button').click();
+  await p.locator('#attente button[type="submit"]').click();
   await pause(p, 400);
 }
 
@@ -101,6 +101,9 @@ async function commandeRemplie(p) {
 }
 
 // plein : toute la page (qui défile) ; sinon le premier écran seulement.
+// Jeton de désinscription factice (32 caractères hexadécimaux, comme les vrais).
+const DESINSCRIT = '0123456789abcdef0123456789abcdef';
+
 const SCENES = [
   { groupe: 'Accueil', titre: 'Page d’accueil', fichier: 'accueil.html', plein: true },
   { groupe: 'Accueil', titre: 'Accueil : chat de support ouvert', fichier: 'accueil.html', faire: async (p) => {
@@ -135,6 +138,11 @@ const SCENES = [
   { groupe: 'Être prévenu', titre: 'Être prévenu : e-mail manquant', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p) },
   { groupe: 'Être prévenu', titre: 'Être prévenu : numéro qui n’est pas un portable français', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr', tel: '04 78 12 34 56' }) },
   { groupe: 'Être prévenu', titre: 'Être prévenu : case pas cochée', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr', accord: false }) },
+  { groupe: 'Être prévenu', titre: 'Être prévenu : faute de frappe dans l’e-mail, « Vouliez-vous dire … ? »', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: async (p) => {
+    await p.locator('.hero .js-commander').click(); await p.locator('#attente-email').waitFor({ state: 'visible' });
+    await p.fill('#attente-email', 'jeanne@hotmial.fr'); await p.locator('#attente-tel').focus();
+    await p.locator('.mel-suggestion').waitFor({ state: 'visible' }); await pause(p);
+  } },
   { groupe: 'Être prévenu', titre: 'Être prévenu : inscription envoyée', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr', tel: '06 12 34 56 78' }) },
   { groupe: 'Être prévenu', titre: 'Être prévenu : l’inscription n’a pas abouti', fichier: 'accueil.html', routes: (p) => stockVide(p, 500), faire: (p) => prevenir(p, { email: 'jeanne@exemple.fr' }) },
   { groupe: 'Être prévenu', titre: 'Être prévenu : menu ☰ (téléphone)', fichier: 'accueil.html', routes: (p) => stockVide(p), faire: async (p) => {
@@ -200,6 +208,11 @@ const SCENES = [
   { groupe: 'Commande', titre: 'Commande : code postal à plusieurs villes, choix de la ville', fichier: 'commande.html', faire: async (p) => {
     await p.fill('#cp', '63490'); await p.dispatchEvent('#cp', 'input'); await p.locator('#ville').waitFor({ timeout: 5000 }); await pause(p, 500);
   } },
+  { groupe: 'Commande', titre: 'Commande : faute de frappe dans l’e-mail, « Vouliez-vous dire … ? »', fichier: 'commande.html', faire: async (p) => {
+    await commandeRemplie(p);
+    await p.fill('#email', 'tanguy.reynaud@gmial.con'); await p.dispatchEvent('#email', 'input'); await p.locator('#email').blur();
+    await p.locator('.mel-suggestion').waitFor({ state: 'visible' }); await p.locator('.mel-suggestion').scrollIntoViewIfNeeded(); await pause(p);
+  } },
   { groupe: 'Commande', titre: 'Commande : il manque le point relais', fichier: 'commande.html', faire: async (p) => {
     await p.fill('#destinataire', 'Tanguy Reynaud'); await p.fill('#email', 'tanguy@exemple.fr'); await p.dispatchEvent('#email', 'input');
     await p.locator('#payer').click(); await pause(p);
@@ -207,7 +220,18 @@ const SCENES = [
   { groupe: 'Commande', titre: 'Merci, commande enregistrée (code et récapitulatif)', fichier: 'merci.html?session=cs_test_galerie', plein: true, note: 'Le récapitulatif vient d’une fausse réponse de codeCommande, avec une adresse e-mail longue (bug de largeur du 27/10).' },
   { groupe: 'Commande', titre: 'Merci : le code de commande n’a pas pu être chargé', fichier: 'merci.html?session=cs_test_galerie', plein: true, routes: (p) => p.route('**/codeCommande**', (r) => r.fulfill({ status: 404, body: '' })) },
   { groupe: 'Textes', titre: 'Conditions générales de vente', fichier: 'cgv.html', plein: true },
-  { groupe: 'Textes', titre: 'Mentions légales et confidentialité', fichier: 'mentions.html', plein: true },
+  { groupe: 'Textes', titre: 'Mentions légales', fichier: 'mentions.html', plein: true },
+  { groupe: 'Textes', titre: 'Politique de confidentialité', fichier: 'confidentialite.html', plein: true },
+  { groupe: 'Résilier', titre: 'Résilier sans compte : adresse et numéro de commande', fichier: 'resilier.html?code=ABCD-EFGH', plein: true },
+  { groupe: 'Résilier', titre: 'Résilier : numéro qui ne correspond pas', fichier: 'resilier.html?code=ABCD-EFGH', plein: true, routes: (p) => p.route('**/resilierSansCompte**', (r) => r.fulfill({ status: 404, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ erreur: "Aucune commande ne correspond à cette adresse e-mail et à ce numéro. Vérifiez-les sur l'e-mail de confirmation de commande, ou écrivez à contact@mapapote.fr." }) })), faire: (p) => p.fill('#email', 'marie@exemple.fr').then(() => p.click('#verifier')).then(() => p.waitForSelector('#erreur:not([hidden])')) },
+  { groupe: 'Résilier', titre: 'Résilier : date d\'arrêt à confirmer', fichier: 'resilier.html?code=ABCD-EFGH', plein: true, routes: (p) => p.route('**/resilierSansCompte**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ etat: 'a-confirmer', le: Date.UTC(2026, 11, 26), famille: 'Mamie Jeanne' }) })), faire: (p) => p.fill('#email', 'marie@exemple.fr').then(() => p.click('#verifier')).then(() => p.waitForSelector('#confirmer:not([hidden])')) },
+  { groupe: 'Résilier', titre: 'Résilier : c\'est fait', fichier: 'resilier.html?code=ABCD-EFGH', plein: true, routes: (p) => p.route('**/resilierSansCompte**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ etat: 'resilie', le: Date.UTC(2026, 11, 26), famille: 'Mamie Jeanne' }) })), faire: (p) => p.fill('#email', 'marie@exemple.fr').then(() => p.click('#verifier')).then(() => p.waitForSelector('#fait:not([hidden])')) },
+  // Désinscription des e-mails d'information (A4, 12/11) : lien en bas des rappels de commande, « Être prévenu »,
+  // ouverture des commandes et nouvelles. Fausse réponse de la fonction desinscription (POST /desinscription).
+  { groupe: 'Se désinscrire', titre: 'Se désinscrire : ce qu\'on quitte, ce qui continue', fichier: `desinscription.html?c=${DESINSCRIT}&j=${DESINSCRIT}`, plein: true },
+  { groupe: 'Se désinscrire', titre: 'Se désinscrire : c\'est fait', fichier: `desinscription.html?c=${DESINSCRIT}&j=${DESINSCRIT}`, plein: true, faire: (p) => p.click('#valider').then(() => p.waitForSelector('#fait:not([hidden])')) },
+  { groupe: 'Se désinscrire', titre: 'Se désinscrire : pas de connexion', fichier: `desinscription.html?c=${DESINSCRIT}&j=${DESINSCRIT}`, plein: true, routes: (p) => p.route('**/desinscription', (r) => r.abort()), faire: (p) => p.click('#valider').then(() => p.waitForSelector('#erreur:not([hidden])')) },
+  { groupe: 'Se désinscrire', titre: 'Se désinscrire : lien pas valable', fichier: 'desinscription.html?c=abc', plein: true },
   { groupe: 'Textes', titre: 'Page introuvable (404)', fichier: '404.html', plein: true },
 ];
 
@@ -225,11 +249,12 @@ async function ouvrir(browser, base, scene, taille) {
   await page.clock.install({ time: new Date('2026-10-26T10:30:00+01:00') });
   // Internet coupé (sauf les polices), puis les faux services : Playwright regarde les routes de la dernière à la première.
   await page.route(/^https?:\/\/(?!127\.0\.0\.1|fonts\.googleapis\.com|fonts\.gstatic\.com)/, (r) => r.abort());
-  await page.route('**/stockDisponible', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"disponible":4}' }));
+  await page.route(/\/(stockDisponible|api\/stock)/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"disponible":4}' }));
   await page.route('**/compter**', (r) => r.fulfill({ status: 204, headers: { 'Access-Control-Allow-Origin': '*' } }));
   // « Payer » part vers la fonction commander (puis Stripe) : ici une réponse 204, que le navigateur ignore,
   // la page reste donc affichée avec « Un instant… ».
   await page.route('**/commander**', (r) => r.fulfill({ status: 204 }));
+  await page.route('**/desinscription', (r) => r.fulfill({ contentType: 'application/json', body: '{"ok":true}' }));
   await page.route('**/codeCommande**', (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RECAP) }));
   // 63490 : un code postal à plusieurs villes, pour voir le choix de la ville.
   await page.route(/geo\.api\.gouv\.fr/, (r) => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },

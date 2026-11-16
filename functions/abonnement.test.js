@@ -367,3 +367,31 @@ test('audit argent 11/11, B3-B4 : contrôle de nuit Stripe ↔ base', () => {
   assert.strictEqual(lignes.length, 9, JSON.stringify(lignes, null, 1));
   assert.deepStrictEqual(a.ecartsStripe({ maintenant: T0, vivants: new Set(), commandes: [], familles: [] }), []);
 });
+
+// A7 (Tanguy, 12/11) : « Laisser plus de temps ».
+test('plus de temps : 15 jours depuis la date prévue, ou depuis aujourd\'hui si elle est passée ; jamais après un prélèvement', () => {
+  assert.strictEqual(a.limiteRepoussee(T0 + 5 * JOUR, T0), T0 + 20 * JOUR);
+  assert.strictEqual(a.limiteRepoussee(T0 - 2 * JOUR, T0), T0 + 15 * JOUR);
+  assert.strictEqual(a.refusPlusDeTemps({ statut: 'attendue', avant: T0 }), '');
+  assert.match(a.refusPlusDeTemps({ statut: 'attendue', prelevementTenteLe: T0 }), /en cours/);
+  assert.match(a.refusPlusDeTemps({ statut: 'echec' }), /refusé/);
+  assert.match(a.refusPlusDeTemps({ statut: 'facturee' }), /Aucune tablette attendue/);
+  assert.match(a.refusPlusDeTemps(null), /Aucune tablette attendue/);
+});
+
+// A8 (Tanguy, 12/11) : mois offert au-delà de 2 semaines d'hospitalisation.
+test('hospitalisation : plus de 14 jours dans le mois qui finit au prélèvement = mois offert, périodes cumulées sans double compte', () => {
+  assert.strictEqual(a.moisAvant(Date.UTC(2026, 2, 31)), Date.UTC(2026, 1, 28));
+  assert.strictEqual(a.moisAvant(Date.UTC(2026, 0, 15)), Date.UTC(2025, 11, 15));
+  const fin = Date.UTC(2026, 10, 30);
+  const debut = a.moisAvant(fin);
+  const c = (pauses) => ({ hospitalisations: pauses.map(([d, f]) => ({ debut: debut + d * JOUR, fin: debut + f * JOUR })) });
+  assert.strictEqual(a.moisOffertHospitalisation(c([[0, 14]]), fin), false, '14 jours tout juste : prélevé');
+  assert.strictEqual(a.moisOffertHospitalisation(c([[0, 15]]), fin), true);
+  assert.strictEqual(a.moisOffertHospitalisation(c([[2, 9], [20, 28]]), fin), true, '7 + 8 jours');
+  assert.strictEqual(a.moisOffertHospitalisation(c([[0, 10], [5, 12]]), fin), false, 'chevauchement compté une fois');
+  assert.strictEqual(a.moisOffertHospitalisation(c([[-20, 5]]), fin), false, 'surtout le mois d\'avant');
+  // Pause en cours (pause.le ou pause.debut, jusqua) comptée jusqu'à sa date prévue.
+  assert.strictEqual(a.moisOffertHospitalisation({ pause: { motif: 'hospitalisation', le: { toMillis: () => debut + 10 * JOUR }, jusqua: { toMillis: () => fin + 10 * JOUR } } }, fin), true);
+  assert.strictEqual(a.moisOffertHospitalisation({}, fin), false);
+});

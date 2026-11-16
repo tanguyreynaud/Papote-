@@ -46,3 +46,33 @@ test('rappels de jumelage à J+5 puis J+12', () => {
   assert.strictEqual(l.alerteDue(T0, T0 + 20 * JOUR), true);
   assert.strictEqual(l.alerteDue(T0, T0 + 19 * JOUR), false);
 });
+
+// M0 (Tanguy 12/11) : la tablette dit « Papote est prévenu » ; l'alerte part 48 h après son arrivée, quelle qu'elle soit.
+test('arrivée de la tablette : colis retiré, remise en main propre, colis sans suivi Sendcloud', () => {
+  assert.deepStrictEqual(l.arriveeTablette({ preparation: { recuLe: T0 }, envoyeeLe: T0 - JOUR }), { le: T0, comment: 'retrait' });
+  assert.deepStrictEqual(l.arriveeTablette({ remise: 'main-propre', preparation: { recuLe: { toMillis: () => T0 } } }), { le: T0, comment: 'main-propre' });
+  // Étiquette Sendcloud, colis pas encore retiré : pas chez la personne.
+  assert.strictEqual(l.arriveeTablette({ envoyeeLe: T0, etiquettes: { aller: { colis: 42 } } }), null);
+  // N° de suivi tapé à la main : personne ne note le retrait, arrivée comptée à l'envoi + 3 jours.
+  assert.deepStrictEqual(l.arriveeTablette({ envoyeeLe: { toMillis: () => T0 } }), { le: T0 + 3 * JOUR, comment: 'estimee' });
+  assert.strictEqual(l.arriveeTablette({ expedition: 'a-preparer' }), null);
+  assert.strictEqual(l.arriveeTablette(null), null);
+});
+
+test('alerte « pas encore connectée » : délai réglé à un seul endroit (48 h), texte selon l\'arrivée', () => {
+  assert.strictEqual(l.ALERTE_CONNEXION_JOURS, 2);
+  assert.strictEqual(l.delaiConnexion(), '48 h');
+  assert.strictEqual(l.alerteConnexionDue(T0, T0 + 2 * JOUR - 1), false);
+  assert.strictEqual(l.alerteConnexionDue(T0, T0 + 2 * JOUR), true);
+  const c = { nom: 'Paul Martin', id: 'sub_1' };
+  const retrait = l.alerteConnexion(c, 'retrait');
+  assert.strictEqual(retrait.titre, 'Tablette pas encore connectée, colis retiré il y a 48 h : Paul Martin');
+  assert.match(retrait.detail, /^Colis retiré il y a 48 h : .*Papote est prévenu et s'en occupe.*Appelez le client/);
+  assert.strictEqual(retrait.aFaire, 'Tablette de Paul Martin pas encore connectée, colis retiré : appeler le client');
+  const main = l.alerteConnexion(c, 'main-propre');
+  assert.strictEqual(main.titre, 'Tablette pas encore connectée, remise en main propre il y a 48 h : Paul Martin');
+  assert.match(main.detail, /^Remise en main propre il y a 48 h : la tablette n'est toujours pas entrée/);
+  const estimee = l.alerteConnexion({ email: 'p@x.fr' }, 'estimee');
+  assert.strictEqual(estimee.titre, 'Tablette pas encore connectée, colis parti sans suivi il y a 5 jours : p@x.fr');
+  assert.match(estimee.aFaire, /colis parti sans suivi : appeler le client/);
+});

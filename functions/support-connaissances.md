@@ -63,7 +63,7 @@ les fonctions suffit pour que le chat en tienne compte.
 ## Abonnement
 - L'abonnement se gère dans l'appli famille, onglet Profil : « Gérer le paiement et les factures » (changer de compte bancaire, factures) et « Résilier l'abonnement ». Seul le propriétaire de la famille (la personne qui a installé la tablette) voit ces boutons ; les autres membres voient l'état de l'abonnement.
 - On peut payer avec le compte bancaire de n'importe qui, par exemple celui du parent lui-même. Paiement au mois seulement, pas à l'année.
-- Hospitalisation du proche : sur justificatif d'hospitalisation envoyé à contact@mapapote.fr, les prélèvements sont mis en pause jusqu'à la date de retour prévue (rien n'est prélevé pour ces mois-là, la tablette reste prête). Aucune pause pour d'autres raisons (vacances, absence…). On peut aussi simplement résilier, sans engagement.
+- Hospitalisation du proche : sur justificatif d'hospitalisation envoyé à contact@mapapote.fr, un mois pendant lequel le proche passe plus de 2 semaines à l'hôpital n'est pas prélevé, le dernier mois à la résiliation compris (la tablette reste prête). Aucune pause pour d'autres raisons (vacances, absence…). On peut aussi simplement résilier, sans engagement.
 - Prélèvement refusé par la banque : tout continue de marcher pendant 7 jours ; un bandeau prévient le propriétaire de la famille dans l'appli. Sans règlement, la tablette se met en pause (« Papote est en pause ») et tout repart dès le paiement (Profil, « Gérer le paiement et les factures »).
 - Fin d'abonnement : le retour est offert, depuis l'appli (Profil, Abonnement). Tout le matériel est à renvoyer sous 30 jours : la tablette et son socle, le chargeur et son câble, et l'enceinte si elle a été fournie.
 - Le paiement passe par Stripe, une page sécurisée. Papote ne voit jamais les coordonnées bancaires complètes.
@@ -108,7 +108,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Décroché automatique : la tablette décroche dès qu'elle voit un visage, quel qu'il soit (aide-soignante, voisin…).
 - Fixer la tablette au mur : déconseillé, elle est faite pour être posée sur son support. Multiprise ou rallonge : oui sans problème, elle consomme très peu.
 - Chargeur cassé : s'il est prouvé que le problème vient du chargeur, nous en envoyons un autre (c'est très rare). Demande de contact.
-- Conditions générales de vente : sur https://mapapote.fr/cgv.html
+- Conditions générales de vente : sur https://mapapote.fr/cgv.html ; politique de confidentialité (données, RGPD) : https://mapapote.fr/confidentialite.html
 - Avis clients : si le site n'en affiche pas encore, dire que Papote vient d'être lancé et n'a pas encore d'avis publiés, et que le plus simple pour se faire une idée est d'essayer : pendant les 30 jours qui suivent la réception, on peut annuler la commande, on ne paie rien pour l'abonnement et les 60 € de mise en service sont remboursés. Ne pas proposer de rappel.
 - Matériel non rendu : seuls les éléments manquants sont prélevés : tablette 130 €, chargeur et câble 10 €, enceinte 10 € (seulement si elle a été fournie), soit 140 € si rien n'est rendu (150 € avec l'enceinte). Le socle n'est jamais facturé. Il n'y a pas de routeur. Aucune caution n'est prélevée d'avance.
 - Aide fiscale (services à la personne) : pas pour le moment.
@@ -122,7 +122,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Photo favorite ou affichée en permanence : non, les photos défilent en diaporama.
 - Mutuelle, APA, aide du département ou de la caisse de retraite : Papote n'est pas pris en charge pour le moment à notre connaissance ; la famille peut se renseigner auprès de sa mutuelle ou du département. Ne pas proposer de rappel.
 - Langues : l'appli et la tablette sont en français ; le chat répond aussi en anglais. Aucune autre langue. Ne pas proposer de rappel.
-- RGPD, protection des données : répondre avec la ligne « Données » ci-dessus (Firebase chiffre, rien n'est revendu, chacun supprime ses envois d'un toucher sur la corbeille ; pour tout effacer, écrire à contact@mapapote.fr). Ne pas proposer de rappel.
+- RGPD, protection des données : répondre avec la ligne « Données » ci-dessus (Firebase chiffre, rien n'est revendu, chacun supprime ses envois d'un toucher sur la corbeille ; pour tout effacer, écrire à contact@mapapote.fr) et donner la page https://mapapote.fr/confidentialite.html. Ne pas proposer de rappel.
 - Résilier : en quelques clics dans l'appli, onglet Profil, partie Abonnement, « Résilier l'abonnement » (jamais dans Réglages : ne dites pas « Réglages, Abonnement »), ou par simple e-mail à contact@mapapote.fr. Jamais besoin de lettre recommandée.
 - Codes promo : il n'y en a pas pour le moment.
 - « Peur de la casser » : rassurer (rien à manipuler, le bouton marche/arrêt ne l'éteint pas), puis dire franchement que la casse accidentelle n'est pas couverte, mais que l'usure normale n'est jamais facturée et qu'aucune caution n'est prélevée d'avance.

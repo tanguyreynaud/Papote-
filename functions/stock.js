@@ -197,11 +197,14 @@ function routeDisponible(db, logger) {
   return async (req, res) => {
     try {
       const n = await lireEtCompter(db, (q) => q.get(), Date.now());
-      res.set('Cache-Control', 'public, max-age=60');
+      // Gardé 60 s par le navigateur et par le cache du site (/api/stock, firebase.vitrine.json) : l'accueil
+      // reçoit la réponse en quelques dizaines de millisecondes au lieu d'un démarrage à froid (Tanguy, 12/11).
+      res.set('Cache-Control', 'public, max-age=60, s-maxage=60');
       const d = delai(n);
       res.json({ disponible: vendable(n), precommande: d === 'precommande', attenteLongue: d === 'long' });
     } catch (e) {
       logger.error('stockDisponible', e);
+      res.set('Cache-Control', 'no-store');
       res.status(500).json({ erreur: 'indisponible' });
     }
   };

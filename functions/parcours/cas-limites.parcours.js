@@ -84,6 +84,8 @@ test('abonnement pris depuis l\'appli avec la tablette déjà installée : rien 
   assert.ok(mailsA(julie.email).some((m) => /abonnement/i.test(m)), 'confirmation');
   const stock = await s.requete('stockDisponible');
   assert.strictEqual(stock.json.precommande, true, 'la tablette installée ne compte plus dans le stock');
+  // Gardé 60 s par le cache du site (/api/stock), pour que l'accueil affiche tout de suite le bon bouton (12/11).
+  assert.strictEqual(stock.entetes['cache-control'], 'public, max-age=60, s-maxage=60');
 });
 
 test('tablette de test jumelée sans commande (famille test de Tanguy) : jamais à vendre, rien à cocher', async () => {
@@ -328,14 +330,14 @@ test('installation abandonnée en route : un autre proche la reprend 30 minutes 
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const t = await a.tablettePreparee();
   await a.afficherCode(t);
-  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, julie);
-  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, julie);
+  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, a.commeAdmin(julie));
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, a.commeAdmin(julie));
   await s.calme();
   await a.entrerDansLaFamille(t);
-  assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul), { etat: 'occupe', par: 'Julie' });
+  assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, a.commeAdmin(paul)), { etat: 'occupe', par: 'Julie' });
 
   s.avancer(31 / 60 / 24);
-  const r = await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
+  const r = await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, a.commeAdmin(paul));
   assert.deepStrictEqual(r, { etat: 'reserve', fid });
   await s.calme();
   const fam = await s.lire(`families/${fid}`);
@@ -355,8 +357,8 @@ test('« Annuler l\'installation » : famille effacée, la tablette se réinstal
   const julie = await s.compte('Julie', 'julie@exemple.fr');
   const t = await a.tablettePreparee();
   await a.afficherCode(t);
-  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, julie);
-  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamei Ema' }, julie);
+  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, a.commeAdmin(julie));
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamei Ema' }, a.commeAdmin(julie));
   await s.calme();
   await a.entrerDansLaFamille(t);
   await s.appeler('annulerInstallation', { fid }, julie);
@@ -379,8 +381,8 @@ test('« Annuler l\'installation » refusée quand la commande payée est déjà
   await a.commandeDAvant(id);
   await a.preparerEtEnvoyer(id, t);
   await a.afficherCode(t);
-  await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
-  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, paul);
+  await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, a.commeAdmin(paul));
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, a.commeAdmin(paul));
   await s.calme();
   await assert.rejects(s.appeler('annulerInstallation', { fid }, paul), /commande est déjà reliée/);
   assert.ok(await s.lire(`families/${fid}`));
@@ -477,8 +479,8 @@ test('installation commencée mais jamais finie : pas gratuite pour toujours, «
   // Tablette hors du stock (n° de série inconnu) : aucune commande ne se relie toute seule.
   const t = { serie: 'INCONNUE-F2', tabletUid: 'tablette-f2', callsUid: 'appels-f2' };
   await a.afficherCode(t);
-  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, julie);
-  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, julie);
+  await s.appeler('reserverTablette', { code: t.code, prenom: 'Julie' }, a.commeAdmin(julie));
+  const { fid } = await s.appeler('nommerFamille', { code: t.code, nom: 'Mamie Emma' }, a.commeAdmin(julie));
   await s.calme();
   await a.entrerDansLaFamille(t);
   let fam = await s.lire(`families/${fid}`);

@@ -255,3 +255,136 @@ test('boîte des factures inondée : 60 e-mails lus par jour au plus, la suite l
     }
   }
 });
+
+// ---------- Quota d'e-mails Brevo (audit sécurité 11/11, L1 et L8, A28) ----------
+
+const quota = require('../quota-courriels');
+const C_EST_NOTE = /^C'est noté/;
+const inscrire = (email, depuis, entetes = {}) => s.requete('listeAttente', { corps: { email, accord: true }, depuis, entetes });
+const contactsEnAttente = async () => (await s.db.collection('contacts').where('listeAttente', '==', true).get()).size;
+// Le compteur du jour (quota-courriels.js) n'avance pas en simulation : le scénario dit combien d'e-mails sont partis.
+const dejaPartis = (n) => s.db.doc(`interne/courriels-${quota.jourParis(Date.now())}`).set({ n });
+
+test('liste d\'attente : 5 demandes par heure et par adresse internet, en-tête inventé ou pas', async () => {
+  const statuts = [];
+  for (let i = 0; i < 7; i++) statuts.push((await inscrire(`visiteur${i}@exemple.fr`, '203.0.113.50', { 'x-forwarded-for': `10.1.0.${i}` })).statut);
+  assert.deepStrictEqual(statuts, [204, 204, 204, 204, 204, 429, 429]);
+  await s.calme();
+  assert.strictEqual(await contactsEnAttente(), 5, 'les demandes refusées ne sont pas notées');
+  assert.strictEqual(s.boite.filter((m) => C_EST_NOTE.test(m.sujet)).length, 5);
+  assert.deepStrictEqual(mailsA('visiteur5@exemple.fr'), []);
+  // Une autre adresse passe ; la même, une heure plus tard.
+  assert.strictEqual((await inscrire('voisin@exemple.fr', '198.51.100.50')).statut, 204);
+  s.avancer(1 / 24 + 0.001);
+  assert.strictEqual((await inscrire('visiteur5@exemple.fr', '203.0.113.50')).statut, 204);
+  await s.calme();
+  assert.strictEqual(mailsA('visiteur5@exemple.fr').length, 1);
+  assert.ok(s.journal.some((l) => /plus de 5 demandes en une heure/.test(l)), 'refus noté dans le journal');
+});
+
+test('liste d\'attente : 50 « C\'est noté » par jour au plus, les suivants notés sans e-mail', async () => {
+  const ip = (i) => `198.51.${Math.floor(i / 200)}.${(i % 200) + 1}`;
+  for (let i = 0; i < 55; i++) assert.strictEqual((await inscrire(`inscrit${i}@exemple.fr`, ip(i))).statut, 204);
+  await s.calme();
+  assert.strictEqual(await contactsEnAttente(), 55, 'tout le monde est noté (e-mail d\'ouverture des commandes)');
+  assert.strictEqual(s.boite.filter((m) => C_EST_NOTE.test(m.sujet)).length, 50);
+  assert.deepStrictEqual(mailsA('inscrit54@exemple.fr'), []);
+  assert.strictEqual(s.journal.filter((l) => /plus de 50 « C'est noté » aujourd'hui/.test(l)).length, 5);
+  // Le lendemain (jour de Paris), les « C'est noté » repartent.
+  s.avancer(1);
+  assert.strictEqual((await inscrire('lendemain@exemple.fr', '192.0.2.200')).statut, 204);
+  await s.calme();
+  assert.strictEqual(mailsA('lendemain@exemple.fr').length, 1);
+});
+
+test('moins de 100 envois Brevo restants : e-mails de confort retenus (journal), urgents toujours envoyés', async () => {
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const t = await a.tablettePreparee();
+  await a.afficherCode(t);
+  const fid = await a.installer(julie, t);
+  await s.appeler('gestionFamilleOfferte', { fid, offerte: true }, a.TANGUY);
+  await s.calme();
+  s.boite.length = 0;
+  await dejaPartis(quota.PLAFOND_JOUR - quota.RESERVE_URGENTS); // 200 partis : il en reste 100, gardés pour les urgents
+
+  // Confort : « C'est noté », demande pour rejoindre, bienvenue, rappel confirmé. Rien ne part, rien ne casse.
+  assert.strictEqual((await inscrire('attente@exemple.fr', '192.0.2.10')).statut, 204);
+  await a.rejoindre(paul, fid, { attente: true });
+  await s.calme();
+  assert.ok(s.notifications.some((n) => n.type === 'demande'), 'la notification de la demande part quand même');
+  await s.db.doc(`families/${fid}/members/${paul.uid}`).update({ status: 'active' });
+  await s.calme();
+  const messages = [{ role: 'user', content: 'Rappelez-moi.' }];
+  const r = await s.requete('supportChat', { depuis: '192.0.2.11', corps: { messages, contact: { nom: 'Léa', telephone: '06 12 34 56 78', email: 'lea@exemple.fr' } } });
+  assert.strictEqual(r.statut, 200);
+  await s.calme();
+  assert.deepStrictEqual(mailsA('attente@exemple.fr'), []);
+  assert.deepStrictEqual(mailsA(julie.email), [], 'pas d\'e-mail « veut rejoindre la famille »');
+  assert.deepStrictEqual(mailsA(paul.email), [], 'pas d\'e-mail « Bienvenue »');
+  assert.deepStrictEqual(mailsA('lea@exemple.fr'), [], 'pas d\'e-mail « Bien reçu »');
+  assert.strictEqual(s.journal.filter((l) => /E-mail de confort non envoyé/.test(l)).length, 4);
+  assert.strictEqual(await contactsEnAttente(), 1, 'le contact est noté quand même');
+
+  // Urgents : demande de rappel pour Papote (envoyée ci-dessus), SOS sans téléphone, invitation, commande payée.
+  assert.ok(s.boite.some((m) => /^Demande de rappel/.test(m.sujet)), 'la demande de rappel arrive chez Papote');
+  s.reglages.telephones = false;
+  await a.appelerDepuisLaTablette(t, { sos: 1 });
+  await s.calme();
+  assert.deepStrictEqual(mailsA(julie.email), ['SOS : Mamie Emma a appuyé sur SOS, aucun téléphone n\'a sonné']);
+  await s.appeler('inviterParEmail', { fid, email: 'cousin@exemple.fr' }, julie);
+  assert.strictEqual(mailsA('cousin@exemple.fr').length, 1, 'l\'invitation part');
+  await a.tablettePreparee();
+  await a.commanderEtPayer({ email: 'acheteur@exemple.fr' });
+  await s.calme();
+  assert.ok(mailsA('acheteur@exemple.fr').length >= 1, 'la confirmation de commande part');
+
+  // Un envoi de moins (199 partis) : le confort repart.
+  await dejaPartis(quota.PLAFOND_JOUR - quota.RESERVE_URGENTS - 1);
+  assert.strictEqual((await inscrire('attente2@exemple.fr', '192.0.2.12')).statut, 204);
+  await s.calme();
+  assert.strictEqual(mailsA('attente2@exemple.fr').length, 1);
+});
+
+test('« Bienvenue dans la famille » : 10 par jour et par famille, même avec deux comptes complices', async () => {
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  const complice = await s.compte('Complice', 'complice@exemple.fr');
+  const fid = await familleInstallee(julie);
+  const tour = async () => {
+    await a.rejoindre(complice, fid, { attente: true });
+    await s.calme();
+    await s.db.doc(`families/${fid}/members/${complice.uid}`).update({ status: 'active' });
+    await s.calme();
+    await s.db.doc(`families/${fid}/members/${complice.uid}`).delete();
+    await s.calme();
+  };
+  for (let i = 0; i < 12; i++) await tour();
+  const bienvenues = () => mailsA(complice.email).filter((m) => /^Bienvenue dans la famille de/.test(m)).length;
+  assert.strictEqual(bienvenues(), 10);
+  assert.strictEqual(s.journal.filter((l) => /plus de 10 « Bienvenue » aujourd'hui/.test(l)).length, 2);
+  // Une autre famille n'est pas touchée par ce plafond.
+  const marc = await s.compte('Marc', 'marc@exemple.fr');
+  const autre = await familleInstallee(marc);
+  await a.rejoindre(complice, autre, { attente: true });
+  await s.calme();
+  await s.db.doc(`families/${autre}/members/${complice.uid}`).update({ status: 'active' });
+  await s.calme();
+  assert.strictEqual(bienvenues(), 11);
+  // Le lendemain, la première famille peut de nouveau souhaiter la bienvenue.
+  s.avancer(1);
+  await tour();
+  assert.strictEqual(bienvenues(), 12);
+});
+
+test('liste d\'attente : champ piège rempli (robot), réponse « réussi » sans rien noter ni envoyer', async () => {
+  const r = await s.requete('listeAttente', { corps: { email: 'robot@exemple.fr', accord: true, adresse2: '12 rue des Robots' }, depuis: '192.0.2.30' });
+  assert.strictEqual(r.statut, 204);
+  await s.calme();
+  assert.strictEqual(await contactsEnAttente(), 0);
+  assert.deepStrictEqual(s.boite, []);
+  // Une personne (champ laissé vide, comme l'envoie le site) passe normalement.
+  assert.strictEqual((await s.requete('listeAttente', { corps: { email: 'humain@exemple.fr', accord: true, adresse2: '' }, depuis: '192.0.2.30' })).statut, 204);
+  await s.calme();
+  assert.strictEqual(await contactsEnAttente(), 1);
+  assert.strictEqual(mailsA('humain@exemple.fr').length, 1);
+});

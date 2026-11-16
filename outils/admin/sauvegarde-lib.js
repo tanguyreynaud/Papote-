@@ -11,9 +11,11 @@ function charger(nom) {
     return require(require.resolve(nom, { paths: [require('path').join(__dirname, '..', '..', 'functions')] }));
   }
 }
-const { Timestamp, GeoPoint, DocumentReference } = charger('firebase-admin/firestore');
+const { Timestamp, GeoPoint, DocumentReference, FieldValue } = charger('firebase-admin/firestore');
 
-const VERSION = 1;
+// Format 2 (12/11) : un dossier par sauvegarde, un document par ligne (ecrireSauvegarde). Le format 1 (un seul
+// fichier JSON) se relit toujours (lireSauvegarde).
+const VERSION = 2;
 
 function encoder(v) {
   if (v === null || v === undefined) return v === undefined ? null : v;
@@ -49,9 +51,12 @@ function decoder(v, db) {
 }
 
 // Parcourt toute la base : chaque collection, chaque document, et les sous-collections de chaque document
-// (listCollections, en parallèle par paquets). Rend les documents dans l'ordre des chemins, lus par pages de 500.
-async function toutLire(db, { progression = () => {}, parallele = 25 } = {}) {
-  const documents = [];
+// (listCollections, en parallèle par paquets), lus par pages de 500. Chaque document est passé tout de suite à
+// surDocument (qui peut être async : l'écriture sur le disque attend le disque) : rien n'est gardé en mémoire, la
+// taille de la base n'a plus de limite (audit 12/11, N2 : un seul texte JSON s'arrêtait vers 20 à 40 familles).
+// Rend le nombre de documents.
+async function parcourir(db, surDocument, { progression = () => {}, parallele = 25 } = {}) {
+  let n = 0;
   const aVisiter = await db.listCollections();
   while (aVisiter.length) {
     const collection = aVisiter.shift();
@@ -59,25 +64,35 @@ async function toutLire(db, { progression = () => {}, parallele = 25 } = {}) {
     while (!page.empty) {
       const refs = [];
       for (const d of page.docs) {
-        documents.push({ chemin: d.ref.path, donnees: encoder(d.data()) });
+        await surDocument({ chemin: d.ref.path, donnees: encoder(d.data()) });
         refs.push(d.ref);
+        n++;
       }
       for (let i = 0; i < refs.length; i += parallele) {
         const sous = await Promise.all(refs.slice(i, i + parallele).map((r) => r.listCollections()));
         sous.forEach((liste) => aVisiter.push(...liste));
       }
-      progression(documents.length);
+      progression(n);
       if (page.size < 500) break;
       page = await collection.orderBy('__name__').startAfter(page.docs[page.docs.length - 1]).limit(500).get();
     }
   }
+  return n;
+}
+
+// Toute la base en mémoire, dans l'ordre des chemins (petites bases : tests, vérification, exercices).
+async function toutLire(db, options = {}) {
+  const documents = [];
+  await parcourir(db, (d) => { documents.push(d); }, options);
   documents.sort((a, b) => (a.chemin < b.chemin ? -1 : a.chemin > b.chemin ? 1 : 0));
   return documents;
 }
 
-// Les comptes (Firebase Auth) : identité et fournisseurs, pas les mots de passe (ceux des comptes « appels » des
-// tablettes sont recréés par la tablette elle-même au besoin).
-async function lireComptes(auth) {
+// Les comptes (Firebase Auth) : identité et fournisseurs. Les mots de passe (en fait leur empreinte scrypt calculée
+// par Google : seuls les comptes « appels » des tablettes en ont, un mot de passe tiré au hasard et gardé dans la
+// tablette) ne sont rendus qu'avec motsDePasse: true, dans un tableau à part : ils ne vont jamais dans comptes.jsonl
+// en clair, seulement dans mots-de-passe.jsonl.enc, chiffré avec la phrase des sauvegardes (A34).
+async function lireComptes(auth, { motsDePasse = null } = {}) {
   const comptes = [];
   let jeton;
   do {
@@ -89,17 +104,22 @@ async function lireComptes(auth) {
         providers: u.providerData.map((p) => ({ providerId: p.providerId, uid: p.uid, email: p.email || null, displayName: p.displayName || null })),
         creeLe: u.metadata.creationTime || null,
       });
+      if (motsDePasse && u.passwordHash) motsDePasse.push({ uid: u.uid, hash: u.passwordHash, sel: u.passwordSalt || null });
     }
     jeton = r.pageToken;
   } while (jeton);
   return comptes.sort((a, b) => (a.uid < b.uid ? -1 : 1));
 }
 
+// Sauvegarde en mémoire (format 1 : { version, le, projet, base, documents: [...], comptes: [...] }) : pour les
+// tests et les exercices sur de petites bases. La sauvegarde du dimanche écrit sur le disque (ecrireSauvegarde).
 async function sauvegarder({ db, auth = null, projet = '', base = '', progression }) {
   const documents = await toutLire(db, { progression });
   const comptes = auth ? await lireComptes(auth) : [];
-  return { version: VERSION, le: new Date().toISOString(), projet, base, documents, comptes };
+  return { version: 1, le: new Date().toISOString(), projet, base: base || nomBase(db), documents, comptes };
 }
+
+const nomBase = (db) => (db && db.databaseId) || '(default)';
 
 // Lots d'écriture : 400 documents au plus, et 3,5 Mio au plus en tout. Firestore refuse une requête de plus de
 // 10 Mio (et l'émulateur reste bloqué au-delà de 4 Mio environ), or un document peut peser près de 1 Mio (photo
@@ -109,76 +129,161 @@ async function sauvegarder({ db, auth = null, projet = '', base = '', progressio
 const MAX_DOCS_LOT = 400;
 const MAX_OCTETS_LOT = 3.5 * 1024 * 1024;
 const tailleEstimee = (d) => Buffer.byteLength(d.chemin) + Buffer.byteLength(JSON.stringify(d.donnees || {})) + 64;
-function lotsDEcriture(documents, { maxDocs = MAX_DOCS_LOT, maxOctets = MAX_OCTETS_LOT } = {}) {
-  const lots = [];
+// Découpe au fil de l'eau : ajouter(d) rend le lot précédent quand d n'y tient plus, reste() le dernier.
+function decoupeur({ maxDocs = MAX_DOCS_LOT, maxOctets = MAX_OCTETS_LOT } = {}) {
   let lot = [];
   let octets = 0;
-  for (const d of documents) {
-    const taille = tailleEstimee(d);
-    if (lot.length && (lot.length >= maxDocs || octets + taille > maxOctets)) {
-      lots.push(lot);
-      lot = [];
-      octets = 0;
-    }
-    lot.push(d);
-    octets += taille;
-  }
-  if (lot.length) lots.push(lot);
+  return {
+    ajouter(d) {
+      const taille = tailleEstimee(d);
+      let plein = null;
+      if (lot.length && (lot.length >= maxDocs || octets + taille > maxOctets)) {
+        plein = lot;
+        lot = [];
+        octets = 0;
+      }
+      lot.push(d);
+      octets += taille;
+      return plein;
+    },
+    reste: () => (lot.length ? lot : null),
+  };
+}
+function lotsDEcriture(documents, options) {
+  const d = decoupeur(options);
+  const lots = [];
+  for (const doc of documents) { const plein = d.ajouter(doc); if (plein) lots.push(plein); }
+  if (d.reste()) lots.push(d.reste());
   return lots;
+}
+
+// Documents qui ne sont jamais réécrits par une restauration : le drapeau de restauration lui-même, et le relevé
+// de la dernière sauvegarde réussie (interne/sauvegarde, lu par l'alerte des 8 jours) qui doit rester le vrai.
+const ATTENTE_DEBUT = process.env.PAPOTE_ATTENTE_DRAPEAU_MS != null ? Number(process.env.PAPOTE_ATTENTE_DRAPEAU_MS) : 70 * 1000;
+const JAMAIS_RESTAURES = new Set(['interne/restauration', 'interne/sauvegarde']);
+
+// Ce que --effacer effacerait : les documents de la base absents de la sauvegarde (relevé et drapeau exceptés).
+async function cheminsAEffacer(db, sauvegarde) {
+  const garder = new Set();
+  for await (const d of sauvegarde.documents) garder.add(d.chemin);
+  const aEffacer = [];
+  await parcourir(db, (d) => { if (!garder.has(d.chemin) && !JAMAIS_RESTAURES.has(d.chemin)) aEffacer.push(d.chemin); });
+  return aEffacer;
 }
 
 // Réécrit chaque document tel qu'il était (set complet, par lots : lotsDEcriture). Les documents présents dans la
 // base et absents de la sauvegarde sont laissés tels quels, sauf avec effacer: true (remise exacte à l'état sauvegardé).
-async function restaurer({ db, auth = null, sauvegarde, effacer = false, progression = () => {} }) {
-  if (sauvegarde.version !== VERSION) throw new Error(`Version de sauvegarde inconnue : ${sauvegarde.version}`);
-  if (effacer) {
-    const presents = await toutLire(db);
-    const garder = new Set(sauvegarde.documents.map((d) => d.chemin));
-    const aEffacer = presents.filter((d) => !garder.has(d.chemin));
-    for (let i = 0; i < aEffacer.length; i += 400) {
-      const lot = db.batch();
-      aEffacer.slice(i, i + 400).forEach((d) => lot.delete(db.doc(d.chemin)));
-      await lot.commit();
-    }
+// sauvegarde.documents : un tableau (format 1) ou un itérable asynchrone relisible (format 2, lireSauvegarde).
+// Mauvaise base (audit A15-2) : la sauvegarde porte le nom de la base d'où elle vient ; la restaurer dans une autre
+// base est refusé, sauf autreBase: true (restaurer.bat --autre-base), par exemple vers une base « europe2 » neuve.
+// attenteDebut, attenteFin : à 0 seulement dans les tests sans fonctions (outils/admin, vérification dans l'émulateur).
+async function restaurer({ db, auth = null, sauvegarde, effacer = false, autreBase = false, progression = () => {}, attenteFin = 5000,
+  attenteDebut = ATTENTE_DEBUT,
+  phrase = null, hachage = null }) {
+  if (![1, VERSION].includes(sauvegarde.version)) throw new Error(`Version de sauvegarde inconnue : ${sauvegarde.version}`);
+  const cible = nomBase(db);
+  if (!autreBase && sauvegarde.base !== cible) {
+    throw new Error(`cette sauvegarde vient de la base « ${sauvegarde.base || 'inconnue'} », pas de « ${cible} » : restauration refusée. `
+      + 'Pour la mettre exprès dans une autre base, relancer avec --autre-base.');
   }
-  // Pendant l'écriture, les déclencheurs du serveur qui préviennent des humains ou réveillent des tablettes se
-  // taisent (functions/base.js restaurationEnCours) : drapeau interne/restauration, 2 h au plus, retiré à la fin.
+  // Mots de passe lus AVANT toute écriture : une phrase manquante ou fausse arrête tout de suite.
+  const mdp = auth && sauvegarde.comptes && sauvegarde.comptes.length ? await lireMotsDePasse(sauvegarde, phrase) : null;
+  const parametres = mdp ? hachage || mdp.hachage || null : null;
+  const options = parametres ? { hash: optionsHachage(parametres) } : undefined;
+  // Pendant TOUTE la restauration (effacement compris), les déclencheurs Firestore du serveur se taisent
+  // (functions/base.js, restaurationEnCours) : drapeau interne/restauration { enCours, debut, jusque } posé avant la
+  // première écriture, prolongé tant que l'écriture dure, puis { enCours: false, debut, fin } (gardé : un événement
+  // livré en retard par Google tombe encore dans la fenêtre debut-fin et reste ignoré). Heures du serveur.
   const drapeau = db.doc('interne/restauration');
-  await drapeau.set({ enCours: true, jusque: Timestamp.fromMillis(Date.now() + 2 * 3600 * 1000), le: Timestamp.now() });
+  const DUREE = 2 * 3600 * 1000;
+  let prolongeLe = Date.now();
+  await drapeau.set({ enCours: true, debut: FieldValue.serverTimestamp(), jusque: Timestamp.fromMillis(Date.now() + DUREE), fin: null });
+  // Les fonctions gardent le drapeau « pas de restauration » 60 s en mémoire (functions/base.js, CACHE_MS) : on attend
+  // qu'aucune ne puisse encore le croire avant la première écriture.
+  await new Promise((r) => setTimeout(r, attenteDebut));
+  const prolonger = async () => {
+    if (Date.now() - prolongeLe < 10 * 60 * 1000) return;
+    prolongeLe = Date.now();
+    await drapeau.update({ jusque: Timestamp.fromMillis(Date.now() + DUREE) });
+  };
   let ecrits = 0;
+  let effaces = 0;
+  const ecrire = async (paquet) => {
+    const lot = db.batch();
+    for (const d of paquet) lot.set(db.doc(d.chemin), decoder(d.donnees, db));
+    await lot.commit();
+    ecrits += paquet.length;
+    progression(ecrits);
+    await prolonger();
+  };
   try {
-    const documents = sauvegarde.documents.filter((d) => d.chemin !== 'interne/restauration');
-    for (const paquet of lotsDEcriture(documents)) {
-      const lot = db.batch();
-      for (const d of paquet) lot.set(db.doc(d.chemin), decoder(d.donnees, db));
-      await lot.commit();
-      ecrits += paquet.length;
-      progression(ecrits);
+    if (effacer) {
+      const aEffacer = await cheminsAEffacer(db, sauvegarde);
+      for (let i = 0; i < aEffacer.length; i += 400) {
+        const lot = db.batch();
+        aEffacer.slice(i, i + 400).forEach((c) => lot.delete(db.doc(c)));
+        await lot.commit();
+        effaces += Math.min(400, aEffacer.length - i);
+        await prolonger();
+      }
     }
+    const lots = decoupeur();
+    for await (const d of sauvegarde.documents) {
+      if (JAMAIS_RESTAURES.has(d.chemin)) continue;
+      const plein = lots.ajouter(d);
+      if (plein) await ecrire(plein);
+    }
+    if (lots.reste()) await ecrire(lots.reste());
     // Les déclencheurs tournent encore quelques secondes après la dernière écriture.
-    await new Promise((r) => setTimeout(r, 5000));
+    await new Promise((r) => setTimeout(r, attenteFin));
   } finally {
-    await drapeau.delete();
+    await drapeau.set({ enCours: false, fin: FieldValue.serverTimestamp() }, { merge: true });
   }
   let comptes = 0;
+  let avecMotDePasse = 0;
+  let sansMotDePasse = 0;
+  let dejaLa = 0;
   if (auth && sauvegarde.comptes && sauvegarde.comptes.length) {
-    for (let i = 0; i < sauvegarde.comptes.length; i += 1000) {
-      const r = await auth.importUsers(sauvegarde.comptes.slice(i, i + 1000).map((c) => ({
+    // Mots de passe des comptes « appels » (A34) : déchiffrés en mémoire seulement, puis remis avec les paramètres
+    // de hachage du projet (sans eux, Google ne peut pas relire les empreintes).
+    const fiche = (c) => {
+      const u = {
         uid: c.uid, email: c.email || undefined, emailVerified: c.emailVerified, displayName: c.displayName || undefined,
         photoURL: c.photoURL || undefined, disabled: c.disabled, customClaims: c.customClaims || undefined,
         providerData: c.providers.filter((p) => p.providerId !== 'password').map((p) => ({ providerId: p.providerId, uid: p.uid, email: p.email || undefined, displayName: p.displayName || undefined })),
-      })));
+      };
+      const m = mdp && mdp.parUid.get(c.uid);
+      if (m && options) {
+        u.passwordHash = Buffer.from(m.hash, 'base64');
+        if (m.sel) u.passwordSalt = Buffer.from(m.sel, 'base64');
+        avecMotDePasse++;
+      } else if (c.providers.some((p) => p.providerId === 'password')) sansMotDePasse++;
+      return u;
+    };
+    // Seuls les comptes absents sont remis : un compte encore là (avec son vrai mot de passe) n'est pas touché, et
+    // Firebase refuse d'ailleurs d'écraser un compte existant.
+    const absents = [];
+    for (let i = 0; i < sauvegarde.comptes.length; i += 100) {
+      const paquet = sauvegarde.comptes.slice(i, i + 100);
+      const r = await auth.getUsers(paquet.map((c) => ({ uid: c.uid })));
+      const la = new Set(r.users.map((u) => u.uid));
+      for (const c of paquet) if (la.has(c.uid)) dejaLa++; else absents.push(c);
+    }
+    for (let i = 0; i < absents.length; i += 1000) {
+      const r = await auth.importUsers(absents.slice(i, i + 1000).map(fiche), options);
       comptes += r.successCount;
       if (r.failureCount) throw new Error(`${r.failureCount} compte(s) non restauré(s) : ${r.errors.map((e) => `${e.index} ${e.error.message}`).join(' ; ')}`);
     }
   }
-  return { documents: ecrits, comptes };
+  return { documents: ecrits, comptes, dejaLa, avecMotDePasse, sansMotDePasse, effaces };
 }
 
-// ---------- Photos et vidéos (Storage) ----------
+// ---------- Fichiers du stockage (Storage) ----------
 // Les fichiers du bucket sont copiés tels quels dans un dossier (fichiers/<chemin dans le bucket>), avec un index
 // (fichiers/index.json : chemin → { md5, taille, type }). Copie incrémentale : seul ce qui est nouveau ou a changé
-// est téléchargé ; rien n'est jamais effacé du dossier (une photo supprimée depuis reste dans la copie).
+// est téléchargé ; rien n'est jamais effacé du dossier (un fichier supprimé depuis reste dans la copie).
+// prefixe : seulement ce dossier du bucket. La sauvegarde du dimanche copie toujours « gestion/ » (factures de
+// vente à garder 10 ans, livres du mois, pièces d'achat : audit 12/11, N5) ; les photos et vidéos seulement avec --photos.
 const fsp = require('fs').promises;
 const pathLib = require('path');
 const crypto = require('crypto');
@@ -190,10 +295,11 @@ async function lireIndex(dossier) {
   try { return JSON.parse(await fsp.readFile(pathLib.join(dossier, INDEX), 'utf8')); } catch { return {}; }
 }
 
-async function sauvegarderFichiers({ bucket, dossier, progression = () => {}, parallele = 8 }) {
+async function sauvegarderFichiers({ bucket, dossier, prefixe = '', progression = () => {}, parallele = 8 }) {
   await fsp.mkdir(dossier, { recursive: true });
   const index = await lireIndex(dossier);
-  const [fichiers] = await bucket.getFiles({ autoPaginate: true });
+  const [tous] = await bucket.getFiles(prefixe ? { prefix: prefixe, autoPaginate: true } : { autoPaginate: true });
+  const fichiers = tous.filter((f) => f.name.startsWith(prefixe));
   const aCopier = fichiers.filter((f) => !f.name.endsWith('/') && (!index[f.name] || index[f.name].md5 !== f.metadata.md5Hash));
   let copies = 0;
   let octets = 0;
@@ -213,18 +319,19 @@ async function sauvegarderFichiers({ bucket, dossier, progression = () => {}, pa
   return { total: fichiers.length, copies, octets, index };
 }
 
-// Vérifie la copie locale : chaque fichier de l'index existe et a bien le même contenu (md5). Rend les manquants
-// et les abîmés.
-async function verifierFichiers(dossier) {
+// Vérifie la copie locale : chaque fichier de l'index (sous prefixe) existe et a bien le même contenu (md5). Rend
+// les manquants et les abîmés.
+async function verifierFichiers(dossier, { prefixe = '' } = {}) {
   const index = await lireIndex(dossier);
   const manquants = [];
   const abimes = [];
-  for (const [chemin, info] of Object.entries(index)) {
+  const entrees = Object.entries(index).filter(([chemin]) => chemin.startsWith(prefixe));
+  for (const [chemin, info] of entrees) {
     let contenu;
     try { contenu = await fsp.readFile(cheminLocal(dossier, chemin)); } catch { manquants.push(chemin); continue; }
     if (crypto.createHash('md5').update(contenu).digest('base64') !== info.md5) abimes.push(chemin);
   }
-  return { total: Object.keys(index).length, manquants, abimes };
+  return { total: entrees.length, manquants, abimes };
 }
 
 // Remet dans le bucket les fichiers de la copie qui n'y sont plus (ou qui ont changé). Ce qui est dans le bucket et
@@ -245,15 +352,297 @@ async function restaurerFichiers({ bucket, dossier, progression = () => {}, para
   return { remis, total: aRemettre.length };
 }
 
-// Ne garde que les n sauvegardes de la base les plus récentes du dossier (papote-<date>.json, le nom porte la date).
-// Rend les noms effacés. n = 0 : rien n'est effacé.
+
+// ---------- Sauvegarde sur le disque, format 2 (audit 12/11, N2, A15-3) ----------
+// Un dossier par sauvegarde, papote-<date>/ :
+//   documents.jsonl  un document par ligne { chemin, donnees } (écrit et relu ligne à ligne : pas de limite de taille)
+//   comptes.jsonl    un compte par ligne
+//   entete.json      { version: 2, le, projet, base, configBase, documents: { lignes, octets, sha256 }, comptes: {…},
+//                      gestion: { fichiers, nouveaux, octets }, photos, complete: true }, écrit EN DERNIER
+// Les fichiers du stockage vont à côté, dans le dossier fichiers/ commun à toutes les sauvegardes (incrémental).
+// La sauvegarde s'écrit d'abord dans papote-<date>.en-cours/, est relue et contrôlée (nombre de lignes, empreinte
+// sha256, chaque ligne lisible), puis seulement renommée en papote-<date>/. La rotation ne compte que les
+// sauvegardes complètes et passe après ce contrôle : une sauvegarde coupée au milieu n'efface jamais une ancienne.
+const PREFIXE_GESTION = 'gestion/';
+const EN_COURS = '.en-cours';
+const ENTETE_FICHIER = 'entete.json';
+const DONNEES = { documents: 'documents.jsonl', comptes: 'comptes.jsonl' };
+const MOTS_DE_PASSE = 'mots-de-passe.jsonl.enc';
+
+// Paramètres de hachage des mots de passe du projet (console Firebase > Authentication > Utilisateurs > ⋮ >
+// « Paramètres de hachage des mots de passe ») : { algorithm: 'SCRYPT', base64_signer_key, base64_salt_separator,
+// rounds, mem_cost }, recopiés une fois par Tanguy dans %USERPROFILE%\.papote\hachage-mots-de-passe.json (jamais dans
+// le dépôt). Les noms de la console ou ceux du SDK sont acceptés.
+function optionsHachage(p) {
+  const cle = p.base64_signer_key || p.key;
+  const separateur = p.base64_salt_separator || p.saltSeparator;
+  const rounds = Number(p.rounds);
+  const memoire = Number(p.mem_cost || p.memoryCost);
+  if (String(p.algorithm || 'SCRYPT').toUpperCase() !== 'SCRYPT' || !cle || !separateur || !rounds || !memoire) {
+    throw new Error('paramètres de hachage des mots de passe incomplets (algorithm SCRYPT, base64_signer_key, base64_salt_separator, rounds, mem_cost)');
+  }
+  return { algorithm: 'SCRYPT', key: Buffer.from(cle, 'base64'), saltSeparator: Buffer.from(separateur, 'base64'), rounds, memoryCost: memoire };
+}
+function lireHachage(fichier) {
+  try { return JSON.parse(require('fs').readFileSync(fichier, 'utf8')); } catch { return null; }
+}
+
+// Déchiffre en mémoire le fichier des mots de passe d'une sauvegarde : { hachage, parUid } ou null (pas de fichier).
+// Fichier présent sans phrase : erreur claire (on ne restaure pas sans le dire).
+async function lireMotsDePasse(sauvegarde, phrase) {
+  if (!sauvegarde.fichierMotsDePasse) return null;
+  if (!phrase) throw new Error('cette sauvegarde contient les mots de passe des comptes des tablettes : phrase secrète nécessaire (PAPOTE_PHRASE_SAUVEGARDE ou .papote\\phrase-sauvegarde.txt)');
+  const { dechiffrer2 } = require('./chiffrement');
+  const lignesMdp = dechiffrer2(await fsp.readFile(sauvegarde.fichierMotsDePasse), phrase).toString('utf8').split('\n').map((l) => JSON.parse(l));
+  return { hachage: lignesMdp[0].hachage || null, parUid: new Map(lignesMdp.slice(1).map((m) => [m.uid, m])) };
+}
+const NOM = /^papote-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$/;
+const ANCIEN_FORMAT = /^papote-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json(\.enc)?$/;
+const nomSauvegarde = (date) => `papote-${date.toISOString().slice(0, 19).replace(/[:T]/g, '-')}`;
+const { once } = require('events');
+const readline = require('readline');
+
+// Écrit des lignes JSON dans un fichier en attendant le disque (pas de tout-en-mémoire), avec l'empreinte.
+function ecrivain(fichier) {
+  const flux = require('fs').createWriteStream(fichier);
+  const hash = crypto.createHash('sha256');
+  let lignes = 0;
+  let octets = 0;
+  let erreur = null;
+  flux.on('error', (e) => { erreur = e; });
+  return {
+    async ligne(objet) {
+      if (erreur) throw erreur;
+      const t = Buffer.from(`${JSON.stringify(objet)}\n`);
+      hash.update(t);
+      octets += t.length;
+      lignes++;
+      if (!flux.write(t)) await once(flux, 'drain');
+    },
+    async fermer() {
+      if (!flux.writableEnded) await new Promise((ok, ko) => { flux.once('error', ko); flux.end(ok); });
+      if (erreur) throw erreur;
+      return { lignes, octets, sha256: hash.digest('hex') };
+    },
+  };
+}
+
+async function* lignes(fichier) {
+  const rl = readline.createInterface({ input: require('fs').createReadStream(fichier), crlfDelay: Infinity });
+  for await (const l of rl) if (l) yield JSON.parse(l);
+}
+
+// Relit un fichier de lignes : nombre de lignes, octets, empreinte, et chaque ligne doit se lire en JSON.
+async function mesurer(fichier) {
+  const hash = crypto.createHash('sha256');
+  let octets = 0;
+  let n = 0;
+  let reste = '';
+  for await (const morceau of require('fs').createReadStream(fichier)) {
+    hash.update(morceau);
+    octets += morceau.length;
+    const texte = reste + morceau.toString('utf8');
+    const parties = texte.split('\n');
+    reste = parties.pop();
+    for (const p of parties) {
+      n++;
+      try { JSON.parse(p); } catch { throw new Error(`${pathLib.basename(fichier)} : ligne ${n} illisible`); }
+    }
+  }
+  if (reste) throw new Error(`${pathLib.basename(fichier)} : dernière ligne coupée`);
+  return { lignes: n, octets, sha256: hash.digest('hex') };
+}
+
+// Contrôle d'un dossier de sauvegarde : chaque fichier de données a exactement les lignes et l'empreinte notées
+// dans entete.json. Rend l'entête ; lance une erreur sinon.
+async function verifierDossier(chemin) {
+  let entete;
+  try { entete = JSON.parse(await fsp.readFile(pathLib.join(chemin, ENTETE_FICHIER), 'utf8')); } catch {
+    throw new Error(`${pathLib.basename(chemin)} : pas d'entete.json lisible, sauvegarde incomplète`);
+  }
+  if (!entete.complete) throw new Error(`${pathLib.basename(chemin)} : sauvegarde incomplète`);
+  for (const [cle, fichier] of Object.entries(DONNEES)) {
+    const m = await mesurer(pathLib.join(chemin, fichier));
+    const attendu = entete[cle] || {};
+    if (m.lignes !== attendu.lignes || m.sha256 !== attendu.sha256) {
+      throw new Error(`${fichier} : ${m.lignes} lignes relues pour ${attendu.lignes} écrites, ou contenu différent`);
+    }
+  }
+  if (entete.motsDePasse && entete.motsDePasse.chiffres) {
+    const t = await fsp.stat(pathLib.join(chemin, MOTS_DE_PASSE)).then((x) => x.size, () => -1);
+    if (t !== entete.motsDePasse.octets) throw new Error(`${MOTS_DE_PASSE} : absent ou de taille différente`);
+  }
+  return entete;
+}
+
+// La sauvegarde du dimanche (sauvegarder.js). bucket : celui du stockage (null = pas de fichiers, pour les tests
+// sans stockage) ; photos : copier tout le bucket au lieu du seul dossier gestion/. Rend { nom, dossier, entete,
+// effacees }. Une erreur à n'importe quelle étape laisse papote-<date>.en-cours/ (effacé à la sauvegarde réussie
+// suivante) et ne touche à aucune sauvegarde d'avant.
+async function ecrireSauvegarde({ db, auth = null, bucket = null, dossier, projet = '', base = '', configBase = null, photos = false,
+  garder = 4, le = new Date(), progression = () => {}, progressionFichiers = () => {}, phrase = null, hachage = null }) {
+  await fsp.mkdir(dossier, { recursive: true });
+  const nom = nomSauvegarde(le);
+  const enCours = pathLib.join(dossier, nom + EN_COURS);
+  await fsp.rm(enCours, { recursive: true, force: true });
+  await fsp.mkdir(enCours);
+
+  const ecrire = async (fichier, remplir) => {
+    const e = ecrivain(pathLib.join(enCours, fichier));
+    try { await remplir((x) => e.ligne(x)); } catch (err) { await e.fermer().catch(() => null); throw err; }
+    return e.fermer();
+  };
+  const documents = await ecrire(DONNEES.documents, (ligne) => parcourir(db, ligne, { progression }));
+  const empreintes = [];
+  const comptes = await ecrire(DONNEES.comptes, async (ligne) => { for (const c of auth ? await lireComptes(auth, { motsDePasse: empreintes }) : []) await ligne(c); });
+  // Mots de passe des comptes « appels » : chiffrés tout de suite (jamais écrits en clair), relus pour contrôle.
+  // Sans phrase secrète, ils ne sont pas gardés : la restauration redonnera ces comptes sans mot de passe.
+  let motsDePasse = null;
+  if (empreintes.length) {
+    if (phrase) {
+      const { chiffrer2, dechiffrer2 } = require('./chiffrement');
+      const clair = Buffer.from([{ hachage: hachage || null }, ...empreintes].map((x) => JSON.stringify(x)).join('\n'));
+      const paquet = chiffrer2(clair, phrase);
+      if (!dechiffrer2(paquet, phrase).equals(clair)) throw new Error('mots de passe : relecture du chiffrement différente');
+      await fsp.writeFile(pathLib.join(enCours, MOTS_DE_PASSE), paquet);
+      motsDePasse = { comptes: empreintes.length, chiffres: true, hachage: !!hachage, octets: paquet.length };
+    } else {
+      motsDePasse = { comptes: empreintes.length, chiffres: false };
+    }
+  }
+
+  let gestion = null;
+  if (bucket) {
+    const dossierFichiers = pathLib.join(dossier, 'fichiers');
+    const copier = () => sauvegarderFichiers({ bucket, dossier: dossierFichiers, prefixe: photos ? '' : PREFIXE_GESTION, progression: progressionFichiers });
+    let f = await copier();
+    let v = await verifierFichiers(dossierFichiers, { prefixe: PREFIXE_GESTION });
+    if (v.manquants.length || v.abimes.length) {
+      // Copie locale abîmée ou fichier effacé à la main : retirés de l'index, retéléchargés une fois.
+      const index = await lireIndex(dossierFichiers);
+      for (const c of [...v.manquants, ...v.abimes]) delete index[c];
+      await fsp.writeFile(pathLib.join(dossierFichiers, INDEX), JSON.stringify(index));
+      f = await copier();
+      v = await verifierFichiers(dossierFichiers, { prefixe: PREFIXE_GESTION });
+    }
+    if (v.manquants.length || v.abimes.length) {
+      throw new Error(`copie du dossier gestion/ : ${v.manquants.length} fichier(s) manquant(s), ${v.abimes.length} abîmé(s)`);
+    }
+    gestion = { fichiers: v.total, nouveaux: f.copies, octets: f.octets };
+  }
+
+  const entete = { version: VERSION, le: le.toISOString(), projet, base: base || nomBase(db), configBase, documents, comptes, motsDePasse, gestion, photos: !!photos, complete: true };
+  await fsp.writeFile(pathLib.join(enCours, ENTETE_FICHIER), JSON.stringify(entete, null, 1));
+  await verifierDossier(enCours);
+  const final = pathLib.join(dossier, nom);
+  await fsp.rename(enCours, final);
+  const effacees = garderDernieres(dossier, garder);
+  return { nom, dossier: final, entete, effacees };
+}
+
+// Relit une sauvegarde pour restaurer() : un dossier (format 2) ou un ancien fichier .json (format 1). Les documents
+// d'un dossier sont relus ligne à ligne à chaque passage (jamais tous en mémoire).
+async function lireSauvegarde(chemin) {
+  const dossierFichiers = pathLib.join(pathLib.dirname(pathLib.resolve(chemin)), 'fichiers');
+  if (!(await fsp.stat(chemin)).isDirectory()) {
+    const s = JSON.parse(await fsp.readFile(chemin, 'utf8'));
+    return { ...s, nbDocuments: s.documents.length, dossierFichiers };
+  }
+  const entete = await verifierDossier(chemin);
+  const comptes = [];
+  for await (const c of lignes(pathLib.join(chemin, DONNEES.comptes))) comptes.push(c);
+  const fichier = pathLib.join(chemin, DONNEES.documents);
+  return {
+    version: entete.version, le: entete.le, projet: entete.projet, base: entete.base, configBase: entete.configBase || null,
+    entete, nbDocuments: entete.documents.lignes, documents: { [Symbol.asyncIterator]: () => lignes(fichier) }, comptes, dossierFichiers,
+    fichierMotsDePasse: entete.motsDePasse && entete.motsDePasse.chiffres ? pathLib.join(chemin, MOTS_DE_PASSE) : null,
+  };
+}
+
+function lireEntete(chemin) {
+  try { return JSON.parse(require('fs').readFileSync(pathLib.join(chemin, ENTETE_FICHIER), 'utf8')); } catch { return null; }
+}
+
+// Rotation (audit A15-3 : avant, quatre dimanches ratés ou vides effaçaient la dernière bonne sauvegarde).
+// - Seules les sauvegardes complètes (entete.json « complete ») comptent ; on garde les n plus récentes.
+// - La plus récente sauvegarde « pleine » (au moins la moitié des documents de la plus grosse) n'est jamais effacée,
+//   même si n sauvegardes vides ou presque l'ont suivie (base vidée par erreur, outil de test lancé…).
+// - Les dossiers .en-cours plus anciens que la dernière sauvegarde complète (sauvegardes coupées) sont effacés.
+// - Les anciens fichiers .json (.json.enc) du format 1 ne sont effacés qu'une fois n sauvegardes complètes du
+//   nouveau format présentes.
+// Rend les noms effacés. n = 0 : rien n'est effacé. Sert aussi pour le dossier de la copie chiffrée.
 function garderDernieres(dossier, n = 4) {
   if (!n || n < 1) return [];
   const fs = require('fs');
-  const fichiers = fs.readdirSync(dossier).filter((f) => /^papote-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/.test(f)).sort();
-  const aEffacer = fichiers.slice(0, Math.max(0, fichiers.length - n));
-  for (const f of aEffacer) fs.unlinkSync(pathLib.join(dossier, f));
-  return aEffacer;
+  const noms = fs.readdirSync(dossier).sort();
+  const completes = noms.filter((f) => NOM.test(f)).map((f) => ({ nom: f, entete: lireEntete(pathLib.join(dossier, f)) }))
+    .filter((x) => x.entete && x.entete.complete);
+  const effacer = [];
+  if (completes.length > n) {
+    const taille = (x) => (x.entete.documents && x.entete.documents.lignes) || 0;
+    const plusGrosse = Math.max(...completes.map(taille));
+    const protegee = [...completes].reverse().find((x) => taille(x) >= plusGrosse / 2);
+    for (const x of completes.slice(0, completes.length - n)) if (x !== protegee) effacer.push(x.nom);
+  }
+  const derniere = completes.length ? completes[completes.length - 1].nom : null;
+  for (const f of noms) {
+    const base = f.endsWith(EN_COURS) ? f.slice(0, -EN_COURS.length) : null;
+    if (base && NOM.test(base) && derniere && base < derniere) effacer.push(f);
+  }
+  if (completes.length >= n) effacer.push(...noms.filter((f) => ANCIEN_FORMAT.test(f)));
+  for (const f of effacer) fs.rmSync(pathLib.join(dossier, f), { recursive: true, force: true });
+  return effacer;
 }
 
-module.exports = { encoder, decoder, lotsDEcriture, MAX_OCTETS_LOT, toutLire, lireComptes, sauvegarder, restaurer, sauvegarderFichiers, verifierFichiers, restaurerFichiers, garderDernieres, VERSION };
+// ---------- Copie chiffrée hors de Google (sauvegarder.js --copie) ----------
+// racine/papote-<date>/ : documents.jsonl.enc, comptes.jsonl.enc (chiffrés au fil de l'eau, chiffrement.js format 2)
+// et entete.json en clair (nombres, empreintes : rien de personnel ; la rotation le lit sans la phrase).
+// racine/fichiers/ : les fichiers de gestion/ chiffrés un par un (<chemin>.enc), incrémental, avec index.json.
+// Même règle que la sauvegarde : écrite en .en-cours, relue (déchiffrée et comparée à l'empreinte), renommée,
+// puis rotation (12 gardées).
+async function copierChiffre({ source, racine, phrase, fichiers = null, garder = 12 }) {
+  const { chiffrerFichier, dechiffrerFichier } = require('./chiffrement');
+  const entete = await verifierDossier(source);
+  const nom = pathLib.basename(source);
+  await fsp.mkdir(racine, { recursive: true });
+  const enCours = pathLib.join(racine, nom + EN_COURS);
+  await fsp.rm(enCours, { recursive: true, force: true });
+  await fsp.mkdir(enCours);
+  for (const [cle, fichier] of Object.entries(DONNEES)) {
+    const cible = pathLib.join(enCours, `${fichier}.enc`);
+    await chiffrerFichier(pathLib.join(source, fichier), cible, phrase);
+    const relu = await dechiffrerFichier(cible, null, phrase);
+    if (relu.sha256 !== entete[cle].sha256) throw new Error(`copie chiffrée de ${fichier} : relecture différente`);
+  }
+  // Les mots de passe sont déjà chiffrés avec la même phrase : copiés tels quels.
+  if (entete.motsDePasse && entete.motsDePasse.chiffres) await fsp.copyFile(pathLib.join(source, MOTS_DE_PASSE), pathLib.join(enCours, MOTS_DE_PASSE));
+  await fsp.copyFile(pathLib.join(source, ENTETE_FICHIER), pathLib.join(enCours, ENTETE_FICHIER));
+  const final = pathLib.join(racine, nom);
+  await fsp.rename(enCours, final);
+
+  let copies = 0;
+  if (fichiers) {
+    const index = await lireIndex(fichiers);
+    const dossierCopie = pathLib.join(racine, 'fichiers');
+    await fsp.mkdir(dossierCopie, { recursive: true });
+    const indexCopie = await lireIndex(dossierCopie);
+    for (const [chemin, info] of Object.entries(index)) {
+      if (!chemin.startsWith(PREFIXE_GESTION) || (indexCopie[chemin] && indexCopie[chemin].md5 === info.md5)) continue;
+      const cible = `${cheminLocal(dossierCopie, chemin)}.enc`;
+      await fsp.mkdir(pathLib.dirname(cible), { recursive: true });
+      await chiffrerFichier(cheminLocal(fichiers, chemin), cible, phrase);
+      indexCopie[chemin] = info;
+      copies++;
+      if (copies % 50 === 0) await fsp.writeFile(pathLib.join(dossierCopie, INDEX), JSON.stringify(indexCopie));
+    }
+    await fsp.writeFile(pathLib.join(dossierCopie, INDEX), JSON.stringify(indexCopie));
+  }
+  return { dossier: final, fichiers: copies, effacees: garderDernieres(racine, garder) };
+}
+
+module.exports = {
+  encoder, decoder, lotsDEcriture, MAX_OCTETS_LOT, parcourir, toutLire, lireComptes, sauvegarder, restaurer,
+  sauvegarderFichiers, verifierFichiers, restaurerFichiers, garderDernieres, VERSION,
+  ecrireSauvegarde, lireSauvegarde, verifierDossier, copierChiffre, nomSauvegarde, lignes, PREFIXE_GESTION, DONNEES, EN_COURS,
+  MOTS_DE_PASSE, optionsHachage, lireHachage, lireMotsDePasse, cheminsAEffacer,
+};

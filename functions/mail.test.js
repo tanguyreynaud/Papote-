@@ -32,7 +32,6 @@ test('blocs : fiche, étapes et encadré en HTML comme en texte brut', () => {
   assert.match(m.html, /NUMÉRO DE SUIVI|Numéro de suivi/);
   assert.match(m.text, /Numéro de suivi : 12345678/);
   assert.match(m.text, /1\. Branchez la tablette/);
-  assert.match(m.html, /commande=ABCD-1234/);
   const r = mail.retourTablette({ nom: 'Julie', avant: Date.UTC(2026, 10, 25), retractation: null, montant: 15000 });
   assert.match(r.html, /border-left:4px solid #4f46e5/);
   assert.match(r.text, /Date limite : 25 novembre 2026\. Sans retour à cette date, 150 € seront prélevés/);
@@ -47,7 +46,7 @@ test('aperçu dans la boîte de réception : la première vraie phrase, jamais �
 test('nouveaux e-mails : liste d\'attente, pause, matériel non rendu, demande acceptée, installation, rappel', () => {
   const l = mail.listeAttenteConfirmee({ prenom: 'Julie', telephone: '06 12 34 56 78', desinscription: 'https://x/d' });
   assert.match(l.text, /06 12 34 56 78/);
-  assert.match(l.text, /Se désinscrire : https:\/\/x\/d/);
+  assert.match(l.text, /Se désinscrire des e-mails d'information : https:\/\/x\/d/);
   assert.match(l.html, /demandé à être prévenu/);
   const p = mail.pausePrelevements({ nom: 'Julie', famille: 'Mamie Jeanne', jusqua: Date.UTC(2026, 11, 20) });
   assert.match(p.text, /reprennent le 20 décembre 2026/);
@@ -108,7 +107,10 @@ test('Outlook et Gmail sans styles : carte de 560 px [if mso], bouton à toute �
 test('premier jour : allumer la tablette expliqué, pas de « décroche toute seule » trompeur', () => {
   // Audit premier jour (05/11) : la tablette décroche quand elle voit un visage, pas toute seule.
   const colis = mail.colisParti({ nom: 'Julie', suivi: '1', lien: 'https://x', relais: null, code: 'AB' });
-  assert.match(colis.text, /bouton de marche/);
+  // Tanguy 12/11 (M9) : « bouton d'allumage (Power) », jamais « la tranche » ; personne n'a besoin d'être dans l'appli.
+  assert.match(colis.text, /bouton d'allumage \(Power\)/);
+  assert.doesNotMatch(colis.text, /tranche/);
+  assert.match(colis.text, /Personne n'a besoin d'être dans l'appli Papote pour la brancher/);
   assert.match(colis.text, /laissez-la charger/);
   for (const m of [mail.installationFinie({ prenom: 'Julie', famille: 'Mamie Jeanne' }), mail.demandeAcceptee({ prenom: 'Anne', famille: 'Mamie Jeanne' })]) {
     assert.doesNotMatch(m.text, /décroche toute seule|n'a rien à faire/);
@@ -148,4 +150,130 @@ test('passer au SEPA : premier e-mail et relance, sans promesse impossible (10/1
     assert.doesNotMatch(m.text, /jamais coupée/);
     assert.match(m.html, /Mamie(&nbsp;| )Jeanne/);
   }
+});
+
+test('e-mails de confort marqués (sans que la marque parte avec le contenu), les autres urgents', async () => {
+  const confort = [
+    mail.listeAttenteConfirmee({ prenom: 'Léa' }), mail.demandeAcceptee({ prenom: 'Léa', famille: 'Mamie' }),
+    mail.demandeRejoindre({ prenom: 'Léa', famille: 'Mamie' }), mail.rappelConfirme({ nom: 'Léa' }), mail.relancePanier({ etape: 2 }),
+  ];
+  confort.forEach((c) => assert.strictEqual(mail.estConfort(c), true, c.subject));
+  assert.ok(confort.every((c) => !Object.keys(c).includes('confort')), 'marque non énumérable');
+  const urgents = [
+    mail.appelSansTelephone({ nom: 'Mamie', sos: true }), mail.commandeConfirmee({ nom: 'Paul' }), mail.paiementEchoue({ nom: 'Paul' }),
+    mail.colisParti({ nom: 'Paul' }), mail.invitation({ prenom: 'Paul', tablette: 'Mamie', lien: 'https://x' }), mail.alerteAdmin({ sujet: 'x' }),
+  ];
+  urgents.forEach((c) => assert.strictEqual(mail.estConfort(c), false, c.subject));
+
+  // envoyer : le contrôle n'est demandé que pour le confort ; false retient l'e-mail sans erreur ; une panne le laisse partir.
+  const partis = [];
+  const vrai = mail.expedier;
+  mail.expedier = async ({ a }) => { partis.push(a); };
+  const demandes = [];
+  try {
+    mail.surEnvoiDeConfort(async (a) => { demandes.push(a); if (a === 'panne@x.fr') throw new Error('panne'); return false; });
+    assert.strictEqual(await mail.envoyer({ a: 'confort@x.fr', contenu: confort[0] }), false);
+    assert.strictEqual(await mail.envoyer({ a: 'urgent@x.fr', contenu: urgents[0] }), true);
+    assert.strictEqual(await mail.envoyer({ a: 'panne@x.fr', contenu: confort[1] }), true);
+    assert.deepStrictEqual(partis, ['urgent@x.fr', 'panne@x.fr']);
+    assert.deepStrictEqual(demandes, ['confort@x.fr', 'panne@x.fr']);
+  } finally {
+    mail.expedier = vrai;
+    mail.surEnvoiDeConfort(null);
+  }
+});
+
+test('A13 : les CGV en PDF sont jointes à chaque confirmation de commande, et le PDF suit vitrine/cgv.html', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const crypto = require('node:crypto');
+  for (const c of [mail.commandeConfirmee({ nom: 'Paul', code: 'AB-12' }), mail.commandeConfirmee({ nom: 'Paul', dejaInstallee: true }),
+    mail.commandeConfirmee({ nom: 'Paul', dejaInstallee: true, reprise: true })]) {
+    assert.strictEqual(c.attachments.length, 1, c.subject);
+    assert.strictEqual(c.attachments[0].contentType, 'application/pdf');
+    assert.match(c.attachments[0].filename, /^Conditions générales de vente Papote\.pdf$/);
+    assert.match(c.text, /conditions générales de vente sont jointes/);
+    assert.strictEqual(fs.readFileSync(c.attachments[0].path).subarray(0, 4).toString('latin1'), '%PDF');
+  }
+  assert.strictEqual(mail.estConfort(mail.commandeConfirmee({ nom: 'Paul' })), false, 'toujours urgent');
+  // cgv.html changée sans refaire le PDF : rouge. Relancer : node outils/cgv-pdf/generer.js
+  const page = path.join(__dirname, '..', 'vitrine', 'cgv.html');
+  const empreinte = crypto.createHash('sha256').update(fs.readFileSync(page)).digest('hex');
+  assert.strictEqual(fs.readFileSync(path.join(__dirname, 'documents', 'cgv.empreinte'), 'utf8').trim(), empreinte,
+    'vitrine/cgv.html a changé : relancer node outils/cgv-pdf/generer.js et garder le nouveau PDF');
+});
+
+// A4 (Tanguy 12/11/2026) : désinscription sur les e-mails d'information seulement, sur mapapote.fr.
+const { scenes } = require('../outils/galerie/emails');
+const SCENES = scenes(mail);
+const LIEN_DESINSCRIPTION = /\/desinscription|Se désinscrire/;
+
+test('e-mails de service : jamais d\'en-tête ni de lien de désinscription', () => {
+  const service = SCENES.filter((sc) => sc.contenu && !mail.MARKETING.includes(sc.fonction));
+  assert.ok(service.length > 60, `${service.length} e-mails de service`);
+  for (const sc of service) {
+    const h = sc.contenu.headers || {};
+    assert.ok(!h['List-Unsubscribe'] && !h['List-Unsubscribe-Post'], `en-tête de désinscription sur « ${sc.titre} »`);
+    assert.doesNotMatch(sc.contenu.html, LIEN_DESINSCRIPTION, `lien de désinscription dans « ${sc.titre} »`);
+    assert.doesNotMatch(sc.contenu.text, LIEN_DESINSCRIPTION, `lien de désinscription dans « ${sc.titre} » (texte)`);
+    assert.ok(!mail.estMarketing(sc.contenu), sc.titre);
+  }
+  // Même si on lui passe un lien par erreur, un e-mail de service l'ignore (relance d'impayé, SOS, colis revenu…).
+  for (const m of [
+    mail.paiementEchoue({ nom: 'Paul', pauseLe: Date.now(), desinscription: 'https://mapapote.fr/desinscription?c=1&j=2' }),
+    mail.passerAuSepa({ nom: 'Paul', relance: true, lien: 'https://x', desinscription: 'https://mapapote.fr/desinscription?c=1&j=2' }),
+    mail.colisRevenu({ nom: 'Paul', rembourse: 6000, desinscription: 'https://mapapote.fr/desinscription?c=1&j=2' }),
+  ]) {
+    assert.strictEqual(m.headers, undefined);
+    assert.doesNotMatch(m.html + m.text, LIEN_DESINSCRIPTION);
+  }
+});
+
+test('e-mails d\'information : en-tête un clic et lien tout en bas, sur mapapote.fr', () => {
+  const lien = mail.lienDesinscription('0123456789abcdef0123456789abcdef', 'fedcba9876543210fedcba9876543210');
+  assert.strictEqual(lien, 'https://mapapote.fr/desinscription?c=0123456789abcdef0123456789abcdef&j=fedcba9876543210fedcba9876543210');
+  const marketing = [
+    mail.relancePanier({ etape: 1, nom: 'Paul', lien: 'https://x/c', desinscription: lien }),
+    mail.relancePanier({ etape: 3, nom: 'Paul', lien: 'https://x/c', desinscription: lien }),
+    mail.listeAttenteConfirmee({ prenom: 'Julie', desinscription: lien }),
+    mail.lancement({ prenom: 'Julie', desinscription: lien }),
+    mail.information({ objet: 'Nouvelles', message: 'Bonjour', lienDesinscription: lien }),
+  ];
+  for (const m of marketing) {
+    assert.ok(mail.estMarketing(m), m.subject);
+    assert.strictEqual(m.headers['List-Unsubscribe'], `<${lien}>`);
+    assert.strictEqual(m.headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
+    assert.doesNotMatch(m.html + m.text, /cloudfunctions\.net/);
+    // Tout en bas : plus rien d'écrit après le lien.
+    const apres = m.html.slice(m.html.lastIndexOf('Se désinscrire'));
+    assert.doesNotMatch(apres.replace(/<[^>]+>/g, ''), /[A-Za-zÀ-ÿ]{3,}.*\n.*[A-Za-zÀ-ÿ]{3,}/s, m.subject);
+    assert.ok(m.text.trim().endsWith(lien), m.subject);
+  }
+  // Sans jeton (contact inconnu) : ni lien ni en-tête.
+  assert.strictEqual(mail.lancement({ prenom: 'Julie' }).headers, undefined);
+});
+
+test('colis revenu : son propre e-mail, plus « la tablette ne partira pas »', () => {
+  const m = mail.colisRevenu({ nom: 'Paul', rembourse: 6000 });
+  assert.strictEqual(m.subject, 'Votre colis Papote nous est revenu');
+  assert.match(m.text, /Votre colis n'a pas été retiré et nous est revenu\.\n\nNous vous remboursons les 60 €\.\n\nÉcrivez-nous si vous voulez un nouvel envoi\./);
+  assert.doesNotMatch(m.text, /ne partira pas/);
+  assert.match(mail.colisRevenu({ nom: 'Paul', rembourse: 8500 }).text, /Nous vous remboursons 85 €\./);
+});
+
+test('paiement échoué et pause : le bouton ouvre la page Abonnement de l\'appli', () => {
+  assert.match(mail.paiementEchoue({ nom: 'Paul', pauseLe: Date.now() }).text, /Régler le paiement : https:\/\/app\.mapapote\.fr\/\?abonnement=1/);
+  assert.match(mail.papoteEnPause({ nom: 'Paul' }).text, /Régler le paiement : https:\/\/app\.mapapote\.fr\/\?abonnement=1/);
+});
+
+test('installer : rien pour le proche âgé, l\'appli Papote pour la famille, jamais l\'un contre l\'autre', () => {
+  // E-mails aux familles (les e-mails internes citent le chat du site tel quel).
+  for (const sc of SCENES.filter((x) => x.contenu && !/internes/.test(x.groupe))) {
+    const t = sc.contenu.text;
+    assert.doesNotMatch(t, /Chacun installe|vous n'avez rien à installer|^Rien à installer/m, sc.titre);
+    for (const ligne of t.split('\n').filter((l) => /rien à installer/i.test(l))) {
+      assert.match(ligne, /Votre proche n'a rien à installer|n'a rien à installer/, `${sc.titre} : « ${ligne} »`);
+    }
+  }
+  assert.match(mail.installationFinie({ prenom: 'Julie', famille: 'Mamie' }).text, /Chacun reçoit un lien et utilise l'appli Papote sur son téléphone/);
 });

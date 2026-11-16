@@ -1,6 +1,6 @@
 @echo off
 rem Verifie qu'une sauvegarde se restaure vraiment (dans l'emulateur Firestore, rien ne touche la vraie base). Java requis.
-rem Utilisation : .\verifier-sauvegarde.bat sauvegardes\papote-<date>.json
+rem Utilisation : .\verifier-sauvegarde.bat sauvegardes\papote-<date>
 cd /d "%~dp0"
 if "%~1"=="" ( echo Usage : verifier-sauvegarde.bat ^<sauvegarde.json^> & pause & exit /b 1 )
 if not exist node_modules\firebase-admin (

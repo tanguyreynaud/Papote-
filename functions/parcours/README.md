@@ -50,6 +50,29 @@ l'admin, inscription de la tablette (fiche d'achat reprise, clé App Check jamai
 même tablette, autre tablette refusée, QR expiré après 24 h ; hors critères noté sans refus, tablette d'essai à part,
 20 QR par heure au plus.
 
+`code-remplacement.parcours.js` : code de tablette de remplacement (R2) : réservé à l'admin, 7 jours, double clic = un
+seul code, nouveau code qui efface l'ancien libre (et un vieux code sans échéance), code pris gardé, famille supprimée.
+
+`courriels-rejetes.parcours.js` : e-mails perdus (courriels-perdus.js) : webhook Brevo refusé sans la clé ; rejet
+noté sur la bonne commande et en « À faire », une seule fois ; envoi groupé, adresse sans commande, adresse corrigée ;
+« colis parti » ou mise en demeure non partis (`reglages.mailsEnPanne = n`) : un seul nouvel essai à la tâche
+horaire suivante, puis « À faire » ; rien pour un e-mail de confort.
+
+`menage.parcours.js` : ménage des données (menage.js) : adresses IP d'un appel effacées à sa fin (décroché, manqué,
+appel de la famille), appels, ordres, alertes et incidents de plus de 90 jours effacés par lots (récents, appel en
+cours et ordre en attente gardés), comptes sans famille depuis plus de 3 mois effacés (membre, responsable, tablette,
+administrateur et commande en cours gardés).
+
+`jeton-unique.parcours.js` : un téléphone ne sonne que pour le dernier compte connecté dessus (jeton-unique.js) :
+deux comptes sur le même téléphone (jeton de l'app Android puis du navigateur), seul le dernier inscrit garde le
+jeton ; même compte dans deux familles, gardé dans les deux, retiré de l'autre compte partout.
+
+`limites.parcours.js` : limites contre les abus (limites.js, A12) : voix Google coupée au 10e message du jour du
+même proche (pas pour les autres, ni pour les légendes de photos), drapeau des 50 messages jusqu'à minuit (Paris) et
+messages passés en même temps sans voix, copie d'anciens messages non comptée, rappels 10 créés par jour et 30 en
+cours (le rappel en trop effacé), rappel modifié 20 fois par jour avec la voix, coût (aucune lecture sur un « vu »).
+Le refus lui-même (51e message, 11e rappel) est une règle Firestore, testé dans `tests/regles/` (branche de l'app).
+
 Le refus du 31e proche lui-même est une règle Firestore : il est testé avec les règles, dans `tests/regles/`
 (branche de l'app web).
 

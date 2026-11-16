@@ -80,6 +80,8 @@ test('prélèvement refusé : responsables prévenus, pause 7 jours plus tard, p
   assert.deepStrictEqual(avis.uids, [julie.uid], 'aux responsables de la famille');
   assert.strictEqual(avis.fid, fid, 'l\'appli ouvre la bonne famille');
   assert.deepStrictEqual(mailsA(paul.email), ['Le paiement de Papote n\'a pas abouti'], 'e-mail à l\'adresse de la commande');
+  // A4 (12/11) : le bouton ouvre la page Abonnement de l'appli, là où se trouve « Régler le paiement ».
+  assert.match(s.boite.find((m) => m.a === paul.email).texte, /Régler le paiement : https:\/\/app\.mapapote\.fr\/\?abonnement=1/);
 
   s.avancer(8);
   await s.tache('finDeGrace');
@@ -284,28 +286,7 @@ test('l\'acheteur installe lui-même une tablette pas reconnue : sa commande est
   assert.deepStrictEqual(mailsA('contact@mapapote.fr'), [], 'rien à faire pour Tanguy');
 });
 
-test('famille préparée, tablette pas reconnue : celui qui a payé scanne, elle entre dans SA famille (pas une deuxième)', async () => {
-  const paul = await s.compte('Paul', 'paul@exemple.fr');
-  const { abonnement: id } = await a.commanderEtPayer({ email: paul.email });
-  const { fid } = await commande(id);
-  await a.entrerParInvitation(paul, fid);
-  const t = { serie: 'INCONNUE4', tabletUid: 'tablette-inconnue4', callsUid: 'appels-inconnue4' };
-  await a.afficherCode(t);
-  assert.strictEqual((await s.lire(`pairings/${t.code}`)).status, 'waiting', 'pas reconnue : pas de jumelage tout seul');
-  s.boite.length = 0;
-  const r = await s.appeler('reserverTablette', { code: t.code, prenom: 'Paul' }, paul);
-  assert.deepStrictEqual(r, { etat: 'reserve', fid }, 'l\'appli entre directement dans la famille');
-  await s.calme();
-  assert.strictEqual(await a.entrerDansLaFamille(t), fid);
-  assert.strictEqual((await famille(fid)).abonnement.statut, 'actif');
-  assert.ok((await commande(id)).tabletteRelieeLe, 'plus de rappel de jumelage');
-  assert.strictEqual((await s.db.collection('families').get()).size, 1, 'aucune deuxième famille');
-  assert.deepStrictEqual(mailsA('contact@mapapote.fr'), [], 'rien à faire pour Tanguy');
-  // Une deuxième tablette inconnue ne s'y ajoute pas d'office : la famille a déjà la sienne.
-  const t2 = { serie: 'INCONNUE5', tabletUid: 'tablette-inconnue5', callsUid: 'appels-inconnue5' };
-  await a.afficherCode(t2);
-  assert.deepStrictEqual(await s.appeler('reserverTablette', { code: t2.code, prenom: 'Paul' }, paul), { etat: 'reserve' });
-});
+// Secours « tablette pas reconnue scannée par celui qui a payé » retiré le 12/11 (A29) : voir mise-en-route.parcours.js (L2).
 
 test('famille préparée nommée pendant que la tablette entre : sa fiche prend quand même le nom de la famille', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
@@ -401,7 +382,7 @@ test('colis jamais retiré : Tanguy prévenu par e-mail à J+20, « Colis revenu
   const fiche = await s.lire(`stock/${t.fiche}`);
   assert.strictEqual(fiche.etat, 'revenue', 'à vérifier avant de repartir');
   assert.strictEqual(fiche.commande, null);
-  assert.ok(mailsA(paul.email).some((m) => /annul/i.test(m)), 'le client est prévenu');
+  assert.ok(mailsA(paul.email).includes('Votre colis Papote nous est revenu'), 'le client est prévenu (son propre e-mail, A4)');
 });
 
 test('appel ou SOS qui n\'atteint aucun téléphone : tous les proches prévenus par e-mail', async () => {
@@ -418,8 +399,8 @@ test('appel ou SOS qui n\'atteint aucun téléphone : tous les proches prévenus
 
   const cid = await a.appelerDepuisLaTablette(t, { sos: 1 });
   await s.calme();
-  assert.deepStrictEqual(mailsA(julie.email), ['SOS : Mamie Emma a appelé, aucun téléphone n\'a sonné']);
-  assert.deepStrictEqual(mailsA(paul.email), ['SOS : Mamie Emma a appelé, aucun téléphone n\'a sonné']);
+  assert.deepStrictEqual(mailsA(julie.email), ['SOS : Mamie Emma a appuyé sur SOS, aucun téléphone n\'a sonné']);
+  assert.deepStrictEqual(mailsA(paul.email), ['SOS : Mamie Emma a appuyé sur SOS, aucun téléphone n\'a sonné']);
   await s.db.doc(`families/${fid}/calls/${cid}`).update({ state: 'missed' });
   await s.calme();
   const cid2 = await a.appelerDepuisLaTablette(t, { sos: 2 });
@@ -534,12 +515,12 @@ test('tâches regroupées (tachesHoraires) : l\'alerte « pas vue » part à 10 
   s.notifications.length = 0;
   // Mercredi 4 novembre 2026 à 3 h (Paris) : les tâches horaires seulement.
   const nuit = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T02:00:00.000Z' });
-  assert.deepStrictEqual(nuit, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok' });
+  assert.deepStrictEqual(nuit, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', courrielsAReessayer: 'ok' });
   await s.calme();
   assert.strictEqual(alertes().length, 0, '3 h : pas d\'alerte « pas vue »');
   // Le même jour à 10 h : en plus, rappels de jumelage et alerte du matin.
   const matin = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T09:00:00.000Z' });
-  assert.deepStrictEqual(matin, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', rappelsJumelage: 'ok', alerteMatin: 'ok' });
+  assert.deepStrictEqual(matin, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', rappelsJumelage: 'ok', alerteMatin: 'ok', courrielsAReessayer: 'ok' });
   await s.calme();
   assert.strictEqual(alertes().length, 1, '10 h : alerte « pas vue »');
 });

@@ -170,7 +170,7 @@
       lCase.appendChild(texteCase);
       var mention = el('p', 'ps-mention', 'Vos coordonnées servent à vous répondre et à vous recontacter si besoin. ');
       var lien = el('a', '', 'Confidentialité');
-      lien.href = 'https://mapapote.fr/mentions.html#confidentialite';
+      lien.href = 'https://mapapote.fr/confidentialite.html';
       lien.target = '_blank';
       lien.rel = 'noopener';
       lien.style.textDecoration = 'underline';

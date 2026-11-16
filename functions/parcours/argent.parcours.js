@@ -98,7 +98,8 @@ test('deux commandes : la pause hospitalisation vise la commande ouverte, pas l\
   await premierMoisPasse(A);
   s.stripe.finirEssai(B);
   await s.calme();
-  await s.appeler('pauseHospitalisation', { commande: B, jusqua: Date.now() + 10 * s.JOUR }, a.TANGUY);
+  // 20 jours dans le mois de B (plus de 2 semaines, A8) : son prochain prélèvement est annulé chez Stripe.
+  await s.appeler('pauseHospitalisation', { commande: B, jusqua: Date.now() + 20 * s.JOUR }, a.TANGUY);
   await s.calme();
   assert.ok(abo(B).pause_collection, 'B en pause');
   assert.ok(!abo(A).pause_collection, 'A n\'est pas en pause');

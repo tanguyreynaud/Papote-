@@ -49,12 +49,15 @@ test('remplacement : panne gratuite, casse 130 € prélevés une seule fois mê
   await assert.rejects(remplacer(id, await remplacante(), undefined), /raison du remplacement/);
   assert.strictEqual((await fiche(t)).commande, id);
 
-  // Panne : rien de prélevé, l'ancienne revient.
+  // Panne : rien de prélevé ; la nouvelle ne part qu'une fois l'ancienne reçue (A9, 12/11).
   const n1 = await remplacante();
   const r1 = await remplacer(id, n1, 'panne');
-  assert.deepStrictEqual([r1.montant, r1.retour], [0, true]);
+  assert.deepStrictEqual([r1.montant, r1.retour, r1.attente], [0, true, true]);
   assert.strictEqual(preleve(id).length, 0);
   assert.strictEqual((await fiche(t)).etat, 'en-retour');
+  assert.ok(!(await fiche(n1)).commande, 'la nouvelle attend le retour de l\'ancienne');
+  await s.appeler('gestionStock', { action: 'remplacer', commande: id, element: 'tablette', nouveau: n1.fiche, raison: 'panne', ancienneRecue: true }, a.TANGUY);
+  assert.strictEqual((await fiche(t)).etat, 'revenue');
   assert.strictEqual((await fiche(n1)).commande, id);
 
   // Casse, deux appuis en même temps : un seul prélèvement de 130 €.

@@ -264,3 +264,56 @@ test('reprise : sans dette (avant la date limite du retour), la reprise reste po
   const { fid, paul } = await familleResiliee();
   assert.ok((await s.appeler('creerPaiement', { fid, formule: 'wifi', tablette: 'incluse' }, paul)).url);
 });
+
+// A13 (Tanguy, 12/11) : résilier depuis le site, sans compte, avec l'e-mail et le numéro de la commande.
+test('Résilier sans compte depuis le site : mauvais numéro refusé sans rien dire, date montrée, confirmé une seule fois', async () => {
+  const paul = await s.compte('Paul', 'paul.sanscompte@exemple.fr');
+  const { id, fid } = await familleAbonnee(paul);
+  s.boite.length = 0;
+  const code = (await commande(id)).code;
+  const depuis = '198.51.100.7';
+  const site = (corps) => s.requete('resilierSansCompte', { corps, depuis });
+
+  // Champs manquants ou illisibles.
+  assert.strictEqual((await site({ email: 'paul', code })).statut, 400);
+  assert.strictEqual((await site({ email: paul.email, code: '12' })).statut, 400);
+  // Mauvaise adresse ou numéro inconnu : même réponse, rien n'apprend qu'une commande existe.
+  const autreAdresse = await site({ email: 'quelquun@exemple.fr', code });
+  const autreCode = await site({ email: paul.email, code: code === 'ABCDEFGH' ? 'ABCDEFGJ' : 'ABCDEFGH' });
+  assert.strictEqual(autreAdresse.statut, 404);
+  assert.deepStrictEqual(autreAdresse.json, autreCode.json);
+  assert.strictEqual(abo(id).cancel_at, null, 'rien n\'est arrêté');
+
+  // Bonne adresse (majuscules et espaces tolérés) et numéro avec tiret : la date d'arrêt est montrée, rien n'est fait.
+  const vue = await site({ email: ` ${paul.email.toUpperCase()} `, code: `${code.slice(0, 4)}-${code.slice(4)}` });
+  assert.strictEqual(vue.statut, 200);
+  assert.strictEqual(vue.json.etat, 'a-confirmer');
+  assert.ok(vue.json.le > Date.now(), 'date d\'arrêt à venir');
+  await s.calme();
+  assert.strictEqual(abo(id).cancel_at, null, 'pas encore arrêté avant « Confirmer »');
+  assert.deepStrictEqual(mailsA(paul.email), []);
+
+  // « Confirmer » touché deux fois : un seul arrêt, un seul e-mail, même date que celle montrée.
+  const ok = await site({ email: paul.email, code, confirmer: true });
+  const encore = await site({ email: paul.email, code, confirmer: true });
+  await s.calme();
+  assert.strictEqual(ok.json.etat, 'resilie');
+  assert.strictEqual(ok.json.le, vue.json.le, 'la date annoncée');
+  assert.strictEqual(encore.json.etat, 'deja');
+  assert.strictEqual(abo(id).cancel_at, Math.ceil(ok.json.le / 1000), 'arrêt prévu chez Stripe');
+  assert.strictEqual((await famille(fid)).abonnement.resiliationLe.toMillis(), abo(id).cancel_at * 1000, 'l\'appli montre la même date');
+  assert.deepStrictEqual(mailsA(paul.email), ['Votre résiliation Papote est enregistrée']);
+  assert.strictEqual(abo(id).metadata.arretPar, 'client', 'le client peut encore le reprendre dans l\'appli');
+});
+
+test('Résilier sans compte : 20 essais par jour et par adresse internet, même en trichant sur X-Forwarded-For', async () => {
+  const depuis = '198.51.100.8';
+  for (let i = 0; i < 20; i++) {
+    const r = await s.requete('resilierSansCompte', { corps: { email: 'devine@exemple.fr', code: 'ABCDEFGH' }, depuis, entetes: { 'x-forwarded-for': `10.0.0.${i}` } });
+    assert.strictEqual(r.statut, 404, `essai ${i + 1}`);
+  }
+  const bloque = await s.requete('resilierSansCompte', { corps: { email: 'devine@exemple.fr', code: 'ABCDEFGH' }, depuis, entetes: { 'x-forwarded-for': '10.0.0.99' } });
+  assert.strictEqual(bloque.statut, 429);
+  const autre = await s.requete('resilierSansCompte', { corps: { email: 'devine@exemple.fr', code: 'ABCDEFGH' }, depuis: '198.51.100.9' });
+  assert.strictEqual(autre.statut, 404, 'une autre adresse internet n\'est pas bloquée');
+});

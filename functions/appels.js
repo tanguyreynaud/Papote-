@@ -3,6 +3,7 @@
 //   appelsSonnerie  appel créé par la tablette : notification push « Mamie vous appelle »
 //   appelsManques   l'appel de la tablette s'arrête sans réponse : « Appel manqué de Mamie » ;
 //                   s'il a été décroché, les autres téléphones arrêtent de sonner (« fin »)
+//                   et à la fin de tout appel (décroché ou non), ses adresses IP sont effacées (menage.js)
 //   jetonAppelNatif connexion de l'écran d'appel de l'app Android (voir envoyerConnexions)
 //                   SOS (bouton « SOS famille ») : « SOS : Mamie vous appelle » ; sans réponse au
 //                   2e essai, « Mamie a appuyé sur SOS » à toute la famille
@@ -12,20 +13,22 @@
 // Jetons des téléphones : families/{fid}/members/{uid}/private/push (voir push.js).
 // Messages « data » seulement : web/sw.js ou l'app Android (telephone/) les affichent.
 
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+// Déclencheurs coupés pendant une restauration (base.js, sansRestauration).
+const { onDocumentCreated, onDocumentUpdated } = require('./base').declencheurs;
 const { logger } = require('firebase-functions/v2');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 
 const { defineSecret, defineString } = require('firebase-functions/params');
-const { BASE_FIRESTORE, REGION_FIRESTORE, db: base, restaurationEnCours } = require('./base');
+const { BASE_FIRESTORE, REGION_FIRESTORE, db: base } = require('./base');
 const { envoyer } = require('./push');
 const mail = require('./mail');
 const journal = require('./journal-alertes');
+const menage = require('./menage');
 
 // Appel ou SOS qui ne fait sonner aucun téléphone (D1, Tanguy 2026-10-27) : tous les proches le savent par
-// e-mail (mêmes réglages que index.js ; en simulation, mail.envoyer est remplacé).
+// e-mail (mêmes réglages que index.js ; en simulation, l'envoi lui-même, mail.expedier, est remplacé).
 const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
 const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
@@ -43,6 +46,29 @@ async function prevenirSansTelephone(db, fid, uids, { nom, sos }) {
     .forEach((r) => logger.error(`Famille ${fid} : e-mail « aucun téléphone n'a sonné » non parti`, r.reason));
 }
 
+// SOS d'une tablette alors qu'aucun proche n'est encore dans la famille (M6, Tanguy 12/11) : celui qui a payé et
+// Papote le savent par e-mail, une fois par SOS (1er essai). Plus rien sinon : personne ne pouvait sonner.
+const EMAIL_PAPOTE = 'contact@mapapote.fr';
+async function sosSansProche(db, fid, appel) {
+  const [tablette, fam] = await Promise.all([
+    db.doc(`families/${fid}/members/${appel.callerUid}`).get(), db.doc(`families/${fid}`).get(),
+  ]);
+  if (!tablette.exists || tablette.get('role') !== 'tablette' || !fam.exists) return;
+  const nom = fam.get('nomAChoisir') ? null : (fam.get('name') || null);
+  const reglages = { smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value() };
+  const envois = [];
+  const payeur = fam.get('proprietaireEmail');
+  if (payeur) envois.push(mail.envoyer({ ...reglages, a: String(payeur).toLowerCase(), contenu: mail.sosSansProche({ nom, lien: APPLI }) }));
+  envois.push(mail.envoyer({ ...reglages, a: EMAIL_PAPOTE, contenu: mail.alerteAdmin({
+    titre: `SOS sans aucun proche dans la famille${nom ? ` de ${nom}` : ''}`,
+    detail: `La tablette a envoyé un SOS, mais personne n'est encore entré dans l'appli : personne n'a été appelé.${payeur ? ` Celui qui a payé (${payeur}) a reçu un e-mail.` : ''} Appelez le client.`,
+    commande: (fam.get('installation') || {}).commande || null,
+  }) }));
+  logger.warn(`Famille ${fid} : SOS sans aucun proche, ${envois.length} e-mail(s)`);
+  (await Promise.allSettled(envois)).filter((r) => r.status === 'rejected')
+    .forEach((r) => logger.error(`Famille ${fid} : e-mail « SOS sans proche » non parti`, r.reason));
+}
+
 const DOC = 'families/{fid}/calls/{cid}';
 
 // L'appel vient-il d'une tablette de la famille ? Renvoie les proches à prévenir.
@@ -58,6 +84,9 @@ async function destinataires(db, fid, appel) {
 
 // Bouton SOS de la tablette : toute la famille, calleeName 'SOS' (1er essai) ou 'SOS 2' (2e essai).
 // Pas de champ à part : les règles Firestore des appels restent les mêmes.
+// Champ des données FCM d'un SOS (« appel » des deux essais, « alerte » personne n'a répondu) : urgence = 'sos'.
+const URGENCE_SOS = 'sos';
+
 function essaiSos(appel) {
   if (appel.calleeUid) return 0;
   if (appel.calleeName === 'SOS') return 1;
@@ -73,16 +102,21 @@ const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 exports.appelsSonnerie = onDocumentCreated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE, timeoutSeconds: 90, secrets: [MAIL_MOT_DE_PASSE] }, async (event) => {
   const appel = event.data.data();
   if (!appel || appel.state !== 'ringing') return;
-  if (await restaurationEnCours()) return; // appel d'hier remis par une restauration : personne ne doit sonner
   const db = base();
   const { fid, cid } = event.params;
   const uids = await destinataires(db, fid, appel);
-  if (!uids.length) return;
+  if (!uids.length) {
+    if (essaiSos(appel) === 1) await sosSansProche(db, fid, appel);
+    return;
+  }
   // Jeton d'appel : seul un téléphone qui a reçu la sonnerie peut refuser sans se connecter.
   const jeton = require('node:crypto').randomBytes(16).toString('hex');
   await event.data.ref.collection('prive').doc('refus').set({ jeton });
   const nom = String(appel.callerName || 'Mamie');
   const data = { type: 'appel', cid, fid, jeton, nom: essaiSos(appel) ? `SOS : ${nom}` : nom };
+  // A47 : marqueur clair d'un SOS (1er et 2e essai), lu par l'appli Android pour sonner en urgence. Jamais sur un
+  // appel ordinaire. Seule une tablette de la famille peut le déclencher (destinataires, règles Firestore).
+  if (essaiSos(appel)) data.urgence = URGENCE_SOS;
   const n = await envoyer(db, fid, uids, data, 45);
   logger.info(`Appel ${cid} : ${n} téléphone(s) prévenu(s)`);
   if (essaiSos(appel) === 1) await journal.noter(db, { genre: 'sos', fid, tablette: appel.callerUid, telephones: n });
@@ -121,6 +155,15 @@ exports.jetonAppelNatif = onCall(async (request) => {
 exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIRESTORE, database: BASE_FIRESTORE, secrets: [MAIL_MOT_DE_PASSE] }, async (event) => {
   const avant = event.data.before.data();
   const apres = event.data.after.data();
+  // Appel fini (décroché ou non) : ses adresses IP sont effacées tout de suite (A26, menage.js). Une erreur est
+  // journalisée sans empêcher « Appel manqué » ; le ménage des 90 jours efface l'appel entier plus tard.
+  if (menage.vientDeFinir(avant, apres)) {
+    try {
+      await menage.effacerTracesAppel(event.data.after.ref, apres);
+    } catch (e) {
+      logger.error(`Appel ${event.params.cid} : adresses IP non effacées`, e);
+    }
+  }
   if (!avant || !apres || avant.state !== 'ringing' || apres.state === 'ringing') return;
   const db = base();
   const { fid, cid } = event.params;
@@ -131,7 +174,7 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
   if (sos && ['missed', 'declined'].includes(apres.state) && !apres.answer) {
     // 1er essai sans réponse : la tablette rappelle tout de suite, rien à dire. Au 2e, l'alerte.
     if (sos === 2) {
-      const n = await envoyer(db, fid, uids, { type: 'alerte', titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
+      const n = await envoyer(db, fid, uids, { type: 'alerte', urgence: URGENCE_SOS, titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
       logger.warn(`SOS ${cid} : personne n'a répondu, famille alertée`);
       await journal.noter(db, { genre: 'sos-sans-reponse', fid, tablette: apres.callerUid, telephones: n });
       if (n === 0) await prevenirSansTelephone(db, fid, uids, { nom, sos: true });

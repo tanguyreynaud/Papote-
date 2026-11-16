@@ -1,5 +1,5 @@
 @echo off
-rem Relit une copie chiffree (.json.enc) et ecrit le .json en clair a cote. Usage : dechiffrer-sauvegarde.bat <fichier.json.enc>
+rem Remet en clair une copie chiffree (dossier papote-date ou fichiers, ancien .json.enc). Usage : dechiffrer-sauvegarde.bat <dossier ou fichier> [destination]
 cd /d "%~dp0"
 node dechiffrer-sauvegarde.js %*
 pause

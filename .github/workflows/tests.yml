@@ -1,14 +1,15 @@
-# Tests des fonctions serveur, à chaque changement de functions/ (gratuit, rien ne part en ligne) :
+# Tests des fonctions serveur, à chaque changement de functions/ ou des CGV (PDF joint aux commandes) (gratuit, rien ne part en ligne) :
 #   unitaires  règles pures (npm test)
 #   parcours   parcours client complet sur les émulateurs Firebase, Stripe et e-mails simulés (npm run parcours)
-#   sauvegarde sauvegarde/restauration de la base et des photos, et le script de vérification (outils/admin)
+#   sauvegarde sauvegarde/restauration de la base et des photos, et le script de vérification (outils/admin),
+#              et le garde-fou des outils qui vident la base (commandes-reelles.test.js)
 name: Tests
 
 # Une seule fois par changement : au push (les résultats s'affichent aussi sur la PR). Avant, push + pull_request
 # faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['functions/**', 'outils/admin/**', '.github/workflows/tests.yml']
+    paths: ['functions/**', 'outils/admin/**', 'vitrine/cgv.html', 'outils/cgv-pdf/**', '.github/workflows/tests.yml']
   workflow_dispatch:
 
 jobs:
@@ -41,6 +42,6 @@ jobs:
       - name: Sauvegarde et restauration (émulateurs)
         env:
           NODE_PATH: ${{ github.workspace }}/functions/node_modules
-        run: npx --yes firebase-tools@14 emulators:exec --only firestore,auth --project demo-papote --config parcours/firebase.json "node --test ../outils/admin/sauvegarde.test.js"
+        run: npx --yes firebase-tools@14 emulators:exec --only firestore,auth --project demo-papote --config parcours/firebase.json "node --test --test-concurrency=1 ../outils/admin/sauvegarde.test.js ../outils/admin/commandes-reelles.test.js"
       - name: Copie chiffrée des sauvegardes
         run: node --test ../outils/admin/chiffrement.test.js

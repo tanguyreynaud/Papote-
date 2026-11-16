@@ -59,3 +59,43 @@ test('commune seule : acceptée à partir de 95 % bien couverts, sinon la rue es
   const blanc = async () => ({ ok: true, json: async () => ({ features: [{ geometry: carre(48.0501, 5.694, 300) }] }) });
   assert.strictEqual((await c.procheDepuisRequete(bof, { chercher: blanc })).eligible, false);
 });
+
+// Badge « Couverture à vérifier » de l'admin (Tanguy, 12/11).
+const repondre = (properties) => async () => ({ ok: true, json: async () => ({ features: properties ? [{ properties }] : [] }) });
+
+test('presDUnBord : faux au cœur d\'une zone bien couverte, vrai à moins de 200 m d\'un carreau sans bonne 4G', () => {
+  assert.strictEqual(c.presDUnBord(45.7578, 4.832), false, 'Lyon, place Bellecour');
+  assert.strictEqual(c.niveauA(44.901, 4.39), 'TBC');
+  assert.strictEqual(c.presDUnBord(44.901, 4.39), true, 'Ardèche, bien couvert mais près d\'un trou');
+  assert.strictEqual(c.presDUnBord(NaN, 4), false);
+});
+
+test('raisonsAVerifier : commune seule, petite commune (< 2 000 habitants), bord de zone', () => {
+  const lyon = { lat: 45.7578, lon: 4.832 };
+  assert.deepStrictEqual(c.raisonsAVerifier({ ...lyon, couverture4g: 'TBC' }, { population: 519127 }), []);
+  assert.deepStrictEqual(c.raisonsAVerifier({ ...lyon, couverture4g: 'commune:97' }, { population: 519127 }), ['commune-seule']);
+  assert.deepStrictEqual(c.raisonsAVerifier({ ...lyon, couverture4g: 'TBC' }, { population: 1999 }), ['petite-commune']);
+  assert.deepStrictEqual(c.raisonsAVerifier({ ...lyon, couverture4g: 'TBC' }, { population: 2000 }), [], '2 000 tout juste : non');
+  assert.deepStrictEqual(c.raisonsAVerifier({ lat: 44.901, lon: 4.39, couverture4g: 'BC' }, { population: 125 }), ['petite-commune', 'bord-de-zone']);
+  assert.deepStrictEqual(c.raisonsAVerifier(null, null), []);
+});
+
+test('communeDuPoint : lit la population de l\'IGN ; la requête demande le point en latitude puis longitude', async () => {
+  let url = '';
+  const commune = await c.communeDuPoint(44.93, 4.39, { chercher: async (u) => { url = u; return repondre({ code_insee: '07108', nom_officiel: 'Jaunac', population: 125 })(); } });
+  assert.deepStrictEqual(commune, { insee: '07108', nom: 'Jaunac', population: 125 });
+  assert.match(decodeURIComponent(url), /INTERSECTS\(geometrie,POINT\(44\.93 4\.39\)\)/);
+  assert.strictEqual(await c.communeDuPoint(44.93, 4.39, { chercher: repondre(null) }), null);
+  await assert.rejects(c.communeDuPoint(44.93, 4.39, { chercher: async () => ({ ok: false, status: 503 }) }));
+});
+
+test('aVerifier : fiche pour l\'admin, rien si tout va bien, « population inconnue » si l\'IGN ne répond pas', async () => {
+  const lyon = { adresse: 'Lyon', lat: 45.7578, lon: 4.832, couverture4g: 'TBC' };
+  assert.strictEqual(await c.aVerifier(lyon, { chercher: repondre({ nom_officiel: 'Lyon', population: 519127 }) }), null);
+  assert.deepStrictEqual(await c.aVerifier({ ...lyon, couverture4g: 'commune:96' }, { chercher: repondre({ nom_officiel: 'Jaunac', population: 125 }) }),
+    { raisons: ['commune-seule', 'petite-commune'], commune: 'Jaunac', population: 125, carte: 'https://monreseaumobile.arcep.fr/' });
+  const panne = await c.aVerifier(lyon, { chercher: async () => { throw new Error('délai'); } });
+  assert.deepStrictEqual(panne.raisons, ['population-inconnue']);
+  assert.strictEqual(await c.aVerifier(null), null);
+  assert.strictEqual(await c.aVerifier({ adresse: 'x', lat: NaN, lon: 2 }), null);
+});

@@ -47,7 +47,7 @@ async function ouvrir(fichier, { taille = TEL, commander = 'stripe', stock = () 
   const { ctx, page, erreurs } = await vitrine.ouvrir(browser, srv.url, {
     fichier, session,
     routes: async (p) => {
-      await p.route('**/stockDisponible', (r) => r.fulfill({ contentType: 'application/json', headers: CORS, body: JSON.stringify({ disponible: stock() }) }));
+      await p.route(/\/(stockDisponible|api\/stock)/, (r) => r.fulfill({ contentType: 'application/json', headers: CORS, body: JSON.stringify({ disponible: stock() }) }));
       await p.route('**/commander**', (r) => {
         appels.push(r.request().url());
         // 204 : le navigateur reste sur la page, comme pendant les 2 à 4 secondes d'attente du vrai serveur.
