@@ -10,6 +10,13 @@ on:
     paths: ['web/**', 'firestore.rules', 'storage-eu.rules', 'tests/app-famille/**', 'tests/reseau.test.mjs', '.github/workflows/app-famille.yml']
   workflow_dispatch:
 
+# Un nouveau push sur la même branche de travail annule l'exécution encore en cours du commit précédent (CI plus
+# rapide, moins d'attente). Jamais sur main ni sur l'admin (claude/project-thread-dlattc) : le bouton « Publier »
+# (outils/publier/ci-verte.sh) y exige une CI verte sur le commit publié, chaque commit y garde donc la sienne.
+concurrency:
+  group: ${{ github.workflow }}-${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/project-thread-dlattc') && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/claude/project-thread-dlattc' }}
+
 jobs:
   app-famille:
     # Deux navigateurs : Chromium (Chrome d'Android) et WebKit (Safari d'iPhone, tailles iPhone 15 et iPhone SE). Ce qui ne peut pas

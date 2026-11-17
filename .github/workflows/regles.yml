@@ -9,6 +9,13 @@ on:
     paths: ['firestore.rules', 'firestore-origine.rules', 'storage.rules', 'storage-eu.rules', 'firebase.json', 'tests/regles/**', 'turn-worker/src/**', '.github/workflows/regles.yml']
   workflow_dispatch:
 
+# Un nouveau push sur la même branche de travail annule l'exécution encore en cours du commit précédent (CI plus
+# rapide, moins d'attente). Jamais sur main ni sur l'admin (claude/project-thread-dlattc) : le bouton « Publier »
+# (outils/publier/ci-verte.sh) y exige une CI verte sur le commit publié, chaque commit y garde donc la sienne.
+concurrency:
+  group: ${{ github.workflow }}-${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/project-thread-dlattc') && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/claude/project-thread-dlattc' }}
+
 jobs:
   regles:
     runs-on: ubuntu-latest
