@@ -323,3 +323,53 @@ test('S8. Petit téléphone (320 px) : le prix de la barre du bas n\'est pas cou
   await capture(page, 'S8-barre-320');
   await ctx.close();
 });
+
+// Statistiques (Tanguy, 17/11 : « où est-ce qu'ils s'arrêtent ») : chaque étape part une seule fois par visite,
+// la visite avec seulement le nom du site d'origine, et rien ne gêne la commande si le compteur ne répond pas.
+test('Statistiques : une commande complète compte chaque étape du tunnel une seule fois', async () => {
+  const comptes = [];
+  const { ctx, page, erreurs } = await ouvrir('commande.html', { commander: 'attend' });
+  await page.route('**/compter**', (r) => { comptes.push(new URL(r.request().url()).searchParams); return r.fulfill({ status: 204, headers: CORS }); });
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await remplir(page);
+  await page.fill('#email', 'marie@exemple.f');
+  await page.fill('#email', 'marie@exemple.fr');
+  await page.locator('#payer').tap();
+  await page.waitForFunction(() => document.getElementById('payer').textContent === 'Un instant…');
+  for (let i = 0; i < 40 && !comptes.some((q) => q.get('e') === 'paiement'); i++) await page.waitForTimeout(100);
+  const etapes = comptes.map((q) => q.get('e'));
+  for (const e of ['visite', 'commande', 'adresse', 'couverture-ok', 'relais', 'coordonnees', 'paiement']) {
+    assert.strictEqual(etapes.filter((x) => x === e).length, 1, `${e} compté une fois (${etapes.join(', ')})`);
+  }
+  assert.ok(!etapes.includes('couverture-non'));
+  const visite = comptes.find((q) => q.get('e') === 'visite');
+  assert.deepStrictEqual([...visite.keys()].sort(), ['e', 'r', 'u'], 'rien d\'autre que l\'étape, le site d\'origine et utm_source');
+  assert.match(visite.get('r'), /^[a-z0-9.-]*$/, 'un nom de site, jamais une adresse complète');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Statistiques : compteur en panne (réseau coupé) : la commande se fait quand même, sans erreur', async () => {
+  const { ctx, page, erreurs } = await ouvrir('commande.html', { commander: 'attend' });
+  await page.route('**/compter**', (r) => r.abort());
+  await page.reload();
+  await remplir(page);
+  await page.locator('#payer').tap();
+  await page.waitForFunction(() => document.getElementById('payer').textContent === 'Un instant…');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Statistiques : plus de tablette, la rupture vue est comptée sur l\'accueil', async () => {
+  const comptes = [];
+  const { ctx, page } = await ouvrir('commande.html', { stock: () => false });
+  await page.route('**/compter**', (r) => { comptes.push(new URL(r.request().url()).searchParams.get('e')); return r.fulfill({ status: 204, headers: CORS }); });
+  await page.waitForURL(/complet=1/);
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await page.locator('#prevenir').waitFor({ state: 'visible' });
+  await page.waitForTimeout(300);
+  assert.ok(comptes.includes('complet'), comptes.join(', '));
+  await ctx.close();
+});
