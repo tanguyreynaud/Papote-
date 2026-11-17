@@ -286,7 +286,7 @@ footer a { color: var(--muted); }
     <nav aria-label="Menu" id="menu">
       <a href="#fonctionnement">Comment ça marche</a>
       <a href="#tarifs">Tarifs</a>
-      <a href="#qui">Qui suis-je</a>
+      <a href="#qui">L'histoire de Papote</a>
       <a href="#questions">Questions</a>
       <a href="https://app.mapapote.fr">Espace client</a>
       <a class="btn btn-primary js-commander" href="commande.html">Commander</a>
@@ -411,8 +411,8 @@ footer a { color: var(--muted); }
   <section id="qui">
     <div class="wrap">
       <div class="section-head">
-        <p class="eyebrow">Qui est derrière Papote</p>
-        <h2>Une personne, pas une plateforme.</h2>
+        <p class="eyebrow">L'histoire de Papote</p>
+        <h2>Une histoire de famille, pas une plateforme.</h2>
       </div>
       <div class="qui-carte">
         <picture><source srcset="tanguy-300.webp 300w, tanguy-400.webp 400w, tanguy.webp 600w" sizes="144px" type="image/webp"><img class="portrait" src="tanguy.jpg" alt="Tanguy Reynaud" width="600" height="600"></picture>
@@ -420,8 +420,8 @@ footer a { color: var(--muted); }
           <blockquote>« Ma grand-mère a 93 ans et n'a jamais touché un ordinateur. Je voulais qu'elle voie les photos de la famille et nos visages, sans rien avoir à apprendre. Papote, c'est la tablette que j'ai faite pour elle. Aujourd'hui, je la propose à d'autres familles. »</blockquote>
           <p><b>Tanguy Reynaud</b>, fondateur de Papote, à Lyon</p>
           <ul class="faits">
-            <li class="coche">Je prépare et vérifie chaque tablette moi-même, une par une.</li>
-            <li class="coche">Je réponds moi-même aux e-mails, à <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a>.</li>
+            <li class="coche">Chaque tablette est préparée et vérifiée à la main, une par une.</li>
+            <li class="coche">Une vraie personne répond à vos e-mails, à <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a>.</li>
             <li class="coche">Entreprise déclarée en France, conditions de vente claires, sans caution ni engagement.</li>
           </ul>
         </div>
@@ -470,12 +470,12 @@ footer a { color: var(--muted); }
       <div class="section-head">
         <p class="eyebrow">Être prévenu</p>
         <h2>Toutes les tablettes sont parties.</h2>
-        <p class="lead">Je prépare les suivantes à Lyon. Laissez votre e-mail : vous serez prévenu dès qu'elles sont prêtes.</p>
+        <p class="lead">Nous préparons les suivantes à Lyon. Laissez votre e-mail : vous serez prévenu dès qu'elles sont prêtes.</p>
       </div>
       <form class="attente" id="attente" novalidate>
         <label>Votre adresse e-mail
           <input name="email" id="attente-email" type="email" autocomplete="email" required maxlength="120"></label>
-        <label><span>Votre portable <span class="muted">(facultatif, pour que je vous appelle)</span></span>
+        <label><span>Votre portable <span class="muted">(facultatif, pour que nous vous appelions)</span></span>
           <input name="telephone" id="attente-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="20"></label>
         <div class="attente-piege" aria-hidden="true"><label>Adresse (laissez vide)
           <input name="adresse2" type="text" tabindex="-1" autocomplete="off"></label></div>
@@ -535,7 +535,7 @@ footer a { color: var(--muted); }
           </details>
           <details>
             <summary>Comment la tablette est-elle livrée&nbsp;?</summary>
-            <p>Gratuitement, en point relais Mondial Relay, en France métropolitaine : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Je prépare et vérifie chaque tablette moi-même, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
+            <p>Gratuitement, en point relais Mondial Relay, en France métropolitaine : vous choisissez le point qui vous arrange au moment de commander, près de chez vous ou de chez votre proche. Nous préparons et vérifions chaque tablette à la main, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés. Dès que la tablette part, vous recevez un e-mail avec le lien de suivi, puis un message de Mondial Relay quand elle vous attend.</p>
           </details>
           <details>
             <summary>Qui peut envoyer des photos&nbsp;?</summary>
@@ -662,13 +662,34 @@ footer a { color: var(--muted); }
   })();
 </script>
 <script>
-  // Menu ☰ du téléphone : ouvre et ferme la liste des liens, se referme quand on en choisit un.
+  // Menu ☰ du téléphone : ouvre et ferme la liste des liens. Il se referme quand on choisit un lien, quand on touche
+  // ailleurs sur la page (Tanguy, 17/11), avec Échap, et avec le bouton Retour du téléphone (il ne quitte pas la page).
   (function () {
     var haut = document.querySelector('.top');
     var bouton = document.getElementById('menu-bouton');
+    var ouvert = function () { return haut.classList.contains('ouvert'); };
     function ouvrir(oui) { haut.classList.toggle('ouvert', oui); bouton.setAttribute('aria-expanded', oui ? 'true' : 'false'); bouton.textContent = oui ? '✕' : '☰'; }
-    bouton.addEventListener('click', function () { ouvrir(!haut.classList.contains('ouvert')); });
-    document.querySelectorAll('#menu a').forEach(function (a) { a.addEventListener('click', function () { ouvrir(false); }); });
+    // Ouvert : une étape dans l'historique, que le bouton Retour retire en fermant le menu.
+    function fermer(parRetour) {
+      if (!ouvert()) return;
+      ouvrir(false);
+      if (!parRetour && history.state && history.state.papoteMenu) history.back();
+    }
+    bouton.addEventListener('click', function () {
+      if (ouvert()) { fermer(false); return; }
+      ouvrir(true);
+      try { history.pushState({ papoteMenu: true }, ''); } catch (_) {}
+    });
+    window.addEventListener('popstate', function () { fermer(true); });
+    document.querySelectorAll('#menu a').forEach(function (a) {
+      a.addEventListener('click', function () {
+        // Le lien ajoute sa propre étape : celle du menu redevient une étape ordinaire.
+        try { if (history.state && history.state.papoteMenu) history.replaceState(null, ''); } catch (_) {}
+        ouvrir(false);
+      });
+    });
+    document.addEventListener('click', function (e) { if (ouvert() && !haut.contains(e.target)) fermer(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ouvert()) { fermer(false); bouton.focus(); } });
   })();
 </script>
 <script>compter('accueil');</script>

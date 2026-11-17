@@ -440,3 +440,54 @@ test('Accueil sans état du stock et serveur lent (réseau faible) : les boutons
   assert.deepStrictEqual(erreurs, []);
   await ctx.close();
 });
+
+// Menu ☰ du téléphone (Tanguy, 17/11 : « un clic en dehors du menu doit l'enlever »).
+async function accueilMenu() {
+  const r = await accueilAvecStock('ok');
+  await r.page.waitForLoadState('load');
+  await r.page.locator('#menu-bouton').tap();
+  assert.strictEqual(await r.page.locator('#menu-bouton').getAttribute('aria-expanded'), 'true');
+  assert.ok(await r.page.locator('#menu a[href="#tarifs"]').isVisible());
+  return r;
+}
+const menuOuvert = (page) => page.evaluate(() => document.querySelector('.top').classList.contains('ouvert'));
+
+test('Menu ☰ : un toucher ailleurs sur la page le ferme', async () => {
+  const { ctx, page, erreurs } = await accueilMenu();
+  await page.touchscreen.tap(180, 700); // bas de l'écran, sous le menu ouvert
+  assert.strictEqual(await menuOuvert(page), false);
+  assert.strictEqual((await page.locator('#menu-bouton').innerText()).trim(), '☰');
+  assert.ok(!(await page.locator('#menu a[href="#tarifs"]').isVisible()));
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Menu ☰ : le bouton Retour du téléphone ferme le menu sans quitter la page, puis ☰ ✕ le rouvre et le ferme', async () => {
+  const { ctx, page, erreurs } = await accueilMenu();
+  const adresse = page.url();
+  await page.goBack();
+  await page.waitForTimeout(200);
+  assert.strictEqual(await menuOuvert(page), false);
+  assert.strictEqual(page.url(), adresse, 'toujours sur l\'accueil');
+  await page.locator('#menu-bouton').tap();
+  assert.strictEqual(await menuOuvert(page), true);
+  await page.locator('#menu-bouton').tap();
+  await page.waitForTimeout(200);
+  assert.strictEqual(await menuOuvert(page), false);
+  assert.strictEqual(page.url(), adresse);
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Menu ☰ : Échap le ferme ; un lien du menu le ferme et mène à sa section', async () => {
+  const { ctx, page, erreurs } = await accueilMenu();
+  await page.keyboard.press('Escape');
+  assert.strictEqual(await menuOuvert(page), false);
+  await page.locator('#menu-bouton').tap();
+  await page.locator('#menu a[href="#tarifs"]').tap();
+  await page.waitForTimeout(300);
+  assert.strictEqual(await menuOuvert(page), false);
+  assert.match(page.url(), /#tarifs$/);
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
