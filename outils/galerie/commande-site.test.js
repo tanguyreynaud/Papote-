@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium, webkit } = require('playwright');
 const { servir, RACINE } = require('./commun');
 const vitrine = require('./vitrine');
 
@@ -25,11 +25,17 @@ const STRIPE = 'https://checkout.stripe.test/c/pay/cs_test_audit';
 const CORS = { 'Access-Control-Allow-Origin': '*' };
 // Le vrai serveur répond par un renvoi 303 vers Stripe ; ici une page qui s'y rend aussitôt (un renvoi simulé vers
 // un autre site partirait sur le vrai internet).
+// Renvoi du serveur (303/302). WebKit ne sait pas simuler un renvoi (« Cannot fulfill with redirect status ») :
+// une page qui se remplace aussitôt, comme versStripe. Le navigateur arrive au même endroit.
+const WEBKIT = process.env.NAVIGATEUR === 'webkit';
+const renvoi = (r, url, status = 303) => (WEBKIT
+  ? r.fulfill({ contentType: 'text/html', body: `<script>location.replace(${JSON.stringify(url)})</script>` })
+  : r.fulfill({ status, headers: { Location: url } }));
 const versStripe = (r) => r.fulfill({ contentType: 'text/html', body: `<script>location.replace(${JSON.stringify(STRIPE)})</script>` });
 
 let browser, srv;
 test.before(async () => {
-  browser = await chromium.launch();
+  browser = await (process.env.NAVIGATEUR === 'webkit' ? webkit : chromium).launch(); // NAVIGATEUR=webkit : moteur de Safari
   srv = await servir(path.join(RACINE, 'vitrine'));
 });
 test.after(async () => { srv.close(); await browser.close(); });
@@ -61,7 +67,7 @@ async function ouvrir(fichier, { taille = TEL, commander = 'stripe', stock = () 
           <a id="retour" href="${srv.url}/commande.html?formule=sim">← Papote</a>
           <a id="payer" href="${srv.url}/merci.html?session=cs_test_audit">Payer</a>` }));
       // « / » est servi par la fonction accueil : ici, la page elle-même.
-      await p.route(/127\.0\.0\.1:\d+\/\?complet=1/, (r) => r.fulfill({ status: 302, headers: { Location: '/accueil.html?complet=1#prevenir' } }).catch(() => {}));
+      await p.route(/127\.0\.0\.1:\d+\/\?complet=1/, (r) => renvoi(r, '/accueil.html?complet=1#prevenir', 302).catch(() => {}));
     },
   }, taille);
   return { ctx, page, erreurs, appels };
@@ -202,7 +208,7 @@ test('S1 bis. « Merci » ouverte sans paiement (pas de ?session) : la commande 
 
 test('S2. Renvoyé par le serveur avec ?trop=1 : le client lit pourquoi le paiement ne s\'ouvre pas', async () => {
   const { ctx, page, erreurs } = await ouvrir('commande.html', {
-    commander: (r) => r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?trop=1` } }),
+    commander: (r) => renvoi(r, `${srv.url}/commande.html?trop=1`),
   });
   await remplir(page);
   await page.locator('#payer').tap();
@@ -255,7 +261,7 @@ test('S3 bis. Plus de tablette et aucun paiement en cours : toujours renvoyé ve
 for (const [motif, attendu, etape] of [['4g', /pas pu vérifier la 4G/, '#ok1'], ['relais', /point relais n'a pas été retenu/, '#ok2']]) {
   test(`S4. Le serveur refuse d'ouvrir le paiement (?refus=${motif}) : la page dit pourquoi et fait refaire l'étape`, async () => {
     const { ctx, page, erreurs } = await ouvrir('commande.html', {
-      commander: (r) => r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?refus=${motif}` } }),
+      commander: (r) => renvoi(r, `${srv.url}/commande.html?refus=${motif}`),
     });
     await remplir(page);
     await page.locator('#payer').tap();
@@ -275,7 +281,7 @@ for (const [motif, attendu, etape] of [['4g', /pas pu vérifier la 4G/, '#ok1'],
 test('S5. Le paiement ne s\'ouvre pas (erreur du serveur) : le client revient sur sa commande remplie, « Payer » prêt', async () => {
   let n = 0;
   const { ctx, page } = await ouvrir('commande.html', {
-    commander: (r) => (++n === 1 ? r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?erreur=1` } }) : versStripe(r)),
+    commander: (r) => (++n === 1 ? renvoi(r, `${srv.url}/commande.html?erreur=1`) : versStripe(r)),
   });
   await remplir(page);
   await page.locator('#payer').tap();
@@ -321,6 +327,56 @@ test('S8. Petit téléphone (320 px) : le prix de la barre du bas n\'est pas cou
   assert.ok(b.height <= ligne + 2, `« 60 € aujourd'hui » tient sur ${Math.round(b.height / ligne)} lignes`);
   await page.locator('#payer').tap();
   await capture(page, 'S8-barre-320');
+  await ctx.close();
+});
+
+// Statistiques (Tanguy, 17/11 : « où est-ce qu'ils s'arrêtent ») : chaque étape part une seule fois par visite,
+// la visite avec seulement le nom du site d'origine, et rien ne gêne la commande si le compteur ne répond pas.
+test('Statistiques : une commande complète compte chaque étape du tunnel une seule fois', async () => {
+  const comptes = [];
+  const { ctx, page, erreurs } = await ouvrir('commande.html', { commander: 'attend' });
+  await page.route('**/compter**', (r) => { comptes.push(new URL(r.request().url()).searchParams); return r.fulfill({ status: 204, headers: CORS }); });
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await remplir(page);
+  await page.fill('#email', 'marie@exemple.f');
+  await page.fill('#email', 'marie@exemple.fr');
+  await page.locator('#payer').tap();
+  await page.waitForFunction(() => document.getElementById('payer').textContent === 'Un instant…');
+  for (let i = 0; i < 40 && !comptes.some((q) => q.get('e') === 'paiement'); i++) await page.waitForTimeout(100);
+  const etapes = comptes.map((q) => q.get('e'));
+  for (const e of ['visite', 'commande', 'adresse', 'couverture-ok', 'relais', 'coordonnees', 'paiement']) {
+    assert.strictEqual(etapes.filter((x) => x === e).length, 1, `${e} compté une fois (${etapes.join(', ')})`);
+  }
+  assert.ok(!etapes.includes('couverture-non'));
+  const visite = comptes.find((q) => q.get('e') === 'visite');
+  assert.deepStrictEqual([...visite.keys()].sort(), ['e', 'r', 'u'], 'rien d\'autre que l\'étape, le site d\'origine et utm_source');
+  assert.match(visite.get('r'), /^[a-z0-9.-]*$/, 'un nom de site, jamais une adresse complète');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Statistiques : compteur en panne (réseau coupé) : la commande se fait quand même, sans erreur', async () => {
+  const { ctx, page, erreurs } = await ouvrir('commande.html', { commander: 'attend' });
+  await page.route('**/compter**', (r) => r.abort());
+  await page.reload();
+  await remplir(page);
+  await page.locator('#payer').tap();
+  await page.waitForFunction(() => document.getElementById('payer').textContent === 'Un instant…');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Statistiques : plus de tablette, la rupture vue est comptée sur l\'accueil', async () => {
+  const comptes = [];
+  const { ctx, page } = await ouvrir('commande.html', { stock: () => false });
+  await page.route('**/compter**', (r) => { comptes.push(new URL(r.request().url()).searchParams.get('e')); return r.fulfill({ status: 204, headers: CORS }); });
+  await page.waitForURL(/complet=1/);
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await page.locator('#prevenir').waitFor({ state: 'visible' });
+  await page.waitForTimeout(300);
+  assert.ok(comptes.includes('complet'), comptes.join(', '));
   await ctx.close();
 });
 

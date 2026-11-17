@@ -60,9 +60,14 @@ jobs:
   # Parcours de commande après « Payer » (faux serveur, fausse page Stripe) : double appui, retour arrière,
   # renvois du serveur, retour sur la page après avoir payé. Les tests « todo » décrivent ce qui reste à corriger
   # (audit du 11/11) : ils n'arrêtent pas la fusion.
+  # Deux fois : Chromium (Chrome, Android) et WebKit (moteur de Safari, iPhone), Tanguy 17/11.
   commande-site:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        navigateur: [chromium, webkit]
     defaults:
       run:
         working-directory: outils/galerie
@@ -72,6 +77,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
-      - name: Parcours de commande sur téléphone
+      - run: npx playwright install --with-deps ${{ matrix.navigateur }}
+      - name: Parcours de commande sur téléphone (${{ matrix.navigateur }})
         run: node --test commande-site.test.js
+        env:
+          NAVIGATEUR: ${{ matrix.navigateur }}

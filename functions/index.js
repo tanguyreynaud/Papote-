@@ -66,7 +66,7 @@ const push = require('./push');
 // Bucket Europe après la migration (BUCKET_STORAGE dans .env), sinon celui du projet.
 admin.initializeApp(base.BUCKET_STORAGE ? { storageBucket: base.BUCKET_STORAGE } : undefined);
 const db = base.db();
-const { FieldValue, Timestamp } = admin.firestore;
+const { FieldValue, FieldPath, Timestamp } = admin.firestore;
 
 setGlobalOptions({ region: 'europe-west1', maxInstances: 5 });
 
@@ -1967,6 +1967,7 @@ exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/],
   res.status(204).end();
   // « C'est noté » (2026-10-30) : une fois par inscription, après la réponse au site (un échec d'envoi ne la bloque pas).
   if (snap.exists && snap.get('listeAttente') === true && !snap.get('desinscritLe')) return;
+  await compterEtape('prevenir').catch((e) => logger.warn('Statistiques', e.message));
   try {
     if (!(await attenteMailPermis())) {
       logger.warn(`Liste d'attente : plus de ${ATTENTE_MAILS_JOUR} « C'est noté » aujourd'hui, ${email} noté sans e-mail`);
@@ -2150,23 +2151,31 @@ exports.accueil = onRequest({ maxInstances: 5, memory: '256MiB' }, async (req, r
 });
 
 // ---------- Statistiques de visite (sans cookie ni donnée personnelle) ----------
-// Un compteur par jour dans statistiques/{AAAA-MM-JJ} : accueil, commande (page ouverte),
-// relais (point choisi), paiement (clic sur Payer), paye (paiement reçu).
-// Lecture : outils/admin/statistiques.bat.
-const ETAPES = ['accueil', 'commande', 'relais', 'paiement'];
+// Compteurs du jour dans statistiques/{AAAA-MM-JJ} : étapes du tunnel et provenance des visites (statistiques.js).
+// Lecture : page « Statistiques » de l'admin (gestionStatistiques), ou outils/admin/statistiques.bat.
+const statistiques = require('./statistiques');
 function compterEtape(etape) {
-  const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
-  return db.doc(`statistiques/${jour}`).set({ [etape]: FieldValue.increment(1) }, { merge: true });
+  return db.doc(`statistiques/${statistiques.jourDeParis()}`).set({ [etape]: FieldValue.increment(1) }, { merge: true });
 }
 
 exports.compter = onRequest({ cors: true, maxInstances: 2 }, async (req, res) => {
-  const etape = String(req.query.e || '');
-  if (!ETAPES.includes(etape)) {
+  const plus = statistiques.increments({ ...req.query }, FieldValue);
+  if (!plus) {
     res.status(400).end();
     return;
   }
-  await compterEtape(etape);
+  await db.doc(`statistiques/${statistiques.jourDeParis()}`).set(plus, { merge: true });
   res.status(204).end();
+});
+
+// Page « Statistiques » de l'admin : les N derniers jours (7 à 365), avec le tunnel et la provenance.
+exports.gestionStatistiques = onCall({ maxInstances: 2 }, async (request) => {
+  if (!request.auth || request.auth.token.admin !== true) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
+  const jours = Math.min(365, Math.max(1, Math.round(Number((request.data || {}).jours) || 30)));
+  const debut = statistiques.jourDeParis(Date.now() - (jours - 1) * 86400000);
+  const snap = await db.collection('statistiques').where(FieldPath.documentId(), '>=', debut).get();
+  const docs = snap.docs.map((d) => ({ id: d.id, data: d.data() })).sort((a, b) => a.id.localeCompare(b.id));
+  return { periode: jours, debut, ...statistiques.resume(docs) };
 });
 
 // ---------- Tâches automatiques ----------
