@@ -312,7 +312,7 @@ const SCENES = [
     await accueil(t, photosVues(), { subscription: 'resilie' });
   } },
 
-  // Soir et nuit (veille par défaut 21h-6h30, couleurs du soir deux heures avant)
+  // Soir et nuit (veille par défaut 23h-5h, couleurs du soir deux heures avant)
   { groupe: 'Soir et nuit', titre: 'Accueil le soir (20h30)', heure: '20:30', faire: async (t) => {
     await accueil(t, photosVues(), { meteo: METEO_NUIT });
   } },
