@@ -19,6 +19,16 @@ public class SimTestTest {
     }
 
     @Test
+    public void raisonDUnAppelCourt() {
+        assertEquals("refuse", SimTest.raison(android.telecom.DisconnectCause.BUSY));
+        assertEquals("refuse", SimTest.raison(android.telecom.DisconnectCause.REJECTED));
+        assertEquals("erreur", SimTest.raison(android.telecom.DisconnectCause.ERROR));
+        assertEquals("erreur", SimTest.raison(android.telecom.DisconnectCause.RESTRICTED));
+        assertEquals("coupe", SimTest.raison(android.telecom.DisconnectCause.REMOTE));
+        assertEquals("délai dépassé : -999, distinct de RESULT_OK (-1)", -999, SimTest.SMS_DELAI);
+    }
+
+    @Test
     public void unProblemeEmpecheLesSuivants() {
         assertEquals("ok", SimTest.etat("", "208", true, false, true));
         assertEquals("pin", SimTest.etat("pin", "", false, false, false));

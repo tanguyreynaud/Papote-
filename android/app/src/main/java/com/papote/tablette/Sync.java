@@ -2865,15 +2865,25 @@ final class Sync {
             JSONObject of = o == null || o.optJSONObject("mapValue") == null ? null : o.getJSONObject("mapValue").optJSONObject("fields");
             String id = of == null ? null : Firebase.str(of, "id");
             String type = of == null ? null : Firebase.str(of, "type");
+            // Facultatif : un SMS et un appel d'essai vers le numéro saisi dans l'admin (Gestion, 17/11).
+            JSONObject appel = null;
+            JSONObject av = of == null ? null : of.optJSONObject("appel");
+            JSONObject af = av == null || av.optJSONObject("mapValue") == null ? null : av.getJSONObject("mapValue").optJSONObject("fields");
+            if (af != null && Firebase.str(af, "numero") != null) {
+                long sec = af.has("secondes") ? Firebase.integer(af, "secondes") : 20;
+                appel = new JSONObject().put("numero", Firebase.str(af, "numero"))
+                        .put("secondes", Math.max(5, Math.min(60, sec))).put("texte", nz(Firebase.str(af, "texte")));
+            }
             if (id == null || id.isEmpty() || id.equals(prefs.getString("simOrdreFait", ""))) return;
             prefs.edit().putString("simOrdreFait", id).apply();
             Journal.log(context, "Installer la carte SIM : ordre " + type + " (" + id + ")");
             if ("simPin".equals(type)) {
                 prefs.edit().putString("simPinOrdre", id).putString("simPinCode", code)
+                        .putString("simPinAppel", appel == null ? null : appel.toString())
                         .putLong("simPinDepuis", System.currentTimeMillis()).apply();
                 listener.onSimPin();
             } else if ("simTest".equals(type)) {
-                ecrireSimTest(code, id);
+                ecrireSimTest(code, id, appel);
             }
         } catch (Exception e) {
             Log.w(TAG, "Ordre carte SIM", e);
@@ -2886,14 +2896,23 @@ final class Sync {
             String id = prefs.getString("simPinOrdre", null);
             String code = prefs.getString("simPinCode", null);
             if (id == null || code == null) return;
-            prefs.edit().remove("simPinOrdre").remove("simPinCode").remove("simPinDepuis").apply();
-            ecrireSimTest(code, id + "-apres-pin");
+            JSONObject appel = null;
+            try { String a = prefs.getString("simPinAppel", null); if (a != null) appel = new JSONObject(a); } catch (JSONException ignored) { }
+            prefs.edit().remove("simPinOrdre").remove("simPinCode").remove("simPinDepuis").remove("simPinAppel").apply();
+            ecrireSimTest(code, id + "-apres-pin", appel);
         });
     }
 
-    private void ecrireSimTest(String code, String id) {
+    private void ecrireSimTest(String code, String id, JSONObject appel) {
         try {
             SimTest.Resultat r = SimTest.mesurer(context);
+            // Carte bonne et données qui passent : SMS puis appel d'essai, résultat écrit une seule fois à la fin.
+            SimTest.Sms sms = null;
+            SimTest.Appel ap = null;
+            if (appel != null && "ok".equals(r.etat)) {
+                sms = SimTest.envoyerSms(context, appel.optString("numero"), appel.optString("texte"));
+                ap = SimTest.appeler(context, appel.optString("numero"), appel.optLong("secondes", 20));
+            }
             JSONObject nul = new JSONObject().put("nullValue", JSONObject.NULL);
             JSONObject donnees = new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
                     .put("ok", new JSONObject().put("booleanValue", r.donneesOk))
@@ -2908,6 +2927,19 @@ final class Sync {
                     .put("inscrite", new JSONObject().put("booleanValue", r.inscrite))
                     .put("itinerance", new JSONObject().put("booleanValue", r.itinerance))
                     .put("donnees", donnees);
+            if (sms != null) {
+                fields.put("sms", new JSONObject().put("mapValue", new JSONObject().put("fields", new JSONObject()
+                        .put("ok", new JSONObject().put("booleanValue", sms.ok))
+                        .put("code", new JSONObject().put("integerValue", String.valueOf(sms.code)))
+                        .put("ms", new JSONObject().put("integerValue", String.valueOf(sms.ms))))));
+            }
+            if (ap != null) {
+                JSONObject af = new JSONObject()
+                        .put("ok", new JSONObject().put("booleanValue", ap.ok))
+                        .put("secondes", new JSONObject().put("integerValue", String.valueOf(ap.secondes)));
+                if (ap.raison != null) af.put("raison", Firebase.string(ap.raison));
+                fields.put("appel", new JSONObject().put("mapValue", new JSONObject().put("fields", af)));
+            }
             JSONObject write = new JSONObject()
                     .put("update", new JSONObject()
                             .put("name", Firebase.docName("pairings/" + code))

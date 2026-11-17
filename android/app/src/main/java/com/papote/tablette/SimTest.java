@@ -90,6 +90,88 @@ final class SimTest {
         return r;
     }
 
+    // ---------- SMS et appel d'essai (ordre.appel = {numero, secondes, texte}, Gestion 17/11) ----------
+
+    static final long SMS_MAX_MS = 30_000;
+    static final int SMS_DELAI = -999;          // pas de réponse d'Android en 30 s
+    static final long APPEL_MIN_MS = 8_000;     // appel « ok » : en cours au moins 8 s sans coupure
+
+    static final class Sms { boolean ok; int code = SMS_DELAI; long ms; }
+    static final class Appel { boolean ok; long secondes; String raison; }
+
+    /** Raison d'un appel fini avant 8 s, d'après la cause Android. */
+    static String raison(int cause) {
+        switch (cause) {
+            case android.telecom.DisconnectCause.BUSY:
+            case android.telecom.DisconnectCause.REJECTED: return "refuse";
+            case android.telecom.DisconnectCause.ERROR:
+            case android.telecom.DisconnectCause.RESTRICTED: return "erreur";
+            default: return "coupe";
+        }
+    }
+
+    static Sms envoyerSms(Context c, String numero, String texte) {
+        Sms s = new Sms();
+        String n = Telephone.composer(numero);
+        if (n.isEmpty()) return s;
+        final int[] code = {SMS_DELAI};
+        final CountDownLatch fini = new CountDownLatch(1);
+        String action = "com.papote.tablette.SIMTEST_SMS_" + System.nanoTime();
+        android.content.BroadcastReceiver r = new android.content.BroadcastReceiver() {
+            @Override public void onReceive(Context ctx, android.content.Intent i) { code[0] = getResultCode(); fini.countDown(); }
+        };
+        long debut = System.currentTimeMillis();
+        try {
+            android.content.IntentFilter f = new android.content.IntentFilter(action);
+            if (android.os.Build.VERSION.SDK_INT >= 33) c.registerReceiver(r, f, Context.RECEIVER_NOT_EXPORTED);
+            else c.registerReceiver(r, f);
+            android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(c, 0,
+                    new android.content.Intent(action).setPackage(c.getPackageName()), android.app.PendingIntent.FLAG_IMMUTABLE);
+            android.telephony.SmsManager.getDefault().sendTextMessage(n, null, texte == null ? "Papote : test de la carte SIM" : texte, pi, null);
+            fini.await(SMS_MAX_MS, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            Log.w(TAG, "Essai SIM : SMS", e);
+        } finally {
+            try { c.unregisterReceiver(r); } catch (Exception ignored) { }
+        }
+        s.code = code[0];
+        s.ok = code[0] == android.app.Activity.RESULT_OK;
+        s.ms = System.currentTimeMillis() - debut;
+        return s;
+    }
+
+    /** Appelle le numéro, laisse sonner « secondes », raccroche. Bloquant (fil de la synchronisation). */
+    static Appel appeler(Context c, String numero, long secondes) {
+        Appel a = new Appel();
+        if (Telephone.composer(numero).isEmpty()) { a.raison = "numero"; return a; }
+        if (c.checkSelfPermission(android.Manifest.permission.CALL_PHONE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            a.raison = "sans-permission";
+            return a;
+        }
+        if (!Telephone.appeler(c, numero)) { a.raison = "erreur"; return a; }
+        long fin = System.currentTimeMillis() + 10_000 + secondes * 1000;
+        long debut = 0;
+        android.telecom.Call call = null;
+        while (System.currentTimeMillis() < fin) {
+            android.telecom.Call ce = AppelGsm.appelEnCours();
+            if (ce != null && call == null) { call = ce; debut = System.currentTimeMillis(); fin = debut + secondes * 1000; }
+            if (call != null && !AppelGsm.encoreOuvert(call.getState())) break;
+            android.os.SystemClock.sleep(250);
+        }
+        if (call == null) { a.raison = "erreur"; return a; }
+        long duree = System.currentTimeMillis() - debut;
+        if (AppelGsm.encoreOuvert(call.getState())) {
+            AppelGsm.raccrocher();
+            a.ok = duree >= APPEL_MIN_MS;
+        } else {
+            android.telecom.DisconnectCause dc = call.getDetails() == null ? null : call.getDetails().getDisconnectCause();
+            a.ok = duree >= APPEL_MIN_MS;
+            if (!a.ok) a.raison = raison(dc == null ? android.telecom.DisconnectCause.UNKNOWN : dc.getCode());
+        }
+        a.secondes = duree / 1000;
+        return a;
+    }
+
     /** Une requête HTTPS forcée sur le réseau mobile (requestNetwork), même si le wifi est là. */
     private static void donnees(Context c, Resultat r) {
         ConnectivityManager cm = (ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
