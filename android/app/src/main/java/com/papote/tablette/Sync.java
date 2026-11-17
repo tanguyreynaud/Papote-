@@ -2605,10 +2605,11 @@ final class Sync {
         } else {
             JSONObject act = vf.optJSONObject("active");
             boolean active = act == null || act.optBoolean("booleanValue", true);
-            int from = vf.has("de") ? Veille.minutes(Firebase.integer(vf, "de"), vf.has("deMin") ? Firebase.integer(vf, "deMin") : 0)
-                    : Veille.DEFAULT_FROM;
-            int to = vf.has("a") ? Veille.minutes(Firebase.integer(vf, "a"), vf.has("aMin") ? Firebase.integer(vf, "aMin") : 0)
-                    : Veille.DEFAULT_TO;
+            // Comme le serveur (veilleSure) : champ absent ou mal formé, valeur par défaut, champ par champ.
+            int from = vf.has("de") ? Veille.lire(Firebase.integer(vf, "de"), vf.has("deMin") ? Firebase.integer(vf, "deMin") : 0) : -1;
+            int to = vf.has("a") ? Veille.lire(Firebase.integer(vf, "a"), vf.has("aMin") ? Firebase.integer(vf, "aMin") : 0) : -1;
+            if (from < 0) from = Veille.DEFAULT_FROM;
+            if (to < 0) to = Veille.DEFAULT_TO;
             Veille.save(context, active, from, to);
         }
         if (before != Veille.active(context) || beforeFrom != Veille.from(context) || beforeTo != Veille.to(context)) {

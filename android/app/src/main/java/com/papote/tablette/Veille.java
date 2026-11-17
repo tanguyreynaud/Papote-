@@ -49,16 +49,15 @@ final class Veille {
     static final int DEBUT_MIN = 19 * 60, DEBUT_MAX = 23 * 60 + 30;
     static final int FIN_MIN = 5 * 60, FIN_MAX = 10 * 60;
 
-    static int bornerDebut(int m) {
-        if (m >= DEBUT_MIN && m <= DEBUT_MAX) return m;
-        // Après minuit (0 h - 4 h) : plus proche de 23 h 30 ; en journée : plus proche de 19 h.
-        return m < 12 * 60 ? (m < 5 * 60 ? DEBUT_MAX : DEBUT_MIN) : (m > DEBUT_MAX ? DEBUT_MAX : DEBUT_MIN);
-    }
+    // Même règle exactement que le serveur (functions/veille.js veilleSure, 17/11) : simple borne.
+    static int bornerDebut(int m) { return Math.min(DEBUT_MAX, Math.max(DEBUT_MIN, m)); }
 
-    static int bornerFin(int m) {
-        if (m >= FIN_MIN && m <= FIN_MAX) return m;
-        // Avant 5 h : 5 h ; après 10 h (jusqu'au soir) : 10 h.
-        return m < FIN_MIN ? FIN_MIN : FIN_MAX;
+    static int bornerFin(int m) { return Math.min(FIN_MAX, Math.max(FIN_MIN, m)); }
+
+    /** Heure lue de la base (0-23, minutes 0 ou 30) en minutes, ou -1 si mal formée (alors : valeur par défaut). */
+    static int lire(long heure, long min) {
+        if (heure < 0 || heure > 23) return -1;
+        return (int) heure * 60 + (min == 30 ? 30 : 0);
     }
 
     /** Vrai pendant les heures de veille (jamais si la veille est désactivée). */
