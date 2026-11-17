@@ -1271,6 +1271,8 @@ exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, a
   // relecture du résultat toutes les 3 s (sim-installation.js).
   if (d.action === 'simOrdre') return simTablette().ordonner({ stock: d.stock || d.id, type: d.type }, qui);
   if (d.action === 'simEtat') return simTablette().etat({ stock: d.stock || d.id });
+  // Numéro d'essai (17/11) : la tablette lui envoie un SMS et l'appelle pendant le test de la carte.
+  if (d.action === 'simNumero') return simTablette().noterNumero({ numero: d.numero });
 
   // Tablette reçue avant sa facture (« Pas dans la liste » à la réception) : fiche sans achat, que l'installation
   // reprend et que la facture complétera (fichesARattacher).

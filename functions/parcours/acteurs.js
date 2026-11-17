@@ -70,7 +70,10 @@ async function repondreOrdreSim(t, resultat = {}, { code = t.code, id = null } =
   await s.db.doc(`pairings/${code}`).update({ simTest: {
     // Heure du serveur, prise sur l'horloge de la simulation (avancer() ne touche pas aux serverTimestamp de l'émulateur).
     id: id || p.ordre.id, le: s.Timestamp.fromMillis(Date.now()), iccid: p.ordre.simAttendue, mcc: '208', mnc: '01', operateur: 'Orange',
-    etat: 'ok', inscrite: true, itinerance: false, donnees: { ok: true, ms: 210 }, ...resultat,
+    etat: 'ok', inscrite: true, itinerance: false, donnees: { ok: true, ms: 210 },
+    // Ordre avec numéro d'essai : la tablette envoie le SMS et passe l'appel (Tanguy, 17/11).
+    ...(p.ordre.appel ? { sms: { ok: true, code: -1, ms: 1800 }, appel: { ok: true, secondes: p.ordre.appel.secondes } } : {}),
+    ...resultat,
   } });
   await s.calme();
   return p.ordre;

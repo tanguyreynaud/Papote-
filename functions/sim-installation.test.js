@@ -136,3 +136,90 @@ test('ordreReporte : un « Retirer le code PIN » reporté devient le test qui l
   assert.strictEqual(test.id, 'xyz');
   assert.strictEqual(test.type, 'simTest');
 });
+
+// ---------- SMS et appel d'essai (Tanguy, 17/11) ----------
+const APPEL = { numero: '+33612345678', secondes: 20, texte: 'Papote : test de la carte SIM de T-003' };
+const ordreAppel = { ...ordre, appel: APPEL };
+const smsOk = { ok: true, code: -1, ms: 2100 };
+const appelOk = { ok: true, secondes: 20 };
+const va = (test, plus = {}) => m.verdict({ ordre: ordreAppel, test, simAttendue: ICCID, maintenant: T0 + 10_000, ...plus });
+
+test('numeroEssai : portable français 06/07 normalisé en +33, tout le reste refusé', () => {
+  assert.strictEqual(m.numeroEssai('0612345678'), '+33612345678');
+  assert.strictEqual(m.numeroEssai('07 12 34 56 78'), '+33712345678');
+  assert.strictEqual(m.numeroEssai('06.12.34.56.78'), '+33612345678');
+  assert.strictEqual(m.numeroEssai('+33 6 12 34 56 78'), '+33612345678');
+  assert.strictEqual(m.numeroEssai('0033612345678'), '+33612345678');
+  for (const faux of ['0112345678', '061234567', '06123456789', '+44612345678', '+33112345678', 'abc', '', null, 612345678]) {
+    assert.strictEqual(m.numeroEssai(faux), null, String(faux));
+  }
+  assert.strictEqual(m.numeroLisible('+33612345678'), '06 12 34 56 78');
+  assert.strictEqual(m.numeroLisible(''), '');
+});
+
+test('appelPourOrdre : rien sans numéro valable ; sinon numéro, 20 s et texte du SMS', () => {
+  assert.strictEqual(m.appelPourOrdre('', 'T-003'), null);
+  assert.strictEqual(m.appelPourOrdre('0112345678', 'T-003'), null);
+  assert.deepStrictEqual(m.appelPourOrdre('06 12 34 56 78', 'T-003'), APPEL);
+  // Reporté (et le « Retirer le code PIN » devenu test « -apres-pin ») avec son appel.
+  assert.deepStrictEqual(m.ordreReporte({ id: 'a', type: 'simPin', demandeLe: T0, simAttendue: '1', appel: APPEL }).appel, APPEL);
+  assert.strictEqual(m.ordreReporte({ id: 'a', type: 'simTest', demandeLe: T0, simAttendue: '1' }).appel, undefined);
+});
+
+test('verdict avec appel : OK seulement avec SMS parti et appel passé ; coches sms et appel', () => {
+  const r = va(resultat({ sms: smsOk, appel: appelOk }));
+  assert.strictEqual(r.ok, true, r.message);
+  assert.deepStrictEqual(r.coches, { carte: true, reseau: true, inscrite: true, internet: true, sms: true, appel: true });
+  assert.match(r.message, /SMS parti et appel passé/);
+  assert.deepStrictEqual(r.appel, { ok: true, secondes: 20, raison: null });
+  // Sans numéro d'essai : pas de coches sms ni appel (comme avant).
+  assert.deepStrictEqual(Object.keys(v(resultat()).coches), ['carte', 'reseau', 'inscrite', 'internet']);
+});
+
+test('verdict avec appel : chaque raison a son message clair, rien d\'anxiogène', () => {
+  const cas = [
+    [{}, /n'a pas fait l'essai de SMS et d'appel : mettez à jour/],
+    [{ sms: { ok: false, code: -1, ms: 30000 }, appel: appelOk }, /pas parti dans les 30 secondes/],
+    [{ sms: { ok: false, code: 4, ms: 900 }, appel: appelOk }, /SMS d'essai n'est pas parti\. Vérifiez que la ligne permet les SMS/],
+    [{ sms: smsOk, appel: { ok: false, secondes: 2, raison: 'coupe' } }, /arrêté trop tôt \(au bout de 2 s\)/],
+    [{ sms: smsOk, appel: { ok: false, secondes: 0, raison: 'refuse' } }, /n'a pas laissé passer l'appel/],
+    [{ sms: { ok: false, code: 0, ms: 0 }, appel: { ok: false, secondes: 0, raison: 'sans-permission' } }, /autorisation/],
+    [{ sms: smsOk, appel: { ok: false, secondes: 0, raison: 'erreur' } }, /n'a pas pu passer l'appel d'essai : redémarrez-la/],
+    [{ sms: { ok: false, code: 0, ms: 0 }, appel: { ok: false, secondes: 0, raison: 'numero' } }, /pas un portable français/],
+  ];
+  for (const [plus, re] of cas) {
+    const r = va(resultat(plus));
+    assert.strictEqual(r.ok, false, re.source);
+    assert.match(r.message, re);
+    assert.doesNotMatch(r.message, /erreur|échec|danger|!/i, `${re.source} : rien d'anxiogène`);
+  }
+  // Une carte absente reste dite comme avant, même avec l'appel raté.
+  assert.match(va(resultat({ etat: 'absente', appel: { ok: false, secondes: 0, raison: 'erreur' } })).message, /Aucune carte détectée/);
+  assert.strictEqual(va(resultat({ sms: smsOk, appel: { ok: false, secondes: 3, raison: 'coupe' } })).coches.sms, true);
+});
+
+test('verdict avec appel : la tablette a 90 s pour répondre avant « pas encore répondu »', () => {
+  assert.match(va(undefined, { maintenant: T0 + 60_000 }).message, /appelle votre portable/);
+  assert.match(va(undefined, { maintenant: T0 + m.SILENCE_APPEL_MS + 1 }).message, /pas encore répondu/);
+  assert.strictEqual(m.SILENCE_APPEL_MS, 90_000);
+  assert.match(v(undefined, { maintenant: T0 + 60_000 }).message, /pas encore répondu/, 'sans appel : 45 s comme avant');
+});
+
+test('resultatPropre : sms et appel recopiés, validés et bornés', () => {
+  const r = m.resultatPropre({ ...resultat(), sms: { ok: true, code: -1.4, ms: 1e9, plus: 1 }, appel: { ok: 'oui', secondes: 20.6, raison: 'autre', x: 1 } });
+  assert.deepStrictEqual(r.sms, { ok: true, code: -1, ms: 600_000 });
+  assert.deepStrictEqual(r.appel, { ok: false, secondes: 21, raison: null });
+  assert.deepStrictEqual(m.resultatPropre({ ...resultat(), appel: { ok: false, secondes: 'x', raison: 'refuse' } }).appel, { ok: false, secondes: null, raison: 'refuse' });
+  const sans = m.resultatPropre(resultat());
+  assert.strictEqual(sans.sms, null);
+  assert.strictEqual(sans.appel, null);
+});
+
+test('refusSimNonTestee : test fait avec appel, l\'envoi demande aussi le SMS et l\'appel', () => {
+  const ligne = { iccid: ICCID };
+  const fiche = (simTest) => ({ ref: 'T-003', simId: 's', simTest: { ok: true, simAttendue: ICCID, ...simTest } });
+  assert.strictEqual(m.refusSimNonTestee(fiche({ avecAppel: true, sms: smsOk, appel: appelOk }), ligne), '');
+  assert.match(m.refusSimNonTestee(fiche({ avecAppel: true, sms: smsOk, appel: { ok: false, secondes: 0, raison: 'refuse' } }), ligne), /SMS ou l'appel d'essai de la tablette T-003/);
+  assert.match(m.refusSimNonTestee(fiche({ avecAppel: true, sms: null, appel: null }), ligne), /testez à nouveau/);
+  assert.strictEqual(m.refusSimNonTestee(fiche({ avecAppel: false }), ligne), '', 'test sans numéro d\'essai : comme avant');
+});
