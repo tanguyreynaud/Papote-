@@ -13,12 +13,20 @@ on:
     paths: ['web/**', '.github/workflows/balayages.yml']
   workflow_dispatch:
 
+# Un nouveau push sur la même branche de travail annule l'exécution encore en cours du commit précédent (CI plus
+# rapide, moins d'attente). Jamais sur main ni sur l'admin (claude/project-thread-dlattc) : le bouton « Publier »
+# (outils/publier/ci-verte.sh) y exige une CI verte sur le commit publié, chaque commit y garde donc la sienne.
+concurrency:
+  group: ${{ github.workflow }}-${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/project-thread-dlattc') && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/claude/project-thread-dlattc' }}
+
 jobs:
   balayage:
     # Ubuntu 24.04 fixé : ubuntu-latest est passé en 26.04 le 06/11 et Playwright 1.56.1 (outils/galerie)
     # n'y installe pas Chromium (« Playwright does not support chromium on ubuntu26.04-x64 »).
     runs-on: ubuntu-24.04
-    # Les gestes de l'app famille (170 écrans × 6 variantes) prennent environ 50 min.
+    # Les gestes de l'app famille (172 écrans × 6 variantes) prenaient environ 50 min dans une seule tâche, et
+    # faisaient toute la durée de la CI : ils sont coupés en 3 tâches parallèles de 2 variantes chacune (~17 min).
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -28,11 +36,19 @@ jobs:
           - '--appui famille admin'
           - '--boutons famille admin'
           - '--identifiants admin famille'
-          - '--gestes famille'
           - '--accessibilite famille admin'
           - 'famille admin'
           # App et admin dans WebKit (moteur de Safari) en iPhone SE et iPhone 15 : simulé, pas un vrai iPhone.
           - '--iphone famille admin'
+        # Gestes : chaque variante (gestes.js, VARIANTES) tourne dans exactement une des 3 tâches (GESTES_VARIANTES).
+        # Les 3 listes réunies = les 6 variantes : une variante ajoutée dans gestes.js doit être ajoutée ici.
+        include:
+          - mode: '--gestes famille'
+            variantes: 'normal,paysage'
+          - mode: '--gestes famille'
+            variantes: 'zoom 130 %,texte +30 %'
+          - mode: '--gestes famille'
+            variantes: 'mode sombre,noms très longs'
     defaults:
       run:
         working-directory: outil/outils/galerie
@@ -54,7 +70,9 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - if: contains(matrix.mode, '--iphone')
         run: npx playwright install --with-deps webkit
-      - name: Balayage ${{ matrix.mode }}
+      - name: Balayage ${{ matrix.mode }} ${{ matrix.variantes }}
+        env:
+          GESTES_VARIANTES: ${{ matrix.variantes }}
         run: node galerie.js ${{ matrix.mode }} --famille=ici --admin=ici
       - name: Rapports
         if: always()
