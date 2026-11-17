@@ -2928,6 +2928,9 @@ function renderMembers(all) {
   $('family-full').hidden = !familyFull || !pending.length;
   $('invite-full').hidden = !familyFull;
   $('invite-email-card').classList.toggle('disabled-card', familyFull);
+  // Vraiment désactivés (pas seulement estompés) : rien à toucher, et le bouton n'est plus pris pour un bouton illisible.
+  $('invite-email').disabled = familyFull;
+  $('form-invite').querySelector('button[type=submit]').disabled = familyFull;
   renderRequests(pending);
   tabletMembers = members.filter((m) => m.role === 'tablette');
   renderPreparee();
@@ -3219,8 +3222,8 @@ $('form-invite').addEventListener('submit', async (e) => {
   try {
     await envoyerInvitation(email);
   } finally {
-    bouton.disabled = false;
-    $('invite-email').disabled = false;
+    bouton.disabled = familyFull;
+    $('invite-email').disabled = familyFull;
     bouton.textContent = libelle;
   }
 });
