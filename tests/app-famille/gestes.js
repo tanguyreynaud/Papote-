@@ -387,7 +387,8 @@ async function centre(t, selecteur) {
   const dessus = () => el.evaluate((e) => {
     const r = e.getBoundingClientRect();
     const d = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-    return !d || e === d || e.contains(d) ? null : `${d.tagName.toLowerCase()}${d.id ? `#${d.id}` : ''}${d.className && typeof d.className === 'string' ? `.${d.className.trim().split(/\s+/).join('.')}` : ''}`;
+    // Un ancêtre sous le doigt : l'élément ne prend pas le toucher (pointer-events: none, bouton qui travaille).
+    return !d || e === d || e.contains(d) || d.contains(e) ? null : `${d.tagName.toLowerCase()}${d.id ? `#${d.id}` : ''}${d.className && typeof d.className === 'string' ? `.${d.className.trim().split(/\s+/).join('.')}` : ''}`;
   });
   if (await dessus()) {
     await el.evaluate((e) => e.scrollIntoView({ block: 'center' }));
