@@ -716,7 +716,8 @@ footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-t
         ouvrir(false);
       });
     });
-    document.addEventListener('click', function (e) { if (ouvert() && !haut.contains(e.target)) fermer(false); });
+    // pointerdown et pas click : sur iPhone (Safari), toucher un texte ou une image ne déclenche aucun « click ».
+    document.addEventListener('pointerdown', function (e) { if (ouvert() && !haut.contains(e.target)) fermer(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ouvert()) { fermer(false); bouton.focus(); } });
   })();
 </script>
