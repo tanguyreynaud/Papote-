@@ -4366,19 +4366,12 @@ const optionsHeures = ({ de, a }) => {
 };
 const OPTIONS_COUCHER = optionsHeures(HEURES_COUCHER);
 const OPTIONS_REVEIL = optionsHeures(HEURES_REVEIL);
-// Une heure gardée hors des bornes (réglée avant, par exemple 0 h 30 ou 20 h 30) prend la plus proche dans les
-// bornes, en passant minuit (0 h 30 → 23 h 30 pour le coucher ; 20 h 30 → 5 h et 12 h → 10 h pour le réveil). En minutes.
+// Une heure gardée hors des bornes (réglée avant, par exemple 0 h 30 ou 20 h 30) est simplement bornée, comme sur la
+// tablette (Veille.java bornerDebut / bornerFin) et au serveur (veilleSure) : 0 h 30 → 19 h pour le coucher ;
+// 20 h 30 ou 12 h → 10 h pour le réveil. Une heure illisible : celle par défaut. En minutes.
 function heureSure(h, m, bornes, defaut) {
   if (!Number.isInteger(h) || h < 0 || h > 23) return defaut;
-  const jour = 24 * 60;
-  const min = h * 60 + (m === 30 ? 30 : 0);
-  let choisie = bornes.de;
-  let ecart = jour;
-  for (let x = bornes.de; x <= bornes.a; x += 30) {
-    const d = Math.min(Math.abs(x - min), jour - Math.abs(x - min));
-    if (d < ecart) { ecart = d; choisie = x; }
-  }
-  return choisie;
+  return Math.min(bornes.a, Math.max(bornes.de, h * 60 + (m === 30 ? 30 : 0)));
 }
 // La veille gardée, ramenée dans les bornes : { veille (forme de la base), corrigee (elle était hors bornes) }.
 function veilleSure(v) {
@@ -4405,13 +4398,23 @@ function veilleChoisie(active, selDe, selA) {
   return veille;
 }
 
-// Veille gardée hors des bornes (réglée avant le 17/11) : un responsable qui ouvre l'app l'envoie ramenée dans les
-// bornes (une fois pour chaque valeur), pour que la tablette ne reste pas en nuit presque toute la journée.
+// Veille gardée hors des bornes (réglée avant le 17/11) qui garde la tablette en nuit plus longtemps que tout réglage
+// possible (19 h → 10 h : 15 h), ou illisible : un responsable qui ouvre l'app l'envoie ramenée dans les bornes (une
+// fois pour chaque valeur), pour que la tablette ne reste pas en nuit presque toute la journée (T-003 : 23 h 30 sur
+// 24). Une nuit plus courte hors bornes (écrite par le serveur ou un essai) est seulement affichée ramenée.
+const NUIT_MAX = (24 * 60 - HEURES_COUCHER.de) + HEURES_REVEIL.a;
+function nuitTropLongue(v) {
+  if (!v || v.active === false) return false;
+  const de = v.de * 60 + (v.deMin || 0);
+  const a = v.a * 60 + (v.aMin || 0);
+  if (!Number.isFinite(de) || !Number.isFinite(a)) return true;
+  return ((a - de + 1440) % 1440 || 1440) > NUIT_MAX;
+}
 const veillesCorrigees = new Set();
 function corrigerVeille() {
   const { veille, corrigee } = veilleSure(session.family.veille);
   const cle = `${session.fid} ${JSON.stringify(session.family.veille)}`;
-  if (!corrigee || !amFamilyAdmin() || veillesCorrigees.has(cle)) return;
+  if (!corrigee || !nuitTropLongue(session.family.veille) || !amFamilyAdmin() || veillesCorrigees.has(cle)) return;
   veillesCorrigees.add(cle);
   updateDoc(doc(db, 'families', session.fid), { veille, rev: increment(1) })
     .catch((err) => console.warn('Veille hors bornes non corrigée', err));

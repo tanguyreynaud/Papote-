@@ -311,9 +311,10 @@ async function routerInternet(context) {
 
 /**
  * Un téléphone : un navigateur à part, comme le téléphone d'un proche.
- * options : { largeur, hauteur, hauteurEcran } (iPhone 13 par défaut).
+ * options : { largeur, hauteur, hauteurEcran } (iPhone 13 par défaut) ; fuseau : fuseau horaire (heure de Paris par
+ * défaut), pour qu'il soit une autre heure sur cet appareil sans toucher à l'horloge (comptes, serveur).
  */
-async function telephone(nom, { largeur, hauteur } = {}) {
+async function telephone(nom, { largeur, hauteur, fuseau = 'Europe/Paris' } = {}) {
   let reglages;
   if (!WEBKIT) {
     reglages = {
@@ -335,7 +336,7 @@ async function telephone(nom, { largeur, hauteur } = {}) {
   const context = await navigateur.newContext({
     ...reglages,
     locale: 'fr-FR',
-    timezoneId: 'Europe/Paris',
+    timezoneId: fuseau,
     serviceWorkers: 'block',
   });
   // Caméra et micro permis, comme Chromium avec --use-fake-ui-for-media-stream (le proche a dit « Autoriser »).

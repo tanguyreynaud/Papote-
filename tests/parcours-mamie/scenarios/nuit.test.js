@@ -1,4 +1,4 @@
-// La nuit chez Mamie (veille de 21 h à 6 h 30) : l'écran s'éteint, une photo envoyée le soir attend le matin sans
+// La nuit chez Mamie (veille réglée par la famille, entre 19 h et 10 h) : l'écran s'éteint, une photo envoyée le soir attend le matin sans
 // rien allumer, mais un appel de la famille sonne quand même et l'écran se rendort après.
 
 const { test, assert, g, s, brancher, chezMamie, familleChezMamie, envoyerPhoto, enGrand, diagnostic } = require('../commun');
@@ -15,12 +15,17 @@ const attendreSommeil = (mamie, oui, delai = 20_000) => g.attendreBase(async () 
   .catch(async (e) => { throw new Error(`${e.message}\n${await diagnostic(mamie)}`); });
 
 test('La nuit : écran en veille ; une photo attend le matin sans rien allumer ; un appel sonne quand même ; le matin, la photo s\'affiche', { timeout: 300_000 }, async () => {
-  const { julie, mamie, fid } = await familleChezMamie();
-  // La famille règle la veille sur l'heure qu'il est (même forme que l'app : families/{fid}.veille, en heures) :
-  // pour la tablette, c'est la nuit. L'horloge n'est pas truquée : la tablette et le serveur ont la même heure.
-  const h = Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Europe/Paris' }).format(new Date())) % 24;
-  assert.ok(Number.isInteger(h), `heure de Paris (${h})`);
-  await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: h, a: (h + 3) % 24 } });
+  // La veille ne se règle plus qu'entre 19 h et 23 h 30 (coucher) et 5 h et 10 h (réveil), bornes que la tablette
+  // applique aussi (17/11) : l'essai ne la cale plus sur l'heure qu'il est. La tablette est mise dans un fuseau où il
+  // est 21 h passées (même minute qu'à Paris) ; l'horloge, elle, n'est pas truquée : tablette, comptes et serveur
+  // ont la même heure. Le soir, nuit de 19 h à 5 h ; le matin, de 23 h à 5 h, qui ne couvre plus 21 h.
+  const utc = new Date().getUTCHours();
+  const decalage = ((21 - utc) % 24 + 24) % 24;
+  const ecart = decalage > 14 ? decalage - 24 : decalage;
+  const fuseau = ecart === 0 ? 'Etc/UTC' : `Etc/GMT${ecart > 0 ? '-' : '+'}${Math.abs(ecart)}`;
+  const { julie, mamie, fid } = await familleChezMamie({ fuseau });
+  assert.strictEqual(await mamie.page.evaluate(() => new Date().getHours()), 21, `21 h sur la tablette (${fuseau})`);
+  await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: 19, a: 5 } });
   await mamie.pont('changed').catch(() => {});
   await attendreSommeil(mamie, true, 150_000);
   assert.match((await mamie.texte('.night-clock')).trim(), /^\d{1,2}:\d\d$/, 'l\'heure, en petit, sur l\'écran de nuit');
@@ -48,7 +53,7 @@ test('La nuit : écran en veille ; une photo attend le matin sans rien allumer ;
   await attendreSommeil(mamie, true, 150_000);
 
   // Le matin (la veille ne couvre plus l'heure qu'il est) : la photo du soir s'affiche en grand.
-  await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: (h + 5) % 24, a: (h + 8) % 24 } });
+  await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: 23, a: 5 } });
   await mamie.pont('changed').catch(() => {});
   await attendreSommeil(mamie, false, 150_000);
   await chezMamie(mamie, '#overlay:not([hidden])', 60_000);

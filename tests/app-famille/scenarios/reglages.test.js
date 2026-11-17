@@ -256,22 +256,26 @@ test('Nom de la tablette : jamais un numéro (message sous le champ) ; nuit : he
   assert.strictEqual(await julie.page.locator('#family-name-error').isVisible(), false);
   await julie.page.click('#family-name-card .setting-cancel');
 
-  // Nuit réglée avant les bornes (cas réel : de 21 h à 20 h 30, la tablette en nuit 23 h 30 sur 24) : l'app d'un
+  // responsable la ramène dans les bornes (simple borne, comme la tablette et le serveur : réveil 10 h) et l'envoie à la tablette, sans rien demander.
   // responsable la ramène dans les bornes (réveil le plus proche, en passant minuit : 5 h) et l'envoie à la tablette, sans rien demander.
   await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: 21, a: 20, aMin: 30 } });
-  await g.attendreBase(async () => require('node:util').isDeepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 21, a: 5 }), 'veille ramenée à 21 h – 5 h');
-  await julie.page.locator('#sleep-value', { hasText: 'De 21 h à 5 h' }).waitFor();
-  // Coucher à 0 h 30 et réveil à midi : 23 h 30 et 10 h ; les listes ne sont jamais vides.
+  await g.attendreBase(async () => require('node:util').isDeepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 21, a: 10 }), 'veille ramenée à 21 h – 10 h');
+  await julie.page.locator('#sleep-value', { hasText: 'De 21 h à 10 h' }).waitFor();
+  // Une nuit courte hors bornes (écrite par le serveur, ou les essais de la tablette) : affichée ramenée, pas
+  // réécrite (la tablette ne dort pas trop longtemps).
+  await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: 15, a: 18 } });
+  await julie.page.locator('#sleep-value', { hasText: 'De 19 h à 10 h' }).waitFor();
+  await julie.page.waitForTimeout(1500);
+  assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 15, a: 18 }, 'pas réécrite');
+  // Coucher à 0 h 30 et réveil à midi, écran jamais éteint : affichés 23 h 30 et 10 h ; les listes ne sont jamais vides.
   await s.db.doc(`families/${fid}`).update({ veille: { active: false, de: 0, deMin: 30, a: 12 } });
-  await g.attendreBase(async () => (await g.lire(`families/${fid}`)).veille.de === 23, 'veille ramenée à 23 h 30 – 10 h');
-  assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: false, de: 23, deMin: 30, a: 10 });
   await julie.page.locator('#sleep-value', { hasText: 'Jamais' }).waitFor();
   await modifier(julie, 'sleep-card');
   await julie.page.locator('#sleep-on').setChecked(true);
-  assert.deepStrictEqual([await julie.page.inputValue('#sleep-from'), await julie.page.inputValue('#sleep-to')], ['23:30', '10:0']);
+  assert.deepStrictEqual([await julie.page.inputValue('#sleep-from'), await julie.page.inputValue('#sleep-to')], ['19:0', '10:0']);
   await julie.page.selectOption('#sleep-to', '7:0');
   await enregistrer(julie, 'sleep-card');
   await g.toast(julie, 'Mise en veille enregistrée');
-  assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 23, deMin: 30, a: 7 });
-  await julie.page.locator('#sleep-value', { hasText: 'De 23 h 30 à 7 h' }).waitFor();
+  assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 19, a: 7 });
+  await julie.page.locator('#sleep-value', { hasText: 'De 19 h à 7 h' }).waitFor();
 });

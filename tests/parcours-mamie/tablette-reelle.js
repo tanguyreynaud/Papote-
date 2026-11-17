@@ -140,14 +140,15 @@ const allumees = [];
 /**
  * Allume une tablette neuve (écran Bienvenue), ou préparée à l'atelier si `tab` est donné : `tab` est la fiche
  * stock d'acteurs.tablettePreparee() ; la tablette prend son n° de série et sa clé est reliée à son vrai compte.
- * options : { tab, etat (imitation d'Android : reseau, secteur, telephone, forfait…), heure ('2026-11-12T10:00:00', heure de Paris) }
+ * options : { tab, etat (imitation d'Android : reseau, secteur, telephone, forfait…), heure ('2026-11-12T10:00:00', heure de Paris),
+ * fuseau (fuseau horaire de l'écran : une autre heure du jour, l'horloge restant juste) }
  */
-async function allumer({ tab = null, etat = {}, heure = null } = {}) {
+async function allumer({ tab = null, etat = {}, heure = null, fuseau } = {}) {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'papote-tablette-'));
   const java = await lancerJava(dossier);
   // Notée tout de suite : si la suite échoue, elle est quand même éteinte à la fin du scénario (sinon l'essai ne finit jamais).
   allumees.push({ java, dossier });
-  const t = await banc.telephone('Tablette', { largeur: 1280, hauteur: 800 });
+  const t = await banc.telephone('Tablette', { largeur: 1280, hauteur: 800, fuseau });
   t.java = java;
   t.dossier = dossier;
   t.evenements = java.evenements;
