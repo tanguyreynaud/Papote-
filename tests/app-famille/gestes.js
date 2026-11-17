@@ -376,10 +376,24 @@ async function attendreBase(fn, message, delai = 15_000) {
 
 // ---------- Gestes humains (doigt pressé, maladroit, pressé de partir) ----------
 
-/** Le centre d'un élément visible, ramené à l'écran s'il le faut. */
+/**
+ * Le centre d'un élément visible, ramené à l'écran s'il le faut. Comme un doigt : si ce centre est caché par autre
+ * chose (la barre du bas sur un petit écran), l'élément est d'abord amené au milieu de l'écran ; s'il reste caché,
+ * c'est une erreur (le proche ne pourrait pas le toucher).
+ */
 async function centre(t, selecteur) {
   const el = t.page.locator(selecteur).filter({ visible: true }).first();
   await el.scrollIntoViewIfNeeded();
+  const dessus = () => el.evaluate((e) => {
+    const r = e.getBoundingClientRect();
+    const d = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return !d || e === d || e.contains(d) ? null : `${d.tagName.toLowerCase()}${d.id ? `#${d.id}` : ''}${d.className && typeof d.className === 'string' ? `.${d.className.trim().split(/\s+/).join('.')}` : ''}`;
+  });
+  if (await dessus()) {
+    await el.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+    const cache = await dessus();
+    if (cache) throw new Error(`[${t.nom}] ${selecteur} caché par ${cache} : impossible à toucher`);
+  }
   const b = await el.boundingBox();
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
 }

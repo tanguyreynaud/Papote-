@@ -82,7 +82,23 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
     const c = document.getElementById('call');
     return `image ${v.videoWidth}x${v.videoHeight}, appel ${c.clientWidth}x${c.clientHeight}, fenêtre ${innerWidth}x${innerHeight}, plein écran ${!!document.fullscreenElement}`;
   });
-  assert.deepStrictEqual(await cadrage(), { remplit: false, ajustement: 'contain', memeImage: true, fondVisible: true }, `téléphone : image entière sur fond flouté (${await tailles()})`);
+  if (banc.WEBKIT) {
+    // Safari d'iPhone : ni plein écran ni verrou de l'orientation ; l'écran d'appel est tourné d'un quart de tour
+    // (force-landscape) tant que le téléphone est tenu debout. L'image remplit l'écran couché si elle y perd au plus
+    // 25 % (iPhone 15 : 659 × 393 pour 640 × 480), sinon elle est entière sur le fond flouté (iPhone SE : 667 × 375).
+    const d = await julie.page.evaluate(() => {
+      const v = document.getElementById('call-remote');
+      const c = document.getElementById('call');
+      return { tourne: c.classList.contains('force-landscape'), W: c.clientWidth, H: c.clientHeight, w: v.videoWidth, h: v.videoHeight };
+    });
+    assert.ok(d.tourne && d.W > d.H, `iPhone : écran d'appel à l'horizontale (${await tailles()})`);
+    const remplit = Math.min(d.W / d.w, d.H / d.h) / 0.75 >= Math.max(d.W / d.w, d.H / d.h) - 1e-6;
+    assert.deepStrictEqual(await cadrage(), remplit
+      ? { remplit: true, ajustement: 'cover', memeImage: true, fondVisible: false }
+      : { remplit: false, ajustement: 'contain', memeImage: true, fondVisible: true }, `iPhone : cadrage (${await tailles()})`);
+  } else {
+    assert.deepStrictEqual(await cadrage(), { remplit: false, ajustement: 'contain', memeImage: true, fondVisible: true }, `téléphone : image entière sur fond flouté (${await tailles()})`);
+  }
   assert.ok(await julie.page.locator('#call-hangup').isVisible(), 'Raccrocher visible');
   // L'appel vidéo passe en plein écran : le navigateur refuse alors de changer la taille de la page.
   await julie.page.evaluate(() => document.fullscreenElement && document.exitFullscreen());

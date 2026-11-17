@@ -1,7 +1,7 @@
 # Tests de bout en bout de l'app famille
 
-L'app famille (`web/`) est ouverte dans un vrai navigateur (Chromium sans écran) et utilisée comme
-un proche le ferait : inscription, installation de la tablette, photos, messages, appels…
+L'app famille (`web/`) est ouverte dans un vrai navigateur (Chromium sans écran, et WebKit en taille iPhone : voir
+`WEBKIT.md`) et utilisée comme un proche le ferait : inscription, installation de la tablette, photos, messages, appels…
 Tout tourne sur l'ordinateur, sur les émulateurs Firebase : rien n'est envoyé en ligne, rien n'est payant.
 
 ## Lancer
@@ -72,4 +72,5 @@ Ports des émulateurs : Firestore 8087, Auth 9097, Storage 9197 (voir `firebase.
 `emulators:exec` (`FIRESTORE_EMULATOR_HOST`…) : une copie de `firebase.json` avec d'autres ports (`--config`) marche telle quelle.
 
 Sur GitHub, `.github/workflows/app-famille.yml` lance ces tests à chaque changement de `web/`, des
-règles ou des tests.
+règles ou des tests, dans Chromium (Chrome d'Android) et dans WebKit (Safari d'iPhone 15 et d'iPhone SE).
+`PAPOTE_MOTEUR=webkit` choisit WebKit en local ; ce qui n'y est pas couvert, et pourquoi : `WEBKIT.md`.
