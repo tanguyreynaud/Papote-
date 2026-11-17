@@ -258,9 +258,19 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .faq.ouverte .faq-plus { display: none; }
 /* Pied */
 footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-top: 1px solid var(--line); }
-footer .wrap { display: grid; gap: .6rem; }
-footer .liens { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; }
-footer a { color: var(--muted); }
+.pied { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 2rem; }
+.pied p { margin: 0 0 .5rem; }
+.pied-nom { display: flex; align-items: center; gap: .5rem; font: 700 1.25rem var(--display, inherit); color: var(--text); }
+.pied-groupe { display: flex; flex-direction: column; align-items: flex-start; }
+.pied-groupe h2 { margin: 0 0 .35rem; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.pied-groupe a { display: flex; align-items: center; min-height: 2.75rem; color: var(--text); }
+.pied-marque a { color: var(--accent-strong, var(--text)); }
+.pied-bas { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: .9rem; }
+@media (max-width: 760px) {
+  .pied { grid-template-columns: 1fr; gap: 1.25rem; }
+  .pied-groupe a { border-bottom: 1px solid var(--line); align-self: stretch; }
+  footer { padding-bottom: 6rem; } /* la bulle du chat ne cache pas le bas */
+}
 /* Bulle du chat (chat-support.js) : sur téléphone, un simple rond pour ne pas recouvrir le texte. */
 @media (max-width: 760px) { body .ps-bouton span { display: none; } body .ps-bouton { padding: .95rem; } }
 </style>
@@ -571,17 +581,26 @@ footer a { color: var(--muted); }
   </section>
 </main>
 <footer>
-  <div class="wrap">
-    <p><b>Papote</b> · Tanguy Reynaud, Lyon · <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
-    <div class="liens">
-      <a href="cgv.html">Conditions de vente</a>
-      <a href="mentions.html">Mentions légales</a>
-      <a href="confidentialite.html">Confidentialité</a>
-      <a href="resilier.html">Résilier mon abonnement</a>
-      <a href="https://app.mapapote.fr">Déjà client ? Ouvrir l'appli famille</a>
+  <!-- Pied de page (Tanguy, 17/11 : « on s'y perd ») : trois blocs nommés, un lien par ligne. -->
+  <div class="wrap pied">
+    <div class="pied-marque">
+      <p class="pied-nom"><img src="icon.svg" alt="" width="28" height="28">Papote</p>
+      <p>La tablette qui rapproche vos aînés de toute la famille.</p>
+      <p>Une question&nbsp;? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
     </div>
-    <span>© 2026 Papote</span>
+    <nav class="pied-groupe" aria-label="Déjà client">
+      <h2>Déjà client</h2>
+      <a href="https://app.mapapote.fr">Ouvrir l'appli famille</a>
+      <a href="resilier.html">Résilier mon abonnement</a>
+    </nav>
+    <nav class="pied-groupe" aria-label="Informations">
+      <h2>Informations</h2>
+      <a href="cgv.html">Conditions de vente</a>
+      <a href="confidentialite.html">Confidentialité</a>
+      <a href="mentions.html">Mentions légales</a>
+    </nav>
   </div>
+  <div class="wrap"><p class="pied-bas">© 2026 Papote · Lyon</p></div>
 </footer>
 <script>
   // FAQ : les autres questions sur demande.
