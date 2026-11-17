@@ -332,7 +332,9 @@ function ouvrirMenu(ouvert) {
 }
 $('nav-menu').addEventListener('click', () => ouvrirMenu(!document.querySelector('.nav').classList.contains('ouvert')));
 window.addEventListener('hashchange', () => ouvrirMenu(false));
-document.addEventListener('click', (e) => { if (!e.target.closest('.nav')) ouvrirMenu(false); });
+// pointerdown, pas click : Safari iPhone n'envoie pas de click sur un simple texte, le menu restait ouvert.
+document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.nav')) ouvrirMenu(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') ouvrirMenu(false); });
 afficherPage();
 
 // ---------- Chargement ----------
