@@ -229,6 +229,7 @@ const TITRES = {
   clients: 'Clients',
   stock: 'Stock',
   compta: 'Comptabilité',
+  statistiques: 'Statistiques',
   validation: 'Validation',
   outils: 'Réglages',
   aide: 'Que faire si…', // guide des pépins courants (admin.html, section « aide »)
