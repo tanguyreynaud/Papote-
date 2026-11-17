@@ -155,7 +155,7 @@ function messageSmsAppel(t) {
   if (appel && appel.raison === 'numero') return 'Le numéro d\'essai n\'est pas un portable français (06 ou 07) : corrigez-le plus bas, puis testez à nouveau.';
   if (appel && appel.raison === 'sans-permission') return 'La tablette n\'a pas encore l\'autorisation d\'envoyer des SMS et de passer des appels : autorisez Téléphone et SMS pour l\'appli Papote (Paramètres de la tablette, Applications), puis testez à nouveau.';
   if (!sms || sms.ok !== true) {
-    return sms && sms.code === -1
+    return sms && (sms.code === -1 || sms.code === -999)
       ? 'Le SMS d\'essai n\'est pas parti dans les 30 secondes. Une ligne tout juste activée met parfois quelques minutes : attendez un peu, puis testez à nouveau.'
       : 'Le SMS d\'essai n\'est pas parti. Vérifiez que la ligne permet les SMS (et qu\'il reste du crédit), puis testez à nouveau.';
   }
