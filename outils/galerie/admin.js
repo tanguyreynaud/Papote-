@@ -263,12 +263,30 @@ function donnees(o = {}) {
       gestionCommande: COMMANDE,
       gestionReglages: { ok: true, masquees: [] },
       stockDisponible: { disponible: 2 },
+      gestionStatistiques: o.vide ? STATISTIQUES_VIDES : STATISTIQUES,
       ...(o.fonctions || {}),
     },
   };
 }
 
 const pause = (p, ms = 700) => p.waitForTimeout(ms);
+// Statistiques du site (gestionStatistiques, functions/statistiques.js) : 30 jours réalistes, un tunnel qui perd
+// surtout au point relais, et la provenance.
+const STATISTIQUES = (() => {
+  const jours = [];
+  const champs = ['visite', 'accueil', 'commande', 'adresse', 'couverture-ok', 'couverture-non', 'relais', 'coordonnees', 'paiement', 'complet', 'paye', 'prevenir'];
+  const total = Object.fromEntries(champs.map((c) => [c, 0]));
+  for (let i = 29; i >= 0; i--) {
+    const v = 18 + ((i * 7) % 23);
+    const l = { jour: new Date(Date.UTC(2026, 10, 17) - i * 86400000).toISOString().slice(0, 10), visite: v, accueil: v - 3,
+      commande: Math.round(v * 0.42), adresse: Math.round(v * 0.33), 'couverture-ok': Math.round(v * 0.29), 'couverture-non': i % 4 ? 0 : 1,
+      relais: Math.round(v * 0.14), coordonnees: Math.round(v * 0.12), paiement: Math.round(v * 0.08), complet: 0, paye: i % 3 ? 0 : 1, prevenir: i % 9 ? 0 : 1 };
+    for (const c of champs) total[c] += l[c];
+    jours.push(l);
+  }
+  return { periode: 30, debut: jours[0].jour, jours, total, sources: { google: 311, direct: 142, facebook: 88, email: 41, qwant: 12, autre: 9 } };
+})();
+const STATISTIQUES_VIDES = { periode: 30, debut: '2026-10-19', jours: [], total: Object.fromEntries(Object.keys(STATISTIQUES.total).map((c) => [c, 0])), sources: {} };
 // Réponse de jetonInstallation (functions/installation-qr.js) : le contenu du QR sans le wifi.
 const QR_INSTALLATION = {
   jeton: 'GaLeRiEjEtOnFaCtIcE0123456789ab', expire: il(-1), versionName: '2.99.120',
@@ -433,6 +451,11 @@ const SCENES = [
   { groupe: 'Stock', titre: 'Un accessoire', page: '#accessoire/X2', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Stock', titre: 'Stock : achats', page: '#stock/achats', tailles: ['pc'], plein: true, donnees: () => donnees() },
 
+  // Statistiques du site (Tanguy, 17/11) : visiteurs vs commandes, où ils s'arrêtent, d'où ils viennent.
+  { groupe: 'Statistiques', titre: 'Statistiques : 30 jours, tunnel et provenance', page: '#statistiques', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
+  { groupe: 'Statistiques', titre: 'Statistiques : choisir 7 jours', page: '#statistiques', tailles: ['tel'], donnees: () => donnees(), faire: toucher('#stats-periode [data-jours="7"]') },
+  { groupe: 'Statistiques', titre: 'Statistiques : aucune visite encore', page: '#statistiques', tailles: ['pc'], donnees: () => donnees({ vide: true }) },
+  { groupe: 'Statistiques', titre: 'Statistiques : le serveur ne répond pas', page: '#statistiques', tailles: ['pc'], donnees: () => donnees({ fonctions: { gestionStatistiques: { erreur: 'Le serveur ne répond pas' } } }) },
   { groupe: 'Comptabilité', titre: 'Bilan', page: '#compta/bilan', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Factures', page: '#compta/factures', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Dépenses', page: '#compta/depenses', tailles: ['pc'], plein: true, donnees: () => donnees() },
