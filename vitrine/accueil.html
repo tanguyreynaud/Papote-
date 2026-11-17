@@ -258,17 +258,19 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .faq.ouverte .faq-plus { display: none; }
 /* Pied */
 footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-top: 1px solid var(--line); }
-.pied { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 2rem; }
+.pied { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 2rem; }
 .pied p { margin: 0 0 .5rem; }
 .pied-nom { display: flex; align-items: center; gap: .5rem; font: 700 1.25rem var(--display, inherit); color: var(--text); }
 .pied-groupe { display: flex; flex-direction: column; align-items: flex-start; }
 .pied-groupe h2 { margin: 0 0 .35rem; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
-.pied-groupe a { display: flex; align-items: center; min-height: 2.75rem; color: var(--text); }
+.pied-groupe a { display: flex; align-items: center; min-height: 2.75rem; color: var(--text); font-weight: 700; }
 .pied-marque a { color: var(--accent-strong, var(--text)); }
 .pied-bas { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: .9rem; }
+@media (max-width: 1000px) and (min-width: 761px) { .pied { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) {
   .pied { grid-template-columns: 1fr; gap: 1.25rem; }
   .pied-groupe a { border-bottom: 1px solid var(--line); align-self: stretch; }
+  .pied-groupe:last-child a:last-child { border-bottom: 0; } /* un seul trait au-dessus du « © » */
   footer { padding-bottom: 6rem; } /* la bulle du chat ne cache pas le bas */
 }
 /* Bulle du chat (chat-support.js) : sur téléphone, un simple rond pour ne pas recouvrir le texte. */
@@ -588,6 +590,13 @@ footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-t
       <p>La tablette qui rapproche vos aînés de toute la famille.</p>
       <p>Une question&nbsp;? <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a></p>
     </div>
+    <nav class="pied-groupe" aria-label="Découvrir">
+      <h2>Découvrir</h2>
+      <a href="#fonctionnement">Comment ça marche</a>
+      <a href="#questions">Questions fréquentes</a>
+      <!-- Suit le stock comme les autres boutons : « Être prévenu » quand il n'y a plus de tablette. -->
+      <a class="js-commander" href="commande.html">Commander</a>
+    </nav>
     <nav class="pied-groupe" aria-label="Déjà client">
       <h2>Déjà client</h2>
       <a href="https://app.mapapote.fr">Ouvrir l'appli famille</a>
