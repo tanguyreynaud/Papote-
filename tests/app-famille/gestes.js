@@ -389,12 +389,8 @@ async function doubleAppui(t, selecteur) {
   const { x, y } = await centre(t, selecteur);
   await t.page.touchscreen.tap(x, y);
   await t.page.touchscreen.tap(x, y);
-  // Le double appui ne doit jamais grossir l'écran (Safari d'iPhone zoome au double appui si la page le permet ;
-  // Chrome d'Android jamais sur une page à la largeur du téléphone).
-  if (!banc.WEBKIT) return;
-  await t.page.waitForTimeout(350);
-  const zoom = await t.page.evaluate(() => (window.visualViewport ? window.visualViewport.scale : 1)).catch(() => 1);
-  if (Math.abs(zoom - 1) > 0.01) t.erreurs.push(`[${t.nom}] double appui sur ${selecteur} : l'écran a zoomé (×${zoom.toFixed(2)})`);
+  // Sous WebKit, l'écran ne doit pas avoir zoomé (Safari d'iPhone zoome au double appui si la page le permet) :
+  // vérifié à la fin de chaque essai (banc.js), sans retarder la suite.
 }
 
 /**

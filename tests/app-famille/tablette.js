@@ -71,7 +71,8 @@ async function decrocher(tablette, cid) {
   const answer = await tablette.page.evaluate(async ({ offer, preparer }) => {
     // eslint-disable-next-line no-eval
     await (0, eval)(`(${preparer})`)();
-    const flux = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    // Image 4:3 comme la caméra de la tablette (la fausse caméra de WebKit n'a pas la même forme que celle de Chromium).
+    const flux = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
     flux.getTracks().forEach((t) => window.pc.addTrack(t, flux));
     await window.pc.setRemoteDescription(offer);
     const a = await window.pc.createAnswer();

@@ -251,7 +251,7 @@ const TOLERE = [
 // note chaque abandon d'une requête vers une autre origine comme « Fetch API cannot load … due to access control
 // checks ». Chromium n'en dit rien. Seulement les canaux de Firestore, mot pour mot.
 const TOLERE_PAGE = WEBKIT ? [
-  /^Fetch API cannot load http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/(Listen|Write)\/channel\?\S* due to access control checks\.$/,
+  /^Fetch API cannot load http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/(Listen|Write)\/channel\?\S* due to access control checks\./,
 ] : [];
 
 async function routerInternet(context) {
@@ -338,7 +338,9 @@ async function telephone(nom, { largeur, hauteur } = {}) {
     largeur: reglages.viewport.width, hauteur: reglages.viewport.height,
   };
   page.on('pageerror', (e) => {
-    if (TOLERE_PAGE.some((r) => r.test(e.message))) return;
+    // Première ligne : WebKit met la pile sous le message.
+    const lignes = [e.message, e.stack].map((x) => String(x || '').split('\n')[0].replace(/^(Type)?Error: /, ''));
+    if (lignes.some((l) => TOLERE_PAGE.some((r) => r.test(l)))) return;
     t.erreurs.push(`[${nom}] erreur non rattrapée : ${e.stack || e.message}`);
   });
   page.on('console', (m) => {
@@ -403,6 +405,14 @@ function brancher() {
     pannes.clear();
   });
   test.afterEach(async (ctx) => {
+    // Safari d'iPhone : un écran resté zoomé (double appui) est une erreur.
+    if (WEBKIT) {
+      for (const t of telephones) {
+        if (t.page.isClosed()) continue;
+        const zoom = await t.page.evaluate(() => (window.visualViewport ? window.visualViewport.scale : 1)).catch(() => 1);
+        if (Math.abs(zoom - 1) > 0.01) t.erreurs.push(`[${t.nom}] écran resté zoomé (×${zoom.toFixed(2)}) : le double appui de Safari`);
+      }
+    }
     const erreursPages = telephones.flatMap((t) => t.erreurs);
     // Dernier écran de chaque téléphone, dans captures/ : pour comprendre un échec sans relancer.
     const dossier = path.join(__dirname, 'captures', (ctx?.name || 'test').replace(/[^\p{L}\p{N} -]+/gu, '_').slice(0, 80));
