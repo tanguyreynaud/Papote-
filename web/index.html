@@ -299,10 +299,10 @@
         <h2>Comment appelez-vous la personne ?</h2>
         <p class="muted">Le nom que toute la famille utilise, par exemple « Mamie Emma ». Il s'affichera sur la tablette, pour les appels et les alertes.</p>
         <label>Son nom
-          <input id="nom-prepare-input" maxlength="40" placeholder="Mamie Emma" required>
+          <input id="nom-prepare-input" maxlength="40" placeholder="Mamie Emma" required aria-describedby="nom-prepare-error">
         </label>
-        <button type="submit" class="primary wide" id="nom-prepare-btn">Enregistrer</button>
         <p id="nom-prepare-error" class="error" hidden></p>
+        <button type="submit" class="primary wide" id="nom-prepare-btn">Enregistrer</button>
       </form>
       <p id="tablette-en-route" class="card small" hidden>La tablette est en route. À son arrivée, il suffira de la brancher : elle retrouvera la famille toute seule, avec les photos déjà envoyées. Vous pouvez déjà inviter vos proches.</p>
       <p id="activity" class="activity" hidden></p>
@@ -494,7 +494,8 @@
           <p id="family-name-value" class="setting-value"></p>
           <form id="form-family-name" class="setting-edit" hidden>
             <p class="muted small">Le nom de la tablette, souvent celui de la personne qui l'a (« Mamie », « Jeanne »…). Il apparaît partout dans l'app.</p>
-            <input id="family-name" maxlength="40" required aria-label="Nom de la tablette">
+            <input id="family-name" maxlength="40" required aria-label="Nom de la tablette" aria-describedby="family-name-error">
+            <p id="family-name-error" class="error small" hidden></p>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
               <button type="submit" class="primary">Enregistrer</button>
@@ -508,9 +509,10 @@
             <label>Code postal
               <input id="meteo-cp" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" autocomplete="postal-code" placeholder="32000">
             </label>
-            <label id="meteo-commune-wrap" hidden>Commune
-              <select id="meteo-commune"></select>
-            </label>
+            <div id="meteo-commune-wrap" class="communes" hidden>
+              <p class="communes-titre">Commune</p>
+              <div id="meteo-commune" class="choice communes-liste" role="radiogroup" aria-label="Commune"></div>
+            </div>
             <p id="meteo-error" class="error small" hidden></p>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
@@ -579,7 +581,6 @@
                 <input id="volume-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
               </div>
             </div>
-            <p id="volume-status" class="setup-son-status" aria-live="polite" hidden></p>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
               <button type="submit" class="primary">Enregistrer</button>

@@ -290,9 +290,18 @@ async function routerInternet(context) {
       });
     }
     if (url.startsWith('https://geo.api.gouv.fr/')) {
+      // Communes aux noms longs (passage à la ligne, jamais coupés) pour 69650 et 51290 ; sinon Saint-Martin.
+      const cp = new URL(url).searchParams.get('codePostal');
+      const communes = {
+        69650: [
+          { nom: 'Saint-Germain-au-Mont-d\'Or', code: '69207', departement: { nom: 'Rhône' }, centre: { coordinates: [4.80, 45.88] } },
+          { nom: 'Quincieux', code: '69163', departement: { nom: 'Rhône' }, centre: { coordinates: [4.78, 45.91] } },
+        ],
+        51290: [{ nom: 'Saint-Remy-en-Bouzemont-Saint-Genest-et-Isson', code: '51513', departement: { nom: 'Marne' }, centre: { coordinates: [4.65, 48.63] } }],
+      }[cp] || [{ nom: 'Saint-Martin-de-Valamas', code: '07292', codesPostaux: ['07310'], centre: { coordinates: [4.37, 44.94] } }];
       return route.fulfill({
         status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
-        body: JSON.stringify([{ nom: 'Saint-Martin-de-Valamas', code: '07292', codesPostaux: ['07310'], centre: { coordinates: [4.37, 44.94] } }]),
+        body: JSON.stringify(communes),
       });
     }
     sorties.add(new URL(url).host);

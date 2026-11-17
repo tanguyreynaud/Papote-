@@ -1095,3 +1095,42 @@ test('R5 : un proche en attente ne modifie plus sa fiche, mais peut partir', asy
   await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/members/marc`), { status: 'active' }));
   await assertSucceeds(updateDoc(doc(marc, `families/${FID}/members/marc`), { name: 'Marco' }));
 });
+
+// Tanguy, 17/11 : une famille réglée de 21 h à 20 h 30 laissait la tablette en nuit 23 h 30 sur 24. Le coucher se
+// choisit le soir (19 h à 23 h 30), le réveil le matin (5 h à 10 h), par demi-heure ; rien d'autre n'est écrit.
+test('veille : coucher de 19 h à 23 h 30, réveil de 5 h à 10 h, par demi-heure ; tout le reste refusé', async () => {
+  await famille();
+  const julie = proche('julie');
+  const veille = (v) => updateDoc(doc(julie, `families/${FID}`), { veille: v, rev: 3 });
+  for (const v of [
+    { active: true, de: 21, a: 6, aMin: 30 },
+    { active: true, de: 19, a: 5 },
+    { active: true, de: 23, deMin: 30, a: 10 },
+    { active: false, de: 22, deMin: 30, a: 7, aMin: 30 },
+  ]) await assertSucceeds(veille(v));
+  for (const v of [
+    { active: true, de: 21, a: 20, aMin: 30 }, // le cas réel : nuit presque toute la journée
+    { active: true, de: 0, deMin: 30, a: 6 },
+    { active: true, de: 18, deMin: 30, a: 6 },
+    { active: true, de: 21, a: 4, aMin: 30 },
+    { active: true, de: 21, a: 10, aMin: 30 },
+    { active: true, de: 21, a: 11 },
+    { active: true, de: 21, deMin: 15, a: 6 },
+    { active: true, de: 21.5, a: 6 },
+    { active: 'oui', de: 21, a: 6 },
+    { active: true, de: 21 },
+    { active: true, de: 21, a: 6, nuit: true },
+    'de 21 h à 6 h',
+  ]) await assertFails(veille(v));
+  // Un proche (pas responsable) ne la règle pas, même dans les bornes.
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}/members/paul`), fiche('paul', { status: 'active' })));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { veille: { active: true, de: 21, a: 6 }, rev: 4 }));
+});
+
+// Tanguy, 17/11 : le nom de la tablette acceptait un numéro de téléphone. Une lettre au moins, jamais 4 chiffres.
+test('nom de la tablette : un prénom (accents, trait d\'union, apostrophe), jamais un numéro de téléphone', async () => {
+  await famille();
+  const nom = (name) => updateDoc(doc(proche('julie'), `families/${FID}`), { name });
+  for (const n of ['Mamie Jeanne', 'Pépé d\'Émile-André 2', 'Mamie 75']) await assertSucceeds(nom(n));
+  for (const n of ['06 12 34 56 78', '0612345678', '+33 6 12 34 56 78', 'Mamie 0612', '1234', '---', '', 'M'.repeat(41)]) await assertFails(nom(n));
+});

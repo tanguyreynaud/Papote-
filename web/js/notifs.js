@@ -25,6 +25,9 @@ export function markNotifsRead() {
   render();
 }
 
+// Page ouverte quand on touche la notification (famille.js) : ce dont elle parle.
+const PAGE = { photo: 'photos', video: 'videos', message: 'messages', call: 'home', member: 'settings', agenda: 'agenda' };
+
 function who(uid, name) {
   return uid === session.uid ? 'Vous' : name;
 }
@@ -34,7 +37,7 @@ function events() {
   const list = [];
   // mine : ce que vous avez fait vous-même ne compte pas comme nouveau.
   // missed : appel manqué, affiché en rouge.
-  const add = (date, icon, text, mine = false, missed = false) => { if (date) list.push({ date, icon, text, mine, missed }); };
+  const add = (date, icon, text, mine = false, missed = false, page = PAGE[icon]) => { if (date) list.push({ date, icon, text, mine, missed, page }); };
   for (const p of posts) {
     if (p.type === 'reply') {
       add(toDate(p.createdAt), 'message', `${grand} a répondu : « ${p.text} »`);
@@ -51,7 +54,7 @@ function events() {
       const of = p.authorUid === session.uid
         ? `que vous avez ${p.type === 'message' ? 'envoyé' : 'envoyée'}`
         : `de ${p.authorName}`;
-      add(toDate(p.seenAt), 'seen', `${grand} a vu ${WHAT_OF[p.type]} ${of}`);
+      add(toDate(p.seenAt), 'seen', `${grand} a vu ${WHAT_OF[p.type]} ${of}`, false, false, PAGE[p.type]);
     }
   }
   // La tablette appelle un proche (calleeUid), ou toute la famille et le SOS (sans calleeUid, comme les appels
@@ -116,6 +119,7 @@ function render() {
   $('notifs').replaceChildren(...list.map((e) => {
     const li = document.createElement('li');
     li.className = `notif n-${e.icon}${isFresh(e) ? ' fresh' : ''}${e.missed ? ' missed' : ''}`;
+    if (e.page) li.dataset.page = e.page;
     li.innerHTML = `<span class="notif-icon"><svg><use href="#i-${{
       photo: 'photo', video: 'video', message: 'message', seen: 'eye', call: 'call', member: 'user', agenda: 'agenda',
     }[e.icon]}"/></svg></span>`;

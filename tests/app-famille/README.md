@@ -36,7 +36,7 @@ scénarios) ; utiliser plutôt
 | `agenda` | Rappels (erreurs, modification, pause, confirmation de Mamie), anniversaires |
 | `limites` | Limites du jour (A12) : le 50e message part, le suivant est refusé avec un mot calme à la place de la barre (texte gardé, rien en attente, double appui sur un message rapide), la barre revient après minuit ; rappels : 30 dans l'agenda (dit dès l'ouverture), 10 ajoutés par jour (double appui : un seul), modification toujours possible |
 | `appels` | Vidéo vers la tablette (vraie liaison WebRTC), refus, Mamie appelle un proche ou toute la famille |
-| `reglages` | Réglages de la tablette, profil, thème, quitter la famille, deux familles, déconnexion |
+| `reglages` | Réglages de la tablette, profil, thème, quitter la famille, deux familles, déconnexion ; nom de la tablette jamais un numéro de téléphone (message sous le champ) ; nuit : coucher de 19 h à 23 h 30, réveil de 5 h à 10 h, une nuit d'avant hors des bornes ramenée et renvoyée à la tablette (Tanguy, 17/11) |
 | `deconnexion` | « Se déconnecter » retire le jeton de l'app Android de ce téléphone ; double appui = une seule déconnexion ; Annuler ne retire rien ; hors ligne, la déconnexion se fait quand même |
 | `abonnement` | Annulation sous 30 jours, résiliation puis « garder », relier une commande, payer depuis l'app, pause |
 | `horsligne` | Envois gardés sans réseau, partis au retour du réseau ou à la prochaine ouverture |
@@ -50,6 +50,9 @@ scénarios) ; utiliser plutôt
 | `admin-remplacement` | Code de tablette de remplacement (R2) : valable 7 jours et pour une seule tablette (échéance affichée), rouvert sans en créer un autre, « Nouveau code » en double clic = un seul code (l'ancien ne marche plus), code servi, code expiré |
 | `admin-sim-bloquee` | Carte SIM bloquée par un code (tablette 2bfc17b) : « Carte SIM bloquée : code PIN demandé » / « code PUK demandé » / « verrouillée » sur la page de la tablette, même mise en forme que « hors service », parti tout seul une fois débloquée |
 | `tel-unique` | Un numéro de portable par proche dans la famille (Tanguy, 13/11) : numéro d'un autre proche refusé à l'entrée dans la famille (« Vos informations » revient avec « Ce numéro est déjà celui de Julie dans la famille. », rien d'écrit) et dans Profil ; son propre numéro accepté ; celui de la tablette ne compte pas ; double appui sur Enregistrer = une écriture ; admin : ligne « Numéro en double dans la famille … » dans « À faire » (numéro masqué) et mot sur la page de la famille |
+| `wifi` | Wi-Fi de la tablette depuis l'appli : mot de passe à part et effacé, vrai résultat ; le réseau actuel touché dit comment en changer (la tablette ne sait pas oublier un réseau sur ordre), double appui sans ordre |
+| `touchers` | Audit du 17/11 : tout ce qui a l'air de se toucher réagit (lignes des membres, « Non lu », photos de profil, lignes de l'agenda, notifications, titre et valeur des réglages, « Écouter ») |
+| `debordement` | Textes longs (nom de la tablette, prénoms, e-mails, réseaux Wi-Fi, communes de la météo) : à la ligne, jamais coupés net ni hors de l'écran |
 
 Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre grise du navigateur
 (confirm/alert) ou une erreur dans une fonction serveur.

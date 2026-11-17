@@ -134,3 +134,46 @@ test('Wifi depuis l\'appli : fenêtre fermée avant que la tablette prenne l\'or
   await g.attendreBase(async () => !(await s.db.doc(`families/${fid}/commands/${cmd.id}`).get()).exists, 'ordre retiré');
   await g.attendreBase(async () => !(await s.db.doc(`families/${fid}/commands/${cmd.id}/secret/wifi`).get()).exists, 'mot de passe retiré');
 });
+
+// Tanguy, 17/11 : le réseau « Connectée » ne réagissait pas au toucher. La tablette ne sait pas oublier un réseau sur
+// ordre (Sync.java : wifi, wifiScan seulement) : touché, il dit comment changer de réseau, et rien ne part.
+test('Wifi : le réseau actuel touché répond par un mot (pas d\'ordre envoyé), touché à nouveau il se referme', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const tab = await ficheTablette(fid);
+  await s.db.doc(`families/${fid}/members/${tab.id}`).update({ lastOnline: s.Timestamp.now(), wifi: { ssid: 'Livebox-Emma' } });
+  await g.ouvrirTuile(julie, 'settings');
+  await julie.page.locator('#wifi-current', { hasText: 'Livebox-Emma' }).waitFor();
+  await julie.page.click('#wifi-modify');
+  const scan = await ordre(fid, 'wifiScan');
+  await s.db.doc(`families/${fid}/commands/${scan.id}`).update({
+    state: 'done', doneAt: s.Timestamp.now(),
+    reseaux: [{ ssid: 'Livebox-Emma', security: 'wpa2', signal: 4 }, { ssid: 'Freebox-Jardin', security: 'wpa2', signal: 3 }],
+  });
+  const actuel = julie.page.locator('#wifi-list .wifi-item', { hasText: 'Livebox-Emma' });
+  await actuel.locator('.wifi-state', { hasText: 'Connectée' }).waitFor();
+  assert.ok(await actuel.locator('.wifi-choice').isEnabled(), 'la ligne se touche');
+  await actuel.locator('.wifi-choice').click();
+  const info = actuel.locator('.wifi-info');
+  await info.waitFor();
+  assert.match(await info.innerText(), /connectée à « Livebox-Emma »[\s\S]*touchez-en un autre[\s\S]*carte SIM/);
+  assert.strictEqual(await actuel.locator('input, button[type=submit]').count(), 0, 'ni mot de passe ni « Se connecter »');
+  // Un autre réseau touché : le mot se referme, son champ s'ouvre ; puis retour sur le réseau actuel.
+  const autre = julie.page.locator('#wifi-list .wifi-item', { hasText: 'Freebox-Jardin' });
+  await autre.locator('.wifi-choice').click();
+  await autre.locator('input[type=password]').waitFor();
+  assert.strictEqual(await info.count(), 0);
+  await julie.page.waitForTimeout(500);
+  await actuel.locator('.wifi-choice').click();
+  await info.waitFor();
+  assert.strictEqual(await autre.locator('input[type=password]').count(), 0);
+  // Touché à nouveau : il se referme. Double appui : il s'ouvre et le reste, jamais d'ordre.
+  await julie.page.waitForTimeout(500);
+  await actuel.locator('.wifi-choice').click();
+  await info.waitFor({ state: 'detached' });
+  await julie.page.waitForTimeout(500);
+  await g.doubleAppui(julie, '#wifi-list .wifi-item.wifi-actuel .wifi-choice');
+  await julie.page.waitForTimeout(800);
+  assert.ok(await info.isVisible(), 'ouvert après un double appui');
+  assert.deepStrictEqual((await g.liste(`families/${fid}/commands`)).map((c) => c.type).filter((x) => x !== 'wifiScan'), [], 'aucun ordre');
+});

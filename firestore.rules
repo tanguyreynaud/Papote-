@@ -68,6 +68,25 @@ service cloud.firestore {
       return get(familyPath(fid)).data.get('nbProches', 0) < 30;
     }
 
+    // Nom de la tablette donné par la famille : 1 à 40 caractères, au moins une lettre, jamais un numéro de téléphone
+    // (4 chiffres ou plus : Tanguy, 17/11 ; l'app refuse aussi plus de chiffres que de lettres).
+    function nomTabletteOk(n) {
+      return n is string && n.size() > 0 && n.size() <= 40
+        && n.matches('(?s).*\\p{L}.*')
+        && !n.matches('(?s)(.*[0-9]){4}.*');
+    }
+    // Heures de veille : { active, de, a, deMin?, aMin? }, coucher de 19 h à 23 h 30, réveil de 5 h à 10 h, par demi-heure.
+    function veilleOk(v) {
+      return v is map
+        && v.keys().hasAll(['active', 'de', 'a'])
+        && v.keys().hasOnly(['active', 'de', 'a', 'deMin', 'aMin'])
+        && v.active is bool
+        && v.get('deMin', 0) in [0, 30]
+        && v.get('aMin', 0) in [0, 30]
+        && v.de is int && v.de >= 19 && v.de <= 23
+        && v.a is int && v.a >= 5 && v.a <= 10
+        && (v.a < 10 || v.get('aMin', 0) == 0);
+    }
     // Ville de la météo : { nom, lat?, lon? }.
     function villeMeteoOk(v) {
       return v is map && v.keys().hasAll(['nom']) && v.keys().hasOnly(['nom', 'lat', 'lon'])
@@ -276,9 +295,7 @@ service cloud.firestore {
         && (
           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
             && isFamilyAdmin(fid)
-            && request.resource.data.name is string
-            && request.resource.data.name.size() > 0
-            && request.resource.data.name.size() <= 40)
+            && nomTabletteOk(request.resource.data.name))
           // Marqueur de changement : les tablettes ne relisent que lorsqu'il bouge.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rev'])
             && request.resource.data.rev is int)
@@ -286,15 +303,12 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code'])
             && isFamilyAdmin(fid)
             && getAfter(invitePath(request.resource.data.code)).data.fid == fid)
-          // Mise en veille de la tablette la nuit : { active, de, a } (heures 0-23), deMin / aMin pour les demi-heures.
+          // Mise en veille de la tablette la nuit : { active, de, a } en heures, deMin / aMin (30) pour les demi-heures.
+          // Coucher le soir, de 19 h à 23 h 30 ; réveil le matin, de 5 h à 10 h (Tanguy, 17/11 : une famille réglée
+          // de 21 h à 20 h 30 laissait la tablette en nuit 23 h 30 sur 24).
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['veille', 'rev'])
             && isFamilyAdmin(fid)
-            && request.resource.data.veille.keys().hasOnly(['active', 'de', 'a', 'deMin', 'aMin'])
-            && request.resource.data.veille.get('deMin', 0) in [0, 30]
-            && request.resource.data.veille.get('aMin', 0) in [0, 30]
-            && request.resource.data.veille.active is bool
-            && request.resource.data.veille.de is int && request.resource.data.veille.de >= 0 && request.resource.data.veille.de <= 23
-            && request.resource.data.veille.a is int && request.resource.data.veille.a >= 0 && request.resource.data.veille.a <= 23)
+            && veilleOk(request.resource.data.veille))
           // Ville de la météo choisie par la famille (l'emporte sur celle de la tablette).
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['meteoVille', 'rev'])
             && isFamilyAdmin(fid)

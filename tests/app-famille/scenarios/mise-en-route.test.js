@@ -189,7 +189,18 @@ test('A43 : famille préparée : le nom, puis « Réglons la tablette », puis l
   await julie.page.waitForTimeout(1500);
   assert.strictEqual(await julie.page.locator('.guide-back').count(), 0, 'ni réglages ni guide avant le nom');
   assert.doesNotMatch(await julie.page.evaluate(() => document.body.innerText), /Votre proche la voit/);
+  // Un numéro de téléphone à la place du nom (Tanguy, 17/11) : refusé sous le champ, sans appel au serveur.
+  for (const numero of ['06 12 34 56 78', '+33612345678', '0612']) {
+    await julie.page.fill('#nom-prepare-input', numero);
+    await julie.page.click('#nom-prepare-btn');
+    await julie.page.locator('#nom-prepare-error', { hasText: 'ressemble à un numéro de téléphone' }).waitFor();
+  }
+  assert.strictEqual(g.nbAppels('nommerFamillePreparee'), 0, 'rien envoyé au serveur');
+  const sousLeChamp = await julie.page.evaluate(() => document.getElementById('nom-prepare-error').getBoundingClientRect().top
+    - document.getElementById('nom-prepare-input').getBoundingClientRect().bottom);
+  assert.ok(sousLeChamp >= 0 && sousLeChamp < 40, `message juste sous le champ (${sousLeChamp} px)`);
   await julie.page.fill('#nom-prepare-input', 'Mamie Emma');
+  assert.strictEqual(await julie.page.locator('#nom-prepare-error').isVisible(), false, 'le message part dès qu\'on corrige');
   await julie.page.click('#nom-prepare-btn');
   // 2. « Réglons la tablette ».
   const intro = julie.page.locator('.intro-back');
@@ -202,6 +213,10 @@ test('A43 : famille préparée : le nom, puis « Réglons la tablette », puis l
   assert.ok(await intro.locator('#intro-veille').isChecked());
   assert.strictEqual(await intro.locator('#intro-de').inputValue(), '21:0');
   assert.strictEqual(await intro.locator('#intro-a').inputValue(), '6:30');
+  // Coucher le soir (19 h à 23 h 30), réveil le matin (5 h à 10 h), comme dans Réglages.
+  const bornes = (sel) => intro.locator(`${sel} option`).evaluateAll((os) => [os[0].textContent, os[os.length - 1].textContent, os.length]);
+  assert.deepStrictEqual(await bornes('#intro-de'), ['19 h', '23 h 30', 10]);
+  assert.deepStrictEqual(await bornes('#intro-a'), ['5 h', '10 h', 11]);
   await intro.locator('.intro-next').click();
   await intro.locator('[data-step="3"]').waitFor();
   assert.match(await intro.locator('[data-step="3"]').innerText(), /Le son/);

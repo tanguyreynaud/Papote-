@@ -310,7 +310,7 @@ button:disabled { opacity: .45; cursor: default; }
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
-.page-head h1 { margin: 0; font-size: 22px; font-weight: 800; }
+.page-head h1 { margin: 0; font-size: 22px; font-weight: 800; min-width: 0; overflow-wrap: anywhere; }
 .page-head svg { width: 26px; height: 26px; }
 
 .empty { text-align: center; color: var(--muted); padding: 60px 24px; }
@@ -384,7 +384,7 @@ button:disabled { opacity: .45; cursor: default; }
   box-shadow: var(--shadow);
 }
 .bubble p { margin: 0; }
-.bubble.mine { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 6px; cursor: pointer; }
+.bubble.mine { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 6px; }
 .bubble.theirs { align-self: flex-start; border-bottom-left-radius: 6px; }
 /* Message en route : gris tant que la base ne l'a pas renvoyé, puis la vraie bulle indigo. */
 .bubble.mine.en-route { background: var(--line); color: var(--muted); cursor: default; }
@@ -468,6 +468,12 @@ button:disabled { opacity: .45; cursor: default; }
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .choice input, .days input { width: auto; margin: 0; display: inline; accent-color: var(--accent); }
+/* Communes de la météo : une par ligne, le nom entier, à la ligne s'il est long (jamais coupé). */
+.communes-titre { margin: 14px 0 0; font-weight: 600; }
+.communes-liste { flex-direction: column; flex-wrap: nowrap; margin-top: 8px; }
+.communes-liste label { display: flex; align-items: flex-start; border-radius: 14px; min-height: 48px; padding: 12px 14px; }
+.communes-liste input { flex: none; margin-top: 3px; }
+.communes-liste span { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- Feuilles (ajout photo, vidéo, rappel) ---------- */
 
@@ -572,6 +578,11 @@ button:disabled { opacity: .45; cursor: default; }
   background: var(--text);
   color: var(--bg);
   font-weight: 700;
+  /* Un mot long (adresse e-mail) : à la ligne, jamais hors de l'écran (largeur 320 px comprise). */
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 /* ---------- Réglages ---------- */
@@ -1155,7 +1166,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setting-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .setting-head h2 { margin: 0; }
 .setting-modify { flex: none; font-weight: 700; color: var(--accent); }
-.setting-value { margin: 6px 0 0; font-size: 17px; font-weight: 600; }
+.setting-value { margin: 6px 0 0; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
 .setting-edit { margin-top: 10px; }
 .setting-edit label { display: block; margin: 8px 0; }
 .setting-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
@@ -1164,7 +1175,8 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setting-value { font-weight: 400; }
 .wifi-list { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; }
 .wifi-choice { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; text-align: left; }
-.wifi-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Nom du réseau : à la ligne s'il est long, « … » seulement après trois lignes (nom entier dans title). */
+.wifi-name { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .wifi-meta { flex: none; color: var(--muted); letter-spacing: -1px; }
 #btn-wifi-scan { margin: 28px 0 6px; }
 #wifi-box form { margin-top: 10px; }
@@ -1218,6 +1230,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .wifi-statut.attente { color: var(--muted); }
 .wifi-statut.ok strong { color: var(--ok); }
 .wifi-join .error { margin: 0; }
+.wifi-info p { margin: 0; line-height: 1.4; }
 .spinner-inline { display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -1347,7 +1360,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .join-text { display: flex; flex-direction: column; min-width: 0; }
 .join-text strong { font-size: 19px; line-height: 1.2; }
 .join-text span { color: var(--muted); font-size: 15px; }
-.join-text .join-mail { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.join-text .join-mail { font-size: 15px; overflow-wrap: anywhere; }
 .join-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 .join-actions button { min-height: 50px; justify-content: center; font-size: 16px; font-weight: 700; border-radius: 14px; }
 .join-no { color: var(--danger); }
@@ -1383,7 +1396,6 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setup-essai:active { background: var(--accent); color: var(--accent-text); }
 .setup-essai:active svg { fill: var(--accent-text); }
 .volume-aide { margin: -4px 0 2px; }
-.setup-son-status { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
 
 /* Aucun lien souligné, dans l'appli comme dans l'admin (demande de Tanguy, 22/10). */
 a { text-decoration: none; }
@@ -1526,7 +1538,7 @@ a { text-decoration: none; }
 .invitations-titre { margin: 18px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .invitations li { gap: 12px; flex-wrap: nowrap; }
 .invitation-rond { width: 36px; height: 36px; font-weight: 700; font-size: 15px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
-.invitation-email { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invitation-email { display: block; min-width: 0; overflow-wrap: anywhere; }
 #form-invite button[disabled] { opacity: 1; }
 
 /* Annuler ma commande / Résilier : un lien gris discret en bas de la carte, pas un bouton mis en avant. */
@@ -1618,3 +1630,9 @@ a { text-decoration: none; }
 .contact-encart p { margin: 0 0 14px; font-size: 16px; line-height: 1.45; }
 .contact-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .contact-actions button { flex: 1 1 140px; min-height: 54px; justify-content: center; font-size: 16px; font-weight: 700; }
+
+/* Audit des touchers (Tanguy, 17/11) : ce qui se touche réagit tout de suite, ce qui ne se touche pas n'en a pas l'air. */
+.ligne-touchable, .member-row, .notif[data-page], .read-badge, .setting-head h2, .setting-value, #wifi-card h2, #wifi-current,
+#face-img, #face-empty, #tface-img, #tface-empty { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ligne-touchable:active, .member-row:active, .notif[data-page]:active { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.read-badge:active, #face-img:active, #face-empty:active, #tface-img:active, #tface-empty:active { transform: scale(.96); }

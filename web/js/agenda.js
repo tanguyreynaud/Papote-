@@ -123,9 +123,11 @@ function editButton(label, onClick) {
   return b;
 }
 
-function item(kindClass, kindLabel, titleText, whenText) {
+// Ligne touchée hors de ses boutons : comme « Modifier » (audit des touchers, 17/11 : rien ne se passait).
+function item(kindClass, kindLabel, titleText, whenText, onOpen) {
   const li = document.createElement('li');
-  li.className = 'reminder';
+  li.className = 'reminder ligne-touchable';
+  li.addEventListener('click', (e) => { if (!e.target.closest('button, a')) onOpen(); });
   const body = document.createElement('div');
   body.className = 'reminder-body';
   const kind = document.createElement('p');
@@ -147,7 +149,7 @@ function renderReminders() {
   ul.replaceChildren();
   reminders.sort((a, b) => a.time.localeCompare(b.time));
   for (const r of reminders) {
-    const { li, body } = item(`k-${r.kind || 'autre'}`, KINDS[r.kind] || 'Autre', r.title, describe(r));
+    const { li, body } = item(`k-${r.kind || 'autre'}`, KINDS[r.kind] || 'Autre', r.title, describe(r), () => openEdit('reminders', r));
     const plus = document.createElement('p');
     plus.className = 'muted small';
     plus.textContent = details(r);
@@ -203,7 +205,7 @@ function renderBirthdays() {
     let when = `${b.day === 1 ? '1er' : b.day} ${MOIS[b.month - 1]}`;
     if (b.year) when += ` · ${b.days === 0 ? 'fête ses' : 'aura'} ${b.nextYear - b.year} ans`;
     const soon = b.days === 0 ? "C'est aujourd'hui !" : b.days === 1 ? 'Demain' : `Dans ${b.days} jours`;
-    const { li, body } = item('k-anniv', 'Anniversaire', b.name, when);
+    const { li, body } = item('k-anniv', 'Anniversaire', b.name, when, () => openEdit('birthdays', b));
     const s = document.createElement('p');
     s.className = b.days === 0 ? 'seen small' : 'muted small';
     s.textContent = soon;
@@ -250,8 +252,13 @@ MOIS.forEach((m, i) => $('bday-month').add(new Option(m, String(i + 1))));
 
 $('rem-repeat').addEventListener('change', syncRepeatFields);
 
+// Double appui (une ligne, « Modifier », +) : une seule fenêtre, une seule entrée d'historique, et le 2e toucher qui
+// tombe sur le voile ne la referme pas.
+let feuilleOuverteLe = 0;
 function openSheet() {
   cacherDoublon();
+  if (!$('sheet-reminder').hidden) return;
+  feuilleOuverteLe = Date.now();
   $('sheet-reminder').hidden = false;
   history.pushState({ page: 'agenda', sheet: true, niveau: (history.state?.niveau || 0) + 1 }, '');
 }
@@ -305,7 +312,7 @@ function openEdit(coll, data) {
   openSheet();
 }
 $('reminder-close').addEventListener('click', () => history.back());
-$('sheet-reminder').addEventListener('click', (e) => { if (e.target === $('sheet-reminder')) history.back(); });
+$('sheet-reminder').addEventListener('click', (e) => { if (e.target === $('sheet-reminder') && Date.now() - feuilleOuverteLe > 500) history.back(); });
 
 // Petit message en bas de l'écran (même style que l'app).
 function toastAgenda(text) {
