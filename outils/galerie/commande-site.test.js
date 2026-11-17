@@ -25,6 +25,12 @@ const STRIPE = 'https://checkout.stripe.test/c/pay/cs_test_audit';
 const CORS = { 'Access-Control-Allow-Origin': '*' };
 // Le vrai serveur répond par un renvoi 303 vers Stripe ; ici une page qui s'y rend aussitôt (un renvoi simulé vers
 // un autre site partirait sur le vrai internet).
+// Renvoi du serveur (303/302). WebKit ne sait pas simuler un renvoi (« Cannot fulfill with redirect status ») :
+// une page qui se remplace aussitôt, comme versStripe. Le navigateur arrive au même endroit.
+const WEBKIT = process.env.NAVIGATEUR === 'webkit';
+const renvoi = (r, url, status = 303) => (WEBKIT
+  ? r.fulfill({ contentType: 'text/html', body: `<script>location.replace(${JSON.stringify(url)})</script>` })
+  : r.fulfill({ status, headers: { Location: url } }));
 const versStripe = (r) => r.fulfill({ contentType: 'text/html', body: `<script>location.replace(${JSON.stringify(STRIPE)})</script>` });
 
 let browser, srv;
@@ -61,7 +67,7 @@ async function ouvrir(fichier, { taille = TEL, commander = 'stripe', stock = () 
           <a id="retour" href="${srv.url}/commande.html?formule=sim">← Papote</a>
           <a id="payer" href="${srv.url}/merci.html?session=cs_test_audit">Payer</a>` }));
       // « / » est servi par la fonction accueil : ici, la page elle-même.
-      await p.route(/127\.0\.0\.1:\d+\/\?complet=1/, (r) => r.fulfill({ status: 302, headers: { Location: '/accueil.html?complet=1#prevenir' } }).catch(() => {}));
+      await p.route(/127\.0\.0\.1:\d+\/\?complet=1/, (r) => renvoi(r, '/accueil.html?complet=1#prevenir', 302).catch(() => {}));
     },
   }, taille);
   return { ctx, page, erreurs, appels };
@@ -202,7 +208,7 @@ test('S1 bis. « Merci » ouverte sans paiement (pas de ?session) : la commande 
 
 test('S2. Renvoyé par le serveur avec ?trop=1 : le client lit pourquoi le paiement ne s\'ouvre pas', async () => {
   const { ctx, page, erreurs } = await ouvrir('commande.html', {
-    commander: (r) => r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?trop=1` } }),
+    commander: (r) => renvoi(r, `${srv.url}/commande.html?trop=1`),
   });
   await remplir(page);
   await page.locator('#payer').tap();
@@ -255,7 +261,7 @@ test('S3 bis. Plus de tablette et aucun paiement en cours : toujours renvoyé ve
 for (const [motif, attendu, etape] of [['4g', /pas pu vérifier la 4G/, '#ok1'], ['relais', /point relais n'a pas été retenu/, '#ok2']]) {
   test(`S4. Le serveur refuse d'ouvrir le paiement (?refus=${motif}) : la page dit pourquoi et fait refaire l'étape`, async () => {
     const { ctx, page, erreurs } = await ouvrir('commande.html', {
-      commander: (r) => r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?refus=${motif}` } }),
+      commander: (r) => renvoi(r, `${srv.url}/commande.html?refus=${motif}`),
     });
     await remplir(page);
     await page.locator('#payer').tap();
@@ -275,7 +281,7 @@ for (const [motif, attendu, etape] of [['4g', /pas pu vérifier la 4G/, '#ok1'],
 test('S5. Le paiement ne s\'ouvre pas (erreur du serveur) : le client revient sur sa commande remplie, « Payer » prêt', async () => {
   let n = 0;
   const { ctx, page } = await ouvrir('commande.html', {
-    commander: (r) => (++n === 1 ? r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?erreur=1` } }) : versStripe(r)),
+    commander: (r) => (++n === 1 ? renvoi(r, `${srv.url}/commande.html?erreur=1`) : versStripe(r)),
   });
   await remplir(page);
   await page.locator('#payer').tap();
