@@ -307,8 +307,68 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         const info = creer('p', { className: 'pc-sim-info', role: 'status' });
         const coches = creer('ul', { className: 'pc-sim-coches', ariaLabel: 'Vérifications de la carte' });
         const message = creer('p', { className: 'pc-sim-message', hidden: true });
-        zone.append(boutons, info, coches, message);
+        // Numéro d'essai (Tanguy, 17/11) : pendant le test, la tablette lui envoie un SMS puis l'appelle ~20 s.
+        const numZone = creer('div', { className: 'pc-sim-numero' });
+        zone.append(boutons, info, coches, message, numZone);
         let attendue = '';
+        let numero = null; // null : pas encore lu ; '' : aucun numéro noté
+        let numSaisie = false;
+        const numLecture = () => {
+          numSaisie = false;
+          if (numero == null) { numZone.replaceChildren(); return; }
+          const changer = creer('button', { type: 'button', className: 'link pc-sim-numero-lien' }, numero ? 'Changer' : 'Noter mon portable');
+          changer.addEventListener('click', numEdition);
+          const p = creer('p', { className: 'small muted' },
+            numero ? `SMS et appel d'essai vers ${numero}. ` : 'Pour recevoir un SMS et un appel de la tablette pendant le test : ');
+          p.append(changer);
+          numZone.replaceChildren(p);
+        };
+        const numEdition = () => {
+          numSaisie = true;
+          const champ = creer('input', { type: 'tel', inputMode: 'tel', autocomplete: 'tel', placeholder: '06 12 34 56 78', value: numero || '', ariaLabel: 'Portable pour le SMS et l\'appel d\'essai' });
+          const garder = creer('button', { type: 'button', className: 'primary' }, 'Enregistrer');
+          const annuler = creer('button', { type: 'button', className: 'secondary' }, 'Annuler');
+          const aide = creer('p', { className: 'small pc-sim-numero-aide', role: 'status' }, 'Votre portable (06 ou 07). Laissez vide pour tester sans SMS ni appel.');
+          const lab = creer('label', { className: 'pc-champ' }, 'Portable pour l\'essai ');
+          lab.append(champ);
+          const btns = creer('div', { className: 'pc-sim-boutons' });
+          btns.append(garder, annuler);
+          numZone.replaceChildren(lab, aide, btns);
+          let envoiNum = false;
+          const enregistrer = async () => {
+            if (envoiNum) return;
+            const brut = champ.value.trim();
+            if (brut && !/^(?:0|\+33\s*|0033\s*)[67](?:[\s.-]*\d){8}$/.test(brut)) {
+              aide.textContent = 'Notez un portable qui commence par 06 ou 07, par exemple 06 12 34 56 78.';
+              champ.focus();
+              return;
+            }
+            envoiNum = true;
+            garder.disabled = true;
+            annuler.disabled = true;
+            boutonCharge(garder, true);
+            aide.textContent = 'Enregistrement…';
+            try {
+              const r = await appeler('gestionStock', { action: 'simNumero', numero: brut });
+              numero = r.numero || '';
+              numLecture();
+              annoncer(numero ? 'Numéro d\'essai enregistré' : 'Test sans SMS ni appel');
+            } catch (err) {
+              aide.textContent = err.message;
+              garder.disabled = false;
+              annuler.disabled = false;
+              boutonCharge(garder, false);
+              envoiNum = false;
+            }
+          };
+          garder.addEventListener('click', enregistrer);
+          annuler.addEventListener('click', numLecture);
+          champ.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') { ev.preventDefault(); enregistrer(); }
+            if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); numLecture(); }
+          });
+          champ.focus();
+        };
         const ligne = (fait, texte) => {
           const li = creer('li', { className: fait ? 'ok' : '' });
           li.append(creer('span', { ariaHidden: 'true' }, fait ? '✓' : ''), creer('em', {}, texte));
@@ -318,12 +378,20 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
           const v = r.verdict || {};
           const c = v.coches || {};
           attendue = r.attendue || attendue;
+          if (typeof r.numero === 'string' && !numSaisie && r.numero !== numero) { numero = r.numero; numLecture(); }
           simVerdict = v;
           coches.replaceChildren(
             ligne(c.carte, `Bonne carte${attendue ? ` (…${attendue})` : ''}`),
             ligne(c.reseau, `Réseau français (${v.operateur && c.reseau ? v.operateur : 'Orange, SFR, Bouygues, Free…'})`),
             ligne(c.inscrite, 'Inscrite au réseau'),
-            ligne(c.internet, `Internet par la carte${c.internet && v.ms != null ? ` (${v.ms} ms)` : ''}`));
+            ligne(c.internet, `Internet par la carte${c.internet && v.ms != null ? ` (${v.ms} ms)` : ''}`),
+            // Test avec numéro d'essai : le SMS et l'appel, avec leur état.
+            ...('sms' in c ? [
+              ligne(c.sms, c.sms ? `SMS parti${v.sms && v.sms.ms != null ? ` (${(v.sms.ms / 1000).toFixed(1).replace('.', ',')} s)` : ''}`
+                : `SMS parti${v.attente ? ' : en cours…' : (v.sms ? ' : pas encore' : '')}`),
+              ligne(c.appel, c.appel ? `Appel passé${v.appel && v.appel.secondes != null ? ` (${Math.round(v.appel.secondes)} s)` : ''}`
+                : `Appel passé${v.attente ? ' : en cours…' : (v.appel ? ' : pas encore' : '')}`),
+            ] : []));
           message.hidden = !v.message;
           message.textContent = v.message || '';
           message.classList.toggle('ok', !!v.ok);
@@ -357,8 +425,10 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
           info.textContent = `Envoi de l'ordre à ${nomT}…`;
           try {
             const r = await appeler('gestionStock', { action: 'simOrdre', stock: e.tablette, type });
-            info.textContent = `Ordre envoyé à ${r.ref || nomT} : ${type === 'simPin' ? 'retrait du code PIN, puis test de la carte' : 'test de la carte'}.`;
-            afficher({ verdict: { attente: true, coches: {}, message: 'La tablette teste la carte, quelques secondes…' } });
+            info.textContent = `Ordre envoyé à ${r.ref || nomT} : ${type === 'simPin' ? 'retrait du code PIN, puis test de la carte' : 'test de la carte'}${r.appel ? ', SMS et appel vers votre portable' : ''}.`;
+            afficher({ verdict: r.appel
+              ? { attente: true, coches: { sms: false, appel: false }, message: 'La tablette teste la carte, puis envoie un SMS et appelle votre portable (environ une minute)…' }
+              : { attente: true, coches: {}, message: 'La tablette teste la carte, quelques secondes…' } });
           } catch (err) {
             info.textContent = err.message;
           }

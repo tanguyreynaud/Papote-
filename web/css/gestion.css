@@ -742,3 +742,8 @@ button.choix-fin-forfait.charge::after { border-color: rgba(255, 255, 255, .45);
 .installer-qr { display: flex; flex-direction: column; gap: 12px; }
 .installer-qr-image { background: #fff; padding: 12px; border-radius: 12px; width: min(100%, 440px); align-self: center; box-sizing: border-box; }
 .installer-qr-image svg { display: block; width: 100%; height: auto; }
+/* Numéro d'essai du test de la carte SIM (SMS et appel, 17/11) : une ligne discrète, ou le champ et deux boutons. */
+.pc-sim-numero { display: flex; flex-direction: column; gap: 8px; }
+.pc-sim-numero p { margin: 0; }
+.pc-sim-numero .pc-sim-numero-lien { min-height: 0; padding: 0; color: var(--accent); font-weight: 700; font-size: inherit; display: inline; }
+.pc-sim-numero-aide { margin: 0; color: var(--muted); }
