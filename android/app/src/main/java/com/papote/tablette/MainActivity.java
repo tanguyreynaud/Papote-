@@ -120,7 +120,10 @@ public class MainActivity extends Activity implements Sync.Listener {
                 | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
 
         // Inspection de la page depuis Chrome (chrome://inspect), seulement pour les versions de test.
-        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+        // Aussi sur les tablettes du canal « test » (T-003…), jamais chez un client : inspection de la page par
+        // le câble, pour trouver ce qui fait tourner le processeur (pics à 140 % le 17/11).
+        boolean canalTest = "test".equals(getSharedPreferences("papote", MODE_PRIVATE).getString("canal", ""));
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0 || canalTest) {
             WebView.setWebContentsDebuggingEnabled(true);
         }
         web = new WebView(this);
