@@ -77,7 +77,12 @@ test('Appel vidéo vers la tablette : ça sonne, la tablette décroche, image re
     };
   });
   await julie.page.waitForFunction(() => document.getElementById('call-remote-fond').srcObject);
-  assert.deepStrictEqual(await cadrage(), { remplit: false, ajustement: 'contain', memeImage: true, fondVisible: true }, 'téléphone : image entière sur fond flouté');
+  const tailles = () => julie.page.evaluate(() => {
+    const v = document.getElementById('call-remote');
+    const c = document.getElementById('call');
+    return `image ${v.videoWidth}x${v.videoHeight}, appel ${c.clientWidth}x${c.clientHeight}, fenêtre ${innerWidth}x${innerHeight}, plein écran ${!!document.fullscreenElement}`;
+  });
+  assert.deepStrictEqual(await cadrage(), { remplit: false, ajustement: 'contain', memeImage: true, fondVisible: true }, `téléphone : image entière sur fond flouté (${await tailles()})`);
   assert.ok(await julie.page.locator('#call-hangup').isVisible(), 'Raccrocher visible');
   // L'appel vidéo passe en plein écran : le navigateur refuse alors de changer la taille de la page.
   await julie.page.evaluate(() => document.fullscreenElement && document.exitFullscreen());

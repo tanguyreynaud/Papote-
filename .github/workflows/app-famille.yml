@@ -12,7 +12,7 @@ on:
 
 jobs:
   app-famille:
-    # Deux navigateurs : Chromium (Chrome d'Android) et WebKit (Safari d'iPhone, taille iPhone 15). Ce qui ne peut pas
+    # Deux navigateurs : Chromium (Chrome d'Android) et WebKit (Safari d'iPhone, tailles iPhone 15 et iPhone SE). Ce qui ne peut pas
     # tourner sous WebKit est listé, avec sa raison, dans tests/app-famille/WEBKIT.md.
     name: app-famille (${{ matrix.moteur }}${{ matrix.appareil && format(', {0}', matrix.appareil) || '' }})
     strategy:
@@ -22,6 +22,8 @@ jobs:
           - moteur: chromium
           - moteur: webkit
             appareil: iPhone 15
+          - moteur: webkit
+            appareil: iPhone SE (3rd gen)
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
