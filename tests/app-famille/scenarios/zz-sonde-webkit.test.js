@@ -19,6 +19,16 @@ test('sonde webkit', async () => {
     const d = await new Promise((r) => { const i = new Image(); i.onload = () => r('ok'); i.onerror = () => r('erreur'); i.src = c.toDataURL(); });
     return { img, f, d, onLine: navigator.onLine };
   });
+  const navs = [];
+  await p.exposeFunction('__nav', (u) => navs.push(u));
+  await p.evaluate(() => { navigation.addEventListener('navigate', (e) => window.__nav(e.destination.url)); });
+  const reqs = [];
+  p.on('request', (r) => reqs.push(r.url()));
+  p.on('requestfailed', (r) => reqs.push('échec ' + r.url() + ' ' + (r.failure() || {}).errorText));
+  await p.evaluate(() => { location.href = 'intent://quitter?cle=abc#Intent;scheme=papote;package=fr.mapapote.famille;end'; });
+  await p.waitForTimeout(1500);
+  log('intent', { navs, reqs, url: p.url() });
+  await p.goto(`${banc.origine}/__vide.html`);
   log('en ligne blob', await imageBlob());
   await t.context.setOffline(true);
   log('hors ligne blob', await imageBlob());
