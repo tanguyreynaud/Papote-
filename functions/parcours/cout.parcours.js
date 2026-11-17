@@ -24,9 +24,9 @@ const CADENCE = {
 const PRIX = { lectures: 0.06, ecritures: 0.18, suppressions: 0.02 };
 
 // Trafic d'une tablette par jour, lu dans android/Sync.java (push prêt : un tour toutes les 30 min le jour, 60 min la
-// nuit de 21 h à 6 h 30 ; à chaque tour : fiche famille + envois nouveaux (≥ 1 lecture) ; rappels et proches toutes
+// nuit de 23 h à 5 h par défaut ; à chaque tour : fiche famille + envois nouveaux (≥ 1 lecture) ; rappels et proches toutes
 // les 6 h ; « en ligne » écrit à chaque tour ; batterie et journal ponctuels).
-const TABLETTE_JOUR = { tours: 29 + 10, lecturesParTour: 2, lecturesRappelsProches: 4 * 2, ecrituresEnLigne: 39, ecrituresDiverses: 6 };
+const TABLETTE_JOUR = { tours: 36 + 6, lecturesParTour: 2, lecturesRappelsProches: 4 * 2, ecrituresEnLigne: 42, ecrituresDiverses: 6 };
 // Appli famille : cache local (persistentLocalCache) : une ouverture ne relit que ce qui a changé ; on compte 3 ouvertures
 // par jour et par proche, 5 proches actifs, ~12 lectures par ouverture (famille, proches, envois du jour, agenda).
 const APPLI_JOUR = { proches: 5, ouvertures: 3, lecturesParOuverture: 12, ecritures: 4 };

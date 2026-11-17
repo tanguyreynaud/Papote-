@@ -16,12 +16,13 @@ const { db: base } = require('./base');
 const { envoyer } = require('./push');
 const { FieldValue } = require('firebase-admin').firestore;
 const journal = require('./journal-alertes');
+const { veilleSure } = require('./veille');
 
 const DEBRANCHEE_MS = 10 * 60_000;
 // La tablette se signale toutes les 30 min sur la carte SIM (android/Sync.java, Tanguy 28/10) : deux tours
 // manqués plus une marge avant d'alerter.
 const SILENCE_MS = 70 * 60_000;
-// Pendant les heures de veille de la famille (families/{fid}.veille, 21 h-6 h 30 par défaut), la tablette ne
+// Pendant les heures de veille de la famille (families/{fid}.veille, 23 h-5 h par défaut, veille.js), la tablette ne
 // donne signe de vie qu'une fois par heure pour ménager la carte SIM (android/Sync.java, 28/10) : on
 // tolère 2 h de silence avant d'alerter.
 const SILENCE_NUIT_MS = 2 * 3600_000;
@@ -41,17 +42,16 @@ function minutesParis(ms) {
   return h * 60 + m;
 }
 
-// Réglage de la famille : { active, de, a } en heures (0-23) et, en plus, deMin / aMin (0 ou 30) pour les
-// demi-heures. Absent : de 21 h à 6 h 30.
-const VEILLE_DEFAUT = { de: 21, deMin: 0, a: 6, aMin: 30 };
+// Réglage de la famille : { active, de, deMin, a, aMin } (veille.js). Absent : de 23 h à 5 h. Une valeur
+// hors bornes en base (coucher 19 h-23 h 30, réveil 5 h-10 h) est ramenée dans les bornes (veilleSure).
 
 // Vrai pendant les heures de veille de la famille (active false = jamais).
 // Même règle que Veille.inRange sur la tablette : [de, a[, en passant minuit ; de == a : jamais.
 function enVeille(veille, maintenant) {
-  const v = veille || VEILLE_DEFAUT;
-  if (v.active === false) return false;
-  const de = (Number.isInteger(v.de) ? v.de : 21) * 60 + (v.deMin === 30 ? 30 : 0);
-  const a = (Number.isInteger(v.a) ? v.a : 6) * 60 + (v.aMin === 30 ? 30 : 0);
+  const v = veilleSure(veille);
+  if (!v.active) return false;
+  const de = v.de * 60 + v.deMin;
+  const a = v.a * 60 + v.aMin;
   const t = minutesParis(maintenant);
   if (de < a) return t >= de && t < a;
   if (de > a) return t >= de || t < a;

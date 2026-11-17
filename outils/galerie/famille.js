@@ -414,7 +414,7 @@ const SCENES = [
     await toucher(page('settings'), modifier('options-card'))(p); await p.check('#opt-radio').catch(() => {}); await p.dispatchEvent('#opt-radio', 'change'); await pause(p);
   } },
   { groupe: 'Réglages', titre: 'Modifier : volumes (sonnerie, vidéos et messages)', donnees: () => connecte(), faire: toucher(page('settings'), modifier('volume-card')) },
-  { groupe: 'Réglages', titre: 'Modifier : veille la nuit (21 h - 6 h 30)', donnees: () => connecte(), faire: toucher(page('settings'), modifier('sleep-card')) },
+  { groupe: 'Réglages', titre: 'Modifier : veille la nuit (23 h - 5 h par défaut)', donnees: () => connecte(), faire: toucher(page('settings'), modifier('sleep-card')) },
   { groupe: 'Réglages', titre: 'Modifier : veille coupée', donnees: () => connecte(), faire: async (p) => {
     await toucher(page('settings'), modifier('sleep-card'))(p); await p.locator('#sleep-on').uncheck({ force: true }).catch(() => {}); await p.dispatchEvent('#sleep-on', 'change'); await pause(p);
   } },

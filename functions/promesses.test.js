@@ -27,7 +27,7 @@ const SOURCES = {
 // [motif, ce que fait vraiment le code]
 const FAUX = [
   [/décroche(nt)? toute? seule?s?|décrochent seuls|décrochent tout seuls/i, "décroché seulement si un visage est vu 1,2 s (appels.js FACE_HOLD_MS) ou sur « Décrocher » ; jamais pour un appel téléphone (AppelGsm.java)"],
-  [/23 ?h (à|-) ?7 ?h/, 'veille par défaut de 21 h à 6 h 30 (Veille.java, alertes.js VEILLE_DEFAUT, famille.js)'],
+  [/23 ?h (à|-) ?7 ?h/, 'veille par défaut de 23 h à 5 h, réglée par la famille (veille.js VEILLE_DEFAUT, Veille.java, famille.js)'],
   [/(pas vue?|vu) de la matinée|depuis le matin|n'a pas été vue ce matin/i, "alerte « pas vue depuis deux jours », à 10 h, après 48 h (alertes.js PAS_VUE_MS)"],
   [/tout le monde à la fois|tous les proches à la fois/i, 'SOS par la carte SIM : un SMS à tous, puis appels un par un (tablette.js startSosTelephone)'],
   [/jusqu'à 3 ?h(eures)? en qualité réduite/i, 'forfait de 1 Go : ≈ 2 h pleine qualité puis ≈ 1 h 30 réduite (Forfait.java)'],

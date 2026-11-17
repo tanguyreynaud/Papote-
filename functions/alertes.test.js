@@ -26,7 +26,7 @@ test('60 minutes de silence en journée : pas encore d’alerte (tour de 30 min,
   assert.strictEqual(etatAlerte({ lastOnline: il(60) }, maintenant), null);
 });
 
-// 3 h du matin à Paris le 19 octobre 2026 = 1 h UTC : pendant la veille (23 h-7 h par défaut).
+// 3 h du matin à Paris le 19 octobre 2026 = 1 h UTC : pendant la veille (23 h-5 h par défaut).
 const nuit = Date.parse('2026-10-19T01:00:00Z');
 const laNuitIl = (minutes) => new Date(nuit - minutes * MIN);
 
@@ -39,16 +39,20 @@ test('la nuit, plus de 2 heures de silence : alerte', () => {
   assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(125) }, nuit), 'silence');
 });
 
-test('veille désactivée par la famille, ou plage qui ne couvre pas 3 h : règle de jour (1 h 10)', () => {
+test('veille désactivée par la famille : règle de jour (1 h 10)', () => {
   assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(75) }, nuit, { active: false }), 'silence');
-  assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(75) }, nuit, { active: true, de: 23, a: 2 }), 'silence');
+});
+
+test('réveil hors bornes en base (2 h) : ramené à 5 h, 3 h reste la nuit (tolérance de 2 h)', () => {
+  assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(75) }, nuit, { active: true, de: 23, a: 2 }), null);
 });
 
 test('en journée, la veille de la famille ne change rien', () => {
   const { enVeille } = require('./alertes');
   assert.strictEqual(enVeille(undefined, maintenant), false);
   assert.strictEqual(enVeille({ active: true, de: 23, a: 7 }, nuit), true);
-  assert.strictEqual(enVeille({ active: true, de: 7, a: 7 }, nuit), false);
+  // Coucher à 7 h en base : ramené à 19 h, la plage 19 h-7 h couvre 3 h.
+  assert.strictEqual(enVeille({ active: true, de: 7, a: 7 }, nuit), true);
 });
 
 test('dates Firestore (toMillis) acceptées', () => {
@@ -88,16 +92,29 @@ test('le compte d’appels de la tablette (jamais en ligne) ne compte pas comme 
   assert.strictEqual(alertePasVueDue([{ lastSeen: vieux, lastOnline: new Date(midi - 80 * MIN) }, { joinedAt: vieux }], midi), false);
 });
 
-test('veille par défaut de 21 h à 6 h 30, demi-heures prises en compte', () => {
+test('veille par défaut de 23 h à 5 h, demi-heures prises en compte', () => {
   const { enVeille } = require('./alertes');
   const paris = (hhmm) => Date.parse(`2026-10-19T${hhmm}:00+02:00`);
-  assert.strictEqual(enVeille(undefined, paris('20:59')), false);
-  assert.strictEqual(enVeille(undefined, paris('21:00')), true);
-  assert.strictEqual(enVeille(undefined, paris('06:29')), true);
-  assert.strictEqual(enVeille(undefined, paris('06:30')), false);
+  assert.strictEqual(enVeille(undefined, paris('22:59')), false);
+  assert.strictEqual(enVeille(undefined, paris('23:00')), true);
+  assert.strictEqual(enVeille(undefined, paris('04:59')), true);
+  assert.strictEqual(enVeille(undefined, paris('05:00')), false);
+  assert.strictEqual(enVeille(undefined, paris('21:30')), false, 'plus de veille dès 21 h par défaut');
   assert.strictEqual(enVeille({ active: true, de: 22, deMin: 30, a: 7 }, paris('22:15')), false);
   assert.strictEqual(enVeille({ active: true, de: 22, deMin: 30, a: 7 }, paris('22:45')), true);
   assert.strictEqual(enVeille({ active: true, de: 23, a: 7 }, paris('06:45')), true);
+});
+
+test('réglage aberrant d\'une vraie famille (21 h-20 h 30) : ramené à 21 h-10 h, la tablette est éveillée l\'après-midi', () => {
+  const { enVeille } = require('./alertes');
+  const paris = (hhmm) => Date.parse(`2026-10-19T${hhmm}:00+02:00`);
+  const v = { active: true, de: 21, a: 20, aMin: 30 };
+  assert.strictEqual(enVeille(v, paris('09:59')), true);
+  assert.strictEqual(enVeille(v, paris('10:00')), false);
+  assert.strictEqual(enVeille(v, paris('15:00')), false);
+  assert.strictEqual(enVeille(v, paris('21:00')), true);
+  // Midi, 2 h sans signe de vie : alerte comme en journée (avant : tolérée, la tablette « dormait »).
+  assert.strictEqual(etatAlerte({ lastOnline: new Date(paris('12:00') - 75 * MIN) }, paris('12:00'), v), 'silence');
 });
 
 test('numéro de la tablette à retrouver seulement s’il n’a jamais été écrit (null = « aucun », déjà cherché)', () => {
@@ -109,6 +126,7 @@ test('numéro de la tablette à retrouver seulement s’il n’a jamais été é
 test('« pas vue depuis deux jours » part chaque jour à 10 h (Paris), hors des heures de veille', () => {
   const { HORAIRE_PAS_VUE, enVeille } = require('./alertes');
   assert.strictEqual(HORAIRE_PAS_VUE, 'every day 10:00');
-  // 10 h à Paris le 29 octobre 2026 (heure d'hiver) = 9 h UTC : jamais pendant la veille par défaut (21 h-6 h 30).
+  // 10 h à Paris le 29 octobre 2026 (heure d'hiver) = 9 h UTC : jamais pendant la veille par défaut (23 h-5 h), ni à 10 h, réveil le plus tard permis.
   assert.strictEqual(enVeille(undefined, Date.parse('2026-10-29T09:00:00Z')), false);
+  assert.strictEqual(enVeille({ active: true, de: 23, a: 12 }, Date.parse('2026-10-29T09:00:00Z')), false);
 });
