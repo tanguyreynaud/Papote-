@@ -43,7 +43,7 @@ const PERIODES = [7, 30, 90];
 
 const nombre = (n) => n.toLocaleString('fr-FR');
 const pourcent = (a, b) => (b ? `${Math.round((100 * a) / b)} %` : '–');
-const jourCourt = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+const jourCourt = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
 
 let periode = 30;
 try { periode = Number(localStorage.getItem('papote-stats-jours')) || 30; } catch (e) { /* navigation privée */ }
