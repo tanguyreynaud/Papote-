@@ -140,6 +140,8 @@ button {
   background: none;
 }
 button:disabled { opacity: .45; cursor: default; }
+/* « Continuer » de « Vos informations » tant qu'il manque quelque chose : l'air grisé, mais l'appui dit ce qui manque. */
+button.incomplet { opacity: .45; }
 .primary { background: var(--accent); color: var(--accent-text); min-height: 54px; }
 .link { color: var(--muted); padding: 10px 0; min-height: 44px; } /* cible tactile */
 .danger { color: var(--danger); }

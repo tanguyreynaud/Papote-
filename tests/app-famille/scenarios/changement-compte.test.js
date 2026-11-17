@@ -317,3 +317,35 @@ test('Retour du premier compte après un autre : accueil direct, ses information
   assert.strictEqual(m.name, 'Julie');
   assert.strictEqual(m.telephone, espaces(g.telDe('Julie')));
 });
+
+test('Se déconnecter efface du téléphone tout ce qui est propre au compte (V1)', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const cles = () => julie.page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('papote.')).sort());
+  const avant = await cles();
+  const enCache = () => julie.page.evaluate(async (f) => {
+    const { db, doc } = await import('/js/firebase.js');
+    const { getDocFromCache } = await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js');
+    try { await getDocFromCache(doc(db, 'families', f)); return 'trouvé'; } catch (e) { return 'vide'; }
+  }, fid);
+  assert.strictEqual(await enCache(), 'trouvé', 'la famille est dans la copie locale pendant la session');
+  for (const k of ['papote.prenom', 'papote.visage', 'papote.telephone', 'papote.anniversaire', 'papote.genre', 'papote.fid']) {
+    assert.ok(avant.includes(k), `${k} gardé pendant la session`);
+  }
+  await julieSeDeconnecte(julie);
+  const apres = await cles();
+  for (const k of ['papote.prenom', 'papote.visage', 'papote.telephone', 'papote.anniversaire', 'papote.genre', 'papote.fid', 'papote.moiDe']) {
+    assert.ok(!apres.includes(k), `${k} effacé à la déconnexion (reste : ${apres.join(', ')})`);
+  }
+  // Rien de Julie dans la page, même caché.
+  const restes = await julie.page.evaluate(() => [...document.querySelectorAll('main *')]
+    .filter((e) => [...e.childNodes].some((n) => n.nodeType === 3 && !/par exemple/.test(n.textContent) && /julie@exemple\.fr|Bonjour Mamie|Julie|Emma/.test(n.textContent))
+      || (e.tagName === 'IMG' && /^data:/.test(e.getAttribute('src') || '')) || (e.value && /Julie|julie@/.test(e.value)))
+    .map((e) => `${e.tagName.toLowerCase()}#${e.id}.${e.className} « ${(e.textContent || '').trim().slice(0, 60)} » dans ${e.closest('section')?.id || '?'}`));
+  assert.deepStrictEqual(restes, [], 'la page ne garde rien de Julie, même caché');
+  // La copie locale de la base aussi : plus aucune fiche de Julie lisible hors ligne.
+  await julie.context.setOffline(true);
+  const lu = await enCache();
+  await julie.context.setOffline(false);
+  assert.strictEqual(lu, 'vide', 'copie locale de la base effacée');
+});

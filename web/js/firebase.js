@@ -5,7 +5,7 @@ import {
   getAuth, onAuthStateChanged,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
-  initializeFirestore, persistentLocalCache, persistentSingleTabManager,
+  initializeFirestore, persistentLocalCache, persistentSingleTabManager, terminate, clearIndexedDbPersistence,
   doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, orderBy, limit,
   onSnapshot, addDoc, serverTimestamp, writeBatch, increment, deleteField,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
@@ -79,6 +79,18 @@ export async function choisirBase() {
   } catch (err) {
     console.warn("config/base illisible, base d'origine gardée", err);
   }
+}
+/** Déconnexion : la copie locale de la base (IndexedDB) du compte qui part est effacée, puis la base rouverte. */
+export async function viderCacheLocal() {
+  let arretee = false;
+  try {
+    await terminate(db);
+    arretee = true;
+    await clearIndexedDbPersistence(db);
+  } catch (err) {
+    console.warn('Copie locale de la base non effacée', err);
+  }
+  if (arretee) db = ouvrirBase(base.database);
 }
 // Pour les appels vidéo (appel.js).
 export {

@@ -169,7 +169,7 @@
       <form id="form-moi" class="card" novalidate>
         <h2>Vos informations</h2>
         <label>Votre prénom
-          <input id="moi-prenom" autocomplete="given-name" maxlength="40" placeholder="Julie" required>
+          <input id="moi-prenom" autocomplete="given-name" maxlength="40" placeholder="Julie">
         </label>
         <p class="genre-titre">Vous êtes</p><div class="genre-choix" role="radiogroup" aria-label="Vous êtes"><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Une femme</button><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Un homme</button></div>
                 <p class="genre-titre">Votre photo</p>
@@ -180,7 +180,7 @@
         </button>
         <input id="moi-in" type="file" accept="image/*" hidden>
         <p class="genre-titre">Votre numéro de portable</p>
-        <input id="moi-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="12" placeholder="0612345678" aria-label="Votre numéro de portable">
+        <input id="moi-tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="0612345678" aria-label="Votre numéro de portable">
         <p class="muted small">Un portable français (06 ou 07) : votre proche vous appelle à ce numéro depuis sa tablette. Seule votre famille le voit.</p>
         <!-- Proche sans portable français (Tanguy 12/11, M5) : la tablette l'appelle par internet, sur l'appli. -->
         <label class="toggle-row moi-sans-tel"><span class="toggle-text"><strong>Je n'ai pas de numéro, ou un numéro étranger</strong><span>Vous pourrez appeler votre proche en vidéo avec l'appli Papote. Sa tablette ne pourra pas vous appeler, ni vous envoyer de SMS.</span></span><input type="checkbox" class="toggle" id="moi-sans-tel"></label>
@@ -705,7 +705,8 @@
           <div class="setting-head"><h2>Mon prénom</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <p id="my-name-value" class="setting-value"></p>
           <form id="form-my-name" class="setting-edit" hidden>
-            <input id="my-name" maxlength="40" autocomplete="given-name" required aria-label="Mon prénom">
+            <input id="my-name" maxlength="40" autocomplete="given-name" aria-label="Mon prénom">
+            <p id="my-name-error" class="error" hidden></p>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
               <button type="submit" class="primary">Enregistrer</button>
@@ -716,7 +717,7 @@
           <div class="setting-head"><h2>Mon numéro de portable</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <p id="my-tel-value" class="setting-value"></p>
           <form id="form-my-tel" class="setting-edit" hidden>
-            <input id="my-tel" type="tel" inputmode="tel" autocomplete="tel" maxlength="12" placeholder="0612345678" aria-label="Mon numéro de portable">
+            <input id="my-tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="0612345678" aria-label="Mon numéro de portable">
             <p class="muted small">Un portable français (06 ou 07). La tablette de votre proche vous appelle à ce numéro, et seuls les numéros de la famille peuvent l'appeler. Visible par votre famille seulement.</p>
             <p id="my-tel-error" class="error" hidden></p>
             <div class="setting-actions">

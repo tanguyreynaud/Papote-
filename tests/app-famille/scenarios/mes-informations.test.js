@@ -164,3 +164,84 @@ test('Numéro ajouté dans l\'app puis par l\'admin : compteur, tuile « Appeler
   await g.ouvrirTuile(paul, 'settings');
   await paul.page.waitForFunction(() => /La tablette peut appeler 2 proches/.test(document.querySelector('#appels-telephones').textContent));
 });
+
+test('Numéro collé avec des espaces ou en +33 (V4) : gardé en entier, dans « Vos informations » et dans Profil', async () => {
+  const paul = await banc.telephone('Paul');
+  await g.seConnecter(paul, 'paul@exemple.fr');
+  await g.attendreVue(paul, 'view-moi');
+  // Collé (ou rempli par le téléphone) : le texte arrive d'un coup, espaces compris.
+  await paul.page.click('#moi-tel');
+  await paul.page.keyboard.insertText('06 12 34 56 78');
+  assert.strictEqual(await paul.page.inputValue('#moi-tel'), '0612345678');
+  await paul.page.fill('#moi-tel', '');
+  await paul.page.click('#moi-tel');
+  await paul.page.keyboard.insertText('+33 6 12 34 56 78');
+  assert.strictEqual(await paul.page.inputValue('#moi-tel'), '+33612345678');
+
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await profil(julie);
+  await modifier(julie, 'my-tel-card');
+  await julie.page.fill('#my-tel', '');
+  await julie.page.keyboard.insertText('+33 7 11 22 33 44');
+  assert.strictEqual(await julie.page.inputValue('#my-tel'), '+33711223344');
+  await enregistrer(julie, 'my-tel-card');
+  await g.toast(julie, 'Numéro enregistré');
+  await g.attendreBase(async () => (await g.liste(`families/${fid}/members`)).some((m) => m.email === 'julie@exemple.fr' && m.telephone === '07 11 22 33 44'),
+    'numéro collé enregistré en entier');
+});
+
+test('Prénom vidé (V6) : refusé avec un mot ; prénom changé (V5) : l\'anniversaire de l\'agenda suit ; la tablette est prévenue (V3)', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'julie@exemple.fr').id;
+  await g.attendreBase(() => g.lire(`families/${fid}/birthdays/membre-${uid}`), 'anniversaire de Julie');
+  await profil(julie);
+  await modifier(julie, 'my-name-card');
+  await julie.page.fill('#my-name', '   ');
+  await enregistrer(julie, 'my-name-card');
+  await julie.page.locator('#my-name-error', { hasText: 'Indiquez votre prénom' }).waitFor();
+  assert.ok(await julie.page.locator('#my-name-card .setting-edit').isVisible(), 'la case reste ouverte');
+  assert.strictEqual((await g.lire(`families/${fid}/members/${uid}`)).name, 'Julie', 'rien d\'écrit');
+
+  const rev = (await g.lire(`families/${fid}`)).rev || 0;
+  await julie.page.fill('#my-name', 'Juju');
+  await enregistrer(julie, 'my-name-card');
+  await g.toast(julie, 'Prénom enregistré');
+  assert.ok(await julie.page.locator('#my-name-error').isHidden());
+  await g.attendreBase(async () => (await g.lire(`families/${fid}/birthdays/membre-${uid}`)).name === 'Juju', 'anniversaire renommé');
+  await g.attendreBase(async () => ((await g.lire(`families/${fid}`)).rev || 0) > rev, 'la tablette est prévenue (rev)');
+  await g.retourAccueil(julie);
+  await g.ouvrirTuile(julie, 'agenda');
+  await julie.page.locator('#birthdays li', { hasText: 'Juju' }).waitFor();
+  assert.ok(!/Julie/.test(await julie.page.locator('#birthdays').innerText()), 'plus l\'ancien prénom dans l\'agenda');
+
+  // Photo et genre changés : la tablette est prévenue aussi.
+  const rev2 = (await g.lire(`families/${fid}`)).rev || 0;
+  await julie.page.click('#view-agenda .back');
+  await profil(julie);
+  await julie.page.setInputFiles('#in-face-gallery', await g.photo({ largeur: 600, hauteur: 600, texte: 'Juju' }));
+  await g.toast(julie, 'Photo enregistrée');
+  await g.attendreBase(async () => ((await g.lire(`families/${fid}`)).rev || 0) > rev2, 'photo : rev');
+});
+
+test('Photo retirée (V2) : ne revient pas après actualisation ni à la réouverture, la carte « Ajoutez votre photo » est due', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'julie@exemple.fr').id;
+  await g.attendreBase(async () => !!(await g.lire(`families/${fid}/members/${uid}`)).face, 'photo de l\'inscription');
+  await profil(julie);
+  await julie.page.click('#face-remove');
+  await julie.page.waitForTimeout(600);
+  await g.repondre(julie, 'Retirer');
+  await g.attendreBase(async () => !(await g.lire(`families/${fid}/members/${uid}`)).face, 'photo retirée');
+  for (let i = 0; i < 2; i++) {
+    await julie.page.reload();
+    await g.attendreVue(julie, 'view-home');
+    await julie.page.waitForTimeout(1500);
+    assert.ok(!(await g.lire(`families/${fid}/members/${uid}`)).face, 'la photo n\'est pas revenue sur la fiche');
+  }
+  await profil(julie);
+  assert.ok(await julie.page.locator('#face-img').isHidden());
+  assert.ok(await julie.page.locator('#face-empty').isVisible(), '« Ajoutez votre photo » proposé');
+});

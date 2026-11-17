@@ -45,7 +45,7 @@ test('M5 : proche à l\'étranger : la case « pas de numéro, ou à l\'étrange
 });
 
 // M5 (suite). Sans la case, le portable reste obligatoire.
-test('M5 : sans la case, « Continuer » reste grisé tant que le portable manque', async () => {
+test('M5 : sans la case, « Continuer » a l\'air grisé tant que le portable manque, et l\'appui dit ce qui manque', async () => {
   const paul = await banc.telephone('Paul');
   await g.seConnecter(paul, 'paul@exemple.fr');
   await g.attendreVue(paul, 'view-moi');
@@ -56,12 +56,17 @@ test('M5 : sans la case, « Continuer » reste grisé tant que le portable manqu
   await paul.page.selectOption('#moi-jour', '3');
   await paul.page.selectOption('#moi-mois', '2');
   await paul.page.selectOption('#moi-annee', '1980');
-  assert.ok(await paul.page.locator('#form-moi button[type=submit]').isDisabled(), 'portable manquant');
+  const grise = () => paul.page.locator('#form-moi button[type=submit]').evaluate((b) => b.classList.contains('incomplet'));
+  assert.ok(await grise(), 'portable manquant');
+  // Grisé mais touchable (audit 17/11, V11) : l'appui dit ce qui manque, rien ne part.
+  await paul.page.click('#form-moi button[type=submit]');
+  await paul.page.locator('#moi-error', { hasText: 'Indiquez votre numéro de portable.' }).waitFor();
+  assert.strictEqual(await g.vue(paul), 'view-moi');
   await paul.page.click('label.moi-sans-tel');
-  assert.ok(await paul.page.locator('#form-moi button[type=submit]').isEnabled());
+  assert.ok(!(await grise()));
   await paul.page.click('label.moi-sans-tel');
   assert.ok(!(await paul.page.locator('#moi-tel').isDisabled()), 'décochée : le champ revient');
-  assert.ok(await paul.page.locator('#form-moi button[type=submit]').isDisabled());
+  assert.ok(await grise());
 });
 
 // M8. La tablette appelle par sa carte SIM : son numéro s'affiche sur le téléphone du proche. Une carte sur l'accueil

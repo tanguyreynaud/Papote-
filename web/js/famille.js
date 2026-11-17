@@ -15,7 +15,7 @@ import {
   loadMembership, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
-  choisirBase, bucketUrl, auth,
+  choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
 import { askConfirm, notice, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
 import { showGuideOnce } from './guide.js';
@@ -1850,8 +1850,11 @@ function renderFace() {
   badgeDu('face-nudge', !myFace);
 }
 
+// La tablette ne relit les proches que si families/{fid}.rev change : sans ça, photo, prénom et genre changés n'y
+// arrivaient qu'au prochain envoi ou 6 h plus tard (audit 17/11, V3).
 async function saveFace(face) {
   await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { face });
+  bumpFamilyRev();
 }
 
 // Carré de 640 px pris au centre, sans déformer le visage (JPEG en data URL) : net en grand sur l'écran
@@ -4187,13 +4190,17 @@ SETTINGS['family-name-card'] = {
 
 // Mon prénom (Profil).
 SETTINGS['my-name-card'] = {
-  fill() { $('my-name').value = session.member.name; },
+  fill() { $('my-name').value = session.member.name; showError($('my-name-error'), ''); },
   async save() {
     const name = $('my-name').value.trim();
-    if (!name) return false;
+    // Vide (ou sans lettre) : refusé avec un mot, le prénom d'avant reste (audit 17/11 : ignoré sans rien dire).
+    showError($('my-name-error'), /\p{L}/u.test(name) ? '' : 'Indiquez votre prénom : la famille le verra.');
+    if (!/\p{L}/u.test(name)) return false;
     if (name === session.member.name) return true;
     await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name });
+    bumpFamilyRev();
     session.member.name = name;
+    renommerMonAnniversaire(name);
     rememberPrenom(name);
     $('my-name-value').textContent = name;
     toast('Prénom enregistré');
@@ -4242,6 +4249,7 @@ SETTINGS['my-genre-card'] = {
     if (!genre) return false;
     if (genre === session.member.genre) return true;
     await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { genre });
+    bumpFamilyRev();
     session.member.genre = genre;
     rememberGenre(genre);
     renderGenre();
@@ -5161,6 +5169,25 @@ function identiteDuCompte(uid) {
   }
   try { localStorage.setItem(MOI_DE_KEY, uid); } catch (e) { /* rien */ }
 }
+// Déconnexion : tout ce qui est propre au compte est effacé de ce téléphone (audit 17/11). Ce qui est propre au téléphone
+// (thème, guide vu, cartes fermées par famille, jeton de l'app Android) reste.
+function oublierCompte() {
+  for (const cle of [PRENOM_KEY, GENRE_KEY, VISAGE_KEY, ANNIV_KEY, TEL_KEY, MOI_A_ECRIRE_KEY, MOI_DE_KEY,
+    'papote.codeCommande', 'papote.retourPaiement', 'papote.notifsLues', INVITE_CODE_KEY, `${INVITE_CODE_KEY}.pour`]) {
+    try { localStorage.removeItem(cle); } catch (e) { /* rien */ }
+  }
+  saveFamilyId(null);
+  document.querySelectorAll('.genre-choix').forEach((g) => marquerGenre(g, ''));
+  // Écrans du compte qui part vidés : rien de lui ne reste dans la page, même caché.
+  for (const id of ['members', 'invitations', 'photos', 'videos', 'messages', 'notifs', 'birthdays', 'reminders', 'invitations-sent', 'factures-liste']) $(id)?.replaceChildren();
+  // Textes écrits pour ce compte (prénom, adresse, famille) et photos : réécrits à l'arrivée du compte suivant.
+  for (const id of ['tablet-owner-text', 'my-name-value', 'my-tel-value', 'my-genre-value', 'account-email', 'join-account',
+    'family-title', 'family-switch', 'contact-titre', 'contact-texte', 'family-name-value']) if ($(id)) $(id).textContent = '';
+  document.querySelectorAll('.grand-name').forEach((e) => { e.textContent = ''; });
+  document.querySelectorAll('main img[src^="data:"], main img[src^="blob:"]').forEach((img) => img.removeAttribute('src'));
+  for (const id of ['moi-prenom', 'moi-tel', 'my-name', 'my-tel', 'family-name']) if ($(id)) $(id).value = '';
+  authUser = null;
+}
 const moiAEcrire = () => { try { return localStorage.getItem(MOI_A_ECRIRE_KEY) === '1'; } catch (e) { return false; } };
 // Revenu sur ce téléphone après un autre compte : mon anniversaire est relu dans l'agenda de ma famille
 // (le reste revient de ma fiche, connaitMoi) ; « Vos informations » ne redemande rien.
@@ -5214,10 +5241,12 @@ function showMoi() {
 }
 $('form-moi').addEventListener('submit', (e) => {
   e.preventDefault();
+  // Double appui sur « Continuer » : la famille ne s'ouvre qu'une fois (l'écran est déjà parti au premier).
+  if ($('view-moi').hidden) return;
   const prenom = $('moi-prenom').value.trim();
   if (!/\p{L}/u.test(prenom)) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
   if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
-  if (!savedVisage()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
+  if (!visageGarde()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
   const sansTel = $('moi-sans-tel').checked;
   if (!sansTel && !$('moi-tel').value.trim()) { showError($('moi-error'), `${TEL_MANQUANT} ${TEL_ETRANGER}`); return; }
   if (!sansTel && !telPropre($('moi-tel').value)) { showError($('moi-error'), `${TEL_INVALIDE} ${TEL_ETRANGER}`); return; }
@@ -5243,10 +5272,15 @@ $('form-moi').addEventListener('submit', (e) => {
   for (let y = an - 10; y >= an - 100; y--) $('moi-annee').append(opt(y, String(y)));
 })();
 
-// « Continuer » reste grisé tant qu'il manque le prénom, le genre, la photo ou l'anniversaire.
+// « Continuer » a l'air grisé tant qu'il manque le prénom, le genre, la photo, le numéro ou l'anniversaire ; il reste
+// touchable : l'appui dit ce qui manque (audit 17/11, V11 : un bouton éteint ne disait rien).
 function moiComplet() {
-  $('form-moi').querySelector('button[type=submit]').disabled = !($('moi-prenom').value.trim()
-    && genreDe($('form-moi')) && savedVisage() && ($('moi-tel').value.trim() || $('moi-sans-tel').checked) && $('moi-jour').value && $('moi-mois').value && $('moi-annee').value);
+  const b = $('form-moi').querySelector('button[type=submit]');
+  b.disabled = false;
+  b.classList.toggle('incomplet', !($('moi-prenom').value.trim()
+    && genreDe($('form-moi')) && visageGarde() && ($('moi-tel').value.trim() || $('moi-sans-tel').checked) && $('moi-jour').value && $('moi-mois').value && $('moi-annee').value));
+  // « Changer ma photo » une fois la photo choisie (V12).
+  $('moi-visage-titre').textContent = visageGarde() ? 'Changer ma photo' : 'Ajouter ma photo';
 }
 // Prénom : seulement des lettres (accents compris), espace, tiret et apostrophe.
 const HORS_PRENOM = /[^\p{L}\p{M} '’-]/gu;
@@ -5318,6 +5352,22 @@ async function ajouterMonAnniversaire() {
   }
 }
 
+// Prénom changé : mon anniversaire dans l'agenda prend le nouveau (audit 17/11 : il gardait l'ancien).
+async function renommerMonAnniversaire(name) {
+  if (!session?.fid) return;
+  const ref = doc(db, 'families', session.fid, 'birthdays', `membre-${session.uid}`);
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists() || snap.data().name === name.slice(0, 40)) return;
+    const batch = writeBatch(db);
+    batch.update(ref, { name: name.slice(0, 40) });
+    bumpRev(batch, session.fid); // la tablette recharge l'agenda
+    await batch.commit();
+  } catch (err) {
+    console.warn('Anniversaire non renommé', err);
+  }
+}
+
 // Famille ouverte : le genre choisi sur ce téléphone rejoint ma fiche si elle n'en a pas.
 function appliquerGenre() {
   // Photo choisie à l'inscription : elle rejoint ma fiche si je n'en ai pas, ou si je viens de la changer dans
@@ -5334,6 +5384,7 @@ function appliquerGenre() {
     session.member.name = prenom;
     $('my-name-value').textContent = prenom;
     updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name: prenom })
+      .then(() => { bumpFamilyRev(); return renommerMonAnniversaire(prenom); })
       .catch((err) => console.warn('Prénom non enregistré', err));
   }
   ajouterMonAnniversaire();
@@ -5343,6 +5394,7 @@ function appliquerGenre() {
   if (!session?.member || (session.member.genre && !forcer) || session.member.genre === g || !['femme', 'homme'].includes(g)) return;
   session.member.genre = g;
   updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { genre: g })
+    .then(() => bumpFamilyRev())
     .catch((err) => console.warn('Genre non enregistré', err));
 }
 // La tablette relit les numéros de la famille quand la fiche de la famille bouge (rev).
@@ -5514,6 +5566,9 @@ document.querySelectorAll('[data-action=logout]').forEach((btn) => btn.addEventL
     await forgetThisPhone(fids, uid);
     await logOut();
     myFamilies = [];
+    // Tout ce qui est propre au compte est oublié sur ce téléphone : « Vos informations », famille, copie locale de la base.
+    oublierCompte();
+    await viderCacheLocal();
     showLogin(false);
   } finally {
     deconnexionEnCours = false;
