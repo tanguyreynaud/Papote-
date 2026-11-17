@@ -1,5 +1,7 @@
 package fr.mapapote.famille;
 
+import android.content.Context;
+
 import androidx.annotation.NonNull;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -15,25 +17,32 @@ import java.util.Map;
  *   { type: 'fin', cid }          la tablette ne sonne plus : silence
  *   { type: 'manque', cid, nom }  personne n'a répondu : « Appel manqué »
  *   { type: 'alerte', titre, texte }
+ * SOS (A47) : « urgence: 'sos' » sur l'appel et l'alerte (sinon « SOS : » devant le nom ou le titre),
+ * affichés en urgence (voir Appels.CANAL_SOS).
  */
 public class Sonnerie extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
-        Map<String, String> d = message.getData();
+        recevoir(this, message.getData());
+    }
+
+    /** Traite un message du serveur (séparé pour les tests). */
+    static void recevoir(Context ctx, Map<String, String> d) {
         String type = d.get("type");
         String cid = d.get("cid");
         String nom = d.get("nom");
         if (nom == null || nom.isEmpty()) nom = "Mamie";
         if ("appel".equals(type) && cid != null) {
-            Appels.sonner(this, cid, nom, d.get("fid"), d.get("jeton"));
+            Appels.sonner(ctx, cid, nom, d.get("fid"), d.get("jeton"), Appels.estSos(d.get("urgence"), nom, null));
+            Raccourci.nommer(ctx, nom);
         } else if ("connexion".equals(type) && cid != null && d.get("connexion") != null) {
-            Appels.memoriserConnexion(this, cid, d.get("connexion"));
+            Appels.memoriserConnexion(ctx, cid, d.get("connexion"));
         } else if ("fin".equals(type)) {
-            Appels.arreter(this, cid);
+            Appels.arreter(ctx, cid);
         } else if ("manque".equals(type) && cid != null) {
-            Appels.manque(this, cid, nom);
+            Appels.manque(ctx, cid, nom);
         } else if ("alerte".equals(type)) {
-            Appels.alerte(this, d.get("titre"), d.get("texte"));
+            Appels.alerte(ctx, d.get("titre"), d.get("texte"), Appels.estSos(d.get("urgence"), null, d.get("titre")));
         }
     }
 

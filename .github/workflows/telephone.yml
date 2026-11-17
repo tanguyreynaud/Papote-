@@ -1,0 +1,48 @@
+# Appli Android des proches (telephone/) : compilée à chaque changement, pour qu'une erreur ne soit jamais
+# découverte sur le PC de Tanguy. Les vrais identifiants Firebase (google-services.json) restent hors du
+# dépôt public : la CI en met de faux, qui suffisent à compiler (rien ne part en ligne).
+name: Appli Android
+
+on:
+  push:
+    paths: ['telephone/**', '.github/workflows/telephone.yml']
+  workflow_dispatch:
+
+jobs:
+  compiler:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: telephone
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Faux identifiants Firebase (compilation seulement)
+        run: |
+          cat > app/google-services.json <<'JSON'
+          {"project_info":{"project_number":"000000000000","project_id":"demo-papote","storage_bucket":"demo-papote.appspot.com"},
+           "client":[{"client_info":{"mobilesdk_app_id":"1:000000000000:android:0000000000000000","android_client_info":{"package_name":"fr.mapapote.famille"}},
+                      "api_key":[{"current_key":"faux"}]}]}
+          JSON
+      - name: Compiler l'APK de débogage et vérifier le code (lint)
+        run: |
+          chmod +x gradlew
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          ./gradlew --no-daemon assembleDebug
+          # En cas d'erreur, le rapport complet dans le journal (lisible sans télécharger l'artefact).
+          ./gradlew --no-daemon lintDebug || { cat app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt; exit 1; }
+      - name: Tests de la sonnerie et du SOS (Android simulé, Robolectric)
+        run: |
+          ./gradlew --no-daemon testDebugUnitTest || { for f in app/build/test-results/testDebugUnitTest/*.xml; do grep -B2 -A20 "<failure" "$f"; done; exit 1; }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: appli-android
+          path: |
+            telephone/app/build/outputs/apk/debug/app-debug.apk
+            telephone/app/build/reports/lint-results-debug.html

@@ -9,4 +9,7 @@
     <color name="texte_doux">#5B5348</color>
     <color name="vert">#16A34A</color>
     <color name="rouge">#DC2626</color>
+    <!-- Écran d'appel, mêmes teintes que l'app famille (.call.sonne) -->
+    <color name="indigo_doux">#5B5794</color>
+    <color name="indigo_fonce">#312E81</color>
 </resources>

@@ -82,7 +82,13 @@ public class EcranAppel extends Activity {
     private void montrer(Intent intent) {
         cid = intent.getStringExtra(Appels.EXTRA_CID);
         String nom = intent.getStringExtra(Appels.EXTRA_NOM);
+        nom = Appels.sansSos(nom);
         if (nom == null || nom.trim().isEmpty()) nom = "Mamie";
+        boolean sos = intent.getBooleanExtra(Appels.EXTRA_SOS, false);
+        TextView entete = findViewById(R.id.entete);
+        entete.setText(sos ? R.string.sos_entete : R.string.appel_video);
+        entete.setTextColor(getColor(sos ? R.color.rouge : R.color.indigo));
+        findViewById(R.id.initiale).setBackgroundResource(sos ? R.drawable.rond_rouge : R.drawable.rond_indigo);
         ((TextView) findViewById(R.id.nom)).setText(nom);
         ((TextView) findViewById(R.id.initiale)).setText(nom.trim().substring(0, 1).toUpperCase());
         if (REPONDRE.equals(intent.getAction())) repondre();

@@ -11,6 +11,13 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.WebResourceError;
+import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -35,16 +42,25 @@ import java.util.List;
  * La page se connecte au compte du proche avec le jeton reçu du serveur (#connexion=…, voir
  * functions/appels.js) et prévient l'app par window.PapoteNatif : etat(etat, nom, video), fin().
  * L'app raccroche par window.papoteRaccrocher().
+ *
+ * Pendant que la page se charge (2 à 4 s : c'est toute l'app famille), un écran d'appel natif
+ * identique à celui de la page est affiché dès le toucher (layout appel_attente) ; il s'efface au
+ * premier état envoyé par la page, qui affiche alors le même écran. Jamais l'écran « Papote » qui charge.
  */
 public class AppelEnCours extends Activity {
     static final String ACTION_RACCROCHER = "fr.mapapote.famille.RACCROCHER";
     private static final String EXTRA_URL = "url";
     private static final String HOTE = "app.mapapote.fr";
     private static final int DEMANDE_MICRO = 7;
+    /** Page toujours pas prête : on la montre telle quelle (erreur, pas de réseau…). */
+    static final long ATTENTE_MAX_MS = 20_000;
 
     private WebView page;
     private PermissionRequest enAttente;
     private boolean fini;
+    private View attente;
+    private final Handler minuterie = new Handler(Looper.getMainLooper());
+    private final Runnable attenteTropLongue = this::montrerPage;
 
     private final BroadcastReceiver raccrocher = new BroadcastReceiver() {
         @Override
@@ -64,6 +80,7 @@ public class AppelEnCours extends Activity {
         String url = "https://" + HOTE + chemin + (connexion != null ? "#connexion=" + Uri.encode(connexion) : "");
         return new Intent(ctx, AppelEnCours.class)
                 .putExtra(EXTRA_URL, url)
+                .putExtra(Lien.EXTRA_CLE, Lien.cle(ctx))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
     }
 
@@ -72,7 +89,17 @@ public class AppelEnCours extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         page = new WebView(this);
-        setContentView(page);
+        page.setBackgroundColor(getColor(R.color.creme));
+        FrameLayout cadre = new FrameLayout(this);
+        cadre.addView(page, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        attente = getLayoutInflater().inflate(R.layout.appel_attente, cadre, false);
+        cadre.addView(attente);
+        setContentView(cadre);
+        attente.findViewById(R.id.attente_raccrocher).setOnClickListener(b -> {
+            // Rien n'est encore lancé côté page : on ferme. Si elle a déjà démarré, elle raccroche.
+            page.evaluateJavascript("window.papoteRaccrocher && window.papoteRaccrocher()", null);
+            terminer();
+        });
         WebSettings r = page.getSettings();
         r.setJavaScriptEnabled(true);
         r.setDomStorageEnabled(true);
@@ -85,13 +112,20 @@ public class AppelEnCours extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                if (HOTE.equals(u.getHost()) || String.valueOf(u.getHost()).endsWith("firebaseapp.com")) return false;
+                // Hôtes exacts : « nimportequoifirebaseapp.com » ne doit pas rester ici avec le pont PapoteNatif.
+                if (HOTE.equals(u.getHost()) || "papote-famille.firebaseapp.com".equals(u.getHost())) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, u));
                 } catch (Exception e) {
                     // aucune app pour ce lien
                 }
                 return true;
+            }
+
+            @Override
+            public void onReceivedError(WebView v, WebResourceRequest req, WebResourceError err) {
+                // La page elle-même ne se charge pas : on montre son écran (« Pas d'internet »…).
+                if (req.isForMainFrame()) montrerPage();
             }
         });
         page.setWebChromeClient(new WebChromeClient() {
@@ -110,6 +144,9 @@ public class AppelEnCours extends Activity {
         charger(getIntent());
     }
 
+    // Android 12 et moins seulement : à partir d'Android 13, le geste retour passe par le
+    // OnBackInvokedCallback posé dans onCreate (lint ne voit pas ce choix par écran).
+    @SuppressLint("GestureBackNavigation")
     @Override
     public void onBackPressed() {
         moveTaskToBack(true);
@@ -119,29 +156,41 @@ public class AppelEnCours extends Activity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         // Touché sur la notification « Appel en cours » : on revient à l'appel, sans recharger.
-        if (intent.getStringExtra(EXTRA_URL) != null || intent.getData() != null) {
+        // Un lien sans la clé ne touche pas à l'appel en cours (ni rechargé, ni raccroché).
+        if (adresse(intent) != null) {
             setIntent(intent);
             charger(intent);
         }
     }
 
     private void charger(Intent intent) {
-        String url = intent.getStringExtra(EXTRA_URL);
-        // Lancé depuis l'app famille (bouton d'appel) : papote://appel?u=/chemin&connexion=jeton
+        String url = adresse(intent);
+        if (url == null) {
+            finish();
+            return;
+        }
+        fini = false;
+        montrerAttente();
+        page.loadUrl(url);
+    }
+
+    /** L'adresse de la page d'appel à ouvrir, ou null si l'intent n'en donne pas une valable. */
+    private String adresse(Intent intent) {
+        // Activité ouvrable par lien (donc par n'importe quelle page) : seuls nos propres lancements
+        // (extra) et les liens de l'app famille portent la clé de ce téléphone (Lien, audit A2).
+        // Sans elle : rien, ni connexion à un compte, ni appel lancé tout seul.
+        String url = Lien.valide(this, intent.getStringExtra(Lien.EXTRA_CLE)) ? intent.getStringExtra(EXTRA_URL) : null;
+        // Lancé depuis l'app famille (bouton d'appel) : papote://appel?u=/chemin&connexion=jeton&cle=…
         Uri lien = intent.getData();
-        if (url == null && lien != null && "papote".equals(lien.getScheme()) && "appel".equals(lien.getHost())) {
+        if (url == null && lien != null && "papote".equals(lien.getScheme()) && "appel".equals(lien.getHost())
+                && Lien.valide(this, lien)) {
             String chemin = lien.getQueryParameter("u");
             if (chemin != null && chemin.startsWith("/") && !chemin.startsWith("//")) {
                 url = pour(this, chemin, lien.getQueryParameter("connexion")).getStringExtra(EXTRA_URL);
             }
         }
         Uri u = url != null ? Uri.parse(url) : null;
-        if (u == null || !HOTE.equals(u.getHost())) {
-            finish();
-            return;
-        }
-        fini = false;
-        page.loadUrl(url);
+        return u != null && "https".equals(u.getScheme()) && HOTE.equals(u.getHost()) ? url : null;
     }
 
     // La page demande le micro (et la caméra en vidéo) : autorisation Android d'abord si besoin.
@@ -177,6 +226,31 @@ public class AppelEnCours extends Activity {
         else demande.grant(ok.toArray(new String[0]));
     }
 
+    /** Écran d'appel natif par-dessus la page qui se charge, avec le nom déjà connu. */
+    private void montrerAttente() {
+        String nom = Raccourci.nomConnu(this);
+        if (nom == null || nom.trim().isEmpty()) nom = getString(R.string.raccourci_defaut);
+        ((TextView) attente.findViewById(R.id.attente_nom)).setText(nom);
+        ((TextView) attente.findViewById(R.id.attente_initiale)).setText(nom.trim().substring(0, 1).toUpperCase());
+        attente.animate().cancel();
+        attente.setAlpha(1f);
+        attente.setVisibility(View.VISIBLE);
+        minuterie.removeCallbacks(attenteTropLongue);
+        minuterie.postDelayed(attenteTropLongue, ATTENTE_MAX_MS);
+    }
+
+    /** La page a pris le relais (même écran) : l'écran natif s'efface en douceur. */
+    private void montrerPage() {
+        minuterie.removeCallbacks(attenteTropLongue);
+        if (attente.getVisibility() != View.VISIBLE) return;
+        attente.animate().alpha(0f).setDuration(150).withEndAction(() -> attente.setVisibility(View.GONE)).start();
+    }
+
+    /** Pour les tests : l'écran natif est-il encore affiché ? */
+    boolean attenteVisible() {
+        return attente.getVisibility() == View.VISIBLE;
+    }
+
     private void terminer() {
         if (fini) return;
         fini = true;
@@ -186,6 +260,7 @@ public class AppelEnCours extends Activity {
 
     @Override
     protected void onDestroy() {
+        minuterie.removeCallbacks(attenteTropLongue);
         unregisterReceiver(raccrocher);
         AppelService.arreter(this);
         page.destroy();
@@ -198,6 +273,8 @@ public class AppelEnCours extends Activity {
         @JavascriptInterface
         public void etat(String etat, String nom, boolean video) {
             runOnUiThread(() -> {
+                montrerPage();
+                if (nom != null && !nom.trim().isEmpty()) Raccourci.nommer(AppelEnCours.this, nom);
                 if (!fini) AppelService.montrer(AppelEnCours.this, etat, nom, video);
             });
         }
