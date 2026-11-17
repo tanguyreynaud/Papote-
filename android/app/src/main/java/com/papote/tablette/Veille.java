@@ -32,7 +32,7 @@ final class Veille {
         if (active == null) {
             e.remove("veille_active").remove("veille_debut").remove("veille_fin");
         } else {
-            e.putBoolean("veille_active", active).putInt("veille_debut", clamp(from)).putInt("veille_fin", clamp(to));
+            e.putBoolean("veille_active", active).putInt("veille_debut", bornerDebut(clamp(from))).putInt("veille_fin", bornerFin(clamp(to)));
         }
         e.apply();
     }
@@ -43,6 +43,23 @@ final class Veille {
     }
 
     private static int clamp(int m) { return Math.max(0, Math.min(24 * 60 - 1, m)); }
+
+    // Garde-fou (17/11 : réveil enregistré à 20 h 30, la tablette est restée en nuit 23 h 30 sur 24) :
+    // début ramené entre 19 h et 23 h 30, réveil entre 5 h et 10 h, au plus proche.
+    static final int DEBUT_MIN = 19 * 60, DEBUT_MAX = 23 * 60 + 30;
+    static final int FIN_MIN = 5 * 60, FIN_MAX = 10 * 60;
+
+    static int bornerDebut(int m) {
+        if (m >= DEBUT_MIN && m <= DEBUT_MAX) return m;
+        // Après minuit (0 h - 4 h) : plus proche de 23 h 30 ; en journée : plus proche de 19 h.
+        return m < 12 * 60 ? (m < 5 * 60 ? DEBUT_MAX : DEBUT_MIN) : (m > DEBUT_MAX ? DEBUT_MAX : DEBUT_MIN);
+    }
+
+    static int bornerFin(int m) {
+        if (m >= FIN_MIN && m <= FIN_MAX) return m;
+        // Avant 5 h : 5 h ; après 10 h (jusqu'au soir) : 10 h.
+        return m < FIN_MIN ? FIN_MIN : FIN_MAX;
+    }
 
     /** Vrai pendant les heures de veille (jamais si la veille est désactivée). */
     /** Avant cette date, l'horloge n'est pas à l'heure (date d'usine, démarrage sans réseau) : pas de veille. */
