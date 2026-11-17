@@ -97,7 +97,26 @@ function couches(port) {
       ${branche}
       const _brancher = (a) => { if (!_branches.has(a)) { _branches.add(a); connectAuthEmulator(a, 'http://${au.h}:${au.p}', { disableWarnings: true }); } return a; };
       export function getAuth(...a) { return _brancher(_get(...a)); }
-      export function initializeAuth(...a) { return _brancher(_init(...a)); }`,
+      export function initializeAuth(...a) { return _brancher(_init(...a)); }
+      // Connexion Google : la fenêtre et la redirection de Google ont besoin de apis.google.com (coupé ici). Un compte
+      // posé par le scénario (globalThis.__papoteGoogle = { email, nom, bloque }) est connecté par l'émulateur comme
+      // Google le ferait ; bloque : la fenêtre est refusée (app installée), l'app passe par la redirection, qui
+      // revient sur l'app (page rechargée) déjà connectée. Sans compte posé : le vrai SDK (gestes.google).
+      import { signInWithCredential as _cred, GoogleAuthProvider as _G, signInWithPopup as _popup, signInWithRedirect as _redir } from './vrai/firebase-auth.js';
+      const _jeton = (c) => _G.credential(JSON.stringify({ sub: 'g-' + c.email, email: c.email, email_verified: true, name: c.nom }));
+      export async function signInWithPopup(auth, fournisseur, r) {
+        const c = globalThis.__papoteGoogle;
+        if (!c) return _popup(auth, fournisseur, r);
+        if (c.bloque) throw Object.assign(new Error('Firebase: Error (auth/popup-blocked).'), { code: 'auth/popup-blocked' });
+        return _cred(auth, _jeton(c));
+      }
+      export async function signInWithRedirect(auth, fournisseur, r) {
+        const c = globalThis.__papoteGoogle;
+        if (!c) return _redir(auth, fournisseur, r);
+        await _cred(auth, _jeton(c));
+        location.reload();
+        return new Promise(() => {});
+      }`,
     'firebase-storage.js': `
       export * from './vrai/firebase-storage.js';
       import { getStorage as _get, connectStorageEmulator } from './vrai/firebase-storage.js';

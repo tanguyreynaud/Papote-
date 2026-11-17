@@ -38,6 +38,8 @@ scénarios) ; utiliser plutôt
 | `appels` | Vidéo vers la tablette (vraie liaison WebRTC), refus, Mamie appelle un proche ou toute la famille |
 | `reglages` | Réglages de la tablette, profil, thème, quitter la famille, deux familles, déconnexion |
 | `deconnexion` | « Se déconnecter » retire le jeton de l'app Android de ce téléphone ; double appui = une seule déconnexion ; Annuler ne retire rien ; hors ligne, la déconnexion se fait quand même |
+| `changement-compte` | Se déconnecter puis entrer avec un autre compte (Tanguy, 17/11) : lien e-mail dans le même onglet, page rechargée, nouvel onglet ; Google (fenêtre et redirection, simulées par le banc) ; compte neuf : « Vos informations » vides, rien du compte d'avant (prénom, photo, numéro, anniversaire, famille) ; 2e compte invité avec le même numéro : message clair, puis photo et numéro changés tous deux enregistrés ; fiche qui a déjà une photo ; retour du premier compte sans rien redemander |
+| `mes-informations` | Chaque champ (prénom, genre, photo, numéro, anniversaire) écrit à l'inscription et dans Profil, relu dans la base et après actualisation ; photo retirée qui ne revient pas ; numéro ajouté dans l'app ou par l'admin : « La tablette peut appeler… », tuile « Appeler », « Enregistrez le numéro » et Profil suivent sans actualiser |
 | `abonnement` | Annulation sous 30 jours, résiliation puis « garder », relier une commande, payer depuis l'app, pause |
 | `horsligne` | Envois gardés sans réseau, partis au retour du réseau ou à la prochaine ouverture |
 | `retour` | Bouton retour d'Android : chaque écran revient à celui d'avant, une fenêtre se ferme, « Voulez-vous quitter Papote ? » dans l'app Android |

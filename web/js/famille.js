@@ -1890,6 +1890,7 @@ async function onFaceChosen(e) {
     myFace = await visageCarre(file);
     renderFace();
     await saveFace(myFace);
+    rememberVisage(myFace);
     toast('Photo enregistrée');
   } catch (err) {
     console.error(err);
@@ -1943,7 +1944,13 @@ $('face-remove').addEventListener('click', async () => {
   if (!await askConfirm('Retirer votre photo ?')) return;
   myFace = null;
   renderFace();
-  try { await saveFace(null); } catch (err) { console.error(err); }
+  rememberVisage(SANS_VISAGE);
+  try {
+    await saveFace(null);
+  } catch (err) {
+    console.error(err);
+    notice("La photo n'a pas pu être retirée. Vérifiez la connexion.");
+  }
 });
 // Le Profil s'ouvre sous le doigt : le 2e appui d'un double appui n'y touche rien (sinon « Galerie » s'ouvrait).
 $('face-nudge').addEventListener('click', () => {
@@ -2841,18 +2848,39 @@ function renderTabletOwnerNote() {
     : "La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone d'un responsable de la famille.";
 }
 
-// Téléphones qui sonnent quand la tablette appelle (D1) : recoitAppels est posé par le serveur.
+// Qui la tablette peut appeler (Tanguy 17/11 : « 1 téléphone reçoit les appels » restait affiché après l'ajout d'un
+// numéro). La tablette appelle toujours par sa carte SIM, et seulement les portables français (06, 07) enregistrés sur
+// les fiches (members/{uid}.telephone, relus par la tablette). Les notifications (recoitAppels, posé par le serveur
+// quand le téléphone a un jeton) sont autre chose : comptées à part. Suit la liste des membres en direct.
 function renderTelephonesAppels(members) {
   const proches = members.filter((m) => m.role === 'famille');
   const el = $('appels-telephones');
-  el.hidden = !tabletMembers.length || !proches.some((m) => typeof m.recoitAppels === 'boolean');
-  const n = proches.filter((m) => m.recoitAppels === true).length;
-  el.textContent = n ? `${n} téléphone${n > 1 ? 's reçoivent' : ' reçoit'} les appels de la tablette.`
-    : "Aucun téléphone ne reçoit encore les appels de la tablette : installez l'app et acceptez les notifications.";
+  el.hidden = !tabletMembers.length || !proches.length;
+  const n = proches.filter((m) => telPropre(m.telephone)).length;
+  const sans = proches.length - n;
+  const notifs = proches.filter((m) => m.recoitAppels === true).length;
+  const pluriel = (k, un, plusieurs) => (k > 1 ? plusieurs : un);
+  el.textContent = [
+    n ? `La tablette peut appeler ${n} proche${pluriel(n, '', 's')} : ${pluriel(n, 'celui', 'ceux')} dont le numéro de portable est enregistré.`
+      : 'La tablette ne peut encore appeler personne : chacun ajoute son numéro de portable dans Profil.',
+    n && sans ? `${sans} proche${pluriel(sans, " n'a", "s n'ont")} pas encore de numéro.` : '',
+    proches.some((m) => typeof m.recoitAppels === 'boolean')
+      ? `Notifications de Papote activées sur ${notifs} téléphone${pluriel(notifs, '', 's')}.` : '',
+  ].filter(Boolean).join(' ');
 }
 
 function renderMembers(all) {
   allMembers = all;
+  // Ma fiche telle que la base la donne (numéro ajouté par l'admin ou depuis un autre téléphone, photo, prénom) :
+  // Profil, tuile « Appeler » et carte « Enregistrez le numéro » suivent sans actualiser.
+  const moi = all.find((m) => m.id === session.uid);
+  if (moi && session.member) {
+    const { id, ...fiche } = moi;
+    session.member = fiche;
+    renderTel();
+    $('my-name-value').textContent = fiche.name || '';
+    renderGenre();
+  }
   renderTabletOwnerNote();
   // Les demandes en attente sont à part : seuls les responsables les voient et les acceptent.
   const pending = all.filter((m) => m.status === 'pending');
@@ -4166,6 +4194,7 @@ SETTINGS['my-name-card'] = {
     if (name === session.member.name) return true;
     await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name });
     session.member.name = name;
+    rememberPrenom(name);
     $('my-name-value').textContent = name;
     toast('Prénom enregistré');
     return true;
@@ -4214,6 +4243,7 @@ SETTINGS['my-genre-card'] = {
     if (genre === session.member.genre) return true;
     await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { genre });
     session.member.genre = genre;
+    rememberGenre(genre);
     renderGenre();
     toast('Enregistré');
     return true;
@@ -5039,7 +5069,9 @@ const TEL_MANQUANT = 'Indiquez votre numéro de portable.';
 // Deux proches d'une même famille n'ont jamais le même numéro (Tanguy, 13/11) : la tablette reconnaît chacun par le sien.
 // Les règles Firestore ne peuvent pas le vérifier : l'appli lit les fiches de la famille avant d'écrire un numéro
 // (Profil, et juste après l'entrée dans la famille) ; l'admin montre un doublon resté (functions/tel-unique.js).
-const telDouble = (prenom) => `Ce numéro est déjà celui de ${prenom} dans la famille.`;
+// Le message dit quoi faire (Tanguy 17/11) : son propre numéro, ou, dans « Vos informations », la case sans numéro.
+const telDouble = (prenom, caseSansTel = false) => `Ce numéro est déjà celui de ${prenom} dans la famille. Indiquez votre propre numéro de portable${
+  caseSansTel ? ", ou cochez « Je n'ai pas de numéro, ou un numéro étranger »" : ''}.`;
 // Prénom de l'autre proche (pas la tablette, pas moi) qui a déjà ce numéro, sinon ''.
 function telPrisDans(membres, tel, uid) {
   const t = telPropre(tel);
@@ -5076,7 +5108,7 @@ async function telALEntree() {
   stopSession();
   showMoi();
   $('moi-tel').value = tel.replace(/ /g, '');
-  showError($('moi-error'), telDouble(pris));
+  showError($('moi-error'), telDouble(pris, true));
   moiComplet();
   return true;
 }
@@ -5101,12 +5133,47 @@ const GENRE_KEY = 'papote.genre';
 const GENRE_MANQUANT = 'Indiquez si vous êtes une femme ou un homme : la tablette choisit la voix qui lira vos messages.';
 const VISAGE_KEY = 'papote.visage';
 function savedVisage() { try { return localStorage.getItem(VISAGE_KEY) || ''; } catch (e) { return ''; } }
+// Photo retirée dans Profil : notée ainsi, pour ne pas la remettre sur ma fiche à l'ouverture suivante (elle revenait).
+const SANS_VISAGE = 'aucune';
+const visageGarde = () => (savedVisage() === SANS_VISAGE ? '' : savedVisage());
 function rememberVisage(v) { try { localStorage.setItem(VISAGE_KEY, v); } catch (e) { /* rien */ } }
 const ANNIV_KEY = 'papote.anniversaire'; // { day, month, year? }
 function savedAnniv() { try { return JSON.parse(localStorage.getItem(ANNIV_KEY) || 'null'); } catch (e) { return null; } }
 function rememberAnniv(a) { try { localStorage.setItem(ANNIV_KEY, JSON.stringify(a)); } catch (e) { /* rien */ } }
 function savedGenre() { try { return localStorage.getItem(GENRE_KEY) || ''; } catch (e) { return ''; } }
 function rememberGenre(g) { try { localStorage.setItem(GENRE_KEY, g); } catch (e) { /* rien */ } }
+// « Vos informations » gardées sur ce téléphone appartiennent à UN compte (Tanguy 17/11 : déconnecté puis connecté
+// avec un autre compte Google, l'autre compte reprenait le prénom, la photo, le numéro et la famille du premier, et
+// arrivait sur « Vos informations » avec le numéro du premier refusé en rouge). Autre compte : tout est oublié.
+const MOI_DE_KEY = 'papote.moiDe';
+// « Vos informations » validées : prénom, photo et genre choisis là sont écrits sur ma fiche même si elle en a déjà
+// (Tanguy 17/11 : photo changée après le numéro refusé, seul le numéro était enregistré).
+const MOI_A_ECRIRE_KEY = 'papote.moiAEcrire';
+function identiteDuCompte(uid) {
+  let de = null;
+  try { de = localStorage.getItem(MOI_DE_KEY); } catch (e) { return; }
+  if (de && de !== uid) {
+    for (const cle of [PRENOM_KEY, GENRE_KEY, VISAGE_KEY, ANNIV_KEY, TEL_KEY, MOI_A_ECRIRE_KEY]) {
+      try { localStorage.removeItem(cle); } catch (e) { /* rien */ }
+    }
+    saveFamilyId(null);
+    document.querySelectorAll('.genre-choix').forEach((g) => marquerGenre(g, ''));
+  }
+  try { localStorage.setItem(MOI_DE_KEY, uid); } catch (e) { /* rien */ }
+}
+const moiAEcrire = () => { try { return localStorage.getItem(MOI_A_ECRIRE_KEY) === '1'; } catch (e) { return false; } };
+// Revenu sur ce téléphone après un autre compte : mon anniversaire est relu dans l'agenda de ma famille
+// (le reste revient de ma fiche, connaitMoi) ; « Vos informations » ne redemande rien.
+async function retrouverAnniv(memberships) {
+  if (savedAnniv()?.year) return;
+  const m = memberships.find((x) => x.status !== 'pending');
+  if (!m) return;
+  try {
+    const snap = await getDoc(doc(db, 'families', m.fid, 'birthdays', `membre-${authUser.uid}`));
+    const b = snap.exists() ? snap.data() : null;
+    if (b?.day && b?.month && b?.year) rememberAnniv({ day: b.day, month: b.month, year: b.year });
+  } catch (e) { /* demandé dans « Vos informations » */ }
+}
 function genreDe(form) { return form.querySelector('.genre-btn[aria-checked="true"]')?.dataset.genre || ''; }
 function marquerGenre(form, g) {
   form.querySelectorAll('.genre-btn').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.genre === g)));
@@ -5133,7 +5200,7 @@ function connaitMoi(memberships) {
 function showMoi() {
   $('moi-prenom').value = (savedPrenom() || defaultName()).replace(HORS_PRENOM, '').trim();
   marquerGenre($('form-moi'), savedGenre());
-  montrerVisage(savedVisage());
+  montrerVisage(visageGarde());
   const a = savedAnniv();
   $('moi-jour').value = a ? String(a.day) : '';
   $('moi-mois').value = a ? String(a.month) : '';
@@ -5162,6 +5229,7 @@ $('form-moi').addEventListener('submit', (e) => {
   rememberPrenom(prenom);
   rememberGenre(genreDe($('form-moi')));
   rememberTel(sansTel ? SANS_TEL : telPropre($('moi-tel').value));
+  try { localStorage.setItem(MOI_A_ECRIRE_KEY, '1'); } catch (e) { /* rien */ }
   enterApp();
 });
 
@@ -5252,17 +5320,27 @@ async function ajouterMonAnniversaire() {
 
 // Famille ouverte : le genre choisi sur ce téléphone rejoint ma fiche si elle n'en a pas.
 function appliquerGenre() {
-  // Photo choisie à l'inscription : elle rejoint ma fiche si je n'en ai pas.
-  const v = savedVisage();
-  if (session?.member && !session.member.face && v) {
+  // Photo choisie à l'inscription : elle rejoint ma fiche si je n'en ai pas, ou si je viens de la changer dans
+  // « Vos informations » (de même le prénom et le genre, plus bas).
+  const forcer = moiAEcrire() && session?.member && session.member.role !== 'tablette';
+  try { localStorage.removeItem(MOI_A_ECRIRE_KEY); } catch (e) { /* rien */ }
+  const v = visageGarde();
+  if (session?.member && v && (!session.member.face || (forcer && session.member.face !== v))) {
     session.member.face = v;
     saveFace(v).catch((err) => console.warn('Photo non enregistrée', err));
+  }
+  const prenom = savedPrenom();
+  if (forcer && prenom && prenom !== session.member.name) {
+    session.member.name = prenom;
+    $('my-name-value').textContent = prenom;
+    updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name: prenom })
+      .catch((err) => console.warn('Prénom non enregistré', err));
   }
   ajouterMonAnniversaire();
   // Mon numéro de téléphone, donné à l'inscription : déjà rejoint ma fiche s'il y manquait (telALEntree).
   renderTel();
   const g = savedGenre();
-  if (!session?.member || session.member.genre || !['femme', 'homme'].includes(g)) return;
+  if (!session?.member || (session.member.genre && !forcer) || session.member.genre === g || !['femme', 'homme'].includes(g)) return;
   session.member.genre = g;
   updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { genre: g })
     .catch((err) => console.warn('Genre non enregistré', err));
@@ -5553,6 +5631,7 @@ async function enterApp() {
   show('loading');
   authUser = await currentUser();
   if (!isRealAccount(authUser)) { showLogin(!!savedFamilyId()); return; }
+  identiteDuCompte(authUser.uid);
   // Bascule en Europe : la bonne base et le bon bucket avant toute lecture.
   await choisirBase();
   if (bucketUrl()) ouvrirStorage(bucketUrl());
@@ -5568,6 +5647,7 @@ async function enterApp() {
     ]);
     // Fiche d'avant tout juste complétée (uid ajouté) : elle n'était pas encore dans la liste.
     const memberships = completee ? await myMemberships() : lues;
+    await retrouverAnniv(memberships);
     // Écran d'appel de l'app Android (WebView neuve, sans la fiche « Moi » du téléphone) : seulement l'appel.
     if (!window.PapoteNatif && !connaitMoi(memberships)) { showMoi(); return; }
     const invitations = invitationsLues.filter((inv) => !memberships.some((m) => m.fid === inv.fid));
