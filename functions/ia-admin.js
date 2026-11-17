@@ -22,6 +22,8 @@ const fs = require('fs');
 const path = require('path');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+// Pour l'e-mail « clé IA refusée » à Papote (cle-ia.js).
+const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
 const MODELE = 'claude-haiku-5-5';
 const QUOTA_JOUR = 40; // questions par jour, tous admins confondus
 const MAX_QUESTION = 500;
@@ -221,7 +223,7 @@ function requete(question, parc, maintenant) {
 }
 
 // Traitement d'une question, dépendances fournies (base, client Anthropic) pour les tests.
-function creer({ db, client, maintenant = () => Date.now() }) {
+function creer({ db, client, maintenant = () => Date.now(), signalerCle = require('./cle-ia').signalerCleIA }) {
   return async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Connectez-vous.');
     if (!request.auth.token || request.auth.token.admin !== true) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
@@ -244,13 +246,15 @@ function creer({ db, client, maintenant = () => Date.now() }) {
       return { ok: true, reponse };
     } catch (e) {
       logger.error('IA admin', e.message || e);
+      // Clé refusée (401/403) : alerte à Papote, au plus une fois par 24 h (cle-ia.js). Ne lève jamais d'erreur.
+      await signalerCle(e, { source: 'l\'IA de l\'admin', db });
       return { ok: false, raison: 'indisponible', reponse: MESSAGE_PANNE };
     }
   };
 }
 
 let anthropic;
-exports.iaAdmin = onCall({ secrets: [ANTHROPIC_API_KEY], maxInstances: 2, timeoutSeconds: 60 }, creer({
+exports.iaAdmin = onCall({ secrets: [ANTHROPIC_API_KEY, MAIL_MOT_DE_PASSE], maxInstances: 2, timeoutSeconds: 60 }, creer({
   db: () => require('./base').db(),
   client: () => {
     if (!anthropic) anthropic = new (require('@anthropic-ai/sdk'))({ apiKey: ANTHROPIC_API_KEY.value(), maxRetries: 1, timeout: 40_000 });

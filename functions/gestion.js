@@ -2341,6 +2341,8 @@ async function lireDocument(contenu, type) {
     });
   } catch (e) {
     logger.warn('Lecture de facture impossible', e.message);
+    // Clé refusée (401/403) : alerte à Papote, au plus une fois par 24 h (cle-ia.js). Ne lève jamais d'erreur.
+    await require('./cle-ia').signalerCleIA(e, { source: 'la lecture des factures', db });
     throw new HttpsError('unavailable', 'La lecture automatique ne répond pas. Remplissez la fiche à la main.');
   }
   const bloc = (reponse.content || []).find((b) => b.type === 'text');
@@ -2355,7 +2357,7 @@ async function lireDocument(contenu, type) {
 }
 
 exports.gestionLireFacture = onCall(
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 180, memory: '512MiB' },
+  { secrets: [ANTHROPIC_API_KEY, MAIL_MOT_DE_PASSE], timeoutSeconds: 180, memory: '512MiB' },
   async (request) => {
     verifierAdmin(request);
     const d = request.data || {};
@@ -3882,7 +3884,8 @@ async function releverFactures() {
 }
 
 const OPTIONS_COURRIER = {
-  secrets: [ANTHROPIC_API_KEY, FACTURES_MOT_DE_PASSE], memory: '512MiB', timeoutSeconds: 540,
+  // MAIL_MOT_DE_PASSE : e-mail « clé IA refusée » (cle-ia.js).
+  secrets: [ANTHROPIC_API_KEY, FACTURES_MOT_DE_PASSE, MAIL_MOT_DE_PASSE], memory: '512MiB', timeoutSeconds: 540,
 };
 
 // Toutes les heures (taches.js).

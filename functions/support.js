@@ -306,6 +306,8 @@ exports.supportChat = onRequest(
       res.json(lu);
     } catch (e) {
       logger.error('supportChat', e);
+      // Clé refusée (401/403) : alerte à Papote, au plus une fois par 24 h (cle-ia.js). Ne lève jamais d'erreur.
+      await require('./cle-ia').signalerCleIA(e, { source: 'le chat du site', db: base });
       passerLaMain('Je suis indisponible pour le moment. Laissez votre téléphone et votre e-mail, nous vous recontacterons.');
     }
   });
