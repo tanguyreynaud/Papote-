@@ -323,3 +323,64 @@ test('S8. Petit téléphone (320 px) : le prix de la barre du bas n\'est pas cou
   await capture(page, 'S8-barre-320');
   await ctx.close();
 });
+
+// Accueil servi par la fonction accueil (Tanguy, 17/11 : « tout doit apparaître en même temps ») : l'état du stock est
+// dans la page (<html data-stock>), le bon bouton est visible dès le premier dessin, sans attendre /api/stock.
+async function accueilAvecStock(etat, { lenteur = 0 } = {}) {
+  const demandes = [];
+  const { ctx, page, erreurs } = await vitrine.ouvrir(browser, srv.url, {
+    fichier: 'commande.html',
+    routes: async (p) => {
+      await p.route(/\/(stockDisponible|api\/stock)/, async (r) => {
+        demandes.push(r.request().url());
+        if (lenteur) await new Promise((ok) => setTimeout(ok, lenteur));
+        return r.fulfill({ contentType: 'application/json', headers: CORS, body: JSON.stringify({ disponible: etat !== 'complet' }) }).catch(() => {});
+      });
+      await p.route(/\/accueil\.html/, async (r) => {
+        const rep = await r.fetch();
+        let html = await rep.text();
+        if (etat !== 'absent') html = html.replace('<html lang="fr">', `<html lang="fr" data-stock="${etat}">`);
+        return r.fulfill({ response: rep, body: html });
+      });
+    },
+  }, TEL);
+  // Le premier dessin : on regarde dès que la page est lue, sans attendre la fin du chargement.
+  demandes.length = 0; // la page de commande ouverte d'abord a déjà demandé le stock
+  await page.goto(`${srv.url}/accueil.html`, { waitUntil: 'commit' });
+  await page.waitForFunction(() => document.querySelector('.hero .js-commander'), null, { timeout: 5000 });
+  const premier = await page.evaluate(() => {
+    const b = document.querySelector('.hero .js-commander');
+    return { texte: b.textContent.trim(), visible: getComputedStyle(b).visibility !== 'hidden', attente: document.documentElement.classList.contains('stock-attente') };
+  });
+  return { ctx, page, erreurs, demandes, premier };
+}
+
+test('Accueil, une tablette au stock : « Commander » visible dès le premier dessin, sans attendre le serveur', async () => {
+  const { ctx, erreurs, demandes, premier } = await accueilAvecStock('ok', { lenteur: 5000 });
+  assert.deepStrictEqual(premier, { texte: 'Commander', visible: true, attente: false });
+  assert.deepStrictEqual(demandes, [], 'le stock n\'est pas redemandé : il est dans la page');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Accueil, plus de tablette : « Être prévenu » directement, jamais « Commander » d\'abord', async () => {
+  const { ctx, page, erreurs, demandes, premier } = await accueilAvecStock('complet', { lenteur: 5000 });
+  await page.waitForLoadState('domcontentloaded');
+  const b = page.locator('.hero .js-commander');
+  assert.strictEqual((await b.innerText()).trim(), 'Être prévenu');
+  assert.ok(await b.isVisible());
+  assert.ok(premier.texte === 'Être prévenu' || !premier.visible, `« ${premier.texte} » affiché avant « Être prévenu »`);
+  assert.deepStrictEqual(demandes, [], 'le stock n\'est pas redemandé : il est dans la page');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Accueil sans état du stock et serveur lent (réseau faible) : les boutons apparaissent quand même en 1,5 s au plus', async () => {
+  const { ctx, page, erreurs } = await accueilAvecStock('absent', { lenteur: 5000 });
+  const debut = Date.now();
+  await page.locator('.hero .js-commander').waitFor({ state: 'visible', timeout: 4000 });
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.hero .js-commander')).visibility !== 'hidden', null, { timeout: 4000 });
+  assert.ok(Date.now() - debut < 2500, `${Date.now() - debut} ms`);
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});

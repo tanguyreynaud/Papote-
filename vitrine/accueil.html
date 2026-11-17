@@ -3,16 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<!-- Stock (Tanguy, 12/11 : « passer de Commander à Être prévenu est moche ») : demandé dès le début de la page, au
-     cache du site (/api/stock, gardé 60 s). Les boutons « Commander » restent invisibles, à leur place, jusqu'à la
-     réponse : le bon bouton apparaît directement, sans bascule. Au plus 1,5 s : sans réponse, « Commander » s'affiche
-     (la page de commande et le serveur revérifient le stock). -->
+<!-- Stock (Tanguy, 12/11 puis 17/11 : « tout doit apparaître en même temps »). La fonction accueil écrit l'état du
+     stock dans la page (<html data-stock="ok|complet">, functions/stock.js) : le bon bouton est là dès le premier
+     dessin, rien à attendre. Seulement si cet état manque (page ouverte en /accueil.html, stock illisible), il est
+     demandé à /api/stock (gardé 60 s) et les boutons restent invisibles, à leur place, au plus 1,5 s. -->
 <style>.stock-attente .js-commander { visibility: hidden; }</style>
 <script>
-  document.documentElement.classList.add('stock-attente');
-  window.papoteStock = fetch('/api/stock').then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
-  window.papoteStock.catch(function () {});
-  setTimeout(function () { document.documentElement.classList.remove('stock-attente'); }, 1500);
+  (function () {
+    var racine = document.documentElement;
+    var etat = racine.getAttribute('data-stock');
+    // « complet » : caché le temps que la page change le libellé (quelques millisecondes, avant le premier dessin).
+    if (etat !== 'ok') racine.classList.add('stock-attente');
+    if (etat === 'ok' || etat === 'complet') {
+      window.papoteStock = Promise.resolve({ disponible: etat === 'ok' });
+      return;
+    }
+    window.papoteStock = fetch('/api/stock').then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+    window.papoteStock.catch(function () {});
+    setTimeout(function () { racine.classList.remove('stock-attente'); }, 1500);
+  })();
 </script>
 <title>Papote · La tablette qui rapproche vos aînés de toute la famille</title>
 <meta name="description" content="Papote garde le lien entre vos aînés et toute la famille : photos, vidéos, messages et appels vidéo arrivent tout seuls sur une tablette simple, sans rien à toucher.">

@@ -237,6 +237,10 @@ global.fetch = async (url, options) => {
     return new Response(JSON.stringify({ versionCode: 120, versionName: '2.99.120', sha256: 'f'.repeat(64),
       url: `https://raw.githubusercontent.com/tanguyreynaud/Papote-/${'c'.repeat(40)}/installation/Papote.apk` }));
   }
+  // Gabarit de la page d'accueil (fonction accueil) : le vrai fichier du site.
+  if (String(url) === 'https://mapapote.fr/accueil.html') {
+    return new Response(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'vitrine', 'accueil.html'), 'utf8'));
+  }
   if (/^https?:\/\/(127\.0\.0\.1|localhost)/.test(String(url))) return vraiFetch(url, options);
   throw new Error(`Simulation : pas d'internet (${url})`);
 };

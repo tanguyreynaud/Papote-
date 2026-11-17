@@ -68,3 +68,15 @@ test('vendable : seulement le stock réel au lancement, précommandes si on vend
   assert.strictEqual(vendable(-9, true), true);
   assert.strictEqual(vendable(-10, true), false);
 });
+
+test('accueil : l\'état du stock est écrit dans la page, une seule fois, et rien si le stock est illisible', () => {
+  const { pageAvecStock } = require('./stock');
+  const html = '<!doctype html>\n<html lang="fr">\n<head></head><body><a class="js-commander">Commander</a></body></html>';
+  assert.match(pageAvecStock(html, true), /<html lang="fr" data-stock="ok">/);
+  assert.match(pageAvecStock(html, false), /<html lang="fr" data-stock="complet">/);
+  assert.strictEqual(pageAvecStock(html, null), html);
+  assert.strictEqual(pageAvecStock(pageAvecStock(html, true), false), pageAvecStock(html, true), 'jamais deux fois');
+  // Le vrai gabarit du site commence bien ainsi (sinon le stock ne serait jamais écrit).
+  const vrai = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'vitrine', 'accueil.html'), 'utf8');
+  assert.match(pageAvecStock(vrai, false), /data-stock="complet"/);
+});
