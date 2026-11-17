@@ -756,3 +756,5 @@ button.choix-fin-forfait.charge::after { border-color: rgba(255, 255, 255, .45);
 .stat-perdus { margin: 3px 0 0; }
 .stat-alerte { margin: 12px 0; padding: 12px 14px; border-radius: 12px; background: #eef0ff; color: var(--accent); font-weight: 600; }
 #stats-periode button { min-height: 44px; }
+.stat-jours td:first-child { white-space: nowrap; }
+.stat-jours th, .stat-jours td { padding-left: 6px; padding-right: 6px; }

@@ -30,6 +30,9 @@ const TUNNEL = [
   ['paiement', 'Touchent « Payer »'],
   ['paye', 'Paient'],
 ];
+// Nom court de chaque étape, pour la phrase « c'est ici qu'on perd le plus de monde ».
+const COURT = { visite: 'l\'arrivée sur le site', commande: 'la page de commande', adresse: 'l\'adresse du proche', 'couverture-ok': 'la 4G',
+  relais: 'le point relais', coordonnees: 'le nom et l\'e-mail', paiement: 'le bouton Payer', paye: 'le paiement' };
 const SOURCES = {
   google: 'Google', bing: 'Bing', qwant: 'Qwant', duckduckgo: 'DuckDuckGo', ecosia: 'Ecosia', yahoo: 'Yahoo',
   facebook: 'Facebook', instagram: 'Instagram', whatsapp: 'WhatsApp', linkedin: 'LinkedIn', youtube: 'YouTube',
@@ -40,7 +43,7 @@ const PERIODES = [7, 30, 90];
 
 const nombre = (n) => n.toLocaleString('fr-FR');
 const pourcent = (a, b) => (b ? `${Math.round((100 * a) / b)} %` : '–');
-const jourCourt = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+const jourCourt = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
 
 let periode = 30;
 try { periode = Number(localStorage.getItem('papote-stats-jours')) || 30; } catch (e) { /* navigation privée */ }
@@ -83,18 +86,21 @@ function rendre() {
     const n = t[cle] || 0;
     const avant = i ? t[TUNNEL[i - 1][0]] || 0 : 0;
     const perdus = i ? Math.max(0, avant - n) : 0;
-    if (i && avant >= 5 && (!pire || perdus / avant > pire.part)) pire = { part: perdus / avant, perdus, avant, texte, precedent: TUNNEL[i - 1][1] };
+    if (i && avant >= 5 && (!pire || perdus / avant > pire.part)) pire = { part: perdus / avant, perdus, avant, de: COURT[TUNNEL[i - 1][0]], a: COURT[cle] };
     return h('li', { class: 'stat-etape' },
       h('div', { class: 'stat-ligne' }, h('span', { class: 'stat-texte' }, texte), h('strong', {}, nombre(n)), h('span', { class: 'muted small stat-part' }, i ? pourcent(n, t.visite) : '')),
       barre(n, t.visite),
       i && perdus ? h('p', { class: 'muted small stat-perdus' }, `${nombre(perdus)} s'arrêtent avant (${pourcent(perdus, avant)})`) : null);
   });
+  const aPart = [
+    t['couverture-non'] ? `4G trop faible chez le proche : ${nombre(t['couverture-non'])} fois` : null,
+    t.complet ? `page « plus de tablette » vue par ${nombre(t.complet)} visiteur${t.complet > 1 ? 's' : ''}` : null,
+  ].filter(Boolean);
   $('stats-tunnel').replaceChildren(h('ol', { class: 'stat-tunnel' }, lignes),
-    h('p', { class: 'muted small' },
-      `À part : 4G trop faible chez le proche ${nombre(t['couverture-non'] || 0)} fois · page « plus de tablette » vue par ${nombre(t.complet || 0)} visiteurs.`));
+    aPart.length ? h('p', { class: 'muted small' }, `À part : ${aPart.join(' · ')}.`) : null);
   $('stats-perte').hidden = !pire || !pire.perdus;
   if (pire && pire.perdus) {
-    $('stats-perte').textContent = `C'est ici que le plus de monde s'arrête : entre « ${pire.precedent} » et « ${pire.texte} » (${pourcent(pire.perdus, pire.avant)} partent).`;
+    $('stats-perte').textContent = `C'est entre ${pire.de} et ${pire.a} que le plus de monde s'arrête : ${pourcent(pire.perdus, pire.avant)} partent.`;
   }
 
   // Provenance des visiteurs.
@@ -109,8 +115,8 @@ function rendre() {
   // Jour par jour, le plus récent en haut.
   const jours = [...r.jours].reverse();
   $('stats-jours').replaceChildren(jours.length
-    ? h('div', { class: 'table' }, h('table', {},
-      h('thead', {}, h('tr', {}, h('th', {}, 'Jour'), h('th', { class: 'n' }, 'Visiteurs'), h('th', { class: 'n' }, 'Page commande'), h('th', { class: 'n' }, 'Payer touché'), h('th', { class: 'n' }, 'Payées'))),
+    ? h('div', { class: 'table stat-jours' }, h('table', {},
+      h('thead', {}, h('tr', {}, h('th', {}, 'Jour'), h('th', { class: 'n' }, 'Visiteurs'), h('th', { class: 'n' }, 'Commande'), h('th', { class: 'n' }, 'Payer'), h('th', { class: 'n' }, 'Payées'))),
       h('tbody', {}, jours.map((j) => h('tr', {}, h('td', {}, jourCourt(j.jour)), h('td', { class: 'n' }, nombre(j.visite)), h('td', { class: 'n' }, nombre(j.commande)),
         h('td', { class: 'n' }, nombre(j.paiement)), h('td', { class: 'n' }, nombre(j.paye)))))))
     : h('p', { class: 'muted' }, 'Aucune visite sur cette période.'));
