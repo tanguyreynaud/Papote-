@@ -5,13 +5,13 @@ import android.content.SharedPreferences;
 
 /**
  * Heures de veille de la tablette, réglées depuis l'app famille (families/{fid}.veille :
- * {active, de, deMin, a, aMin}, minutes 0 ou 30). Sans réglage : de 21h à 6h30, comme le
+ * {active, de, deMin, a, aMin}, minutes 0 ou 30). Sans réglage : de 23 h à 5 h (17/11 ; avant 21 h - 6 h 30), comme le
  * serveur (functions/alertes.js). Gardées sur la tablette pour tenir sans internet.
  * Les heures sont gardées en minutes depuis minuit.
  */
 final class Veille {
-    static final int DEFAULT_FROM = 21 * 60;
-    static final int DEFAULT_TO = 6 * 60 + 30;
+    static final int DEFAULT_FROM = 23 * 60; // Tanguy, 17/11 : 23 h - 5 h par défaut
+    static final int DEFAULT_TO = 5 * 60;
 
     private Veille() { }
 

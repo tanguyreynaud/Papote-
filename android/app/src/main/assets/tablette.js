@@ -3394,8 +3394,8 @@
   // (ou le prochain toucher) pour ne pas allumer l'écran en pleine nuit.
 
   // Heures de veille réglées par la famille (families/{fid}.veille), en minutes depuis minuit
-  // (Sync.java les convertit) ; sans réglage, 21h-6h30 comme le serveur.
-  var VEILLE_DEFAUT = { active: true, de: 21 * 60, a: 6 * 60 + 30 };
+  // (Sync.java les convertit) ; sans réglage, 23 h - 5 h (le serveur doit avoir le même défaut).
+  var VEILLE_DEFAUT = { active: true, de: 23 * 60, a: 5 * 60 }; // Tanguy, 17/11 (avant 21 h - 6 h 30)
   var veille = VEILLE_DEFAUT;
 
   // Pas de veille tant que les réglages de la famille ne sont pas arrivés (premier onPosts) : au
