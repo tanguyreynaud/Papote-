@@ -918,3 +918,19 @@ test('installation sans carte SIM ni internet : le choix du wifi tout de suite',
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
+
+// Tanguy (17/11) : plus de zoom lent sur la photo de l'accueil ; relancé toutes les 12 s, il faisait
+// redessiner l'écran 60 fois par seconde toute la journée (plus de 2 cœurs sur T-003).
+test('accueil : la photo change en fondu, sans zoom', async () => {
+  const b = await ouvrir();
+  try {
+    await b.android('onPosts', lot([envoi({ seen: true, text: 'Un' }), envoi({ seen: true, text: 'Deux' })]));
+    await b.avancer(30000);
+    const zoom = await b.page.evaluate(() => ['frame-img', 'frame-img-b'].map((id) => {
+      const e = document.getElementById(id);
+      return e ? getComputedStyle(e).transform + ' | ' + e.style.transition : '';
+    }));
+    for (const z of zoom) assert.ok(!/matrix|scale|transform/.test(z), `pas de zoom : ${z}`);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});

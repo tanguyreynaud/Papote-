@@ -404,7 +404,8 @@
   }
 
   // Changement de photo de l'accueil en fondu enchaîné : la nouvelle photo est chargée à part,
-  // puis apparaît doucement par-dessus l'ancienne (avec un très léger zoom), la légende en fondu.
+  // puis apparaît doucement par-dessus l'ancienne, la légende en fondu. Plus de zoom lent (Tanguy, 17/11) :
+  // relancé toutes les 12 s, il redessinait l'écran 60 fois par seconde toute la journée (2 cœurs sur T-003).
   var frameBack = null;
   var frameShown = '';
   function crossfadeFrame(p, done) {
@@ -427,7 +428,7 @@
       var next = top === front ? frameBack : front;
       next.style.transition = 'none';
       next.style.opacity = first ? '1' : '0';
-      next.style.transform = 'scale(1)';
+      next.style.transform = '';
       setPicture(next, p.image);
       next.style.zIndex = '2';
       top.style.zIndex = '1';
@@ -435,9 +436,8 @@
       cap.style.transition = 'opacity .5s';
       cap.style.opacity = '0';
       setTimeout(function () {
-        next.style.transition = 'opacity 1.4s ease, transform 12s linear';
+        next.style.transition = 'opacity 1.4s ease';
         next.style.opacity = '1';
-        next.style.transform = 'scale(1.04)';
         done();
         cap.style.opacity = '1';
       }, first ? 0 : 60);

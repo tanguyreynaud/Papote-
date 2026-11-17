@@ -1544,7 +1544,7 @@ html .call-out.picker .call-strip .call-person-face { width: 21vmin; height: 21v
 .home-left .call-btn .icon { width: 6.5vmin; height: 6.5vmin; }
 
 /* Photo de l'accueil : deux couches pour le fondu enchaîné, la légende toujours au-dessus */
-.home-frame #frame-img, .home-frame #frame-img-b { transform-origin: center; will-change: opacity, transform; }
+.home-frame #frame-img, .home-frame #frame-img-b { will-change: opacity; }
 .home-frame .frame-caption { z-index: 3; }
 
 /* Nuit : l'heure en grand, très sombre (l'écran est aussi au minimum de luminosité) */
