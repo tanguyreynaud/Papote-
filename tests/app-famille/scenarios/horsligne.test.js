@@ -11,7 +11,7 @@ banc.brancher();
 const RESEAU = /ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_FAILED|Could not reach Cloud Firestore|WebChannelConnection|net::/;
 
 async function envoyerHorsLigne(t) {
-  await t.context.setOffline(true);
+  await g.reseau(t, true);
   await g.ouvrirTuile(t, 'messages');
   await t.page.fill('#message-text', 'Écrit dans le métro');
   await t.page.click('#btn-message');
@@ -54,7 +54,7 @@ test('Hors ligne : message et photos mis en attente, partis dès le retour du r�
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await envoyerHorsLigne(julie);
 
-  await julie.context.setOffline(false);
+  await g.reseau(julie, false);
   await g.toast(julie, 'Envois en attente partis');
   await julie.page.locator('#outbox').waitFor({ state: 'hidden' });
   await verifierPartis(fid);
@@ -68,7 +68,7 @@ test('Hors ligne puis app fermée : les envois partent à la prochaine ouverture
   await julie.page.close();
   banc.tolerer(julie, RESEAU);
 
-  await julie.context.setOffline(false);
+  await g.reseau(julie, false);
   julie.page = await julie.context.newPage();
   await julie.page.goto(banc.origine);
   await g.attendreVue(julie, 'view-home');

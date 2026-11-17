@@ -34,7 +34,7 @@ const capture = (t, nom) => t.page.screenshot({ path: path.join(__dirname, '..',
 async function surveiller(t) {
   await t.page.evaluate((ids) => {
     window.__releve = {
-      max: 0, tMin: Infinity, tMax: -Infinity, images: 0, pasMax: 0, dtMax: 0, tPrec: null, imagesMvt: 0, premier: null, debut: performance.now(), y: null, y0: null, ecart: 0,
+      max: 0, tMin: Infinity, tMax: -Infinity, images: 0, pasMax: 0, vitesseMax: 0, dtMax: 0, tPrec: null, mvtDebut: null, mvtFin: null, imagesMvt: 0, premier: null, debut: performance.now(), y: null, y0: null, ecart: 0,
     };
     if (window.__surveille) return;
     window.__surveille = true;
@@ -44,8 +44,8 @@ async function surveiller(t) {
       if (!document.getElementById('view-home').hidden) {
         r.images++;
         const maint = performance.now();
-        if (r.tPrec !== null) r.dtMax = Math.max(r.dtMax, maint - r.tPrec);
-        r.tPrec = maint;
+        const dt = r.tPrec === null ? 0 : maint - r.tPrec;
+        r.dtMax = Math.max(r.dtMax, dt);
         r.max = Math.max(r.max, ids.filter((id) => vu(document.getElementById(id))).length);
         const y = document.querySelector('.tiles').getBoundingClientRect().top + window.scrollY;
         if (r.y0 === null) r.y0 = y;
@@ -53,8 +53,13 @@ async function surveiller(t) {
         if (r.premier === null && r.ecart >= 0.5) r.premier = performance.now() - r.debut;
         if (r.y !== null && Math.abs(y - r.y) >= 0.5) {
           r.pasMax = Math.max(r.pasMax, Math.abs(y - r.y));
+          // Le même pas ramené à une image de 1/60 s : la vitesse du glissement, quel que soit le rythme des images.
+          r.vitesseMax = Math.max(r.vitesseMax, (Math.abs(y - r.y) * (1000 / 60)) / Math.max(dt, 1000 / 60));
           r.imagesMvt++;
+          if (r.mvtDebut === null) r.mvtDebut = r.tPrec;
+          r.mvtFin = maint;
         }
+        r.tPrec = maint;
         r.y = y;
         r.tMin = Math.min(r.tMin, y);
         r.tMax = Math.max(r.tMax, y);
@@ -64,13 +69,19 @@ async function surveiller(t) {
   }, BADGES);
 }
 /** Les tuiles n'ont bougé qu'après l'attente, et en glissant (pas de saut). */
+// Sous WebKit (Playwright, sans écran), une image peut tarder (jusqu'à 230 ms entre deux, vu en CI) pendant que la carte
+// suivante se met en place : le glissement y est jugé à sa vitesse (pas ramené à 1/60 s) et à sa durée (au moins
+// 150 ms des 250 ms), au lieu du pas et du nombre d'images. Un saut sans glissement échoue toujours.
 function glissement(r, nom) {
   assert.ok(r.images > 5, 'relevé actif');
-  assert.ok(r.pasMax <= PAS_MAX, `tuiles : saut de ${r.pasMax.toFixed(1)} px en une image (${nom} ; ${r.imagesMvt} images en mouvement, ${r.images} images, ${Math.round(r.dtMax)} ms au plus entre deux)`);
+  const detail = `${nom} ; ${r.imagesMvt} images en mouvement, ${r.images} images, ${Math.round(r.dtMax)} ms au plus entre deux`;
+  const pas = banc.WEBKIT ? r.vitesseMax : r.pasMax;
+  assert.ok(pas <= PAS_MAX, `tuiles : saut de ${pas.toFixed(1)} px en une image (${detail})`);
   const course = r.tMax - r.tMin;
   if (r.ecart >= 0.5) {
     assert.ok(r.premier >= ATTENTE_MIN_MS, `tuiles parties ${Math.round(r.premier)} ms après le geste, avant le doigt levé (${nom})`);
-    if (course > PAS_MAX) assert.ok(r.imagesMvt >= 3, `glissement en ${r.imagesMvt} images (${nom})`);
+    if (course > PAS_MAX && !banc.WEBKIT) assert.ok(r.imagesMvt >= 3, `glissement en ${r.imagesMvt} images (${nom})`);
+    if (course > PAS_MAX && banc.WEBKIT) assert.ok(r.mvtFin - r.mvtDebut >= 150, `glissement en ${Math.round(r.mvtFin - r.mvtDebut)} ms (${detail})`);
   }
 }
 const releve = (t) => t.page.evaluate(() => window.__releve);

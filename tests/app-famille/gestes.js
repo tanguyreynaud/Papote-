@@ -443,7 +443,8 @@ async function appuiLong(t, selecteur, ms = 900) {
 
 /**
  * Adresses que la page demande d'ouvrir hors du web (intent://… vers l'app Android), sans les suivre.
- * Chromium : CDP (Page.frameRequestedNavigation). WebKit : la demande de navigation vue par Playwright.
+ * Chromium : CDP (Page.frameRequestedNavigation). WebKit : l'événement navigate de la page (Navigation API), qui
+ * donne l'adresse entière, fragment #Intent;…;end compris (la requête vue par Playwright s'arrête au #).
  */
 async function espionnerNavigation(t) {
   const demandes = [];
@@ -453,10 +454,36 @@ async function espionnerNavigation(t) {
     cdp.on('Page.frameRequestedNavigation', (e) => demandes.push(e.url));
     return demandes;
   }
-  const noter = (r) => { if (!/^(https?|data|blob|about):/.test(r.url()) && !demandes.includes(r.url())) demandes.push(r.url()); };
-  t.page.on('request', noter);
-  t.page.on('requestfailed', noter);
+  await t.page.exposeFunction('__papoteNavigation', (url) => { if (!/^(https?|data|blob|about):/.test(url)) demandes.push(url); });
+  const ecouter = () => window.navigation?.addEventListener('navigate', (e) => window.__papoteNavigation(e.destination.url));
+  await t.page.addInitScript(ecouter);
+  await t.page.evaluate(ecouter);
   return demandes;
+}
+
+/**
+ * Réseau du téléphone coupé (coupe = true) ou revenu. Chromium : context.setOffline. WebKit : le setOffline du WebKit
+ * de Playwright coupe aussi les adresses blob: (une photo choisie ne s'ouvre plus, vu par la sonde du 17/11), ce que
+ * Safari ne fait pas ; le réseau y est donc coupé requête par requête (toute requête http(s) échoue « internet
+ * déconnecté »), avec navigator.onLine à false et les événements offline / online, comme Safari.
+ */
+async function reseau(t, coupe) {
+  if (!banc.WEBKIT) return t.context.setOffline(!!coupe);
+  if (!t.coupure) {
+    t.coupure = { coupe: false };
+    await t.context.route(/^https?:/, (route) => (t.coupure.coupe ? route.abort('internetdisconnected') : route.fallback()));
+    await t.context.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, 'onLine', { get: () => !window.__papoteHorsLigne, configurable: true });
+    });
+  }
+  t.coupure.coupe = !!coupe;
+  for (const p of t.context.pages()) {
+    await p.evaluate((c) => {
+      Object.defineProperty(Navigator.prototype, 'onLine', { get: () => !window.__papoteHorsLigne, configurable: true });
+      window.__papoteHorsLigne = c;
+      window.dispatchEvent(new Event(c ? 'offline' : 'online'));
+    }, !!coupe).catch(() => {});
+  }
 }
 
 /** Clavier du téléphone ouvert (environ 330 px de moins en hauteur sur Android ; iPhone : ce qui reste de Safari
@@ -567,7 +594,7 @@ async function repondreSim(tablette, resultat = {}, { code = tablette.code, id =
 
 module.exports = {
   ordreSim, repondreSim, fermerTablettes,
-  centre, doubleAppui, appuiLong, doigt, espionnerNavigation, tourner, clavier, fenetresOuvertes, attendreRetourVisible, nbAppels, serveurMuet, jamaisMainPropre,
+  centre, doubleAppui, appuiLong, doigt, espionnerNavigation, reseau, tourner, clavier, fenetresOuvertes, attendreRetourVisible, nbAppels, serveurMuet, jamaisMainPropre,
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
   ouvrir, ouvrirParApp, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, entrerFamillePreparee, familleRelieeParPapote, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,

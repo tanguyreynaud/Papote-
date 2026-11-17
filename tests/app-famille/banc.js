@@ -331,6 +331,14 @@ async function telephone(nom, { largeur, hauteur } = {}) {
   });
   // Caméra et micro permis, comme Chromium avec --use-fake-ui-for-media-stream (le proche a dit « Autoriser »).
   if (WEBKIT) await context.grantPermissions(['camera', 'microphone']);
+  // Safari d'iPhone n'a pas le plein écran d'un élément (seulement celui d'une vidéo, webkitEnterFullscreen), que le
+  // WebKit de Playwright (Linux) a : on l'enlève, pour que l'app prenne le chemin d'un iPhone.
+  if (WEBKIT && reglages.isMobile) {
+    await context.addInitScript(() => {
+      for (const nom of ['requestFullscreen', 'webkitRequestFullscreen', 'webkitRequestFullScreen']) delete Element.prototype[nom];
+      Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => false, configurable: true });
+    });
+  }
   await routerInternet(context);
   const page = await context.newPage();
   const t = {

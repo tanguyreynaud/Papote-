@@ -15,11 +15,15 @@ En local : `PAPOTE_MOTEUR=webkit npm test` (il faut `npx playwright install webk
 | --- | --- |
 | Caméra et micro simulés (`--use-fake-device-for-media-stream`, `--use-fake-ui-for-media-stream`) | Caméra et micro simulés du WebKit de Playwright, permis par `context.grantPermissions(['camera', 'microphone'])` |
 | Appui long, doigt posé puis levé ou glissé (CDP `Input.dispatchTouchEvent`) | Les événements qu'envoie Safari d'iPhone, dans son ordre (`pointerdown` puis `touchstart`, `pointerup`/`pointercancel`…) sur l'élément sous le doigt (`gestes.doigt`) |
-| Liens `intent://` vus par CDP (`Page.frameRequestedNavigation`) | Vus par la requête de navigation de Playwright (`gestes.espionnerNavigation`) |
+| Liens `intent://` vus par CDP (`Page.frameRequestedNavigation`) | Vus par l'événement `navigate` de la page (Navigation API), adresse entière avec son `#Intent;…;end` (`gestes.espionnerNavigation`) |
 | Clavier ouvert : 844 → 510 px | 659 → 399 px (ce qui reste de Safari au-dessus du clavier et de sa barre) |
 | Téléphone tourné : 844 × 390 | 659 × 393 (la taille du téléphone, couchée) |
 | Double appui | Le même, et en plus : l'écran ne doit jamais zoomer (`visualViewport.scale`), Safari zoomant au double appui |
-| Réseau coupé : `context.setOffline` | Le même ; messages de WebKit tolérés comme ceux de Chromium (`Failed to load resource: WebKit encountered an internal error`, `Beacon API cannot load …TYPE=terminate`) |
+| Réseau coupé : `context.setOffline` | Le même ; messages de WebKit tolérés comme ceux de Chromium (`Failed to load resource: WebKit encountered an internal error`, `Beacon API cannot load …TYPE=terminate`). Sauf `horsligne` (photos choisies sans réseau) : le `setOffline` du WebKit de Playwright coupe aussi les adresses `blob:` (la photo choisie ne s'ouvre plus), ce que Safari ne fait pas ; `gestes.reseau` y coupe chaque requête http(s) (« internet déconnecté »), avec `navigator.onLine` à `false` et les événements `offline` / `online` |
+| Plein écran d'un élément (`requestFullscreen`) | Retiré sur iPhone, comme dans Safari d'iPhone (seule une vidéo a son plein écran, `webkitEnterFullscreen`) : l'app prend le chemin d'un iPhone |
+| Invitations de l'accueil : glissement des tuiles jugé au pas d'une image (≤ 40 px) et au nombre d'images (≥ 3) | Jugé à la vitesse (pas ramené à 1/60 s, ≤ 40 px) et à la durée (≥ 150 ms) : le WebKit de Playwright sans écran laisse parfois 230 ms entre deux images pendant que la carte suivante se met en place |
+
+La tablette filme en 640 × 480 (comme sa caméra) dans les deux moteurs.
 
 Messages de Safari tolérés (et seulement sous WebKit, voir `banc.js`) :
 
@@ -62,11 +66,18 @@ existe : sans lui, l'app suivrait un chemin qu'aucun iPhone ne prend.)
 Raison : « Partager » vers Papote passe par l'app Android (cible de partage, puis le service worker) : Safari d'iPhone
 n'a pas de cible de partage web et l'app Android n'existe pas sur iPhone
 
-### appel-android et retour (une vérification dans chacun ; le reste de l'essai tourne)
+### sepa (une vérification ; le reste de l'essai tourne)
 
-- appel-android, `App Android : « Appel vidéo » passe à l'écran d'appel de l'app…` : la fin du lien `intent://appel?…`
-- retour, `App Android : retour depuis l'accueil demande « Voulez-vous quitter Papote ? »…` : la fin du lien
-  `intent://quitter?…`
+- `« Passer au prélèvement » : double appui et appui long, une seule page Stripe…` : que l'appui long ouvre la page.
 
-Raison : sous WebKit, Playwright ne voit que l'adresse avant le # du lien intent:// (le fragment
-#Intent;scheme=…;package=…;end, que seul Chrome d'Android lit, n'est pas vérifiable) ; tout ce qui précède est vérifié
+Raison : appui long : le WebKit de Playwright n'a pas de vrai doigt (pas de CDP) ; le doigt simulé (pointer/touch)
+n'engendre aucun clic, donc « au plus une page » est vérifié mais pas « la page s'ouvre »
+
+## Défauts trouvés par WebKit et corrigés dans l'app
+
+- **Double appui sur un bouton qui ouvre une fenêtre** (`web/js/ui.js`) : sur l'écran d'un iPhone 15 dans Safari
+  (393 × 659), le 2e toucher tombait sur le fond gris de la fenêtre « Avant de partir » à peine ouverte, qui se
+  refermait aussitôt (« Résilier » doublé = rien ne s'ouvre, « Merci de rester »). Il aurait aussi pu tomber sur un de
+  ses boutons. Le 2e toucher (moins de 500 ms, moins de 40 px du premier) est maintenant ignoré par toute fenêtre de
+  l'app. Le même défaut se voit dans Chromium à cette taille ; à 390 × 844, le 2e toucher tombait par chance dans la
+  fenêtre.
