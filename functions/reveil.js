@@ -4,6 +4,8 @@
 //   reveilAppel    un proche appelle (families/{fid}/calls créé par un téléphone) : { type: 'appel', id }
 //   reveilOrdre    test du son demandé par le téléphone (commands créé) : { type: 'ordre', id }
 //   reveilFamille  la fiche de la famille change (envoi, rappel, réglage…) : { type: 'famille' }
+//   reveilMembres  la fiche d'un proche change (prénom, photo, numéro…) : families/{fid}.rev + 1, qui
+//                  réveille par reveilFamille (la tablette ne relit les proches qu'au changement de rev)
 //   reveilVersion  nouvelle version publiée (config/version) : { type: 'version' } à toutes les tablettes
 //   reveilPing     auto-contrôle : la tablette écrit pingDemande dans son document de jetons, le serveur
 //                  lui renvoie { type: 'ping' } ; sans ping reçu, la tablette garde son écoute en direct
@@ -81,6 +83,14 @@ exports.reveilFamille = onDocumentUpdated({ ...OPTIONS, document: 'families/{fid
   if (!event.data) return;
   const champs = changements(event.data.before.data(), event.data.after.data());
   if (!champs.length) return;
+  // Nom de la famille (= nom de la tablette, Réglages de l'app) changé sans rev : les règles n'autorisent pas
+  // name et rev dans la même écriture, et la tablette, qui relit name à chaque tour, ne le montre qu'au
+  // changement de rev (Sync.java). On incrémente rev : ce nouveau changement réveille la tablette, une seule fois.
+  if (doitAvancerRev(champs)) {
+    await event.data.after.ref.update({ rev: FieldValue.increment(1) });
+    logger.info('Réveil famille : rev avancé', { fid: event.params.fid, champs });
+    return;
+  }
   const n = await reveiller(base(), event.params.fid, { type: 'famille' }, 3600);
   // Toujours journalisé : « tablettes: 0 » = aucun jeton (ancienne version, jeton effacé), à distinguer
   // d'un message parti mais jamais arrivé (28/10 : vidéo envoyée, tablette pas réveillée).
@@ -97,6 +107,46 @@ function changements(avant, apres) {
 function aChange(avant, apres) {
   return changements(avant, apres).length > 0;
 }
+
+// Champs de la famille que la tablette ne montre qu'au changement de rev.
+const AFFICHES_AU_REV = ['name'];
+function doitAvancerRev(champs) {
+  return !champs.includes('rev') && champs.some((k) => AFFICHES_AU_REV.includes(k));
+}
+
+// Champs d'un membre lus par la tablette (Sync.syncFamilyExtras : name, role, enTete, telephone, status, et face
+// relue quand la fiche change). Liste fermée : les champs écrits par la tablette elle-même ou par le serveur
+// (lastOnline, lastSeen, lastActive, battery, wifi, meteoVille, alerte*, recoitAppels…) ne comptent jamais,
+// sinon chaque signe de vie de la tablette la réveillerait en boucle. genre n'est pas lu par la tablette.
+const LUS_PAR_LA_TABLETTE = ['name', 'role', 'status', 'enTete', 'telephone', 'face'];
+const estTablette = (m) => !!m && m.role === 'tablette';
+// Vrai si la tablette doit relire les proches : un proche (pas une tablette) est arrivé, parti, ou a changé
+// un champ lu. Une fiche de tablette ne compte pas (la tablette ne liste que les proches).
+function membreAChange(avant, apres) {
+  if (!avant && !apres) return false;
+  if (estTablette(avant) && estTablette(apres)) return false;
+  if (!avant || !apres) return !estTablette(avant || apres);
+  return LUS_PAR_LA_TABLETTE.some((k) => JSON.stringify(avant[k]) !== JSON.stringify(apres[k]));
+}
+
+// La fiche d'un proche a changé (photo, prénom, numéro, arrivée, départ) : l'app ne touche pas rev pour ça
+// (testeur 17/11 : nouvelle photo et nouveau prénom invisibles sur la tablette pendant 4 min, jusqu'au prochain
+// envoi ou à la relecture de 6 h). rev + 1 sur la famille : reveilFamille réveille la tablette, qui relit les proches.
+exports.reveilMembres = onDocumentWritten({ ...OPTIONS, document: 'families/{fid}/members/{uid}' }, async (event) => {
+  if (!event.data) return;
+  const avant = event.data.before.exists ? event.data.before.data() : null;
+  const apres = event.data.after.exists ? event.data.after.data() : null;
+  if (!membreAChange(avant, apres)) return;
+  const { fid, uid } = event.params;
+  try {
+    await base().doc(`families/${fid}`).update({ rev: FieldValue.increment(1) });
+    logger.info('Réveil membres : rev avancé', { fid, uid });
+  } catch (e) {
+    // Famille effacée (départ du dernier membre, purge) : rien à réveiller.
+    if (e && (e.code === 5 || /NOT_FOUND/.test(e.message || ''))) return;
+    throw e;
+  }
+});
 
 // Nouvelle version publiée : toutes les tablettes (abonnées au sujet « tablettes » au démarrage).
 exports.reveilVersion = onDocumentWritten({ ...OPTIONS, document: 'config/version' }, async () => {
@@ -136,3 +186,5 @@ module.exports.doitPinger = doitPinger;
 module.exports.reveiller = reveiller;
 module.exports.aChange = aChange;
 module.exports.changements = changements;
+module.exports.membreAChange = membreAChange;
+module.exports.doitAvancerRev = doitAvancerRev;
