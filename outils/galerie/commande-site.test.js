@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium, webkit } = require('playwright');
 const { servir, RACINE } = require('./commun');
 const vitrine = require('./vitrine');
 
@@ -29,7 +29,7 @@ const versStripe = (r) => r.fulfill({ contentType: 'text/html', body: `<script>l
 
 let browser, srv;
 test.before(async () => {
-  browser = await chromium.launch();
+  browser = await (process.env.NAVIGATEUR === 'webkit' ? webkit : chromium).launch(); // NAVIGATEUR=webkit : moteur de Safari
   srv = await servir(path.join(RACINE, 'vitrine'));
 });
 test.after(async () => { srv.close(); await browser.close(); });
