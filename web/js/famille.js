@@ -2034,15 +2034,23 @@ async function renderPhoneCard() {
     ? "Android ne met jamais Papote en pause : le téléphone sonne toujours."
     : "Pour qu'Android ne mette jamais Papote en pause, sinon le téléphone ne sonnerait plus.";
 }
-$('phone-push').addEventListener('change', (e) => {
-  e.target.checked = pushAllowed();
-  if (!pushAllowed()) $('push-nudge').click();
+// Chaque toucher sur ces lignes a un effet visible (Tanguy 17/11 : allumées, elles semblaient ne rien faire) :
+// la demande d'autorisation si elle est possible, sinon une phrase qui dit pourquoi et où le régler.
+$('phone-push').closest('.toggle-row').addEventListener('click', (e) => {
+  e.preventDefault();
+  const push = $('phone-push');
+  push.checked = pushAllowed();
+  if (push.disabled) toast($('phone-push-text').textContent);
+  else if (pushAllowed()) toast('Les notifications sont activées sur ce téléphone. Pour les couper, passez par les réglages du téléphone.');
+  else $('push-nudge').click();
 });
-$('phone-pause-toggle').addEventListener('change', (e) => {
+$('phone-pause').addEventListener('click', (e) => {
+  e.preventDefault();
   let pause = null;
   try { pause = sessionStorage.getItem('papote.pause'); } catch (err) { /* rien */ }
-  e.target.checked = pause === '0';
-  if (pause !== '0') ouvrirReglagePause('reglages');
+  $('phone-pause-toggle').checked = pause === '0';
+  if (pause === '0') toast("C'est déjà réglé : Android ne met jamais Papote en pause.");
+  else ouvrirReglagePause('reglages');
 });
 
 async function renderSettings() {
@@ -2586,6 +2594,9 @@ function renderPauseNudge() {
 }
 // depuis=reglages : une fois réglé, l'app rouvre Réglages avec ?pause=0 (interrupteur activé).
 function ouvrirReglagePause(depuis) {
+  // Double appui : le réglage d'Android ne s'ouvre qu'une fois (le temps qu'il s'ouvre).
+  if (Date.now() - (ouvrirReglagePause.le || 0) < 3000) return;
+  ouvrirReglagePause.le = Date.now();
   try { sessionStorage.removeItem('papote.pause'); } catch (e) { /* rien */ }
   renderPauseNudge();
   location.href = `intent://sans-pause?depuis=${depuis}#Intent;scheme=papote;package=fr.mapapote.famille;end`;
