@@ -76,8 +76,9 @@ n'engendre aucun clic, donc « au plus une page » est vérifié mais pas « la 
 ## Défauts trouvés par WebKit et corrigés dans l'app
 
 - **Double appui sur un bouton qui ouvre une fenêtre** (`web/js/ui.js`) : sur l'écran d'un iPhone 15 dans Safari
-  (393 × 659), le 2e toucher tombait sur le fond gris de la fenêtre « Avant de partir » à peine ouverte, qui se
-  refermait aussitôt (« Résilier » doublé = rien ne s'ouvre, « Merci de rester »). Il aurait aussi pu tomber sur un de
-  ses boutons. Le 2e toucher (moins de 500 ms, moins de 40 px du premier) est maintenant ignoré par toute fenêtre de
-  l'app. Le même défaut se voit dans Chromium à cette taille ; à 390 × 844, le 2e toucher tombait par chance dans la
-  fenêtre.
+  (393 × 659), le 2e toucher d'un double appui sur « Résilier l'abonnement » tombait sur « Garder Papote » de la
+  fenêtre « Avant de partir » à peine ouverte : elle se refermait aussitôt (rien ne semble s'ouvrir, « Merci de
+  rester »). Ailleurs, ce 2e toucher pouvait tomber sur le fond gris ou sur un autre bouton, choisi sans avoir lu.
+  Une fenêtre ouverte pendant un clic ignore maintenant tout toucher (fond, boutons, croix) arrivé moins de 500 ms
+  après ce clic et à moins de 40 px. Le même défaut se voit dans Chromium à cette taille ; à 390 × 844, le 2e toucher
+  tombait par chance sur le texte de la fenêtre.

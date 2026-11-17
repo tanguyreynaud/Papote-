@@ -417,7 +417,10 @@ function brancher() {
     if (WEBKIT) {
       for (const t of telephones) {
         if (t.page.isClosed()) continue;
-        const zoom = await t.page.evaluate(() => (window.visualViewport ? window.visualViewport.scale : 1)).catch(() => 1);
+        // Seulement une page à la largeur du téléphone (balise viewport) : une page sans elle (atelier, tablette
+        // simulée) s'ouvre réduite à 980 px, sans geste.
+        const zoom = await t.page.evaluate(() => (window.visualViewport && document.querySelector('meta[name=viewport][content*="width=device-width"]')
+          ? window.visualViewport.scale : 1)).catch(() => 1);
         if (Math.abs(zoom - 1) > 0.01) t.erreurs.push(`[${t.nom}] écran resté zoomé (×${zoom.toFixed(2)}) : le double appui de Safari`);
       }
     }
