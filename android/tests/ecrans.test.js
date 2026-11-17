@@ -764,7 +764,10 @@ test('envoi de 3 photos : elles passent l\'une après l\'autre en grand, toutes 
     await b.avancer(4000); vues.push(await affichee(b));
     await b.avancer(10000); vues.push(await affichee(b));
     assert.strictEqual(await b.texte('#overlay-close'), 'OK', 'toutes vues : OK');
-    await b.avancer(10000); vues.push(await affichee(b));
+    // Retour à la 1re : jusqu'à 1 s de marge (la CI du 17/11 l'a relevée quelques ms avant la bascule).
+    await b.avancer(10000);
+    for (let i = 0; i < 4 && (await affichee(b)) !== e.image; i++) await b.avancer(250);
+    vues.push(await affichee(b));
     assert.deepStrictEqual(vues, [e.image, e.images[0], e.images[1], e.image], 'les 3 photos, en boucle');
     await b.toucher('#overlay-close');
     await b.avancer(6500);
