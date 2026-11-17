@@ -307,11 +307,8 @@
       <p id="tablette-en-route" class="card small" hidden>La tablette est en route. À son arrivée, il suffira de la brancher : elle retrouvera la famille toute seule, avec les photos déjà envoyées. Vous pouvez déjà inviter vos proches.</p>
       <p id="activity" class="activity" hidden></p>
       <p id="outbox" class="outbox" hidden></p>
-      <button type="button" id="photo-nudge" class="card nudge photo-cta">
-        <span class="avatar photo-cta-icon" aria-hidden="true"><svg><use href="#i-camera"/></svg></span>
-        <span><strong>Envoyer une photo</strong><br><span class="small">Elle s'affiche sur la tablette de <span class="grand-name"></span></span></span>
-      </button>
-      <!-- Invitations de l'accueil (Tanguy 13/11) : une seule visible à la fois, la plus importante d'abord ;
+      <!-- Invitations de l'accueil (Tanguy 13/11) : une seule visible à la fois, la plus importante d'abord, au-dessus
+           de « Envoyer une photo » (Tanguy 17/11) ;
            l'ordre ici est celui de la file (famille.js, majBadges). -->
       <div id="badges" class="badges">
         <span id="badges-compte" class="badges-compte" hidden></span>
@@ -351,6 +348,10 @@
           <p id="sepa-erreur" class="sepa-erreur" role="alert" hidden></p>
         </section>
       </div>
+      <button type="button" id="photo-nudge" class="card nudge photo-cta">
+        <span class="avatar photo-cta-icon" aria-hidden="true"><svg><use href="#i-camera"/></svg></span>
+        <span><strong>Envoyer une photo</strong><br><span class="small">Elle s'affiche sur la tablette de <span class="grand-name"></span></span></span>
+      </button>
       <div class="tiles">
         <a class="tile t-phone" id="tile-phone" href="tel:" hidden>
           <svg class="tile-icon"><use href="#i-phone"/></svg><span>Appeler<small class="tile-note" hidden>Ajoutez votre numéro</small></span>

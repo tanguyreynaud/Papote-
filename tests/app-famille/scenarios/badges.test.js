@@ -102,6 +102,12 @@ async function seule(t, id, compte) {
     assert.fail(`compteur sous ${id} : ${await c.isVisible() ? await c.innerText() : 'absent'}, attendu ${compte || 'absent'}`);
   });
   assert.deepStrictEqual(await visibles(t), [id], `seule ${id} est visible`);
+  // La carte à faire passe avant « Envoyer une photo » (Tanguy 17/11) : au-dessus, jamais en dessous. Jugé une fois
+  // la place de la carte ouverte (pendant qu'elle s'ouvre, la carte peut déborder sur la photo).
+  await t.page.waitForFunction(() => !document.getElementById('badges').classList.contains('figee'), null, { timeout: 5_000 }).catch(() => {});
+  await t.page.waitForTimeout(400);
+  const [carte, photo] = await Promise.all([`#${id}`, '#photo-nudge'].map((s) => t.page.locator(s).boundingBox()));
+  assert.ok(carte.y + carte.height <= photo.y + 1, `${id} au-dessus de « Envoyer une photo » (${carte.y}+${carte.height} / ${photo.y})`);
 }
 
 /** Après un geste qui fait partir une carte : aucune carte, puis la suivante une fois le doigt levé, les tuiles qui glissent. */
@@ -326,4 +332,47 @@ test('Proche qui n\'est pas responsable : jamais le prélèvement ; la responsab
   assert.deepStrictEqual(await visibles(paul), [], 'pas de prélèvement pour Paul');
   await g.doubleAppui(julie, '#contact-fait');
   await seule(julie, 'sepa-encart', null);
+});
+
+// Réglages > Ce téléphone (Tanguy 17/11 : « Notifications » et « Arrière-plan » semblaient cliquables mais ne faisaient
+// rien une fois allumés) : chaque toucher a un effet visible, double appui compris.
+test('Réglages > Ce téléphone : chaque toucher sur Notifications et Arrière-plan a un effet visible', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await famillePayee(julie);
+  await avecNumero(fid, tab);
+
+  // Navigateur sans notifications possibles (le banc les coupe) : l'interrupteur grisé dit pourquoi au toucher.
+  await julie.page.reload();
+  await g.attendreVue(julie, 'view-home', 30_000);
+  await g.ouvrirTuile(julie, 'settings');
+  // (au doigt sur le texte de la ligne : Playwright refuse de cliquer une ligne dont l'interrupteur est grisé)
+  const ligne = await julie.page.locator('#phone-push-text').boundingBox();
+  await julie.page.touchscreen.tap(ligne.x + 20, ligne.y + ligne.height / 2);
+  await julie.page.locator('#toast').filter({ hasText: await julie.page.locator('#phone-push-text').innerText() }).waitFor({ state: 'visible' });
+  assert.strictEqual(await julie.page.locator('#phone-pause').isVisible(), false, 'pas d\'arrière-plan hors de l\'app Android');
+
+  // App Android, notifications permises et pas de pause : les deux allumés ; les toucher le dit, sans rien éteindre.
+  const intents = liensAndroid(julie);
+  await g.ouvrirParApp(julie, `?natif=${JETON}&pause=0`);
+  await g.attendreVue(julie, 'view-home', 30_000);
+  await g.ouvrirTuile(julie, 'settings');
+  assert.strictEqual(await julie.page.locator('#phone-push').isChecked(), true);
+  assert.strictEqual(await julie.page.locator('#phone-pause-toggle').isChecked(), true);
+  await g.doubleAppui(julie, '#phone-push');
+  await g.toast(julie, 'Les notifications sont activées');
+  assert.strictEqual(await julie.page.locator('#phone-push').isChecked(), true, 'toujours allumé');
+  await julie.page.waitForTimeout(2800); // le toast précédent s'en va
+  await g.doubleAppui(julie, '#phone-pause-toggle');
+  await g.toast(julie, 'Android ne met jamais Papote en pause');
+  assert.strictEqual(await julie.page.locator('#phone-pause-toggle').isChecked(), true, 'toujours allumé');
+  assert.strictEqual(intents.length, 0, 'aucun réglage d\'Android ouvert');
+
+  // Android peut encore la mettre en pause : le toucher ouvre son réglage, une seule fois au double appui.
+  await g.ouvrirParApp(julie, `?natif=${JETON}&pause=1`);
+  await g.attendreVue(julie, 'view-home', 30_000);
+  await g.ouvrirTuile(julie, 'settings');
+  assert.strictEqual(await julie.page.locator('#phone-pause-toggle').isChecked(), false);
+  await g.doubleAppui(julie, '#phone-pause-toggle');
+  await julie.page.waitForTimeout(800);
+  assert.strictEqual(intents.filter((u) => u.startsWith('intent://sans-pause?depuis=reglages')).length, 1, 'un seul réglage ouvert');
 });
