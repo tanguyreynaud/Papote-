@@ -4,9 +4,11 @@
 const ouvertes = [];
 
 // Double appui sur un bouton qui ouvre une fenêtre : le 2e toucher tombe sur la fenêtre à peine ouverte, au même
-// endroit. Sur un petit écran (iPhone 15 dans Safari, 659 px de haut), c'est le fond gris : la fenêtre se refermait
-// aussitôt (« Résilier » doublé = rien ne s'ouvre et « Merci de rester »), ou un de ses boutons, choisi sans l'avoir lu.
-// Ce 2e toucher est ignoré : moins d'une demi-seconde après le toucher qui a ouvert la fenêtre, à moins de 40 px.
+// endroit. Sur un petit écran (iPhone 15 dans Safari, 659 px de haut), il tombait sur « Garder Papote » de la fenêtre
+// « Avant de partir » à peine ouverte : elle se refermait aussitôt (« Résilier » doublé = rien ne s'ouvre, « Merci de
+// rester ») ; ailleurs, ce pouvait être le fond gris ou un autre bouton, choisi sans avoir lu. Ce 2e toucher est
+// ignoré par la fenêtre (fond, boutons, croix) : moins d'une demi-seconde après le toucher qui l'a ouverte (pendant ce
+// clic), à moins de 40 px.
 const DOUBLE_MS = 500;
 const DOUBLE_PX = 40;
 let dernierToucher = null; // { x, y, t } du dernier clic de la page
@@ -24,8 +26,8 @@ function dialog(message, buttons, extra = null) {
     text.hidden = !message;
     const row = document.createElement('div');
     row.className = extra?.stack ? 'dialog-buttons stack' : 'dialog-buttons';
-    // Le toucher qui ouvre cette fenêtre (clic en cours, ou tout juste fini) : son double est ignoré.
-    const ouvreur = dernierToucher && performance.now() - dernierToucher.t < 100 ? dernierToucher : null;
+    // Le toucher qui ouvre cette fenêtre (fenêtre ouverte pendant ce clic) : son double est ignoré.
+    const ouvreur = window.event?.type === 'click' && dernierToucher?.t === window.event.timeStamp ? dernierToucher : null;
     const doublon = (e) => !!ouvreur && e.timeStamp - ouvreur.t < DOUBLE_MS && e.timeStamp > ouvreur.t
       && Math.hypot(e.clientX - ouvreur.x, e.clientY - ouvreur.y) < DOUBLE_PX;
     const close = (value) => {
