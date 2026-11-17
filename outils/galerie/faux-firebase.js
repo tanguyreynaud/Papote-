@@ -244,6 +244,8 @@ export const persistentLocalCache = () => ({});
 export const persistentSingleTabManager = () => ({});
 export const persistentMultipleTabManager = () => ({});
 export const enableIndexedDbPersistence = async () => {};
+export const terminate = async () => {};
+export const clearIndexedDbPersistence = async () => {};
 export const connectFirestoreEmulator = () => {};
 
 // ---------- App, App Check ----------
