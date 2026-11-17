@@ -102,6 +102,12 @@ async function seule(t, id, compte) {
     assert.fail(`compteur sous ${id} : ${await c.isVisible() ? await c.innerText() : 'absent'}, attendu ${compte || 'absent'}`);
   });
   assert.deepStrictEqual(await visibles(t), [id], `seule ${id} est visible`);
+  // La carte à faire passe avant « Envoyer une photo » (Tanguy 17/11) : au-dessus, jamais en dessous. Jugé une fois
+  // la place de la carte ouverte (pendant qu'elle s'ouvre, la carte peut déborder sur la photo).
+  await t.page.waitForFunction(() => !document.getElementById('badges').classList.contains('figee'), null, { timeout: 5_000 }).catch(() => {});
+  await t.page.waitForTimeout(400);
+  const [carte, photo] = await Promise.all([`#${id}`, '#photo-nudge'].map((s) => t.page.locator(s).boundingBox()));
+  assert.ok(carte.y + carte.height <= photo.y + 1, `${id} au-dessus de « Envoyer une photo » (${carte.y}+${carte.height} / ${photo.y})`);
 }
 
 /** Après un geste qui fait partir une carte : aucune carte, puis la suivante une fois le doigt levé, les tuiles qui glissent. */
