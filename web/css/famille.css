@@ -312,7 +312,7 @@ button.incomplet { opacity: .45; }
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
-.page-head h1 { margin: 0; font-size: 22px; font-weight: 800; }
+.page-head h1 { margin: 0; font-size: 22px; font-weight: 800; min-width: 0; overflow-wrap: anywhere; }
 .page-head svg { width: 26px; height: 26px; }
 
 .empty { text-align: center; color: var(--muted); padding: 60px 24px; }
@@ -386,7 +386,7 @@ button.incomplet { opacity: .45; }
   box-shadow: var(--shadow);
 }
 .bubble p { margin: 0; }
-.bubble.mine { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 6px; cursor: pointer; }
+.bubble.mine { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 6px; }
 .bubble.theirs { align-self: flex-start; border-bottom-left-radius: 6px; }
 /* Message en route : gris tant que la base ne l'a pas renvoyé, puis la vraie bulle indigo. */
 .bubble.mine.en-route { background: var(--line); color: var(--muted); cursor: default; }
@@ -470,6 +470,12 @@ button.incomplet { opacity: .45; }
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .choice input, .days input { width: auto; margin: 0; display: inline; accent-color: var(--accent); }
+/* Communes de la météo : une par ligne, le nom entier, à la ligne s'il est long (jamais coupé). */
+.communes-titre { margin: 14px 0 0; font-weight: 600; }
+.communes-liste { flex-direction: column; flex-wrap: nowrap; margin-top: 8px; }
+.communes-liste label { display: flex; align-items: flex-start; border-radius: 14px; min-height: 48px; padding: 12px 14px; }
+.communes-liste input { flex: none; margin-top: 3px; }
+.communes-liste span { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- Feuilles (ajout photo, vidéo, rappel) ---------- */
 
@@ -574,6 +580,11 @@ button.incomplet { opacity: .45; }
   background: var(--text);
   color: var(--bg);
   font-weight: 700;
+  /* Un mot long (adresse e-mail) : à la ligne, jamais hors de l'écran (largeur 320 px comprise). */
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 /* ---------- Réglages ---------- */
@@ -1036,7 +1047,7 @@ button.incomplet { opacity: .45; }
 /* ---------- Premier lancement guidé ---------- */
 
 .guide-back { position: fixed; inset: 0; z-index: 35; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0, 0, 0, .5); animation: fade-in .2s ease-out; }
-.guide { width: 100%; max-width: 360px; padding: 28px 22px 18px; border-radius: 24px; background: var(--surface); text-align: center; box-shadow: 0 20px 50px rgba(0, 0, 0, .25); animation: rise .2s ease-out; }
+.guide { display: flex; flex-direction: column; width: 100%; max-width: 360px; height: min(440px, calc(100dvh - 48px)); overflow-y: auto; padding: 28px 22px 18px; border-radius: 24px; background: var(--surface); text-align: center; box-shadow: 0 20px 50px rgba(0, 0, 0, .25); animation: rise .2s ease-out; }
 .guide-icon { display: inline-flex; width: 72px; height: 72px; align-items: center; justify-content: center; border-radius: 22px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .guide-icon svg { width: 36px; height: 36px; }
 .guide h2 { margin: 16px 0 8px; font-size: 22px; }
@@ -1044,8 +1055,12 @@ button.incomplet { opacity: .45; }
 .guide-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 18px; }
 .guide-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
 .guide-dots span.on { background: var(--accent); width: 22px; border-radius: 4px; }
-.guide-buttons { display: flex; justify-content: space-between; align-items: center; }
-.guide-buttons .primary { min-height: 48px; padding: 0 22px; margin-left: auto; }
+.guide > p { flex: 1; }
+.guide > :not(p) { flex-shrink: 0; }
+/* Deux boutons de même taille, toujours en bas et à la même place d'une étape à l'autre (V8 du 17/11). */
+.guide-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: auto; flex: none; }
+.guide-buttons button { min-height: 52px; padding: 0 12px; justify-content: center; text-align: center; font-size: 16px; font-weight: 700; }
+.guide-buttons .primary { grid-column: 2; }
 
 .remote-buttons #btn-logs { grid-column: 1 / -1; }
 .logs { max-height: 50vh; overflow: auto; margin: 6px 0 0; padding: 10px; border-radius: 10px; background: var(--bg); font-size: 11px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -1083,15 +1098,14 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 }
 .site-link { display: flex; justify-content: center; text-decoration: none; margin-top: 16px; border-radius: 14px; padding: 13px 18px; font-weight: 600; }
 
-/* Bouton flottant « Installer l'app » (disparaît une fois l'app installée) */
+/* Bouton « Installer l'app » (disparaît une fois l'app installée) */
 /* Hors ligne : pas d'installation possible, et le bandeau du haut le ferait passer sur les tuiles. */
 body:has(#hors-ligne-bandeau:not([hidden])) .install-fab { display: none; }
-/* Flottant (Tanguy : il faut que les gens installent l'app) mais collant : quand tout tient à l'écran, il se pose
-   sous les tuiles ; sinon il flotte au-dessus de la barre du bas, et la marge sous la grille laisse tout lire en faisant défiler. */
+/* Dans la page, sous les tuiles (testeur, V9 du 17/11) : collant, il passait sur les tuiles et le message du bas
+   (« Photo envoyée ») se posait dessus. Il ne cache plus rien : la marge du bas le garde au-dessus de la barre et
+   de la place des messages. */
+#view-home:has(#btn-install:not([hidden])) { padding-bottom: calc(168px + env(safe-area-inset-bottom)); }
 .install-fab {
-  position: sticky;
-  bottom: calc(88px + env(safe-area-inset-bottom));
-  z-index: 7;
   display: flex;
   width: fit-content;
   margin: 22px auto 0;
@@ -1157,7 +1171,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setting-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .setting-head h2 { margin: 0; }
 .setting-modify { flex: none; font-weight: 700; color: var(--accent); }
-.setting-value { margin: 6px 0 0; font-size: 17px; font-weight: 600; }
+.setting-value { margin: 6px 0 0; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
 .setting-edit { margin-top: 10px; }
 .setting-edit label { display: block; margin: 8px 0; }
 .setting-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
@@ -1166,7 +1180,8 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setting-value { font-weight: 400; }
 .wifi-list { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; }
 .wifi-choice { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; text-align: left; }
-.wifi-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Nom du réseau : à la ligne s'il est long, « … » seulement après trois lignes (nom entier dans title). */
+.wifi-name { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .wifi-meta { flex: none; color: var(--muted); letter-spacing: -1px; }
 #btn-wifi-scan { margin: 28px 0 6px; }
 #wifi-box form { margin-top: 10px; }
@@ -1220,6 +1235,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .wifi-statut.attente { color: var(--muted); }
 .wifi-statut.ok strong { color: var(--ok); }
 .wifi-join .error { margin: 0; }
+.wifi-info p { margin: 0; line-height: 1.4; }
 .spinner-inline { display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -1300,7 +1316,10 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .call-video:disabled { display: none; }
 
 /* Première installation de la tablette (pas à pas). */
-.intro { text-align: left; max-width: 400px; max-height: 92vh; overflow-y: auto; }
+.intro { text-align: left; max-width: 400px; height: min(620px, calc(100dvh - 48px)); overflow: hidden; }
+.intro .intro-step:not([hidden]) { flex: 1; min-height: 0; overflow-y: auto; }
+.intro .intro-error { flex: none; margin: 8px 0; }
+.intro .guide-buttons { padding-top: 12px; }
 .intro .guide-dots { justify-content: center; margin: 0 0 12px; }
 .intro h2 { margin: 8px 0; }
 .intro .guide-icon { display: flex; margin: 0 auto 4px; }
@@ -1349,7 +1368,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .join-text { display: flex; flex-direction: column; min-width: 0; }
 .join-text strong { font-size: 19px; line-height: 1.2; }
 .join-text span { color: var(--muted); font-size: 15px; }
-.join-text .join-mail { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.join-text .join-mail { font-size: 15px; overflow-wrap: anywhere; }
 .join-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 .join-actions button { min-height: 50px; justify-content: center; font-size: 16px; font-weight: 700; border-radius: 14px; }
 .join-no { color: var(--danger); }
@@ -1385,7 +1404,6 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setup-essai:active { background: var(--accent); color: var(--accent-text); }
 .setup-essai:active svg { fill: var(--accent-text); }
 .volume-aide { margin: -4px 0 2px; }
-.setup-son-status { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 15px; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
 
 /* Aucun lien souligné, dans l'appli comme dans l'admin (demande de Tanguy, 22/10). */
 a { text-decoration: none; }
@@ -1528,7 +1546,7 @@ a { text-decoration: none; }
 .invitations-titre { margin: 18px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .invitations li { gap: 12px; flex-wrap: nowrap; }
 .invitation-rond { width: 36px; height: 36px; font-weight: 700; font-size: 15px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
-.invitation-email { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invitation-email { display: block; min-width: 0; overflow-wrap: anywhere; }
 #form-invite button[disabled] { opacity: 1; }
 
 /* Annuler ma commande / Résilier : un lien gris discret en bas de la carte, pas un bouton mis en avant. */
@@ -1618,5 +1636,12 @@ a { text-decoration: none; }
 /* « Enregistrez le numéro de Mamie » sur l'accueil (M8). */
 .contact-encart h2 { margin: 0 0 6px; font-size: 19px; }
 .contact-encart p { margin: 0 0 14px; font-size: 16px; line-height: 1.45; }
+.contact-encart .numero { white-space: nowrap; font-weight: 700; }
 .contact-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .contact-actions button { flex: 1 1 140px; min-height: 54px; justify-content: center; font-size: 16px; font-weight: 700; }
+
+/* Audit des touchers (Tanguy, 17/11) : ce qui se touche réagit tout de suite, ce qui ne se touche pas n'en a pas l'air. */
+.ligne-touchable, .member-row, .notif[data-page], .read-badge, .setting-head h2, .setting-value, #wifi-card h2, #wifi-current,
+#face-img, #face-empty, #tface-img, #tface-empty { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ligne-touchable:active, .member-row:active, .notif[data-page]:active { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.read-badge:active, #face-img:active, #face-empty:active, #tface-img:active, #tface-empty:active { transform: scale(.96); }

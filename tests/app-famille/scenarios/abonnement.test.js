@@ -36,6 +36,9 @@ test('Dans les 30 jours : seule « Annuler ma commande » est proposée ; annula
   await pageAbonnement(julie);
   // La mise en service payée à la commande : une facture, à télécharger.
   await julie.page.locator('#factures-liste li', { hasText: '60 €' }).waitFor();
+  // La ligne de la facture touchée (pas seulement « Télécharger ») l'ouvre aussi (audit des touchers, 17/11).
+  const [facture] = await Promise.all([julie.context.waitForEvent('page'), julie.page.locator('#factures-liste li', { hasText: '60 €' }).locator('.facture-montant').click()]);
+  await facture.close();
   await julie.page.locator('#btn-retracter').waitFor({ state: 'visible' });
   assert.match(await julie.page.locator('#retract-info').innerText(), /Annulation possible jusqu'au .* 60 € de mise en service compris/);
   assert.strictEqual(await julie.page.locator('#btn-resilier').isVisible(), false, 'pas de « Résilier » pendant les 30 jours');

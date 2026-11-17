@@ -22,9 +22,9 @@ function brancher() {
  * Le client commande sur le site (Stripe simulé), Tanguy relie une tablette du stock à la commande et l'envoie.
  * Renvoie { tab, commande, mamie } : la tablette est allumée chez Mamie, sur son écran Bienvenue.
  */
-async function commandeLivree({ email, etat = {}, heure = null } = {}) {
+async function commandeLivree({ email, etat = {}, heure = null, fuseau } = {}) {
   const tab = await acteurs.tablettePreparee();
-  const mamie = await tablette.allumer({ tab, etat, heure });
+  const mamie = await tablette.allumer({ tab, etat, heure, fuseau });
   const { abonnement } = await acteurs.commanderEtPayer({ email });
   await acteurs.preparerEtEnvoyer(abonnement, tab);
   tab.commande = abonnement;
@@ -116,10 +116,10 @@ async function envoyerPhoto(t, { texte = 'Coucou', legende = '', fichiers = null
  * envoi, « Commencer », le proche entre), puis la tablette est éteinte et rallumée : sa page des appels rejoint
  * alors la famille tout de suite (sinon elle met jusqu'à une minute, voir arrivee.test.js).
  */
-async function familleChezMamie({ email = 'julie@exemple.fr', prenom = 'Julie', etat = {}, heure = null } = {}) {
+async function familleChezMamie({ email = 'julie@exemple.fr', prenom = 'Julie', etat = {}, heure = null, fuseau } = {}) {
   const julie = await banc.telephone(prenom);
   await g.inscrire(julie, email, prenom, { genre: 'femme' });
-  const { mamie, commande, tab } = await commandeLivree({ email, etat, heure });
+  const { mamie, commande, tab } = await commandeLivree({ email, etat, heure, fuseau });
   const fid = await brancherChezMamie(mamie);
   await entrerDansSaFamille(julie, fid);
   await mamie.rallumer();

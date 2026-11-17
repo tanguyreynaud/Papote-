@@ -23,6 +23,6 @@ test('Vos données : ne pas dire « personne d\'autre » (le compte admin de Pap
 
 test('veille annoncée = veille par défaut de l\'app', () => {
   const src = fs.readFileSync(path.join(web, 'js/famille.js'), 'utf8');
-  assert.match(src, /const VEILLE_DEFAUT = \{ active: true, de: 21, a: 6, aMin: 30 \}/,
-    'si la veille par défaut change, changer aussi le site (21 h à 6 h 30) et le guide du chat');
+  assert.match(src, /const VEILLE_DEFAUT = \{ active: true, de: 23, a: 5 \}/,
+    'si la veille par défaut change, changer aussi le site (23 h à 5 h) et le guide du chat');
 });

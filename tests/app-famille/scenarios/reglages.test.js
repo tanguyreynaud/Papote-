@@ -48,18 +48,22 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   assert.deepStrictEqual([options.radio.active, options.radio.nom], [true, 'FIP']);
   assert.match(await julie.page.locator('#options-value').innerText(), /FIP/);
 
-  // Volumes : sonnerie, vidéos et messages lus. Chaque barre lâchée fait sonner ou parler la tablette.
+  // Volumes : sonnerie, vidéos et messages lus. Chaque barre lâchée fait sonner ou parler la tablette, sans
+  // récapitulatif « La tablette sonne à 70 % » au-dessus d'Enregistrer (Tanguy, 17/11 : inutile).
   await modifier(julie, 'volume-card');
   await julie.page.locator('#volume-sonnerie').fill('70');
-  await julie.page.locator('#volume-status', { hasText: 'La tablette sonne à 70 %' }).waitFor();
   await julie.page.locator('#volume').fill('50');
-  await julie.page.locator('#volume-status', { hasText: 'La tablette parle à 50 %' }).waitFor();
   const essais = await g.attendreBase(async () => {
     const c = (await g.liste(`families/${fid}/commands`)).filter((d) => d.type === 'son');
     return c.length >= 2 && c;
   }, 'essais du son');
   assert.ok(essais.some((c) => c.quoi === 'sonnerie' && c.volume === 70));
   assert.ok(essais.some((c) => c.quoi === 'voix' && c.volume === 50));
+  assert.strictEqual(await julie.page.locator('#volume-card').getByText(/La tablette (sonne|parle) à/).count(), 0, 'plus de récapitulatif');
+  // « Écouter » touché : un petit mot en bas, et la tablette sonne.
+  await julie.page.click('#volume-card .volume-essai[data-essai="sonnerie"]');
+  await g.toast(julie, 'Écoutez la tablette : elle sonne.');
+  await g.attendreBase(async () => (await g.liste(`families/${fid}/commands`)).filter((d) => d.type === 'son').length >= 3, '3e essai du son');
   assert.strictEqual(await julie.page.inputValue('#volume-appel'), '100', 'appels au plus fort par défaut');
   await julie.page.locator('#volume-appel').fill('80');
   await enregistrer(julie, 'volume-card');
@@ -68,13 +72,18 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   assert.deepStrictEqual([fam.volume, fam.volumeSonnerie, fam.volumeAppel], [50, 70, 80]);
   await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 % · Vidéos et messages 50 % · Appels 80 %' }).waitFor();
 
-  // Nuit : mêmes heures refusées, puis de 22 h à 6 h 30 (demi-heure).
+  // Nuit : le coucher se choisit le soir (19 h à 23 h 30), le réveil le matin (5 h à 10 h), par demi-heure
+  // (Tanguy, 17/11) ; puis de 22 h à 6 h 30.
   await modifier(julie, 'sleep-card');
-  await julie.page.selectOption('#sleep-from', '7:0');
-  await julie.page.selectOption('#sleep-to', '7:0');
-  await enregistrer(julie, 'sleep-card');
-  assert.match(await g.texteFenetre(julie), /L'heure de fin doit être différente/);
-  await g.repondre(julie, 'OK');
+  const heures = (sel) => julie.page.locator(`${sel} option`).evaluateAll((os) => os.map((o) => o.textContent));
+  assert.deepStrictEqual(await heures('#sleep-from'), ['19 h', '19 h 30', '20 h', '20 h 30', '21 h', '21 h 30', '22 h', '22 h 30', '23 h', '23 h 30']);
+  assert.deepStrictEqual(await heures('#sleep-to'), ['5 h', '5 h 30', '6 h', '6 h 30', '7 h', '7 h 30', '8 h', '8 h 30', '9 h', '9 h 30', '10 h']);
+  assert.deepStrictEqual([await julie.page.inputValue('#sleep-from'), await julie.page.inputValue('#sleep-to')], ['23:0', '5:0'], 'par défaut 23 h à 5 h (Tanguy, 17/11)');
+  // T-003 (17/11) : réveil réglé à « 20 h 30 » dans l'ancienne liste de 0 h à 23 h 30 (8 h 30 voulu ?), la tablette
+  // en nuit 23 h 30 sur 24. Plus aucune heure du soir dans le réveil, ni du matin dans le coucher.
+  for (const [liste, interdite] of [['#sleep-to', '20:30'], ['#sleep-to', '12:0'], ['#sleep-from', '8:30'], ['#sleep-from', '0:30']]) {
+    assert.strictEqual(await julie.page.locator(`${liste} option[value="${interdite}"]`).count(), 0, `${liste} ${interdite}`);
+  }
   await julie.page.selectOption('#sleep-from', '22:0');
   await julie.page.selectOption('#sleep-to', '6:30');
   await enregistrer(julie, 'sleep-card');
@@ -206,4 +215,67 @@ test('Deux familles : changer de famille depuis l\'accueil ; déconnexion puis r
   await g.attendreVue(julie, 'view-login');
   await g.seConnecter(julie, 'julie@exemple.fr');
   await g.attendreVue(julie, 'view-home');
+});
+
+// Tanguy, 17/11 : le nom de la tablette acceptait un numéro de téléphone, et la nuit se réglait de 0 h 30 à 23 h 30.
+test('Nom de la tablette : jamais un numéro (message sous le champ) ; nuit : heures d\'avant hors des bornes ramenées', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await g.ouvrirTuile(julie, 'settings');
+
+  await modifier(julie, 'family-name-card');
+  // Testeur du 17/11 (V6) : « 12345 », émojis, balises et nom vidé passaient, ou rien ne se passait sans un mot.
+  const MOTIFS = {
+    '06 12 34 56 78': /ressemble à un numéro de téléphone/, '0612345678': /ressemble à un numéro/,
+    '+33 6 12 34 56 78': /ressemble à un numéro/, 12345: /ressemble à un numéro/, 'Mamie 0612': /ressemble à un numéro/,
+    12: /ressemble à un numéro/, '---': /avec des lettres/, 'Mamie 🙂🙂': /émojis/, '🙂🙂': /émojis/,
+    'Mamie <b>Rose</b>': /< et >/, '   ': /Indiquez le nom de la tablette/, '': /Indiquez le nom de la tablette/,
+  };
+  for (const [nom, motif] of Object.entries(MOTIFS)) {
+    await julie.page.fill('#family-name', nom);
+    await enregistrer(julie, 'family-name-card');
+    const erreur = julie.page.locator('#family-name-error');
+    await erreur.waitFor();
+    assert.match(await erreur.innerText(), motif, `« ${nom} »`);
+    assert.ok(await julie.page.locator('#form-family-name').isVisible(), 'le champ reste ouvert pour corriger');
+  }
+  // Juste sous le champ, en calme : pas une fenêtre.
+  assert.strictEqual(await julie.page.locator('.dialog-back').count(), 0);
+  const ecart = await julie.page.evaluate(() => document.getElementById('family-name-error').getBoundingClientRect().top
+    - document.getElementById('family-name').getBoundingClientRect().bottom);
+  assert.ok(ecart >= 0 && ecart < 40, `sous le champ (${ecart} px)`);
+  assert.strictEqual((await g.lire(`families/${fid}`)).name, 'Mamie Emma', 'rien d\'écrit');
+  // Le message part dès qu'on corrige ; accents, trait d'union, apostrophe, espace et un chiffre vont bien.
+  await julie.page.fill('#family-name', 'Pépé d\'Émile-André 2');
+  assert.strictEqual(await julie.page.locator('#family-name-error').isVisible(), false);
+  await enregistrer(julie, 'family-name-card');
+  await g.toast(julie, 'Nom enregistré');
+  assert.strictEqual((await g.lire(`families/${fid}`)).name, 'Pépé d\'Émile-André 2');
+  // Rouvert : plus de message d'avant.
+  await modifier(julie, 'family-name-card');
+  assert.strictEqual(await julie.page.locator('#family-name-error').isVisible(), false);
+  await julie.page.click('#family-name-card .setting-cancel');
+
+  // responsable la ramène dans les bornes (simple borne, comme la tablette et le serveur : réveil 10 h) et l'envoie à la tablette, sans rien demander.
+  // responsable la ramène dans les bornes (réveil le plus proche, en passant minuit : 5 h) et l'envoie à la tablette, sans rien demander.
+  await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: 21, a: 20, aMin: 30 } });
+  await g.attendreBase(async () => require('node:util').isDeepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 21, a: 10 }), 'veille ramenée à 21 h – 10 h');
+  await julie.page.locator('#sleep-value', { hasText: 'De 21 h à 10 h' }).waitFor();
+  // Une nuit courte hors bornes (écrite par le serveur, ou les essais de la tablette) : affichée ramenée, pas
+  // réécrite (la tablette ne dort pas trop longtemps).
+  await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: 15, a: 18 } });
+  await julie.page.locator('#sleep-value', { hasText: 'De 19 h à 10 h' }).waitFor();
+  await julie.page.waitForTimeout(1500);
+  assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 15, a: 18 }, 'pas réécrite');
+  // Coucher à 0 h 30 et réveil à midi, écran jamais éteint : affichés 23 h 30 et 10 h ; les listes ne sont jamais vides.
+  await s.db.doc(`families/${fid}`).update({ veille: { active: false, de: 0, deMin: 30, a: 12 } });
+  await julie.page.locator('#sleep-value', { hasText: 'Jamais' }).waitFor();
+  await modifier(julie, 'sleep-card');
+  await julie.page.locator('#sleep-on').setChecked(true);
+  assert.deepStrictEqual([await julie.page.inputValue('#sleep-from'), await julie.page.inputValue('#sleep-to')], ['19:0', '10:0']);
+  await julie.page.selectOption('#sleep-to', '7:0');
+  await enregistrer(julie, 'sleep-card');
+  await g.toast(julie, 'Mise en veille enregistrée');
+  assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 19, a: 7 });
+  await julie.page.locator('#sleep-value', { hasText: 'De 19 h à 7 h' }).waitFor();
 });
