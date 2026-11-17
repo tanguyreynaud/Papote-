@@ -94,7 +94,7 @@ test('Photos : une photo avec légende, puis 6 choisies (5 gardées) en un envoi
   await julie.page.locator('#photos .shot-count').waitFor({ state: 'detached' });
 });
 
-test('Vidéo : préparée dans le téléphone, envoyée dans Storage, lue dans la visionneuse', async () => {
+test('Vidéo : préparée dans le téléphone, envoyée dans Storage, lue dans la visionneuse', { skip: banc.nonCouvert('webkit', 'MediaRecorder absent du WebKit de Playwright (Linux), alors que Safari d\'iPhone l\'a depuis iOS 14.3 : la vidéo préparée dans le téléphone et « Filmer dans Papote » ne peuvent pas y tourner comme sur un iPhone') }, async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
 
@@ -155,7 +155,7 @@ const capture = async (p, nom) => { if (process.env.PAPOTE_CAPTURES) await p.scr
 // Bug du 29/10 : le plein écran de l'aperçu se refermait aussitôt (l'app fermait tout plein écran hors
 // appel). L'aperçu avant envoi : la vidéo à sa forme, lecture et plein écran sur la vidéo, Refilmer / Galerie, Envoyer.
 for (const [forme, largeur, hauteur] of [['debout', 240, 426], ['couchée', 426, 240]]) {
-  test(`Vidéo ${forme} : aperçu à sa forme, lecture, plein écran qui reste ouvert, Galerie, téléphone tourné`, async () => {
+  test(`Vidéo ${forme} : aperçu à sa forme, lecture, plein écran qui reste ouvert, Galerie, téléphone tourné`, { skip: banc.nonCouvert('webkit', 'MediaRecorder absent du WebKit de Playwright (Linux), alors que Safari d\'iPhone l\'a depuis iOS 14.3 : la vidéo préparée dans le téléphone et « Filmer dans Papote » ne peuvent pas y tourner comme sur un iPhone') }, async () => {
     const julie = await banc.telephone('Julie');
     const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
     const p = julie.page;
@@ -217,7 +217,7 @@ for (const [forme, largeur, hauteur] of [['debout', 240, 426], ['couchée', 426,
 
 // Filmer dans Papote (29/10) : la caméra dans la page plutôt que l'appareil photo du téléphone.
 // Le navigateur du banc filme avec une fausse caméra (image de test et bip).
-test('Filmer dans Papote : caméra, Filmer / Arrêter, aperçu, Refilmer, retour d\'Android, envoi sans préparation', async () => {
+test('Filmer dans Papote : caméra, Filmer / Arrêter, aperçu, Refilmer, retour d\'Android, envoi sans préparation', { skip: banc.nonCouvert('webkit', 'MediaRecorder absent du WebKit de Playwright (Linux), alors que Safari d\'iPhone l\'a depuis iOS 14.3 : la vidéo préparée dans le téléphone et « Filmer dans Papote » ne peuvent pas y tourner comme sur un iPhone') }, async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const p = julie.page;
@@ -305,7 +305,7 @@ test('Filmer dans Papote : caméra, Filmer / Arrêter, aperçu, Refilmer, retour
   assert.strictEqual(v.text, 'Filmé dans Papote');
 });
 
-test('Filmer : caméra refusée, message clair et repli sur l\'appareil photo du téléphone', async () => {
+test('Filmer : caméra refusée, message clair et repli sur l\'appareil photo du téléphone', { skip: banc.nonCouvert('webkit', 'MediaRecorder absent du WebKit de Playwright (Linux), alors que Safari d\'iPhone l\'a depuis iOS 14.3 : la vidéo préparée dans le téléphone et « Filmer dans Papote » ne peuvent pas y tourner comme sur un iPhone') }, async () => {
   const julie = await banc.telephone('Julie');
   await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const p = julie.page;

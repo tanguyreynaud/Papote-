@@ -45,7 +45,7 @@ async function ouvrirPartage(t, r) {
   await t.page.goto(`${banc.origine}/?partage=1`);
 }
 
-test('Une photo partagée depuis WhatsApp avec un texte joint : « Envoyer » s\'ouvre prêt, légende vide, un appui et elle part', async () => {
+test('Une photo partagée depuis WhatsApp avec un texte joint : « Envoyer » s\'ouvre prêt, légende vide, un appui et elle part', { skip: banc.nonCouvert('webkit', '« Partager » vers Papote passe par l\'app Android (cible de partage, puis le service worker) : Safari d\'iPhone n\'a pas de cible de partage web et l\'app Android n\'existe pas sur iPhone') }, async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const avant = (await postsDe(fid, 'photo')).length;
@@ -71,7 +71,7 @@ test('Une photo partagée depuis WhatsApp avec un texte joint : « Envoyer » s\
   assert.ok(!(await julie.page.locator('#sheet-post').isVisible()), 'rien ne se rouvre');
 });
 
-test('Trois photos partagées depuis la Galerie : un seul envoi de trois photos, double appui sur Envoyer compris', async () => {
+test('Trois photos partagées depuis la Galerie : un seul envoi de trois photos, double appui sur Envoyer compris', { skip: banc.nonCouvert('webkit', '« Partager » vers Papote passe par l\'app Android (cible de partage, puis le service worker) : Safari d\'iPhone n\'a pas de cible de partage web et l\'app Android n\'existe pas sur iPhone') }, async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const trois = [];
@@ -89,7 +89,7 @@ test('Trois photos partagées depuis la Galerie : un seul envoi de trois photos,
   assert.strictEqual((posts[0].photos || []).length, 3, 'les trois photos');
 });
 
-test('Une vidéo partagée depuis l\'appareil photo : la page Vidéos s\'ouvre avec l\'aperçu, et elle part', async () => {
+test('Une vidéo partagée depuis l\'appareil photo : la page Vidéos s\'ouvre avec l\'aperçu, et elle part', { skip: banc.nonCouvert('webkit', '« Partager » vers Papote passe par l\'app Android (cible de partage, puis le service worker) : Safari d\'iPhone n\'a pas de cible de partage web et l\'app Android n\'existe pas sur iPhone') }, async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await ouvrirPartage(julie, await partager(julie, [await g.video({ secondes: 2, nom: 'VID_20261108.webm' })]));
@@ -104,7 +104,7 @@ test('Une vidéo partagée depuis l\'appareil photo : la page Vidéos s\'ouvre a
   assert.match(v.videoUrl, /^https:\/\/firebasestorage\.googleapis\.com\//);
 });
 
-test('Partage sans photo ni vidéo (un simple lien) : l\'accueil s\'ouvre normalement, aucune erreur', async () => {
+test('Partage sans photo ni vidéo (un simple lien) : l\'accueil s\'ouvre normalement, aucune erreur', { skip: banc.nonCouvert('webkit', '« Partager » vers Papote passe par l\'app Android (cible de partage, puis le service worker) : Safari d\'iPhone n\'a pas de cible de partage web et l\'app Android n\'existe pas sur iPhone') }, async () => {
   const julie = await banc.telephone('Julie');
   await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await ouvrirPartage(julie, await partager(julie, [], { text: 'https://exemple.fr' }));
@@ -113,7 +113,7 @@ test('Partage sans photo ni vidéo (un simple lien) : l\'accueil s\'ouvre normal
   assert.ok(!(await julie.page.locator('#sheet-post').isVisible()), 'pas de fenêtre d\'envoi vide');
 });
 
-test('Retour d\'Android sur la fenêtre d\'envoi ouverte par un partage : elle se ferme, rien ne part', async () => {
+test('Retour d\'Android sur la fenêtre d\'envoi ouverte par un partage : elle se ferme, rien ne part', { skip: banc.nonCouvert('webkit', '« Partager » vers Papote passe par l\'app Android (cible de partage, puis le service worker) : Safari d\'iPhone n\'a pas de cible de partage web et l\'app Android n\'existe pas sur iPhone') }, async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const avant = (await postsDe(fid, 'photo')).length;

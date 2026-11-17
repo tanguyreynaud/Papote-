@@ -27,6 +27,8 @@ jobs:
     env:
       PAPOTE_MOTEUR: ${{ matrix.moteur }}
       PAPOTE_APPAREIL: ${{ matrix.appareil }}
+      # La fin de la console de chaque téléphone dans le compte rendu de WebKit (pour comprendre un échec sans les captures).
+      PAPOTE_JOURNAL: ${{ matrix.moteur == 'webkit' && '1' || '' }}
     defaults:
       run:
         working-directory: tests/app-famille

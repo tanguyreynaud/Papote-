@@ -87,17 +87,15 @@ async function photo({ largeur = 1200, hauteur = 900, texte = 'Photo', nom = 'ph
   return { name: nom, mimeType: 'image/jpeg', buffer: Buffer.from(base64, 'base64') };
 }
 
-/** Une petite vidéo (secondes), filmée par le navigateur : WebM (Chrome d'Android), ou MP4 quand le navigateur
- *  ne sait pas filmer en WebM (Safari d'iPhone) ; l'extension du nom suit. */
+/** Une petite vidéo WebM (secondes), filmée par le navigateur. */
 async function video({ secondes = 2, nom = 'video.webm', largeur = 320, hauteur = 240 } = {}) {
   const page = await pageAtelier();
-  const { base64, type } = await page.evaluate(async ({ sec, l, h }) => {
+  const base64 = await page.evaluate(async ({ sec, l, h }) => {
     const c = document.createElement('canvas');
     c.width = l; c.height = h;
     const g = c.getContext('2d');
     const flux = c.captureStream(25);
-    const mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4';
-    const rec = new MediaRecorder(flux, { mimeType });
+    const rec = new MediaRecorder(flux, { mimeType: 'video/webm' });
     const parts = [];
     rec.ondataavailable = (e) => parts.push(e.data);
     const fini = new Promise((r) => { rec.onstop = r; });
@@ -114,13 +112,12 @@ async function video({ secondes = 2, nom = 'video.webm', largeur = 320, hauteur 
     });
     rec.stop();
     await fini;
-    const buf = new Uint8Array(await new Blob(parts, { type: mimeType }).arrayBuffer());
+    const buf = new Uint8Array(await new Blob(parts, { type: 'video/webm' }).arrayBuffer());
     let bin = '';
     for (const b of buf) bin += String.fromCharCode(b);
-    return { base64: btoa(bin), type: mimeType };
+    return btoa(bin);
   }, { sec: secondes, l: largeur, h: hauteur });
-  const nomFinal = type === 'video/mp4' ? nom.replace(/\.webm$/, '.mp4') : nom;
-  return { name: nomFinal, mimeType: type, buffer: Buffer.from(base64, 'base64') };
+  return { name: nom, mimeType: 'video/webm', buffer: Buffer.from(base64, 'base64') };
 }
 
 // ---------- Connexion ----------
@@ -392,6 +389,12 @@ async function doubleAppui(t, selecteur) {
   const { x, y } = await centre(t, selecteur);
   await t.page.touchscreen.tap(x, y);
   await t.page.touchscreen.tap(x, y);
+  // Le double appui ne doit jamais grossir l'écran (Safari d'iPhone zoome au double appui si la page le permet ;
+  // Chrome d'Android jamais sur une page à la largeur du téléphone).
+  if (!banc.WEBKIT) return;
+  await t.page.waitForTimeout(350);
+  const zoom = await t.page.evaluate(() => (window.visualViewport ? window.visualViewport.scale : 1)).catch(() => 1);
+  if (Math.abs(zoom - 1) > 0.01) t.erreurs.push(`[${t.nom}] double appui sur ${selecteur} : l'écran a zoomé (×${zoom.toFixed(2)})`);
 }
 
 /**
@@ -419,8 +422,11 @@ async function doigt(t) {
     d.cible.dispatchEvent(new PointerEvent(pointeur, {
       ...commun, pointerId: 2, pointerType: 'touch', isPrimary: true, width: 20, height: 20, pressure: e === 'poser' ? 0.5 : 0, buttons: e === 'poser' ? 1 : 0,
     }));
-    if (typeof w.Touch === 'function' && typeof w.TouchEvent === 'function') {
-      const touche = new Touch({ identifier: 2, target: d.cible, clientX: d.x, clientY: d.y, pageX: d.x + w.scrollX, pageY: d.y + w.scrollY, screenX: d.x, screenY: d.y });
+    // Les événements touch* aussi quand le moteur sait les fabriquer (le WebKit de Playwright refuse new Touch()) :
+    // l'app n'écoute que les pointer*.
+    let touche = null;
+    try { touche = new Touch({ identifier: 2, target: d.cible, clientX: d.x, clientY: d.y, pageX: d.x + w.scrollX, pageY: d.y + w.scrollY, screenX: d.x, screenY: d.y }); } catch (err) { touche = null; }
+    if (touche) {
       const type = { poser: 'touchstart', lever: 'touchend', annuler: 'touchcancel' }[e];
       const encore = e === 'poser' ? [touche] : [];
       d.cible.dispatchEvent(new TouchEvent(type, { ...commun, touches: encore, targetTouches: encore, changedTouches: [touche] }));

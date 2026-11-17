@@ -34,7 +34,7 @@ const capture = (t, nom) => t.page.screenshot({ path: path.join(__dirname, '..',
 async function surveiller(t) {
   await t.page.evaluate((ids) => {
     window.__releve = {
-      max: 0, tMin: Infinity, tMax: -Infinity, images: 0, pasMax: 0, imagesMvt: 0, premier: null, debut: performance.now(), y: null, y0: null, ecart: 0,
+      max: 0, tMin: Infinity, tMax: -Infinity, images: 0, pasMax: 0, dtMax: 0, tPrec: null, imagesMvt: 0, premier: null, debut: performance.now(), y: null, y0: null, ecart: 0,
     };
     if (window.__surveille) return;
     window.__surveille = true;
@@ -43,6 +43,9 @@ async function surveiller(t) {
       const r = window.__releve;
       if (!document.getElementById('view-home').hidden) {
         r.images++;
+        const maint = performance.now();
+        if (r.tPrec !== null) r.dtMax = Math.max(r.dtMax, maint - r.tPrec);
+        r.tPrec = maint;
         r.max = Math.max(r.max, ids.filter((id) => vu(document.getElementById(id))).length);
         const y = document.querySelector('.tiles').getBoundingClientRect().top + window.scrollY;
         if (r.y0 === null) r.y0 = y;
@@ -63,7 +66,7 @@ async function surveiller(t) {
 /** Les tuiles n'ont bougé qu'après l'attente, et en glissant (pas de saut). */
 function glissement(r, nom) {
   assert.ok(r.images > 5, 'relevé actif');
-  assert.ok(r.pasMax <= PAS_MAX, `tuiles : saut de ${r.pasMax.toFixed(1)} px en une image (${nom})`);
+  assert.ok(r.pasMax <= PAS_MAX, `tuiles : saut de ${r.pasMax.toFixed(1)} px en une image (${nom} ; ${r.imagesMvt} images en mouvement, ${r.images} images, ${Math.round(r.dtMax)} ms au plus entre deux)`);
   const course = r.tMax - r.tMin;
   if (r.ecart >= 0.5) {
     assert.ok(r.premier >= ATTENTE_MIN_MS, `tuiles parties ${Math.round(r.premier)} ms après le geste, avant le doigt levé (${nom})`);

@@ -237,8 +237,22 @@ const TOLERE = [
   ...(WEBKIT ? [
     /Failed to load resource: (The Internet connection appears to be offline|The network connection was lost|Could not connect to the server|A server with the specified hostname could not be found|cancelled)\.?/i,
     /Failed to load resource: (Blocked by client|Request intercepted|The operation couldn.t be completed)/i,
+    // Réseau coupé (setOffline) ou requête coupée par le banc : le WebKit de Playwright le dit ainsi.
+    /Failed to load resource: WebKit encountered an internal error/,
+    // Fermeture d'un canal Firestore (TYPE=terminate, envoyée par sendBeacon) pendant que le réseau est coupé.
+    /^Beacon API cannot load http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/(Listen|Write)\/channel\?[^ ]*TYPE=terminate/,
+    // Safari ne connaît pas interactive-widget (balise viewport, pour Chrome d'Android) : il le dit et l'ignore.
+    /Viewport argument key "interactive-widget" not recognized and ignored/,
   ] : []),
 ];
+
+// Erreurs « non rattrapées » que Safari signale sans qu'aucun code de l'app ne soit en faute : le SDK Firestore
+// abandonne ses longues requêtes d'écoute et d'écriture (changement de base, fin d'écoute, page qui part) et WebKit
+// note chaque abandon d'une requête vers une autre origine comme « Fetch API cannot load … due to access control
+// checks ». Chromium n'en dit rien. Seulement les canaux de Firestore, mot pour mot.
+const TOLERE_PAGE = WEBKIT ? [
+  /^Fetch API cannot load http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/(Listen|Write)\/channel\?\S* due to access control checks\.$/,
+] : [];
 
 async function routerInternet(context) {
   await context.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, async (route) => {
@@ -315,13 +329,18 @@ async function telephone(nom, { largeur, hauteur } = {}) {
     timezoneId: 'Europe/Paris',
     serviceWorkers: 'block',
   });
+  // Caméra et micro permis, comme Chromium avec --use-fake-ui-for-media-stream (le proche a dit « Autoriser »).
+  if (WEBKIT) await context.grantPermissions(['camera', 'microphone']);
   await routerInternet(context);
   const page = await context.newPage();
   const t = {
     nom, context, page, erreurs: [], console: [],
     largeur: reglages.viewport.width, hauteur: reglages.viewport.height,
   };
-  page.on('pageerror', (e) => t.erreurs.push(`[${nom}] erreur non rattrapée : ${e.stack || e.message}`));
+  page.on('pageerror', (e) => {
+    if (TOLERE_PAGE.some((r) => r.test(e.message))) return;
+    t.erreurs.push(`[${nom}] erreur non rattrapée : ${e.stack || e.message}`);
+  });
   page.on('console', (m) => {
     const texte = m.text();
     t.console.push(`${m.type()} : ${texte}`);
@@ -391,6 +410,13 @@ function brancher() {
       if (t.page.isClosed()) continue;
       await fs.promises.mkdir(dossier, { recursive: true });
       await t.page.screenshot({ path: path.join(dossier, `${t.nom}.png`) }).catch(() => {});
+    }
+    // PAPOTE_JOURNAL=1 : la fin de la console de chaque téléphone dans le compte rendu (la CI, sans les captures).
+    if (process.env.PAPOTE_JOURNAL) {
+      for (const t of telephones) {
+        console.log(`# --- console de ${t.nom} (${ctx?.name || ''}) ---`);
+        for (const l of t.console.slice(-25)) console.log(`#   ${l.slice(0, 300).replace(/\n/g, ' ')}`);
+      }
     }
     for (const t of telephones.splice(0)) await t.context.close().catch(() => {});
     await s.calme();

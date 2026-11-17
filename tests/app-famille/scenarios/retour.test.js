@@ -130,5 +130,6 @@ test('App Android : retour depuis l\'accueil demande « Voulez-vous quitter Papo
   await question(lea).locator('button', { hasText: 'Quitter' }).click();
   for (let i = 0; i < 50 && !demandes.length; i++) await lea.page.waitForTimeout(100);
   // Avec la clé du téléphone (Lien.java) : sans elle, l'app ne ferme rien (un lien d'une autre page, audit A2).
-  assert.deepStrictEqual(demandes, ['intent://quitter?cle=c1e5ecrete#Intent;scheme=papote;package=fr.mapapote.famille;end']);
+  const quitter = 'intent://quitter?cle=c1e5ecrete#Intent;scheme=papote;package=fr.mapapote.famille;end';
+  assert.deepStrictEqual(demandes, [banc.nonCouvert('webkit', 'sous WebKit, Playwright ne voit que l\'adresse avant le # du lien intent:// (le fragment #Intent;scheme=…;package=…;end, que seul Chrome d\'Android lit, n\'est pas vérifiable) ; tout ce qui précède est vérifié') ? quitter.split('#')[0] : quitter]);
 });

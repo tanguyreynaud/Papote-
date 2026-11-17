@@ -82,7 +82,8 @@ test('M8 : « Enregistrez le numéro de Mamie Emma » sur l\'accueil dès que la
   await julie.page.click('#contact-oui');
   assert.strictEqual(await julie.page.locator('#contact-oui').innerText(), 'Un instant…', 'réaction visible tout de suite');
   const fichier = await telechargement;
-  assert.match(fichier.suggestedFilename(), /Mamie Emma\.vcf/);
+  // Le WebKit de Playwright remplace les espaces du nom proposé par « _ » (le nom donné par l'app reste « Mamie Emma.vcf »).
+  assert.match(fichier.suggestedFilename(), banc.WEBKIT ? /^Mamie[ _]Emma\.vcf$/ : /Mamie Emma\.vcf/);
   await g.texteFenetre(julie).then((t) => assert.match(t, /Fiche contact de Mamie Emma prête/));
   await g.repondre(julie, 'OK').catch(() => null);
   await julie.page.locator('#contact-encart').waitFor({ state: 'hidden' });

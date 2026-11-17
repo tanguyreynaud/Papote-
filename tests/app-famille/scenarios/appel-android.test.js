@@ -30,7 +30,7 @@ test('App Android : « Appel vidéo » passe à l\'écran d\'appel de l\'app, qu
   for (let i = 0; i < 50 && !demandes.length; i++) await julie.page.waitForTimeout(100);
   const lien = demandes.find((u) => u.startsWith('intent://appel?'));
   assert.ok(lien, `l'app Android est appelée : ${JSON.stringify(demandes)}`);
-  assert.match(lien, /#Intent;scheme=papote;package=fr\.mapapote\.famille;end$/);
+  if (!banc.nonCouvert('webkit', 'sous WebKit, Playwright ne voit que l\'adresse avant le # du lien intent:// (le fragment #Intent;scheme=…;package=…;end, que seul Chrome d\'Android lit, n\'est pas vérifiable) ; tout ce qui précède est vérifié')) assert.match(lien, /#Intent;scheme=papote;package=fr\.mapapote\.famille;end$/);
   const params = new URL(lien.replace(/^intent:/, 'https:').replace(/#Intent.*$/, '')).searchParams;
   assert.strictEqual(params.get('u'), `/?appeler=video&famille=${fid}`);
   assert.ok(params.get('connexion'), 'jeton de connexion');
