@@ -18,7 +18,7 @@ import {
   choisirBase, bucketUrl, auth,
 } from './firebase.js';
 import { askConfirm, notice, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
-import { showGuideOnce } from './guide.js';
+import { showGuideOnce, guideVu } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, nommerFamillePreparee,
@@ -338,7 +338,7 @@ function montrerGuide() {
 
 function renderSansAbo() {
   const admin = amFamilyAdmin();
-  document.querySelectorAll('.sans-abo-nom').forEach((e) => { e.textContent = session.family.name; });
+  document.querySelectorAll('.sans-abo-nom').forEach((e) => { e.textContent = session.family.nomAChoisir ? 'votre proche' : session.family.name; });
   document.querySelectorAll('.sans-abo-admin').forEach((e) => { e.hidden = !admin; });
   $('sans-abo-membre').hidden = admin;
 }
@@ -668,6 +668,8 @@ function galleryItem(post, what, onOpen) {
 function renderPhotos(posts) {
   $('photos').replaceChildren(...posts.map((p) => galleryItem(p, 'cette photo', () => openPhoto(p))));
   $('photos-empty').hidden = posts.length > 0;
+  // Rien à télécharger sur une page vide (testeur, V14 du 17/11) : le bouton revient avec la première photo.
+  $('btn-photos-zip').hidden = !posts.length;
 }
 
 function renderVideos(posts) {
@@ -963,7 +965,7 @@ function serveurMuet(promesse) {
 }
 
 // ---------- Première ouverture : régler la tablette pas à pas (responsable) ----------
-// La nuit (21 h – 6 h 30), le son, le SOS : proposé une fois à chaque responsable, sur ce téléphone, tant qu'il ne
+// La nuit (23 h – 5 h), le son, le SOS : proposé une fois à chaque responsable, sur ce téléphone, tant qu'il ne
 // l'a jamais vu. Famille préparée à la commande : toujours (elle naît avec ses options, M4 du 12/11) ; famille d'avant
 // toute neuve (ni veille, ni options) aussi. Tout reste modifiable ensuite dans Réglages > La tablette.
 const INTRO_KEY = 'papote.introTablette.';
@@ -1025,7 +1027,7 @@ function showIntroTablette() {
       </div>
       <p class="error small intro-error" hidden></p>
       <div class="guide-buttons">
-        <button type="button" class="link intro-prev">Retour</button>
+        <button type="button" class="secondary intro-prev">Retour</button>
         <button type="submit" class="primary intro-next"></button>
       </div>
     </form>`.replace('COUCHER', OPTIONS_COUCHER).replace('REVEIL', OPTIONS_REVEIL);
@@ -1033,7 +1035,6 @@ function showIntroTablette() {
   const steps = [...back.querySelectorAll('.intro-step')];
   $i('.guide-dots').innerHTML = steps.map(() => '<span></span>').join('');
   $i('[data-step="0"] p').textContent = `Quelques questions pour que la tablette de ${nom} soit prête : nuit, son, options. Une minute, et tout reste modifiable dans Réglages.`;
-  $i('[data-step="5"] p').textContent = `La tablette de ${nom} est réglée. Invitez maintenant la famille pour qu'elle envoie des photos.`;
   back.querySelectorAll('.intro-nom').forEach((e) => { e.textContent = nom; });
   $i('#intro-veille').checked = choix.veille.active !== false;
   $i('#intro-heures').hidden = !$i('#intro-veille').checked;
@@ -1060,9 +1061,19 @@ function showIntroTablette() {
     $i('.intro-next').textContent = i === 0 ? 'Commencer' : i === steps.length - 1 ? 'Inviter la famille' : 'Suivant';
     $i('.intro-prev').textContent = i === 0 ? 'Plus tard' : i === steps.length - 1 ? 'Terminer' : 'Retour';
     $i('.intro-error').hidden = true;
+    // Le dernier mot dit le vrai (testeur, V7 du 17/11) : « est réglée » seulement si la tablette est là ; en route,
+    // les réglages l'attendent.
+    if (i === steps.length - 1) {
+      const arrivee = tabletMembers.length > 0;
+      $i('[data-step="5"] h2').textContent = arrivee ? "C'est prêt" : "C'est noté";
+      $i('[data-step="5"] p').textContent = arrivee
+        ? `La tablette de ${nom} est réglée. Invitez maintenant la famille pour qu'elle envoie des photos.`
+        : `Les réglages sont enregistrés : la tablette de ${nom} les prendra dès son arrivée. Invitez maintenant la famille pour qu'elle envoie des photos.`;
+    }
   };
-  // Fermée : le petit guide vient ensuite (sauf vers « Inviter la famille » : il attendra la prochaine ouverture).
-  const close = (guide = true) => { introVue(); back.remove(); if (guide) montrerGuide(); };
+  // Une seule fenêtre au démarrage (testeur, V8 du 17/11 : 5 écrans de réglages puis 3 de guide) : après les
+  // réglages, pas de petit guide ; l'accueil le remplace (« Envoyer une photo », les tuiles).
+  const close = () => { introVue(); guideVu(); back.remove(); };
 
   async function enregistrer() {
     choix.veille = veilleChoisie($i('#intro-veille').checked, $i('#intro-de'), $i('#intro-a'));
@@ -1104,7 +1115,7 @@ function showIntroTablette() {
         $i('.intro-next').disabled = false;
       }
     }
-    if (i === steps.length - 1) { close(false); openPage('invite'); return; }
+    if (i === steps.length - 1) { close(); openPage('invite'); return; }
     i++;
     render();
   });
@@ -2862,7 +2873,7 @@ function renderTabletOwnerNote() {
   // Abonnement et réglages de la tablette : tout responsable (propriétaire et responsables nommés).
   $('tablet-owner-note').hidden = amFamilyAdmin();
   $('tablet-owner-text').textContent = owner?.name
-    ? `La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone de ${owner.name}, qui l'a installée, ou d'un autre responsable de la famille. Demandez-leur si besoin.`
+    ? `La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone de ${owner.name} ou d'un autre responsable de la famille. Demandez-leur si besoin.`
     : "La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone d'un responsable de la famille.";
 }
 
@@ -2922,7 +2933,7 @@ function renderMembers(all) {
     }
     const name = document.createElement('span');
     name.className = 'member-name';
-    name.textContent = m.role === 'tablette' ? `Tablette de ${session.family.name}` : m.name;
+    name.textContent = m.role === 'tablette' ? `Tablette de ${session.family.nomAChoisir ? 'votre proche' : session.family.name}` : m.name;
     li.append(name);
     // Numéro de la tablette (carte SIM) : la famille peut l'appeler par téléphone ; les autres numéros sont refusés.
     const telTablette = m.role === 'tablette' ? numeroTablette() : '';
@@ -4233,9 +4244,10 @@ const saveFamily = (data, message) => updateDoc(doc(db, 'families', session.fid)
   .then(() => toast(message));
 
 // Nom de la tablette (nom de la personne) : un prénom, jamais un numéro de téléphone (Tanguy, 17/11). Refusé s'il n'a
-// aucune lettre, s'il a 4 chiffres ou plus (un numéro, même écrit « 06 12 … » ou « +33 6… »), ou plus de chiffres que
-// de lettres. Accents, traits d'union, apostrophes et espaces vont bien (« Mamie Jeanne-Marie », « Pépé d'Émile »,
-// « Mamie 2 »). Rien (champ vide) : le message de chaque formulaire.
+// aucune lettre, s'il a 4 chiffres ou plus (un numéro, même écrit « 06 12 … » ou « +33 6… »), plus de chiffres que de
+// lettres, des balises (< >) ou des émojis (mal affichés sur la tablette et dans les SMS : V6 du 17/11). Accents,
+// traits d'union, apostrophes et espaces vont bien (« Mamie Jeanne-Marie », « Pépé d'Émile », « Mamie 2 »). Rien
+// (champ vide) : le message de chaque formulaire. firestore.rules (nomTabletteOk) refuse la même chose.
 function nomRefuse(nom) {
   if (!nom) return '';
   const chiffres = (nom.match(/\d/g) || []).length;
@@ -4243,7 +4255,14 @@ function nomRefuse(nom) {
   if (chiffres >= 4 || (chiffres && chiffres >= lettres)) {
     return 'Ce nom ressemble à un numéro de téléphone. Écrivez plutôt comment vous appelez la personne, par exemple « Mamie Emma ».';
   }
+  if (/[<>]/.test(nom)) return 'Les signes < et > ne vont pas dans un nom. Écrivez simplement comment vous l\'appelez, par exemple « Mamie Emma ».';
+  if (/[\p{Extended_Pictographic}\p{So}]/u.test(nom)) {
+    return 'Les émojis s\'affichent mal sur la tablette et dans les SMS. Écrivez le nom avec des lettres, par exemple « Mamie Emma ».';
+  }
   if (!lettres) return 'Écrivez le nom avec des lettres, par exemple « Mamie Emma ».';
+  if (!/^[\p{L}\p{M}\d '’.,()-]+$/u.test(nom)) {
+    return 'Écrivez le nom avec des lettres (accents, traits d\'union et apostrophes vont bien), par exemple « Mamie Emma ».';
+  }
   return '';
 }
 $('family-name').addEventListener('input', () => showError($('family-name-error'), ''));
@@ -4332,11 +4351,11 @@ SETTINGS['my-genre-card'] = {
 };
 
 // Mise en veille : families/{fid}.veille = { active, de, a } en heures, plus deMin / aMin (30) pour les demi-heures
-// (absents = pile). Par défaut, l'écran s'éteint de 21 h à 6 h 30. Le coucher (De) se choisit le soir, de 19 h à
+// (absents = pile). Par défaut, l'écran s'éteint de 23 h à 5 h (Tanguy, 17/11 ; avant : 21 h à 6 h 30). Le coucher (De) se choisit le soir, de 19 h à
 // 23 h 30, et le réveil (à) le matin, de 5 h à 10 h, par demi-heure (Tanguy, 17/11 : de 0 h 30 à 23 h 30 pour les
 // deux n'avait pas de sens ; une famille réglée de 21 h à 20 h 30 laissait la tablette en nuit 23 h 30 sur 24).
 // firestore.rules refuse toute autre valeur.
-const VEILLE_DEFAUT = { active: true, de: 21, a: 6, aMin: 30 };
+const VEILLE_DEFAUT = { active: true, de: 23, a: 5 };
 const heureVeille = (h, m) => (m ? `${h} h ${m}` : `${h} h`);
 const HEURES_COUCHER = { de: 19 * 60, a: 23 * 60 + 30 };
 const HEURES_REVEIL = { de: 5 * 60, a: 10 * 60 };
@@ -4364,8 +4383,8 @@ function heureSure(h, m, bornes, defaut) {
 // La veille gardée, ramenée dans les bornes : { veille (forme de la base), corrigee (elle était hors bornes) }.
 function veilleSure(v) {
   const brute = v && typeof v === 'object' ? v : VEILLE_DEFAUT;
-  const de = heureSure(brute.de, brute.deMin, HEURES_COUCHER, 21 * 60);
-  const a = heureSure(brute.a, brute.aMin, HEURES_REVEIL, 6 * 60 + 30);
+  const de = heureSure(brute.de, brute.deMin, HEURES_COUCHER, VEILLE_DEFAUT.de * 60);
+  const a = heureSure(brute.a, brute.aMin, HEURES_REVEIL, VEILLE_DEFAUT.a * 60);
   const veille = { active: brute.active !== false, de: Math.floor(de / 60), a: Math.floor(a / 60) };
   if (de % 60) veille.deMin = 30;
   if (a % 60) veille.aMin = 30;
@@ -4729,19 +4748,22 @@ function applyFamily() {
   $('btn-new-code').hidden = !admin || !CHANGE_CODE_READY;
   if (admin && !stopInvitations) watchInvitations();
   if (!$('view-settings').hidden) renderSettings();
-  const name = session.family.name;
-  $('family-title').textContent = `Pour ${name}`;
+  // Pas encore de nom (famille préparée) : « Votre espace famille », « votre proche » en minuscules dans les
+  // phrases, jamais « Pour Votre proche » ni « la tablette de Votre proche » (testeur, V7 du 17/11).
+  const sansNom = !!session.family.nomAChoisir;
+  const name = sansNom ? 'votre proche' : session.family.name;
+  $('family-title').textContent = sansNom ? 'Votre espace famille' : `Pour ${name}`;
   // Plusieurs familles : le bouton « Pour … · Changer » et la liste prennent aussi le nouveau nom (famille
   // préparée nommée, nom changé dans les réglages) ; ils gardaient le nom lu à l'ouverture (« Votre proche »).
   const actuelle = myFamilies.find((f) => f.fid === session.fid);
-  if (actuelle && name && actuelle.name !== name) {
+  if (actuelle && !sansNom && name && actuelle.name !== name) {
     actuelle.name = name;
     renderFamilySwitch(session.fid);
   }
   document.querySelectorAll('.grand-name').forEach((el) => { el.textContent = name; });
   $('message-text').placeholder = `Écrire à ${name}…`;
   $('family-name-card').hidden = !amFamilyAdmin();
-  $('family-name-value').textContent = name;
+  $('family-name-value').textContent = sansNom ? 'Pas encore choisi' : name;
   if (allMembers.length) renderMembers(allMembers);
   renderPreparee();
 }
@@ -5099,7 +5121,12 @@ function renderContact() {
   if (!voir) return;
   const nom = session.family.name;
   $('contact-titre').textContent = `Enregistrez le numéro de ${nom}`;
-  $('contact-texte').textContent = `Quand ${nom} vous appelle depuis sa tablette, votre téléphone affiche le ${tel}. Enregistrez-le dans vos contacts : vous saurez tout de suite que c'est ${nom}.`;
+  // Le numéro d'un seul tenant, jamais coupé en fin de ligne (testeur, V13 du 17/11).
+  const numero = document.createElement('span');
+  numero.className = 'numero';
+  numero.textContent = tel;
+  $('contact-texte').replaceChildren(`Quand ${nom} vous appelle depuis sa tablette, votre téléphone affiche le `, numero,
+    `. Enregistrez-le dans vos contacts : vous saurez tout de suite que c'est ${nom}.`);
 }
 $('contact-oui').addEventListener('click', () => {
   const tel = numeroTablette();
@@ -5659,7 +5686,7 @@ function showJoin(canGoBack) {
   $('join-code-wrap').hidden = !!code;
   $('join-title').textContent = code
     ? (pour ? `Rejoindre la famille de ${pour}` : 'Rejoindre la famille')
-    : 'Vous êtes invité dans une famille';
+    : 'Rejoindre une famille'; // pas « Vous êtes invité » : il ne l'est peut-être pas (V7 du 17/11)
   $('join-help').textContent = code
     ? 'Touchez « Rejoindre » : un responsable de la famille acceptera votre arrivée.'
     : JOIN_AIDE;
@@ -5813,7 +5840,7 @@ async function enterApp() {
 function renderFamilySwitch(current) {
   const btn = $('family-switch');
   const actuelle = myFamilies.find((f) => f.fid === current);
-  btn.textContent = `Pour ${actuelle?.name || ''}`;
+  btn.textContent = actuelle?.fid === session?.fid && session.family.nomAChoisir ? 'Votre espace famille' : `Pour ${actuelle?.name || ''}`;
   // L'intitulé lu reprend le texte affiché (règle WCAG « label in name »).
   btn.setAttribute('aria-label', `${btn.textContent}, changer de famille`);
   btn.hidden = myFamilies.length < 2;

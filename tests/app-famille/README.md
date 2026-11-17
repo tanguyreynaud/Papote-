@@ -26,7 +26,7 @@ scénarios) ; utiliser plutôt
 | Fichier | Parcours |
 | --- | --- |
 | `installation` | Inscription ; commande du site : famille préparée (invitation « Entrer dans ma famille », nom de la personne, tablette entrée seule) |
-| `mise-en-route` | Audit du 12/11 : `?tablette=` sans aucun effet (seul Papote relie une tablette, A29) ; numéro de commande tapé dans « Rejoindre une famille » : refusé sans appel au serveur, une seule tentative au double appui (A53, qui retire l'entrée par le numéro de commande d'A40) ; le nom, puis « Réglons la tablette », puis le guide, et e-mails des proches pour les responsables (A43) ; proche à l'étranger (M5) ; numéro de Mamie à enregistrer (M8) |
+| `mise-en-route` | Audit du 12/11 : `?tablette=` sans aucun effet (seul Papote relie une tablette, A29) ; numéro de commande tapé dans « Rejoindre une famille » : refusé sans appel au serveur, une seule tentative au double appui (A53, qui retire l'entrée par le numéro de commande d'A40) ; le nom (jamais « Votre proche » en majuscule), puis « Réglons la tablette » seule fenêtre au démarrage, boutons fixes, « C'est prêt » seulement tablette arrivée (A43, V7, V8 du 17/11), « Rejoindre une famille » ; petit guide d'un proche aux boutons fixes ; e-mails des proches pour les responsables (A43) ; proche à l'étranger (M5) ; numéro de Mamie à enregistrer, jamais coupé en fin de ligne (M8, V13) |
 | `natif` | Liens piégés : `?natif=` d'un autre, et `#connexion=` ignoré hors de l'app Android (L3) |
 | `proches` | Invitation par e-mail, code famille (accepté, refusé, faux), responsable, retrait d'un proche |
 | `envois` | Photos (légende, 5 max, suppression, « Tout télécharger » : photos, vidéos et messages dans un .zip), vidéo, aperçu avant envoi (forme gardée, plein écran qui reste ouvert, Refilmer / Galerie, debout et couchée), filmer dans Papote (caméra, Filmer / Arrêter, retour, caméra refusée), messages (rapides, vu, réponse de Mamie), droits |
@@ -51,8 +51,8 @@ scénarios) ; utiliser plutôt
 | `admin-sim-bloquee` | Carte SIM bloquée par un code (tablette 2bfc17b) : « Carte SIM bloquée : code PIN demandé » / « code PUK demandé » / « verrouillée » sur la page de la tablette, même mise en forme que « hors service », parti tout seul une fois débloquée |
 | `tel-unique` | Un numéro de portable par proche dans la famille (Tanguy, 13/11) : numéro d'un autre proche refusé à l'entrée dans la famille (« Vos informations » revient avec « Ce numéro est déjà celui de Julie dans la famille. », rien d'écrit) et dans Profil ; son propre numéro accepté ; celui de la tablette ne compte pas ; double appui sur Enregistrer = une écriture ; admin : ligne « Numéro en double dans la famille … » dans « À faire » (numéro masqué) et mot sur la page de la famille |
 | `wifi` | Wi-Fi de la tablette depuis l'appli : mot de passe à part et effacé, vrai résultat ; le réseau actuel touché dit comment en changer (la tablette ne sait pas oublier un réseau sur ordre), double appui sans ordre |
-| `touchers` | Audit du 17/11 : tout ce qui a l'air de se toucher réagit (lignes des membres, « Non lu », photos de profil, lignes de l'agenda, notifications, titre et valeur des réglages, « Écouter ») |
-| `debordement` | Textes longs (nom de la tablette, prénoms, e-mails, réseaux Wi-Fi, communes de la météo) : à la ligne, jamais coupés net ni hors de l'écran |
+| `touchers` | Audit du 17/11 : tout ce qui a l'air de se toucher réagit (lignes des membres, « Non lu », photos de profil, lignes de l'agenda, notifications, titre et valeur des réglages, « Écouter ») ; « Tout télécharger » caché sur une page Photos vide (V14) |
+| `debordement` | Textes longs (nom de la tablette, prénoms, e-mails, réseaux Wi-Fi, communes de la météo) : à la ligne, jamais coupés net ni hors de l'écran ; « Installer l'app » dans la page, ne cache rien (V9) |
 
 Chaque test échoue aussi s'il y a une erreur dans la console, une fenêtre grise du navigateur
 (confirm/alert) ou une erreur dans une fonction serveur.

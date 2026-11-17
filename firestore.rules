@@ -69,11 +69,14 @@ service cloud.firestore {
     }
 
     // Nom de la tablette donné par la famille : 1 à 40 caractères, au moins une lettre, jamais un numéro de téléphone
-    // (4 chiffres ou plus : Tanguy, 17/11 ; l'app refuse aussi plus de chiffres que de lettres).
+    // (4 chiffres ou plus : Tanguy, 17/11 ; l'app refuse aussi plus de chiffres que de lettres) ; seulement des lettres
+    // (accents compris), chiffres, espaces, apostrophes, traits d'union, points, virgules et parenthèses : ni balise
+    // (< >) ni émoji (mal affichés sur la tablette et dans les SMS, V6 du 17/11).
     function nomTabletteOk(n) {
       return n is string && n.size() > 0 && n.size() <= 40
         && n.matches('(?s).*\\p{L}.*')
-        && !n.matches('(?s)(.*[0-9]){4}.*');
+        && !n.matches('(?s)(.*[0-9]){4}.*')
+        && n.matches("[\\p{L}\\p{M}0-9 '’.,()-]+");
     }
     // Heures de veille : { active, de, a, deMin?, aMin? }, coucher de 19 h à 23 h 30, réveil de 5 h à 10 h, par demi-heure.
     function veilleOk(v) {

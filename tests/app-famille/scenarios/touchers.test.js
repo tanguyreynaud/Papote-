@@ -147,3 +147,19 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
   }
   await verifier(['#view-profile .seg:not(.active)', '#face-camera', '#face-gallery']);
 });
+
+// V14 (testeur, 17/11) : « Tout télécharger » sur une page Photos vide ne servait à rien. Caché tant qu'il n'y a
+// aucune photo, il revient avec la première.
+test('V14 : « Tout télécharger » caché sur la page Photos vide, de retour avec la première photo', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const photos = (await s.db.collection(`families/${fid}/posts`).where('type', '==', 'photo').get()).docs;
+  assert.ok(photos.length, 'la photo de l\'installation');
+  await Promise.all(photos.map((d) => d.ref.delete()));
+  await g.ouvrirTuile(julie, 'photos');
+  await julie.page.locator('#photos-empty').waitFor({ state: 'visible' });
+  assert.strictEqual(await julie.page.locator('#btn-photos-zip').isVisible(), false, 'rien à télécharger');
+  await photos[0].ref.set(photos[0].data());
+  await julie.page.locator('#btn-photos-zip').waitFor({ state: 'visible' });
+  assert.strictEqual(await julie.page.locator('#photos-empty').isVisible(), false);
+});

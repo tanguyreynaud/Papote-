@@ -74,6 +74,14 @@ test('M8 : « Enregistrez le numéro de Mamie Emma » sur l\'accueil dès que la
   await julie.page.locator('#contact-encart').waitFor({ state: 'visible' });
   assert.strictEqual(await julie.page.locator('#contact-titre').innerText(), 'Enregistrez le numéro de Mamie Emma');
   assert.match(await julie.page.locator('#contact-texte').innerText(), /06 98 76 54 32/);
+  // V13 (testeur, 17/11) : le numéro n'est jamais coupé en fin de ligne, même sur un petit écran.
+  const taille = julie.page.viewportSize();
+  for (const largeur of [320, 360, 390]) {
+    await julie.page.setViewportSize({ width: largeur, height: taille.height });
+    const lignes = await julie.page.locator('#contact-texte .numero').evaluate((e) => new Set([...e.getClientRects()].map((r) => Math.round(r.top))).size);
+    assert.strictEqual(lignes, 1, `numéro sur une seule ligne à ${largeur} px`);
+  }
+  await julie.page.setViewportSize(taille);
   // Les deux boutons ont la même taille.
   const [b1, b2] = await Promise.all(['#contact-oui', '#contact-fait'].map((id) => julie.page.locator(id).boundingBox()));
   assert.ok(Math.abs(b1.height - b2.height) < 1 && Math.abs(b1.width - b2.width) < 2, `boutons de même taille (${b1.width}×${b1.height}, ${b2.width}×${b2.height})`);
@@ -121,7 +129,8 @@ test('A29 : ?tablette= n\'a plus aucun effet : ni écran d\'installation, ni fam
   await g.inscrire(paul, 'paul.perso@exemple.fr', 'Paul');
   await g.attendreVue(paul, 'view-join', 30_000);
   await paul.page.waitForTimeout(1500);
-  assert.strictEqual(await g.vue(paul), 'view-join', 'toujours « Vous êtes invité dans une famille »');
+  assert.strictEqual(await g.vue(paul), 'view-join', 'toujours « Rejoindre une famille »');
+  assert.strictEqual(await paul.page.locator('#join-title').innerText(), 'Rejoindre une famille', 'pas « Vous êtes invité » : personne ne l\'a invité (V7)');
   for (const sel of ['#view-setup', '#view-pair', '#join-pair-card', '#btn-join-pair']) {
     assert.strictEqual(await paul.page.locator(sel).count(), 0, `${sel} retiré de l'appli`);
   }
@@ -172,8 +181,9 @@ test('A53 : numéro de commande dans « Rejoindre une famille » : refusé, sans
 });
 
 // A43 (M4) : pour le premier qui entre dans une famille préparée, dans l'ordre : le nom, puis « Réglons la tablette »
-// (nuit 21 h – 6 h 30, son, SOS), puis le petit guide, qui ne parle plus de « Votre proche ».
-test('A43 : famille préparée : le nom, puis « Réglons la tablette », puis le petit guide', async () => {
+// (nuit 23 h – 5 h par défaut, son, SOS). Une seule fenêtre au démarrage (testeur, V8 du 17/11) : pas de petit guide
+// ensuite, et ses boutons ne bougent pas d'une étape à l'autre. Jamais « Votre proche » avec une majuscule (V7).
+test('A43 : famille préparée : le nom, puis « Réglons la tablette », une seule fenêtre', async () => {
   const julie = await banc.telephone('Julie');
   await g.inscrire(julie, 'julie@exemple.fr', 'Julie');
   const tab = await g.tabletteAllumee({ commande: { email: 'julie@exemple.fr' } });
@@ -189,12 +199,18 @@ test('A43 : famille préparée : le nom, puis « Réglons la tablette », puis l
   await julie.page.waitForTimeout(1500);
   assert.strictEqual(await julie.page.locator('.guide-back').count(), 0, 'ni réglages ni guide avant le nom');
   assert.doesNotMatch(await julie.page.evaluate(() => document.body.innerText), /Votre proche la voit/);
+  // V7 : avant le nom, ni « Pour Votre proche » ni « la tablette de Votre proche ».
+  assert.strictEqual(await julie.page.locator('#family-title').innerText(), 'Votre espace famille');
+  assert.doesNotMatch(await julie.page.evaluate(() => document.body.innerText), /Votre proche/);
   // Un numéro de téléphone à la place du nom (Tanguy, 17/11) : refusé sous le champ, sans appel au serveur.
   for (const numero of ['06 12 34 56 78', '+33612345678', '0612']) {
     await julie.page.fill('#nom-prepare-input', numero);
     await julie.page.click('#nom-prepare-btn');
     await julie.page.locator('#nom-prepare-error', { hasText: 'ressemble à un numéro de téléphone' }).waitFor();
   }
+  await julie.page.fill('#nom-prepare-input', 'Mamie 🙂');
+  await julie.page.click('#nom-prepare-btn');
+  await julie.page.locator('#nom-prepare-error', { hasText: 'émojis' }).waitFor();
   assert.strictEqual(g.nbAppels('nommerFamillePreparee'), 0, 'rien envoyé au serveur');
   const sousLeChamp = await julie.page.evaluate(() => document.getElementById('nom-prepare-error').getBoundingClientRect().top
     - document.getElementById('nom-prepare-input').getBoundingClientRect().bottom);
@@ -207,12 +223,22 @@ test('A43 : famille préparée : le nom, puis « Réglons la tablette », puis l
   await intro.waitFor({ timeout: 15_000 });
   assert.strictEqual(await julie.page.locator('.guide-back:not(.intro-back)').count(), 0, 'le guide attend');
   assert.match(await intro.locator('[data-step="0"]').innerText(), /Réglons la tablette[\s\S]*Mamie Emma/);
+  // V8 : la fenêtre et ses deux boutons (même taille) restent à la même place à chaque étape.
+  const place = async () => {
+    await julie.page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished)).then(() => true));
+    const [f, p, n] = await Promise.all(['form', '.intro-prev', '.intro-next'].map((sel) => intro.locator(sel).boundingBox()));
+    return JSON.stringify([f, p, n].map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)]));
+  };
+  const depart = await place();
+  const [bp, bn] = JSON.parse(depart).slice(1);
+  assert.deepStrictEqual(bp.slice(2), bn.slice(2), `deux boutons de même taille : ${depart}`);
   await intro.locator('.intro-next').click(); // Commencer
   await intro.locator('[data-step="2"]').waitFor();
+  assert.strictEqual(await place(), depart, 'rien ne bouge sous le doigt (étape 2)');
   assert.match(await intro.locator('[data-step="2"]').innerText(), /La nuit/);
   assert.ok(await intro.locator('#intro-veille').isChecked());
-  assert.strictEqual(await intro.locator('#intro-de').inputValue(), '21:0');
-  assert.strictEqual(await intro.locator('#intro-a').inputValue(), '6:30');
+  assert.strictEqual(await intro.locator('#intro-de').inputValue(), '23:0', 'coucher par défaut : 23 h (Tanguy, 17/11)');
+  assert.strictEqual(await intro.locator('#intro-a').inputValue(), '5:0', 'réveil par défaut : 5 h');
   // Coucher le soir (19 h à 23 h 30), réveil le matin (5 h à 10 h), comme dans Réglages.
   const bornes = (sel) => intro.locator(`${sel} option`).evaluateAll((os) => [os[0].textContent, os[os.length - 1].textContent, os.length]);
   assert.deepStrictEqual(await bornes('#intro-de'), ['19 h', '23 h 30', 10]);
@@ -222,24 +248,26 @@ test('A43 : famille préparée : le nom, puis « Réglons la tablette », puis l
   assert.match(await intro.locator('[data-step="3"]').innerText(), /Le son/);
   await intro.locator('.intro-next').click();
   await intro.locator('[data-step="4"]').waitFor();
+  assert.strictEqual(await place(), depart, 'rien ne bouge sous le doigt (étape des options, la plus longue)');
   assert.ok(await intro.locator('#intro-sos').isChecked(), 'SOS allumé, comme la famille préparée');
   await intro.locator('.intro-next').click(); // enregistre
   await intro.locator('[data-step="5"]').waitFor();
   await g.attendreBase(async () => (await g.lire(`families/${fid}`)).veille, 'nuit enregistrée');
   const reglee = await g.lire(`families/${fid}`);
-  assert.deepStrictEqual(reglee.veille, { active: true, de: 21, a: 6, aMin: 30 });
+  assert.deepStrictEqual(reglee.veille, { active: true, de: 23, a: 5 });
   assert.strictEqual(reglee.options.sos, true);
   assert.strictEqual(reglee.options.meteo, true, 'les autres options de départ sont gardées');
+  // V7 : la tablette n'est pas encore arrivée : pas « est réglée », les réglages l'attendent.
+  assert.strictEqual(await place(), depart, 'rien ne bouge sous le doigt (dernière étape)');
+  const fin = await intro.locator('[data-step="5"]').innerText();
+  assert.match(fin, /C'est noté[\s\S]*la tablette de Mamie Emma les prendra dès son arrivée/);
+  assert.doesNotMatch(fin, /est réglée|C'est prêt/);
   await intro.locator('.intro-prev').click(); // Terminer
-  // 3. Le petit guide, avec le nom ; la tablette n'est pas encore arrivée.
-  const guide = julie.page.locator('.guide-back:not(.intro-back)');
-  await guide.waitFor();
-  assert.strictEqual(await julie.page.locator('.intro-back').count(), 0);
-  const texte = await guide.innerText();
-  assert.match(texte, /Mamie Emma la verra sur sa tablette dès son arrivée/);
-  assert.doesNotMatch(texte, /Votre proche/);
-  for (let i = 0; i < 3; i++) await guide.locator('.guide-next').click();
-  await guide.waitFor({ state: 'detached' });
+  // 3. Pas de deuxième fenêtre : l'accueil, tout simplement.
+  await intro.waitFor({ state: 'detached' });
+  await julie.page.waitForTimeout(1000);
+  assert.strictEqual(await julie.page.locator('.guide-back').count(), 0, 'pas de petit guide après les réglages');
+  await julie.page.locator('#photo-nudge').waitFor({ state: 'visible' });
   // Rouverte : ni réglages ni guide une deuxième fois.
   await julie.page.reload();
   await g.attendreVue(julie, 'view-home', 30_000);
@@ -266,4 +294,54 @@ test('A43 : les e-mails des proches visibles des responsables seulement', async 
   // Paul devient responsable : il les voit aussitôt.
   await s.db.doc(`families/${fid}`).update({ admins: [paul.uid] });
   await paul.page.locator('#members .member-email', { hasText: 'julie@exemple.fr' }).waitFor();
+});
+
+// V7 et V8 (testeur, 17/11) : la tablette est arrivée pendant les réglages : « C'est prêt », « est réglée ». Un
+// proche qui entre ensuite voit le petit guide, seule fenêtre, ses deux boutons de même taille et toujours à la même
+// place.
+test('V7, V8 : « C\'est prêt » seulement quand la tablette est là ; le petit guide d\'un proche ne bouge pas', async () => {
+  const julie = await banc.telephone('Julie');
+  await g.inscrire(julie, 'julie@exemple.fr', 'Julie');
+  const tab = await g.tabletteAllumee({ commande: { email: 'julie@exemple.fr' } });
+  const fid = await g.entrerFamillePreparee(julie, tab, { accueil: false });
+  const intro = julie.page.locator('.intro-back');
+  await intro.waitFor({ timeout: 10_000 });
+  await acteurs.entrerDansLaFamille(tab);
+  await julie.page.locator('#tablette-en-route').waitFor({ state: 'hidden' });
+  for (let i = 0; i < 4; i++) await intro.locator('.intro-next').click();
+  await intro.locator('[data-step="5"]').waitFor();
+  assert.match(await intro.locator('[data-step="5"]').innerText(), /C'est prêt[\s\S]*La tablette de Mamie Emma est réglée/);
+  await intro.locator('.intro-prev').click(); // Terminer
+  await intro.waitFor({ state: 'detached' });
+  await julie.page.waitForTimeout(800);
+  assert.strictEqual(await julie.page.locator('.guide-back').count(), 0, 'une seule fenêtre au démarrage');
+
+  const { code } = await g.lire(`families/${fid}`);
+  const paul = await banc.telephone('Paul');
+  await g.inscrire(paul, 'paul@exemple.fr', 'Paul', { genre: 'homme', suite: `?code=${code}` });
+  await g.attendreVue(paul, 'view-join');
+  await paul.page.click('#form-join button[type=submit]');
+  await g.attendreVue(paul, 'view-pending');
+  await julie.page.locator('#pending-banner .join-card', { hasText: 'Paul' }).locator('.join-ok').click();
+  await g.attendreVue(paul, 'view-home');
+  const guide = paul.page.locator('.guide-back');
+  await guide.waitFor();
+  assert.strictEqual(await guide.count(), 1, 'une seule fenêtre');
+  const place = async () => (await paul.page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished)).then(() => true))) && JSON.stringify(await Promise.all(['.guide', '.guide-skip', '.guide-next'].map(async (sel) => {
+    const b = await guide.locator(sel).boundingBox();
+    return b && [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)];
+  })));
+  const depart = await place();
+  const [, skip, suivant] = JSON.parse(depart);
+  assert.deepStrictEqual(skip.slice(2), suivant.slice(2), `deux boutons de même taille : ${depart}`);
+  await guide.locator('.guide-next').click();
+  assert.strictEqual(await place(), depart, 'étape 2 : rien ne bouge');
+  await guide.locator('.guide-next').click();
+  // Dernière étape : « Passer » s'efface, « C'est parti » reste à sa place.
+  assert.strictEqual(await guide.locator('.guide-skip').isVisible(), false);
+  const fin = JSON.parse(await place());
+  assert.deepStrictEqual([fin[0], fin[2]], [JSON.parse(depart)[0], suivant], 'la fenêtre et « C\'est parti » ne bougent pas');
+  assert.strictEqual(await guide.locator('.guide-next').innerText(), "C'est parti");
+  await guide.locator('.guide-next').click();
+  await guide.waitFor({ state: 'detached' });
 });

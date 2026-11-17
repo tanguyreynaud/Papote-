@@ -258,7 +258,7 @@
       </div>
       <p id="join-account" class="muted small"></p>
       <div class="card">
-        <h2 id="join-title">Vous êtes invité dans une famille</h2>
+        <h2 id="join-title">Rejoindre une famille</h2>
         <p id="join-help" class="muted">Entrez le code famille qu'on vous a envoyé : un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.</p>
         <form id="form-join">
           <label id="join-code-wrap">Code famille
@@ -383,7 +383,7 @@
       <header class="page-head">
         <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
         <h1>Photos</h1>
-        <button type="button" id="btn-photos-zip" class="head-action"><svg><use href="#i-download"/></svg>Tout télécharger</button>
+        <button type="button" id="btn-photos-zip" class="head-action" hidden><svg><use href="#i-download"/></svg>Tout télécharger</button>
       </header>
       <p class="outbox" hidden></p>
       <ul id="photos" class="gallery"></ul>
@@ -492,7 +492,7 @@
         <div id="family-name-card" class="card setting" hidden>
           <div class="setting-head"><h2>Nom de la tablette</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <p id="family-name-value" class="setting-value"></p>
-          <form id="form-family-name" class="setting-edit" hidden>
+          <form id="form-family-name" class="setting-edit" hidden novalidate>
             <p class="muted small">Le nom de la tablette, souvent celui de la personne qui l'a (« Mamie », « Jeanne »…). Il apparaît partout dans l'app.</p>
             <input id="family-name" maxlength="40" required aria-label="Nom de la tablette" aria-describedby="family-name-error">
             <p id="family-name-error" class="error small" hidden></p>

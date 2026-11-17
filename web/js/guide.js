@@ -10,6 +10,11 @@ const STEPS = [
   { icon: 'call', title: 'Appeler en vidéo', text: (n) => `Touchez « Appel vidéo » : la tablette de ${n} sonne et l'image s'affiche en grand.` },
 ];
 
+// Déjà vu : les réglages de la tablette ont été la fenêtre de démarrage (une seule à la fois, V8 du 17/11).
+export function guideVu() {
+  try { localStorage.setItem(KEY, '1'); } catch (e) { /* rien */ }
+}
+
 function seen() {
   try { return localStorage.getItem(KEY) === '1'; } catch (e) { return true; }
 }
@@ -24,7 +29,7 @@ export function showGuideOnce(name, { enRoute = false } = {}) {
       <h2></h2><p></p>
       <div class="guide-dots">${STEPS.map(() => '<span></span>').join('')}</div>
       <div class="guide-buttons">
-        <button type="button" class="link guide-skip">Passer</button>
+        <button type="button" class="secondary guide-skip">Passer</button>
         <button type="button" class="primary guide-next"></button>
       </div>
     </div>`;
@@ -35,12 +40,10 @@ export function showGuideOnce(name, { enRoute = false } = {}) {
     back.querySelector('p').textContent = step.text(name, enRoute);
     back.querySelectorAll('.guide-dots span').forEach((d, k) => d.classList.toggle('on', k === i));
     back.querySelector('.guide-next').textContent = i === STEPS.length - 1 ? "C'est parti" : 'Suivant';
-    back.querySelector('.guide-skip').hidden = i === STEPS.length - 1;
+    // Dernière étape : « Passer » s'efface sans que « C'est parti » ne bouge (bouton fixe, V8 du 17/11).
+    back.querySelector('.guide-skip').style.visibility = i === STEPS.length - 1 ? 'hidden' : '';
   };
-  const close = () => {
-    try { localStorage.setItem(KEY, '1'); } catch (e) { /* rien */ }
-    back.remove();
-  };
+  const close = () => { guideVu(); back.remove(); };
   back.querySelector('.guide-next').addEventListener('click', () => {
     if (i === STEPS.length - 1) close();
     else { i++; render(); }

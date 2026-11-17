@@ -1127,10 +1127,11 @@ test('veille : coucher de 19 h à 23 h 30, réveil de 5 h à 10 h, par demi-heur
   await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { veille: { active: true, de: 21, a: 6 }, rev: 4 }));
 });
 
-// Tanguy, 17/11 : le nom de la tablette acceptait un numéro de téléphone. Une lettre au moins, jamais 4 chiffres.
+// Tanguy, 17/11 : le nom de la tablette acceptait un numéro de téléphone, des émojis et des balises (V6). Une lettre
+// au moins, jamais 4 chiffres, ni < >, ni émoji.
 test('nom de la tablette : un prénom (accents, trait d\'union, apostrophe), jamais un numéro de téléphone', async () => {
   await famille();
   const nom = (name) => updateDoc(doc(proche('julie'), `families/${FID}`), { name });
   for (const n of ['Mamie Jeanne', 'Pépé d\'Émile-André 2', 'Mamie 75']) await assertSucceeds(nom(n));
-  for (const n of ['06 12 34 56 78', '0612345678', '+33 6 12 34 56 78', 'Mamie 0612', '1234', '---', '', 'M'.repeat(41)]) await assertFails(nom(n));
+  for (const n of ['06 12 34 56 78', '0612345678', '+33 6 12 34 56 78', 'Mamie 0612', '1234', '---', '', 'M'.repeat(41), 'Mamie 🙂', '🙂🙂', 'Mamie <b>Rose</b>', 'Mamie ♥', 'Mamie_Rose', 'Mamie\nRose']) await assertFails(nom(n)).catch((e) => { throw new Error(`« ${n} » : ${e.message}`); });
 });

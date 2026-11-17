@@ -78,7 +78,12 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   const heures = (sel) => julie.page.locator(`${sel} option`).evaluateAll((os) => os.map((o) => o.textContent));
   assert.deepStrictEqual(await heures('#sleep-from'), ['19 h', '19 h 30', '20 h', '20 h 30', '21 h', '21 h 30', '22 h', '22 h 30', '23 h', '23 h 30']);
   assert.deepStrictEqual(await heures('#sleep-to'), ['5 h', '5 h 30', '6 h', '6 h 30', '7 h', '7 h 30', '8 h', '8 h 30', '9 h', '9 h 30', '10 h']);
-  assert.deepStrictEqual([await julie.page.inputValue('#sleep-from'), await julie.page.inputValue('#sleep-to')], ['21:0', '6:30'], 'par défaut 21 h à 6 h 30');
+  assert.deepStrictEqual([await julie.page.inputValue('#sleep-from'), await julie.page.inputValue('#sleep-to')], ['23:0', '5:0'], 'par défaut 23 h à 5 h (Tanguy, 17/11)');
+  // T-003 (17/11) : réveil réglé à « 20 h 30 » dans l'ancienne liste de 0 h à 23 h 30 (8 h 30 voulu ?), la tablette
+  // en nuit 23 h 30 sur 24. Plus aucune heure du soir dans le réveil, ni du matin dans le coucher.
+  for (const [liste, interdite] of [['#sleep-to', '20:30'], ['#sleep-to', '12:0'], ['#sleep-from', '8:30'], ['#sleep-from', '0:30']]) {
+    assert.strictEqual(await julie.page.locator(`${liste} option[value="${interdite}"]`).count(), 0, `${liste} ${interdite}`);
+  }
   await julie.page.selectOption('#sleep-from', '22:0');
   await julie.page.selectOption('#sleep-to', '6:30');
   await enregistrer(julie, 'sleep-card');
@@ -219,12 +224,19 @@ test('Nom de la tablette : jamais un numéro (message sous le champ) ; nuit : he
   await g.ouvrirTuile(julie, 'settings');
 
   await modifier(julie, 'family-name-card');
-  for (const nom of ['06 12 34 56 78', '0612345678', '+33 6 12 34 56 78', '1234', 'Mamie 0612', '12', '---']) {
+  // Testeur du 17/11 (V6) : « 12345 », émojis, balises et nom vidé passaient, ou rien ne se passait sans un mot.
+  const MOTIFS = {
+    '06 12 34 56 78': /ressemble à un numéro de téléphone/, '0612345678': /ressemble à un numéro/,
+    '+33 6 12 34 56 78': /ressemble à un numéro/, 12345: /ressemble à un numéro/, 'Mamie 0612': /ressemble à un numéro/,
+    12: /ressemble à un numéro/, '---': /avec des lettres/, 'Mamie 🙂🙂': /émojis/, '🙂🙂': /émojis/,
+    'Mamie <b>Rose</b>': /< et >/, '   ': /Indiquez le nom de la tablette/, '': /Indiquez le nom de la tablette/,
+  };
+  for (const [nom, motif] of Object.entries(MOTIFS)) {
     await julie.page.fill('#family-name', nom);
     await enregistrer(julie, 'family-name-card');
     const erreur = julie.page.locator('#family-name-error');
     await erreur.waitFor();
-    assert.match(await erreur.innerText(), nom === '---' ? /avec des lettres/ : /ressemble à un numéro de téléphone/, nom);
+    assert.match(await erreur.innerText(), motif, `« ${nom} »`);
     assert.ok(await julie.page.locator('#form-family-name').isVisible(), 'le champ reste ouvert pour corriger');
   }
   // Juste sous le champ, en calme : pas une fenêtre.

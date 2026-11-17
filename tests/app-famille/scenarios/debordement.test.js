@@ -139,3 +139,42 @@ test('Textes longs : nom de la tablette, prénoms, e-mails, Wi-Fi, communes pass
   await g.attendreVue(julie, 'view-profile');
   await debordements(julie, 'Profil');
 });
+
+// V9 (testeur, 17/11) : « Installer l'app » flottait sur les tuiles, et le message du bas (« Photo envoyée ») se
+// posait dessus. Il est maintenant dans la page, sous les tuiles : il ne cache rien, en haut comme tout en bas de
+// l'accueil, et tout en bas le message ne se pose pas dessus, sur Android (390 × 844) comme sur iPhone SE (375 × 667, 320 × 568).
+test('V9 : « Installer l\'app » ne cache jamais rien, et le message du bas ne se pose pas dessus', async () => {
+  const julie = await banc.telephone('Julie');
+  await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await julie.page.locator('#btn-install').waitFor({ state: 'visible' });
+  for (const [largeur, hauteur] of [[390, 844], [375, 667], [320, 568]]) {
+    await julie.page.setViewportSize({ width: largeur, height: hauteur });
+    for (const ou of ['haut', 'bas']) {
+      const chevauchements = await julie.page.evaluate((bas) => {
+        if (bas) window.scrollTo(0, document.documentElement.scrollHeight);
+        else window.scrollTo(0, 0);
+        const bouton = document.getElementById('btn-install');
+        // Le message du bas, à sa place habituelle.
+        const toast = document.createElement('p');
+        toast.className = 'toast';
+        toast.textContent = 'Photo envoyée';
+        document.body.append(toast);
+        const b = bouton.getBoundingClientRect();
+        const croise = (r) => r.width && r.height && r.left < b.right - 1 && r.right > b.left + 1 && r.top < b.bottom - 1 && r.bottom > b.top + 1;
+        const out = [];
+        // Le message du bas passe un instant sur ce qui défile dessous ; tout en bas de l'accueil, là où le bouton
+        // se pose, il ne le couvre pas.
+        const autres = [...document.querySelectorAll(`#view-home .tile, #view-home .card, #view-home .badges > *, #nav${bas ? ', .toast' : ''}`)]
+          .filter((el) => !el.closest('[hidden]') && el !== bouton && !el.contains(bouton));
+        for (const el of autres) if (croise(el.getBoundingClientRect())) out.push(`${el.id || el.className} sur le bouton`);
+        // Le bouton, quand il est à l'écran, y est en entier au-dessus de la barre du bas.
+        const nav = document.getElementById('nav').getBoundingClientRect();
+        if (b.bottom > 0 && b.top < innerHeight && b.bottom > nav.top + 1) out.push(`bouton sous la barre du bas (${Math.round(b.bottom)} > ${Math.round(nav.top)})`);
+        if (getComputedStyle(bouton).position !== 'static') out.push(`bouton ${getComputedStyle(bouton).position}`);
+        toast.remove();
+        return out;
+      }, ou === 'bas');
+      assert.deepStrictEqual(chevauchements, [], `${largeur} × ${hauteur}, ${ou} de l'accueil`);
+    }
+  }
+});
