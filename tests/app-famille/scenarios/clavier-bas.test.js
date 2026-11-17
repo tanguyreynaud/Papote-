@@ -58,10 +58,10 @@ test('Téléphone tourné, champ actif sans clavier : la barre du bas reste là'
   await julie.page.click('.nav-item[data-page="messages"]');
   await g.attendreVue(julie, 'view-messages');
   await julie.page.locator('#message-text').focus();
-  await julie.page.setViewportSize({ width: 844, height: 390 });
+  await g.tourner(julie, true);
   await julie.page.waitForTimeout(300);
   assert.ok(await julie.page.locator('#nav').isVisible(), 'passer en paysage n\'est pas un clavier');
-  await julie.page.setViewportSize({ width: 390, height: 844 });
+  await g.tourner(julie, false);
 });
 
 test('Messages ouvert depuis la tuile de l\'accueil, clavier ouvert : la zone d\'écriture touche le clavier', async () => {

@@ -279,8 +279,8 @@ test('Rien de dû : aucune carte ; une plus importante qui arrive sous le doigt 
   // Le doigt posé sur la carte, la tablette reçoit son numéro (plus important) : rien ne change sous le doigt.
   await surveiller(julie);
   const { x, y } = await g.centre(julie, '#face-nudge');
-  const cdp = await julie.context.newCDPSession(julie.page);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  const doigt = await g.doigt(julie);
+  await doigt.poser(x, y);
   await avecNumero(fid, tab);
   await julie.page.locator('#badges-compte', { hasText: '/ 2' }).waitFor();
   await julie.page.waitForTimeout(1500);
@@ -289,8 +289,7 @@ test('Rien de dû : aucune carte ; une plus importante qui arrive sous le doigt 
   assert.ok(pendant.images > 5 && pendant.tMax - pendant.tMin < 0.5, `tuiles immobiles sous le doigt : ${pendant.tMin} → ${pendant.tMax}`);
   await surveiller(julie);
   // Le doigt glisse et se lève sans toucher (pas de clic) : le numéro prend la place, les tuiles glissent ensuite.
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
-  await cdp.detach().catch(() => {});
+  await doigt.annuler();
   await remplacee(julie, 'contact-encart', '1 / 2', 'photo → numéro (plus important)');
   assert.strictEqual(await g.vue(julie), 'view-home');
 });

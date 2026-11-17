@@ -87,15 +87,17 @@ async function photo({ largeur = 1200, hauteur = 900, texte = 'Photo', nom = 'ph
   return { name: nom, mimeType: 'image/jpeg', buffer: Buffer.from(base64, 'base64') };
 }
 
-/** Une petite vidéo WebM (secondes), filmée par le navigateur. */
+/** Une petite vidéo (secondes), filmée par le navigateur : WebM (Chrome d'Android), ou MP4 quand le navigateur
+ *  ne sait pas filmer en WebM (Safari d'iPhone) ; l'extension du nom suit. */
 async function video({ secondes = 2, nom = 'video.webm', largeur = 320, hauteur = 240 } = {}) {
   const page = await pageAtelier();
-  const base64 = await page.evaluate(async ({ sec, l, h }) => {
+  const { base64, type } = await page.evaluate(async ({ sec, l, h }) => {
     const c = document.createElement('canvas');
     c.width = l; c.height = h;
     const g = c.getContext('2d');
     const flux = c.captureStream(25);
-    const rec = new MediaRecorder(flux, { mimeType: 'video/webm' });
+    const mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4';
+    const rec = new MediaRecorder(flux, { mimeType });
     const parts = [];
     rec.ondataavailable = (e) => parts.push(e.data);
     const fini = new Promise((r) => { rec.onstop = r; });
@@ -112,12 +114,13 @@ async function video({ secondes = 2, nom = 'video.webm', largeur = 320, hauteur 
     });
     rec.stop();
     await fini;
-    const buf = new Uint8Array(await new Blob(parts, { type: 'video/webm' }).arrayBuffer());
+    const buf = new Uint8Array(await new Blob(parts, { type: mimeType }).arrayBuffer());
     let bin = '';
     for (const b of buf) bin += String.fromCharCode(b);
-    return btoa(bin);
+    return { base64: btoa(bin), type: mimeType };
   }, { sec: secondes, l: largeur, h: hauteur });
-  return { name: nom, mimeType: 'video/webm', buffer: Buffer.from(base64, 'base64') };
+  const nomFinal = type === 'video/mp4' ? nom.replace(/\.webm$/, '.mp4') : nom;
+  return { name: nomFinal, mimeType: type, buffer: Buffer.from(base64, 'base64') };
 }
 
 // ---------- Connexion ----------
@@ -391,19 +394,81 @@ async function doubleAppui(t, selecteur) {
   await t.page.touchscreen.tap(x, y);
 }
 
+/**
+ * Un doigt posé sur l'écran, levé ou qui glisse hors de l'élément (annulé), comme le vrai : poser(x, y), lever(),
+ * annuler(). Chromium : le vrai toucher de l'écran (CDP Input.dispatchTouchEvent). WebKit n'a pas de CDP : les
+ * événements que Safari d'iPhone envoie dans cet ordre (pointerdown puis touchstart ; pointerup puis touchend ;
+ * pointercancel puis touchcancel) sur l'élément sous le doigt. Aucun clic n'en sort, comme d'un appui long.
+ */
+async function doigt(t) {
+  if (!banc.WEBKIT) {
+    const cdp = await t.context.newCDPSession(t.page);
+    return {
+      poser: (x, y) => cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }),
+      lever: async () => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await cdp.detach().catch(() => {}); },
+      annuler: async () => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); await cdp.detach().catch(() => {}); },
+    };
+  }
+  const envoyer = (etape, x, y) => t.page.evaluate(({ etape: e, x: px, y: py }) => {
+    const w = window;
+    if (e === 'poser') w.__doigt = { x: px, y: py, cible: document.elementFromPoint(px, py) };
+    const d = w.__doigt;
+    if (!d || !d.cible) throw new Error(`doigt : rien sous (${px}, ${py})`);
+    const commun = { bubbles: true, cancelable: true, composed: true, clientX: d.x, clientY: d.y, view: w };
+    const pointeur = { poser: 'pointerdown', lever: 'pointerup', annuler: 'pointercancel' }[e];
+    d.cible.dispatchEvent(new PointerEvent(pointeur, {
+      ...commun, pointerId: 2, pointerType: 'touch', isPrimary: true, width: 20, height: 20, pressure: e === 'poser' ? 0.5 : 0, buttons: e === 'poser' ? 1 : 0,
+    }));
+    if (typeof w.Touch === 'function' && typeof w.TouchEvent === 'function') {
+      const touche = new Touch({ identifier: 2, target: d.cible, clientX: d.x, clientY: d.y, pageX: d.x + w.scrollX, pageY: d.y + w.scrollY, screenX: d.x, screenY: d.y });
+      const type = { poser: 'touchstart', lever: 'touchend', annuler: 'touchcancel' }[e];
+      const encore = e === 'poser' ? [touche] : [];
+      d.cible.dispatchEvent(new TouchEvent(type, { ...commun, touches: encore, targetTouches: encore, changedTouches: [touche] }));
+    }
+    if (e !== 'poser') w.__doigt = null;
+  }, { etape, x, y });
+  return { poser: (x, y) => envoyer('poser', x, y), lever: () => envoyer('lever'), annuler: () => envoyer('annuler') };
+}
+
 /** Appui long du doigt (presque une seconde) : le bouton agit au plus une fois, jamais deux. */
 async function appuiLong(t, selecteur, ms = 900) {
   const { x, y } = await centre(t, selecteur);
-  const cdp = await t.context.newCDPSession(t.page);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  const d = await doigt(t);
+  await d.poser(x, y);
   await t.page.waitForTimeout(ms);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await cdp.detach().catch(() => {});
+  await d.lever();
 }
 
-/** Clavier du téléphone ouvert (environ 330 px de moins en hauteur), ou refermé. */
+/**
+ * Adresses que la page demande d'ouvrir hors du web (intent://… vers l'app Android), sans les suivre.
+ * Chromium : CDP (Page.frameRequestedNavigation). WebKit : la demande de navigation vue par Playwright.
+ */
+async function espionnerNavigation(t) {
+  const demandes = [];
+  if (!banc.WEBKIT) {
+    const cdp = await t.context.newCDPSession(t.page);
+    await cdp.send('Page.enable');
+    cdp.on('Page.frameRequestedNavigation', (e) => demandes.push(e.url));
+    return demandes;
+  }
+  const noter = (r) => { if (!/^(https?|data|blob|about):/.test(r.url()) && !demandes.includes(r.url())) demandes.push(r.url()); };
+  t.page.on('request', noter);
+  t.page.on('requestfailed', noter);
+  return demandes;
+}
+
+/** Clavier du téléphone ouvert (environ 330 px de moins en hauteur sur Android ; iPhone : ce qui reste de Safari
+ *  au-dessus du clavier et de sa barre), ou refermé. */
 async function clavier(t, ouvert) {
-  await t.page.setViewportSize({ width: 390, height: ouvert ? 510 : 844 });
+  const ferme = t.hauteur || 844;
+  await t.page.setViewportSize({ width: t.largeur || 390, height: ouvert ? (banc.WEBKIT ? Math.max(320, ferme - 260) : ferme - 334) : ferme });
+}
+
+/** Téléphone tourné (couché) ou remis debout. */
+async function tourner(t, couche) {
+  const l = t.largeur || 390;
+  const h = t.hauteur || 844;
+  await t.page.setViewportSize(couche ? { width: h, height: l } : { width: l, height: h });
 }
 
 /** Nombre de fenêtres de l'app ouvertes (confirmation, notice). */
@@ -500,7 +565,7 @@ async function repondreSim(tablette, resultat = {}, { code = tablette.code, id =
 
 module.exports = {
   ordreSim, repondreSim, fermerTablettes,
-  centre, doubleAppui, appuiLong, clavier, fenetresOuvertes, attendreRetourVisible, nbAppels, serveurMuet, jamaisMainPropre,
+  centre, doubleAppui, appuiLong, doigt, espionnerNavigation, tourner, clavier, fenetresOuvertes, attendreRetourVisible, nbAppels, serveurMuet, jamaisMainPropre,
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
   ouvrir, ouvrirParApp, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, entrerFamillePreparee, familleRelieeParPapote, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,

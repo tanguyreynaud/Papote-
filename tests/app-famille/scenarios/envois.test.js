@@ -198,9 +198,9 @@ for (const [forme, largeur, hauteur] of [['debout', 240, 426], ['couchée', 426,
     await g.visible(julie, '#btn-send').waitFor();
 
     // Téléphone tourné : tout reste dans l'écran.
-    await p.setViewportSize({ width: 844, height: 390 });
+    await g.tourner(julie, true);
     await g.verifierLargeur(julie, 'aperçu vidéo couché');
-    await p.setViewportSize({ width: 390, height: 844 });
+    await g.tourner(julie, false);
 
     // Galerie : la galerie se rouvre, la nouvelle vidéo remplace l'ancienne.
     const [choix] = await Promise.all([p.waitForEvent('filechooser'), p.click('#video-autre')]);
@@ -260,10 +260,10 @@ test('Filmer dans Papote : caméra, Filmer / Arrêter, aperçu, Refilmer, retour
   await p.waitForTimeout(2300);
   assert.match(await p.locator('#filmer-temps').innerText(), /^0:0[23] \/ 1:00$/);
   await capture(p, 'filmer-en-cours');
-  await p.setViewportSize({ width: 844, height: 390 });
+  await g.tourner(julie, true);
   await capture(p, 'filmer-couche');
   await g.verifierLargeur(julie, 'caméra couchée');
-  await p.setViewportSize({ width: 390, height: 844 });
+  await g.tourner(julie, false);
   await p.click('#filmer-rec');
   await p.locator('#filmer').waitFor({ state: 'hidden' });
   await g.visible(julie, '#btn-send').waitFor({ timeout: 5000 });

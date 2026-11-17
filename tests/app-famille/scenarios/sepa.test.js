@@ -159,7 +159,7 @@ test('Autres proches, famille en SEPA, retard de paiement : jamais d\'encart ; p
   // Clavier ouvert (petite hauteur) : les deux boutons restent dans la largeur de l'écran.
   await g.clavier(julie, true);
   const box = await julie.page.locator('#sepa-plus-tard').boundingBox();
-  assert.ok(box.x + box.width <= 390, 'pas de débordement à droite');
+  assert.ok(box.x + box.width <= julie.largeur, 'pas de débordement à droite');
   await g.clavier(julie, false);
 
   // Thème sombre : texte or clair sur fond sombre, contraste AA (≥ 4,5).

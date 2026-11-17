@@ -12,8 +12,21 @@ on:
 
 jobs:
   app-famille:
+    # Deux navigateurs : Chromium (Chrome d'Android) et WebKit (Safari d'iPhone, taille iPhone 15). Ce qui ne peut pas
+    # tourner sous WebKit est listé, avec sa raison, dans tests/app-famille/WEBKIT.md.
+    name: app-famille (${{ matrix.moteur }}${{ matrix.appareil && format(', {0}', matrix.appareil) || '' }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - moteur: chromium
+          - moteur: webkit
+            appareil: iPhone 15
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
+    env:
+      PAPOTE_MOTEUR: ${{ matrix.moteur }}
+      PAPOTE_APPAREIL: ${{ matrix.appareil }}
     defaults:
       run:
         working-directory: tests/app-famille
@@ -37,12 +50,12 @@ jobs:
       # Tests sans navigateur ni émulateur : réseau mobile de l'admin (opérateur par fréquence, « Vu » sur l'alerte).
       - run: node --test ../reseau.test.mjs
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps ${{ matrix.moteur }}
       - run: npm test
       - name: Captures en cas d'échec
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: captures-app-famille
+          name: captures-app-famille-${{ matrix.moteur }}${{ matrix.appareil && format('-{0}', matrix.appareil) || '' }}
           path: tests/app-famille/captures/
           if-no-files-found: ignore

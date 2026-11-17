@@ -10,14 +10,6 @@ const tablette = require('../tablette');
 
 banc.brancher();
 
-// Adresses que la page demande d'ouvrir (intent://… vers l'app Android), sans les suivre.
-async function espionnerNavigation(t) {
-  const cdp = await t.context.newCDPSession(t.page);
-  await cdp.send('Page.enable');
-  const demandes = [];
-  cdp.on('Page.frameRequestedNavigation', (e) => demandes.push(e.url));
-  return demandes;
-}
 
 test('App Android : « Appel vidéo » passe à l\'écran d\'appel de l\'app, qui se connecte et appelle tout seul', async () => {
   const julie = await banc.telephone('Julie');
@@ -30,7 +22,7 @@ test('App Android : « Appel vidéo » passe à l\'écran d\'appel de l\'app, qu
   const mamie = await tablette.ouvrir(fid, tab);
 
   // Dans Chrome : après la confirmation, l'appel part vers l'app avec un jeton de connexion, pas d'ici.
-  const demandes = await espionnerNavigation(julie);
+  const demandes = await g.espionnerNavigation(julie);
   await julie.page.locator('#tile-call:not([disabled])').waitFor();
   assert.ok((await jeton).ok(), 'jeton de connexion reçu');
   await julie.page.click('#tile-call');

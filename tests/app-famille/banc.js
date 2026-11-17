@@ -42,6 +42,25 @@ try {
   playwright = require(require.resolve('playwright', { paths: [process.env.NODE_PATH || '', '/opt/node-tools/node_modules'] }));
 }
 
+// Moteur du navigateur : chromium (Chrome d'Android, par défaut) ou webkit (Safari d'iPhone).
+// PAPOTE_MOTEUR=webkit ouvre chaque téléphone comme un iPhone (PAPOTE_APPAREIL, « iPhone 15 » par défaut :
+// taille, écran, agent Safari, doigt) ; un ordinateur (largeur > 600) comme Safari sur Mac. Voir WEBKIT.md.
+const MOTEUR = process.env.PAPOTE_MOTEUR || 'chromium';
+if (!['chromium', 'webkit'].includes(MOTEUR)) throw new Error(`PAPOTE_MOTEUR inconnu : ${MOTEUR} (chromium ou webkit)`);
+const WEBKIT = MOTEUR === 'webkit';
+const APPAREIL = process.env.PAPOTE_APPAREIL || 'iPhone 15';
+if (WEBKIT && !playwright.devices[APPAREIL]) throw new Error(`PAPOTE_APPAREIL inconnu de Playwright : ${APPAREIL}`);
+
+/**
+ * Saut d'un essai (ou d'une partie) qui ne peut pas tourner dans ce moteur : jamais en silence. La raison est
+ * écrite dans le compte rendu et chaque saut est listé dans WEBKIT.md (vérifié par webkit-liste.test.js).
+ */
+function nonCouvert(moteur, raison) {
+  if (MOTEUR !== moteur) return false;
+  console.log(`# NON COUVERT sous ${moteur} : ${raison}`);
+  return raison;
+}
+
 const hote = (variable) => {
   const v = process.env[variable];
   if (!v) throw new Error(`${variable} absent : lancez les tests avec « npm test » (émulateurs).`);
@@ -214,6 +233,11 @@ const TOLERE = [
   // pendant un envoi : simple ménage du SDK, refusé (400) par l'émulateur. Vu 1 fois sur 4 dans mauvais-jours (12/11).
   // (le motif est essayé sur « message (adresse) »)
   /status of 400 \(Bad Request\) \(http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/Write\/channel\?[^)]*TYPE=terminate/,
+  // Les mêmes, avec les mots de Safari (WebKit) : réseau coupé exprès, requête coupée par le banc.
+  ...(WEBKIT ? [
+    /Failed to load resource: (The Internet connection appears to be offline|The network connection was lost|Could not connect to the server|A server with the specified hostname could not be found|cancelled)\.?/i,
+    /Failed to load resource: (Blocked by client|Request intercepted|The operation couldn.t be completed)/i,
+  ] : []),
 ];
 
 async function routerInternet(context) {
@@ -266,19 +290,37 @@ async function routerInternet(context) {
  * Un téléphone : un navigateur à part, comme le téléphone d'un proche.
  * options : { largeur, hauteur, hauteurEcran } (iPhone 13 par défaut).
  */
-async function telephone(nom, { largeur = 390, hauteur = 844 } = {}) {
+async function telephone(nom, { largeur, hauteur } = {}) {
+  let reglages;
+  if (!WEBKIT) {
+    reglages = {
+      viewport: { width: largeur || 390, height: hauteur || 844 },
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
+      hasTouch: true,
+      isMobile: true,
+    };
+  } else if (largeur > 600) {
+    // L'admin, sur un ordinateur : Safari sur Mac.
+    const { defaultBrowserType, ...mac } = playwright.devices['Desktop Safari'];
+    reglages = { ...mac, viewport: { width: largeur, height: hauteur || 900 } };
+  } else {
+    // Un iPhone : sa taille (Safari, barres comprises), son écran, son agent, son doigt ; une taille demandée
+    // par le scénario (petit téléphone) est gardée.
+    const { defaultBrowserType, ...iphone } = playwright.devices[APPAREIL];
+    reglages = { ...iphone, viewport: largeur ? { width: largeur, height: hauteur } : iphone.viewport };
+  }
   const context = await navigateur.newContext({
-    viewport: { width: largeur, height: hauteur },
+    ...reglages,
     locale: 'fr-FR',
     timezoneId: 'Europe/Paris',
     serviceWorkers: 'block',
-    userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
-    hasTouch: true,
-    isMobile: true,
   });
   await routerInternet(context);
   const page = await context.newPage();
-  const t = { nom, context, page, erreurs: [], console: [] };
+  const t = {
+    nom, context, page, erreurs: [], console: [],
+    largeur: reglages.viewport.width, hauteur: reglages.viewport.height,
+  };
   page.on('pageerror', (e) => t.erreurs.push(`[${nom}] erreur non rattrapée : ${e.stack || e.message}`));
   page.on('console', (m) => {
     const texte = m.text();
@@ -322,9 +364,12 @@ function brancher() {
   test.before(async () => {
     await s.demarrer();
     await demarrerServeur();
-    navigateur = await playwright.chromium.launch({
-      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
-    });
+    navigateur = WEBKIT
+      // WebKit de Playwright : caméra et micro simulés d'office (MockCaptureDevices), autorisés sans question.
+      ? await playwright.webkit.launch()
+      : await playwright.chromium.launch({
+        args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
+      });
   });
   test.after(async () => {
     await navigateur?.close();
@@ -358,5 +403,5 @@ module.exports = {
   s, acteurs, admin, brancher, telephone, tolerer, appels, pannes, sorties,
   get origine() { return origine; },
   get port() { return port; },
-  PROJET, hote,
+  PROJET, hote, MOTEUR, WEBKIT, APPAREIL, nonCouvert,
 };

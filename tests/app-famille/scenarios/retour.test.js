@@ -126,10 +126,7 @@ test('App Android : retour depuis l\'accueil demande « Voulez-vous quitter Papo
   await question(lea).waitFor();
 
   // « Quitter » : l'app Android est appelée pour fermer Papote (papote://quitter).
-  const cdp = await lea.context.newCDPSession(lea.page);
-  await cdp.send('Page.enable');
-  const demandes = [];
-  cdp.on('Page.frameRequestedNavigation', (e) => demandes.push(e.url));
+  const demandes = await g.espionnerNavigation(lea);
   await question(lea).locator('button', { hasText: 'Quitter' }).click();
   for (let i = 0; i < 50 && !demandes.length; i++) await lea.page.waitForTimeout(100);
   // Avec la clé du téléphone (Lien.java) : sans elle, l'app ne ferme rien (un lien d'une autre page, audit A2).
