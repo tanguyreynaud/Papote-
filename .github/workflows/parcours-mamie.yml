@@ -17,6 +17,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/project-thread-dlattc') && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/claude/project-thread-dlattc' }}
 
+# Tests à l'heure de Paris, comme l'app montrée en France : « aujourd'hui », minuit, jour du mois… (Tanguy, 18/11).
+# Les machines de GitHub sont en UTC : sans ça, entre 23 h et minuit (22 h l'été) la date des tests n'était pas celle de Paris.
+env:
+  TZ: Europe/Paris
+
 jobs:
   parcours-mamie:
     runs-on: ubuntu-latest
