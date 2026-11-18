@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
-const { chromium } = require('playwright');
+const { chromium, webkit } = require('playwright');
 const { servir, RACINE } = require('./commun');
 const vitrine = require('./vitrine');
 
@@ -25,11 +25,17 @@ const STRIPE = 'https://checkout.stripe.test/c/pay/cs_test_audit';
 const CORS = { 'Access-Control-Allow-Origin': '*' };
 // Le vrai serveur répond par un renvoi 303 vers Stripe ; ici une page qui s'y rend aussitôt (un renvoi simulé vers
 // un autre site partirait sur le vrai internet).
+// Renvoi du serveur (303/302). WebKit ne sait pas simuler un renvoi (« Cannot fulfill with redirect status ») :
+// une page qui se remplace aussitôt, comme versStripe. Le navigateur arrive au même endroit.
+const WEBKIT = process.env.NAVIGATEUR === 'webkit';
+const renvoi = (r, url, status = 303) => (WEBKIT
+  ? r.fulfill({ contentType: 'text/html', body: `<script>location.replace(${JSON.stringify(url)})</script>` })
+  : r.fulfill({ status, headers: { Location: url } }));
 const versStripe = (r) => r.fulfill({ contentType: 'text/html', body: `<script>location.replace(${JSON.stringify(STRIPE)})</script>` });
 
 let browser, srv;
 test.before(async () => {
-  browser = await chromium.launch();
+  browser = await (process.env.NAVIGATEUR === 'webkit' ? webkit : chromium).launch(); // NAVIGATEUR=webkit : moteur de Safari
   srv = await servir(path.join(RACINE, 'vitrine'));
 });
 test.after(async () => { srv.close(); await browser.close(); });
@@ -61,7 +67,7 @@ async function ouvrir(fichier, { taille = TEL, commander = 'stripe', stock = () 
           <a id="retour" href="${srv.url}/commande.html?formule=sim">← Papote</a>
           <a id="payer" href="${srv.url}/merci.html?session=cs_test_audit">Payer</a>` }));
       // « / » est servi par la fonction accueil : ici, la page elle-même.
-      await p.route(/127\.0\.0\.1:\d+\/\?complet=1/, (r) => r.fulfill({ status: 302, headers: { Location: '/accueil.html?complet=1#prevenir' } }).catch(() => {}));
+      await p.route(/127\.0\.0\.1:\d+\/\?complet=1/, (r) => renvoi(r, '/accueil.html?complet=1#prevenir', 302).catch(() => {}));
     },
   }, taille);
   return { ctx, page, erreurs, appels };
@@ -202,7 +208,7 @@ test('S1 bis. « Merci » ouverte sans paiement (pas de ?session) : la commande 
 
 test('S2. Renvoyé par le serveur avec ?trop=1 : le client lit pourquoi le paiement ne s\'ouvre pas', async () => {
   const { ctx, page, erreurs } = await ouvrir('commande.html', {
-    commander: (r) => r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?trop=1` } }),
+    commander: (r) => renvoi(r, `${srv.url}/commande.html?trop=1`),
   });
   await remplir(page);
   await page.locator('#payer').tap();
@@ -255,7 +261,7 @@ test('S3 bis. Plus de tablette et aucun paiement en cours : toujours renvoyé ve
 for (const [motif, attendu, etape] of [['4g', /pas pu vérifier la 4G/, '#ok1'], ['relais', /point relais n'a pas été retenu/, '#ok2']]) {
   test(`S4. Le serveur refuse d'ouvrir le paiement (?refus=${motif}) : la page dit pourquoi et fait refaire l'étape`, async () => {
     const { ctx, page, erreurs } = await ouvrir('commande.html', {
-      commander: (r) => r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?refus=${motif}` } }),
+      commander: (r) => renvoi(r, `${srv.url}/commande.html?refus=${motif}`),
     });
     await remplir(page);
     await page.locator('#payer').tap();
@@ -275,7 +281,7 @@ for (const [motif, attendu, etape] of [['4g', /pas pu vérifier la 4G/, '#ok1'],
 test('S5. Le paiement ne s\'ouvre pas (erreur du serveur) : le client revient sur sa commande remplie, « Payer » prêt', async () => {
   let n = 0;
   const { ctx, page } = await ouvrir('commande.html', {
-    commander: (r) => (++n === 1 ? r.fulfill({ status: 303, headers: { Location: `${srv.url}/commande.html?erreur=1` } }) : versStripe(r)),
+    commander: (r) => (++n === 1 ? renvoi(r, `${srv.url}/commande.html?erreur=1`) : versStripe(r)),
   });
   await remplir(page);
   await page.locator('#payer').tap();
@@ -321,5 +327,167 @@ test('S8. Petit téléphone (320 px) : le prix de la barre du bas n\'est pas cou
   assert.ok(b.height <= ligne + 2, `« 60 € aujourd'hui » tient sur ${Math.round(b.height / ligne)} lignes`);
   await page.locator('#payer').tap();
   await capture(page, 'S8-barre-320');
+  await ctx.close();
+});
+
+// Statistiques (Tanguy, 17/11 : « où est-ce qu'ils s'arrêtent ») : chaque étape part une seule fois par visite,
+// la visite avec seulement le nom du site d'origine, et rien ne gêne la commande si le compteur ne répond pas.
+test('Statistiques : une commande complète compte chaque étape du tunnel une seule fois', async () => {
+  const comptes = [];
+  const { ctx, page, erreurs } = await ouvrir('commande.html', { commander: 'attend' });
+  await page.route('**/compter**', (r) => { comptes.push(new URL(r.request().url()).searchParams); return r.fulfill({ status: 204, headers: CORS }); });
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await remplir(page);
+  await page.fill('#email', 'marie@exemple.f');
+  await page.fill('#email', 'marie@exemple.fr');
+  await page.locator('#payer').tap();
+  await page.waitForFunction(() => document.getElementById('payer').textContent === 'Un instant…');
+  for (let i = 0; i < 40 && !comptes.some((q) => q.get('e') === 'paiement'); i++) await page.waitForTimeout(100);
+  const etapes = comptes.map((q) => q.get('e'));
+  for (const e of ['visite', 'commande', 'adresse', 'couverture-ok', 'relais', 'coordonnees', 'paiement']) {
+    assert.strictEqual(etapes.filter((x) => x === e).length, 1, `${e} compté une fois (${etapes.join(', ')})`);
+  }
+  assert.ok(!etapes.includes('couverture-non'));
+  const visite = comptes.find((q) => q.get('e') === 'visite');
+  assert.deepStrictEqual([...visite.keys()].sort(), ['e', 'r', 'u'], 'rien d\'autre que l\'étape, le site d\'origine et utm_source');
+  assert.match(visite.get('r'), /^[a-z0-9.-]*$/, 'un nom de site, jamais une adresse complète');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Statistiques : compteur en panne (réseau coupé) : la commande se fait quand même, sans erreur', async () => {
+  const { ctx, page, erreurs } = await ouvrir('commande.html', { commander: 'attend' });
+  await page.route('**/compter**', (r) => r.abort());
+  await page.reload();
+  await remplir(page);
+  await page.locator('#payer').tap();
+  await page.waitForFunction(() => document.getElementById('payer').textContent === 'Un instant…');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Statistiques : plus de tablette, la rupture vue est comptée sur l\'accueil', async () => {
+  const comptes = [];
+  const { ctx, page } = await ouvrir('commande.html', { stock: () => false });
+  await page.route('**/compter**', (r) => { comptes.push(new URL(r.request().url()).searchParams.get('e')); return r.fulfill({ status: 204, headers: CORS }); });
+  await page.waitForURL(/complet=1/);
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await page.locator('#prevenir').waitFor({ state: 'visible' });
+  await page.waitForTimeout(300);
+  assert.ok(comptes.includes('complet'), comptes.join(', '));
+  await ctx.close();
+});
+
+// Accueil servi par la fonction accueil (Tanguy, 17/11 : « tout doit apparaître en même temps ») : l'état du stock est
+// dans la page (<html data-stock>), le bon bouton est visible dès le premier dessin, sans attendre /api/stock.
+async function accueilAvecStock(etat, { lenteur = 0 } = {}) {
+  const demandes = [];
+  const { ctx, page, erreurs } = await vitrine.ouvrir(browser, srv.url, {
+    fichier: 'commande.html',
+    routes: async (p) => {
+      await p.route(/\/(stockDisponible|api\/stock)/, async (r) => {
+        demandes.push(r.request().url());
+        if (lenteur) await new Promise((ok) => setTimeout(ok, lenteur));
+        return r.fulfill({ contentType: 'application/json', headers: CORS, body: JSON.stringify({ disponible: etat !== 'complet' }) }).catch(() => {});
+      });
+      await p.route(/\/accueil\.html/, async (r) => {
+        const rep = await r.fetch();
+        let html = await rep.text();
+        if (etat !== 'absent') html = html.replace('<html lang="fr">', `<html lang="fr" data-stock="${etat}">`);
+        return r.fulfill({ response: rep, body: html });
+      });
+    },
+  }, TEL);
+  // Le premier dessin : on regarde dès que la page est lue, sans attendre la fin du chargement.
+  demandes.length = 0; // la page de commande ouverte d'abord a déjà demandé le stock
+  await page.goto(`${srv.url}/accueil.html`, { waitUntil: 'commit' });
+  await page.waitForFunction(() => document.querySelector('.hero .js-commander'), null, { timeout: 5000 });
+  const premier = await page.evaluate(() => {
+    const b = document.querySelector('.hero .js-commander');
+    return { texte: b.textContent.trim(), visible: getComputedStyle(b).visibility !== 'hidden', attente: document.documentElement.classList.contains('stock-attente') };
+  });
+  return { ctx, page, erreurs, demandes, premier };
+}
+
+test('Accueil, une tablette au stock : « Commander » visible dès le premier dessin, sans attendre le serveur', async () => {
+  const { ctx, erreurs, demandes, premier } = await accueilAvecStock('ok', { lenteur: 5000 });
+  assert.deepStrictEqual(premier, { texte: 'Commander', visible: true, attente: false });
+  assert.deepStrictEqual(demandes, [], 'le stock n\'est pas redemandé : il est dans la page');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Accueil, plus de tablette : « Être prévenu » directement, jamais « Commander » d\'abord', async () => {
+  const { ctx, page, erreurs, demandes, premier } = await accueilAvecStock('complet', { lenteur: 5000 });
+  await page.waitForLoadState('domcontentloaded');
+  const b = page.locator('.hero .js-commander');
+  assert.strictEqual((await b.innerText()).trim(), 'Être prévenu');
+  assert.ok(await b.isVisible());
+  assert.ok(premier.texte === 'Être prévenu' || !premier.visible, `« ${premier.texte} » affiché avant « Être prévenu »`);
+  assert.deepStrictEqual(demandes, [], 'le stock n\'est pas redemandé : il est dans la page');
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Accueil sans état du stock et serveur lent (réseau faible) : les boutons apparaissent quand même en 1,5 s au plus', async () => {
+  const { ctx, page, erreurs } = await accueilAvecStock('absent', { lenteur: 5000 });
+  const debut = Date.now();
+  await page.locator('.hero .js-commander').waitFor({ state: 'visible', timeout: 4000 });
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.hero .js-commander')).visibility !== 'hidden', null, { timeout: 4000 });
+  assert.ok(Date.now() - debut < 2500, `${Date.now() - debut} ms`);
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+// Menu ☰ du téléphone (Tanguy, 17/11 : « un clic en dehors du menu doit l'enlever »).
+async function accueilMenu() {
+  const r = await accueilAvecStock('ok');
+  await r.page.waitForLoadState('load');
+  await r.page.locator('#menu-bouton').tap();
+  assert.strictEqual(await r.page.locator('#menu-bouton').getAttribute('aria-expanded'), 'true');
+  assert.ok(await r.page.locator('#menu a[href="#tarifs"]').isVisible());
+  return r;
+}
+const menuOuvert = (page) => page.evaluate(() => document.querySelector('.top').classList.contains('ouvert'));
+
+test('Menu ☰ : un toucher ailleurs sur la page le ferme', async () => {
+  const { ctx, page, erreurs } = await accueilMenu();
+  await page.touchscreen.tap(180, 700); // bas de l'écran, sous le menu ouvert
+  assert.strictEqual(await menuOuvert(page), false);
+  assert.strictEqual((await page.locator('#menu-bouton').innerText()).trim(), '☰');
+  assert.ok(!(await page.locator('#menu a[href="#tarifs"]').isVisible()));
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Menu ☰ : le bouton Retour du téléphone ferme le menu sans quitter la page, puis ☰ ✕ le rouvre et le ferme', async () => {
+  const { ctx, page, erreurs } = await accueilMenu();
+  const adresse = page.url();
+  await page.goBack();
+  await page.waitForTimeout(200);
+  assert.strictEqual(await menuOuvert(page), false);
+  assert.strictEqual(page.url(), adresse, 'toujours sur l\'accueil');
+  await page.locator('#menu-bouton').tap();
+  assert.strictEqual(await menuOuvert(page), true);
+  await page.locator('#menu-bouton').tap();
+  await page.waitForTimeout(200);
+  assert.strictEqual(await menuOuvert(page), false);
+  assert.strictEqual(page.url(), adresse);
+  assert.deepStrictEqual(erreurs, []);
+  await ctx.close();
+});
+
+test('Menu ☰ : Échap le ferme ; un lien du menu le ferme et mène à sa section', async () => {
+  const { ctx, page, erreurs } = await accueilMenu();
+  await page.keyboard.press('Escape');
+  assert.strictEqual(await menuOuvert(page), false);
+  await page.locator('#menu-bouton').tap();
+  await page.locator('#menu a[href="#tarifs"]').tap();
+  await page.waitForTimeout(300);
+  assert.strictEqual(await menuOuvert(page), false);
+  assert.match(page.url(), /#tarifs$/);
+  assert.deepStrictEqual(erreurs, []);
   await ctx.close();
 });

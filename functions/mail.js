@@ -254,7 +254,7 @@ const FICHE_OFFRE = [
 // Jamais « rien à installer » adressé à un membre de la famille, jamais « chacun installe » non plus.
 const RIEN_A_INSTALLER = { petit: 'Votre proche n\'a rien à installer : la tablette est prêtée et arrive configurée, prête à brancher.' };
 
-const DELAI = 'Je prépare et vérifie votre tablette moi-même, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés';
+const DELAI = 'Nous préparons et vérifions votre tablette à la main, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés';
 
 // reprise : abonnement repris après une résiliation, tablette restée chez le proche (C3) : pas de mise en service,
 // pas de délai pour changer d'avis.

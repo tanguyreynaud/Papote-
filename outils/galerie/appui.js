@@ -47,7 +47,8 @@ async function essayer(partie, browser, base, scene, taille, nom, tablette) {
   try {
     page.on('request', (r) => {
       if (r.method() === 'GET' || /fonts\.g|gstatic\.com/.test(r.url())) return;
-      const k = `${r.method()} ${r.url().replace(/\?.*$/, '')}`;
+      // Compteur de statistiques : chaque étape (?e=…) est un appel distinct, une seule fois par visite.
+      const k = `${r.method()} ${/\/compter\?/.test(r.url()) ? r.url().replace(/&.*$/, '') : r.url().replace(/\?.*$/, '')}`;
       requetes.set(k, (requetes.get(k) || 0) + 1);
     });
     page.on('dialog', (d) => d.dismiss().catch(() => {}));
