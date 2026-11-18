@@ -30,7 +30,7 @@ jobs:
     # Ubuntu 24.04 fixé : ubuntu-latest est passé en 26.04 le 06/11 et Playwright 1.56.1 (outils/galerie)
     # n'y installe pas Chromium (« Playwright does not support chromium on ubuntu26.04-x64 »).
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -53,9 +53,8 @@ jobs:
           node-version: 22
       # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
       - run: npm install --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
-      - if: contains(matrix.mode, '--iphone')
-        run: npx playwright install --with-deps webkit
+      # Un seul passage apt pour les deux navigateurs (18/11 : l'apt des runners a pris 10 + 20 min, job coupé avant tout test).
+      - run: npx playwright install --with-deps chromium ${{ contains(matrix.mode, '--iphone') && 'webkit' || '' }}
       - name: Balayage ${{ matrix.mode }}
         run: node galerie.js ${{ matrix.mode }} --vitrine=ici --emails=ici
       - name: Rapports
