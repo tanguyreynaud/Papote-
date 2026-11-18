@@ -115,7 +115,7 @@ function rendre() {
   // Jour par jour, le plus récent en haut.
   const jours = [...r.jours].reverse();
   $('stats-jours').replaceChildren(jours.length
-    ? h('div', { class: 'table stat-jours' }, h('table', {},
+    ? h('div', { class: 'table stat-jours', tabindex: '0', role: 'region', 'aria-label': 'Tableau jour par jour' }, h('table', {},
       h('thead', {}, h('tr', {}, h('th', {}, 'Jour'), h('th', { class: 'n' }, 'Visiteurs'), h('th', { class: 'n' }, 'Commande'), h('th', { class: 'n' }, 'Payer'), h('th', { class: 'n' }, 'Payées'))),
       h('tbody', {}, jours.map((j) => h('tr', {}, h('td', {}, jourCourt(j.jour)), h('td', { class: 'n' }, nombre(j.visite)), h('td', { class: 'n' }, nombre(j.commande)),
         h('td', { class: 'n' }, nombre(j.paiement)), h('td', { class: 'n' }, nombre(j.paye)))))))
