@@ -53,6 +53,9 @@ jobs:
         run: |
           curl -sSfL --retry 3 https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz | tar -xz -C /opt
           echo /opt/apache-maven-3.9.9/bin >> "$GITHUB_PATH"
+          # Dans le conteneur, Java prend /root comme dossier personnel et Node $HOME (/github/home) : preparer.js
+          # cherche les bibliothèques dans $HOME/.m2 (os.homedir()), Maven doit donc les y ranger.
+          echo "MAVEN_ARGS=-Dmaven.repo.local=$HOME/.m2/repository" >> "$GITHUB_ENV"
       - uses: actions/cache@v4
         with:
           path: ~/.cache/firebase/emulators
