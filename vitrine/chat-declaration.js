@@ -415,7 +415,8 @@
       (f.photos.length ? (f.photos.length > 1 ? ', avec vos ' + f.photos.length + ' photos' : ', avec votre photo') : '') +
       '. Nous vous répondons sous 48 h, par e-mail.';
     var h = o.historique();
-    h.push({ role: 'user', content: '(Demande envoyée : ' + m.libelle + ')' });
+    // Repère lu par le serveur (support.js, etatMain) : « (Déclaration … envoyée) », sans parenthèse à l'intérieur.
+    h.push({ role: 'user', content: '(Déclaration « ' + m.libelle.replace(/\s*\([^)]*\)/g, '') + ' » envoyée)' });
     h.push({ role: 'assistant', content: merci });
     o.sauver();
     o.ajouter('assistant', merci);

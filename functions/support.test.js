@@ -30,7 +30,7 @@ test('coupe les messages trop longs et trop nombreux', () => {
   assert.strictEqual(r[r.length - 1].content, 'fin');
 });
 
-const { coordonneesValides, lireReponse, ACTIONS, consigneActions } = require('./support')._test;
+const { coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, etatMain, PHRASE_RAPPEL, PHRASE_DECLARATION } = require('./support')._test;
 
 test('accepte un téléphone ou un e-mail', () => {
   assert.deepStrictEqual(coordonneesValides('06 12 34 56 78'), { telephone: '06 12 34 56 78' });
@@ -41,7 +41,7 @@ test('accepte un téléphone ou un e-mail', () => {
 });
 
 test('repère la marque de passage de main', () => {
-  assert.deepStrictEqual(lireReponse('Quelqu’un va vous recontacter.\n[CONTACT]'), { reponse: 'Quelqu’un va vous recontacter.', contact: true });
+  assert.deepStrictEqual(lireReponse('Quelqu’un va vous recontacter.\n[CONTACT]'), { reponse: 'Quelqu’un va vous recontacter.\n\n' + PHRASE_RAPPEL, contact: true });
   assert.deepStrictEqual(lireReponse('20 € par mois.'), { reponse: '20 € par mois.', contact: false });
 });
 
@@ -111,6 +111,8 @@ test('boutons [ALLER:x] : retirés du texte, gardés seulement s\'ils sont permi
     { reponse: 'Ouvrez Réglages, « Dépanner la tablette ».', contact: false, actions: ['depanner'] });
   // Inconnue, ou réservée à l'autre page : ignorée, mais jamais laissée dans le texte.
   const inconnu = lireReponse('Voici.\n[ALLER:payer]\n[ALLER:commander]', 'appli');
+  // Sur le site, un écran de l'appli est permis (bouton « Dans l'appli »).
+  assert.deepStrictEqual(lireReponse('Changez de carte dans l\'appli.\n[ALLER:abonnement]', 'site').actions, ['abonnement']);
   assert.deepStrictEqual(inconnu, { reponse: 'Voici.', contact: false });
   assert.deepStrictEqual(lireReponse('Commandez ici.\n[ALLER:commander]', 'site').actions, ['commander']);
   // Deux au plus, sans doublon, casse et espaces tolérés.
@@ -121,8 +123,16 @@ test('boutons [ALLER:x] : retirés du texte, gardés seulement s\'ils sont permi
 
 test('boutons : la passation de main reste reconnue avec une balise avant ou après', () => {
   const lu = lireReponse('Regardez l\'abonnement.\n[ALLER:abonnement]\n[CONTACT]', 'appli');
-  assert.deepStrictEqual(lu, { reponse: 'Regardez l\'abonnement.', contact: true, actions: ['abonnement'] });
+  assert.deepStrictEqual(lu, { reponse: 'Regardez l\'abonnement.\n\n' + PHRASE_RAPPEL, contact: true, actions: ['abonnement'] });
   assert.strictEqual(lireReponse('Regardez.\n[CONTACT]\n[ALLER:abonnement]', 'appli').contact, true);
+});
+
+test('boutons : déduits du libellé cité quand l\'IA oublie la balise (appli seulement)', () => {
+  assert.deepStrictEqual(lireReponse('Allez dans Réglages, « Dépanner la tablette », puis « Redémarrer la tablette ».', 'appli').actions, ['depanner']);
+  assert.deepStrictEqual(lireReponse('Onglet Profil, « Gérer le paiement et les factures ». Sinon Réglages, « Changer le Wi-Fi », ou « Volumes ».', 'appli').actions, ['abonnement', 'wifi']);
+  assert.strictEqual(lireReponse('Allez dans Réglages, « Dépanner la tablette ».', 'site').actions, undefined);
+  assert.strictEqual(lireReponse('Bonjour, comment puis-je vous aider ?', 'appli').actions, undefined);
+  assert.deepStrictEqual(lireReponse('Réglages, « Dépanner la tablette ».\n[ALLER:nuit]', 'appli').actions, ['nuit']);
 });
 
 test('boutons : aucune action ne touche à l\'argent, et la consigne le dit', () => {
@@ -130,4 +140,40 @@ test('boutons : aucune action ne touche à l\'argent, et la consigne le dit', ()
   assert.match(consigneActions('appli'), /\[ALLER:depanner\]/);
   assert.doesNotMatch(consigneActions('appli'), /\[ALLER:commander\]/);
   assert.match(consigneActions('site'), /c'est elle qui appuie/);
+});
+
+test('passage de main : la phrase est posée par le serveur, une seule fois', () => {
+  // Vu sur 121 conversations de 6 messages : phrase en double, phrase sans la marque, marque avant la phrase.
+  const double = lireReponse('Je comprends. ' + PHRASE_RAPPEL + '\n\n' + PHRASE_RAPPEL + '\n[CONTACT]', 'site');
+  assert.deepStrictEqual(double, { reponse: 'Je comprends.\n\n' + PHRASE_RAPPEL, contact: true });
+  const sansMarque = lireReponse('Je regarde.\n\n\n\n' + PHRASE_RAPPEL.replace(/’/g, "'"), 'site');
+  assert.deepStrictEqual(sansMarque, { reponse: 'Je regarde.\n\n' + PHRASE_RAPPEL, contact: true });
+  const marqueAvant = lireReponse('Je regarde.\n\n[CONTACT]\n\n' + PHRASE_RAPPEL + '\n[ALLER:abonnement]', 'appli');
+  assert.deepStrictEqual(marqueAvant, { reponse: 'Je regarde.\n\n' + PHRASE_RAPPEL, contact: true, actions: ['abonnement'] });
+  // Appli avec la demande guidée : l'autre phrase, même si l'IA a recopié l'ancienne.
+  assert.strictEqual(lireReponse('Écran fissuré. ' + PHRASE_RAPPEL + '\n[CONTACT]', 'appli', true).reponse, 'Écran fissuré.\n\n' + PHRASE_DECLARATION);
+  assert.strictEqual(lireReponse('Écran fissuré.\n[CONTACT]', 'site', true).reponse, 'Écran fissuré.\n\n' + PHRASE_RAPPEL);
+  assert.strictEqual(lireReponse('25 € par mois.', 'site').reponse, '25 € par mois.');
+  assert.match(consigneMain('site', false), /Ne l'écris donc jamais toi-même/);
+});
+
+test('passage de main : une fois faite, elle n\'est pas répétée à chaque message', () => {
+  const avant = [{ role: 'user', content: 'Double prélèvement' }, { role: 'assistant', content: 'L\'équipe doit vérifier.\n\n' + PHRASE_RAPPEL }, { role: 'user', content: 'Et je suis remboursée quand ?' }];
+  assert.strictEqual(etatMain(avant), 'proposee');
+  assert.strictEqual(etatMain(avant.slice(0, 1)), '');
+  assert.match(consigneMain('appli', false, 'proposee'), /DÉJÀ été passée/);
+  // Demande envoyée (la bulle l'écrit dans l'historique) : on ne la repropose plus.
+  const apres = avant.concat([{ role: 'user', content: '(Demande de rappel envoyée)' }, { role: 'assistant', content: 'Merci ! Votre demande est bien arrivée.' }, { role: 'user', content: 'Et maintenant ?' }]);
+  assert.strictEqual(etatMain(apres), 'envoyee');
+  assert.match(consigneMain('site', false, 'envoyee'), /DÉJÀ envoyé sa demande/);
+  assert.deepStrictEqual(lireReponse('Sous 14 jours.\n[CONTACT]', 'appli', false, 'proposee'), { reponse: 'Sous 14 jours.', contact: true });
+  assert.deepStrictEqual(lireReponse('Nouveau souci.\n[CONTACT]', 'appli', false, 'envoyee'), { reponse: 'Nouveau souci.\n\n' + PHRASE_RAPPEL, contact: true });
+});
+
+test('passage de main : phrase selon la page et la bulle', () => {
+  assert.match(consigneMain('site', true), /Laissez votre téléphone et votre e-mail/);
+  assert.match(consigneMain('appli', false), /Laissez votre téléphone et votre e-mail/);
+  assert.match(consigneMain('appli', true), /Remplissez la petite demande/);
+  assert.match(consigneMain('appli', true), /Ne promets rien sur l’argent/);
+  assert.match(consigneActions('site'), /déjà cliente/);
 });
