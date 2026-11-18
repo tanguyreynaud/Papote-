@@ -334,9 +334,28 @@ function dernierMail(email) {
   return m[m.length - 1] || null;
 }
 
-/** Le texte d'un toast (petit message en bas). */
+/**
+ * Le texte d'un toast (petit message en bas) : affiché dans les 10 s d'avant l'appel ou dans les 15 s qui suivent.
+ * Le toast ne reste que 2,5 s : attendre qu'il soit visible ratait celui d'un 2e téléphone pendant qu'on attendait
+ * le 1er (deux-proches), ou celui d'une page occupée sur une CI chargée (agenda) ; chaque toast affiché est donc
+ * noté par la page elle-même (banc.js NOTER_TOASTS) et relu ici. Un toast relu est retiré de la liste : le même
+ * texte attendu deux fois demande deux affichages. Même comparaison que hasText (casse et espaces ignorés).
+ */
 async function toast(t, motif) {
-  await t.page.locator('#toast').filter({ hasText: motif }).waitFor({ state: 'visible', timeout: 15_000 });
+  const depuis = await t.page.evaluate(() => Date.now() - 10_000);
+  try {
+    await t.page.waitForFunction(({ m, d }) => {
+      const norme = (x) => String(x).replace(/\s+/g, ' ').trim().toLowerCase();
+      const vus = window.__toastsVus || [];
+      const i = vus.findIndex((v) => v.a >= d && norme(v.texte).includes(norme(m)));
+      if (i < 0) return false;
+      vus.splice(i, 1);
+      return true;
+    }, { m: motif, d: depuis }, { timeout: 15_000 });
+  } catch (e) {
+    const vus = await t.page.evaluate(() => (window.__toastsVus || []).map((v) => v.texte)).catch(() => []);
+    throw new Error(`[${t.nom}] toast « ${motif} » jamais affiché (toasts vus : ${JSON.stringify(vus)})\n${t.console.slice(-15).join('\n')}`);
+  }
 }
 
 // ---------- Accueil et pages ----------

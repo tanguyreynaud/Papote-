@@ -33,6 +33,11 @@ et une app pour que la famille lui envoie photos et messages depuis iPhone ou An
    nom de la tablette, wifi (sauté s'il y a une carte SIM avec internet), puis QR code ou code à taper
    dans l'app famille (« Ajouter ma tablette »), et confirmation « C'est bien vous ? » sur la tablette.
 
+## Avant chaque push d'un fil
+
+`outils/verifier-avant-pousser.sh` : secrets, balayage accessibilité de l'app famille / admin, règles et scénarios
+touchés, comme la CI, en quelques minutes ; code 1 au moindre échec (détails : `tests/app-famille/README.md`).
+
 ## Publier une mise à jour
 
 1. Augmenter `versionCode` et `versionName` dans `android/app/build.gradle.kts`, puis faire un commit.

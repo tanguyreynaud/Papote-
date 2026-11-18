@@ -7,10 +7,19 @@ const banc = require('./banc');
 
 const { s } = banc;
 
+// Une promesse qui ne répond pas dans le délai devient une erreur claire. Le WebRTC de WebKit peut rester bloqué
+// dans un page.evaluate (qui n'a pas de délai) : un appel sans fin a gardé appels.test.js 10 min (délai du fichier)
+// puis fait échouer le fichier suivant (badges, « Rien de dû », 18/11 : audit/tests-instables-18-11.md).
+function avecDelai(promesse, message, delai = 20_000) {
+  let minuteur;
+  const trop = new Promise((_, non) => { minuteur = setTimeout(() => non(new Error(`Tablette : ${message} (pas de réponse en ${delai / 1000} s)`)), delai); });
+  return Promise.race([promesse, trop]).finally(() => clearTimeout(minuteur));
+}
+
 async function attendre(fn, message, delai = 20_000) {
   const debut = Date.now();
   for (;;) {
-    const r = await fn();
+    const r = await avecDelai(fn(), message, Math.max(1_000, delai - (Date.now() - debut)));
     if (r) return r;
     if (Date.now() - debut > delai) throw new Error(`Tablette : ${message}`);
     await new Promise((ok) => setTimeout(ok, 150));
@@ -34,18 +43,27 @@ function relayer(tablette, cid, mesCandidats, siensCandidats) {
   const boucle = (async () => {
     while (!fini) {
       try {
-        const miens = await tablette.page.evaluate(() => window.candidats.splice(0));
+        const miens = await avecDelai(tablette.page.evaluate(() => window.candidats.splice(0)), 'candidats ICE');
         for (const c of miens) {
           const cle = JSON.stringify(c);
           if (envoyes.has(cle)) continue;
           envoyes.add(cle);
           await ref(tablette, cid).collection(mesCandidats).add(c);
         }
+        // Un candidat de l'autre côté n'est ajouté qu'une fois sa description reçue (setRemoteDescription) : avant,
+        // addIceCandidate le refuse. Il était pourtant noté « reçu » et jamais redonné : quand la tablette appelle,
+        // le relais démarre avant la réponse du proche (prendreReponse), et les candidats du proche arrivés entre
+        // les deux étaient perdus ; WebKit ne trouvait alors aucune paire (« liaison non établie », 18/11).
+        // Comme l'app (appel.js, early) : gardé pour le tour suivant tant que la description n'est pas là.
         const siens = await ref(tablette, cid).collection(siensCandidats).get();
         for (const d of siens.docs) {
           if (recus.has(d.id)) continue;
-          recus.add(d.id);
-          await tablette.page.evaluate((c) => window.pc.addIceCandidate(c).catch(() => {}), d.data());
+          const pris = await avecDelai(tablette.page.evaluate(async (c) => {
+            if (!window.pc.remoteDescription) return false;
+            await window.pc.addIceCandidate(c).catch(() => {});
+            return true;
+          }, d.data()), 'candidat ICE');
+          if (pris) recus.add(d.id);
         }
       } catch (e) {
         if (!fini) throw e;
@@ -68,7 +86,7 @@ const PREPARER = async () => {
 /** La tablette décroche un appel vidéo d'un proche (appel.js startCall). */
 async function decrocher(tablette, cid) {
   const appel = await attendre(async () => { const d = (await ref(tablette, cid).get()).data(); return d && d.offer && d; }, 'offre absente');
-  const answer = await tablette.page.evaluate(async ({ offer, preparer }) => {
+  const answer = await avecDelai(tablette.page.evaluate(async ({ offer, preparer }) => {
     // eslint-disable-next-line no-eval
     await (0, eval)(`(${preparer})`)();
     // Image 4:3 comme la caméra de la tablette (la fausse caméra de WebKit n'a pas la même forme que celle de Chromium).
@@ -78,7 +96,7 @@ async function decrocher(tablette, cid) {
     const a = await window.pc.createAnswer();
     await window.pc.setLocalDescription(a);
     return { type: a.type, sdp: a.sdp };
-  }, { offer: appel.offer, preparer: PREPARER.toString() });
+  }, { offer: appel.offer, preparer: PREPARER.toString() }), 'réponse à l\'offre');
   tablette.arreterRelais = relayer(tablette, cid, 'calleeCandidates', 'callerCandidates');
   await ref(tablette, cid).update({ answer, state: 'accepted' });
   await attendre(() => tablette.page.evaluate(() => window.pc.connectionState === 'connected'), 'liaison non établie');
@@ -96,7 +114,7 @@ async function appeler(tablette, { vers = null, nom = 'Mamie Emma', sos = 0 } = 
     callerUid: tablette.tab.callsUid, callerName: nom, calleeUid: sos ? null : vers, calleeName: sos ? (sos === 2 ? 'SOS 2' : 'SOS') : null,
     state: 'ringing', offer: null, answer: null, createdAt: s.FieldValue.serverTimestamp(), endedAt: null,
   });
-  const offer = await tablette.page.evaluate(async (preparer) => {
+  const offer = await avecDelai(tablette.page.evaluate(async (preparer) => {
     // eslint-disable-next-line no-eval
     await (0, eval)(`(${preparer})`)();
     const flux = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -105,7 +123,7 @@ async function appeler(tablette, { vers = null, nom = 'Mamie Emma', sos = 0 } = 
     const o = await window.pc.createOffer();
     await window.pc.setLocalDescription(o);
     return { type: o.type, sdp: o.sdp };
-  }, PREPARER.toString());
+  }, PREPARER.toString()), 'offre');
   await callRef.update({ offer });
   tablette.arreterRelais = relayer(tablette, callRef.id, 'callerCandidates', 'calleeCandidates');
   return callRef.id;
@@ -114,7 +132,7 @@ async function appeler(tablette, { vers = null, nom = 'Mamie Emma', sos = 0 } = 
 /** Le proche a décroché (answer écrite) : la tablette prend sa réponse et attend la liaison. */
 async function prendreReponse(tablette, cid) {
   const appel = await attendre(async () => { const d = (await ref(tablette, cid).get()).data(); return d && d.answer && d; }, 'pas de réponse');
-  await tablette.page.evaluate((a) => window.pc.setRemoteDescription({ type: a.type, sdp: a.sdp }), appel.answer);
+  await avecDelai(tablette.page.evaluate((a) => window.pc.setRemoteDescription({ type: a.type, sdp: a.sdp }), appel.answer), 'réponse du proche');
   await attendre(() => tablette.page.evaluate(() => window.pc.connectionState === 'connected'), 'liaison non établie');
   return appel.answer;
 }
