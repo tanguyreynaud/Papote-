@@ -79,3 +79,10 @@ test('le guide ne dit plus que la commande est fermée ni que deux abonnements v
   assert.ok(STOCK_DISPONIBLE.startsWith('# État du stock') && STOCK_EPUISE.startsWith('# État du stock'));
   assert.ok(STOCK_DISPONIBLE.includes('Commander') && STOCK_EPUISE.includes('Être prévenu'));
 });
+
+// Tanguy, 18/11 : tout responsable gère l'abonnement, pas seulement le propriétaire ; l'assistant ne doit pas dire l'inverse.
+test('le guide dit que tout responsable gère l\'abonnement', () => {
+  const guide = require('fs').readFileSync(require('path').join(__dirname, 'support-connaissances.md'), 'utf8');
+  assert.ok(!/Seul le propriétaire de la famille|Elle seule règle la tablette/.test(guide));
+  assert.ok(guide.includes('Tous les responsables de la famille voient ces boutons, qu\'ils paient ou non'));
+});
