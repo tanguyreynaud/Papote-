@@ -30,7 +30,7 @@ test('coupe les messages trop longs et trop nombreux', () => {
   assert.strictEqual(r[r.length - 1].content, 'fin');
 });
 
-const { coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, mainDejaPassee, PHRASE_RAPPEL, PHRASE_DECLARATION } = require('./support')._test;
+const { coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, etatMain, PHRASE_RAPPEL, PHRASE_DECLARATION } = require('./support')._test;
 
 test('accepte un téléphone ou un e-mail', () => {
   assert.deepStrictEqual(coordonneesValides('06 12 34 56 78'), { telephone: '06 12 34 56 78' });
@@ -151,11 +151,14 @@ test('passage de main : la phrase est posée par le serveur, une seule fois', ()
 
 test('passage de main : une fois faite, elle n\'est pas répétée à chaque message', () => {
   const avant = [{ role: 'user', content: 'Double prélèvement' }, { role: 'assistant', content: 'L\'équipe doit vérifier.\n\n' + PHRASE_RAPPEL }, { role: 'user', content: 'Et je suis remboursée quand ?' }];
-  assert.strictEqual(mainDejaPassee(avant), true);
-  assert.strictEqual(mainDejaPassee(avant.slice(0, 1)), false);
-  assert.match(consigneMain('appli', false, true), /DÉJÀ été passée/);
-  assert.deepStrictEqual(lireReponse('Sous 14 jours.\n[CONTACT]', 'appli', false, true), { reponse: 'Sous 14 jours.', contact: true });
-  assert.deepStrictEqual(lireReponse('Sous 14 jours.', 'appli', false, true), { reponse: 'Sous 14 jours.', contact: false });
+  assert.strictEqual(etatMain(avant), 'proposee');
+  assert.strictEqual(etatMain(avant.slice(0, 1)), '');
+  assert.match(consigneMain('appli', false, 'proposee'), /DÉJÀ été passée/);
+  // Demande envoyée (la bulle l'écrit dans l'historique) : on ne la repropose plus.
+  const apres = avant.concat([{ role: 'user', content: '(Demande de rappel envoyée)' }, { role: 'assistant', content: 'Merci ! Votre demande est bien arrivée.' }, { role: 'user', content: 'Et maintenant ?' }]);
+  assert.strictEqual(etatMain(apres), 'envoyee');
+  assert.match(consigneMain('site', false, 'envoyee'), /DÉJÀ envoyé sa demande/);
+  assert.deepStrictEqual(lireReponse('Sous 14 jours.', 'appli'), { reponse: 'Sous 14 jours.', contact: false });
 });
 
 test('passage de main : phrase selon la page et la bulle', () => {

@@ -256,13 +256,22 @@ const PHRASE_DECLARATION = 'Remplissez la petite demande juste en dessous, avec 
 function phraseMain(page, declaration) {
   return page === 'appli' && declaration ? PHRASE_DECLARATION : PHRASE_RAPPEL;
 }
-// La main a-t-elle déjà été passée plus haut ? (une réponse précédente porte la phrase)
-function mainDejaPassee(messages) {
-  return (messages || []).some((m) => m && m.role === 'assistant' && [PHRASE_RAPPEL, PHRASE_DECLARATION].some((p) => String(m.content).includes(p.slice(0, 40))));
+// Où en est le passage de main dans la conversation : '' (jamais), 'proposee' (formulaire affiché), 'envoyee' (demande partie).
+function etatMain(messages) {
+  let etat = '';
+  for (const m of messages || []) {
+    const c = String((m && m.content) || '');
+    if (m.role === 'user' && /^\((Demande|Déclaration)[^)]*envoyée\)$/.test(c.trim())) etat = 'envoyee';
+    else if (m.role === 'assistant' && [PHRASE_RAPPEL, PHRASE_DECLARATION].some((p) => c.includes(p.slice(0, 40)))) etat = 'proposee';
+  }
+  return etat;
 }
-function consigneMain(page, declaration, deja) {
-  if (deja) {
-    return `La main a DÉJÀ été passée dans cette conversation : le formulaire est affiché sous une de tes réponses précédentes. Ne recommence pas : n'écris plus ${MARQUE_CONTACT}, n'invite plus à laisser ses coordonnées, ne redis pas que l'équipe va regarder ou recontacter. Réponds seulement, en une ou deux phrases, à ce que la personne vient d'écrire (un prix, un délai, « et si… ? », une étape du guide). Rien n'est transmis tant qu'elle n'a pas envoyé le formulaire : ne dis jamais que l'équipe est prévenue ou a déjà la demande. Si elle demande ce qu'il faut faire ou qui contacter, dis simplement de remplir le formulaire affiché plus haut : l'équipe répond sous 48 h. Seule exception : si elle demande de nouveau, clairement, à parler à quelqu'un, tu peux terminer par ${MARQUE_CONTACT}.`;
+function consigneMain(page, declaration, etat) {
+  if (etat === 'envoyee') {
+    return `La personne a DÉJÀ envoyé sa demande à l'équipe dans cette conversation : l'équipe répond sous 48 h. Ne lui propose plus de laisser ses coordonnées et n'écris plus ${MARQUE_CONTACT} pour le même sujet. Réponds simplement à ce qu'elle écrit ; si elle s'inquiète, rassure-la : sa demande est bien partie. N'écris ${MARQUE_CONTACT} que pour un nouveau problème, différent, que tu ne peux pas régler.`;
+  }
+  if (etat === 'proposee') {
+    return `La main a DÉJÀ été passée dans cette conversation, et le formulaire a été proposé. Ne recommence pas à chaque message : par défaut, n'écris plus ${MARQUE_CONTACT}, ne parle plus du formulaire ni de laisser ses coordonnées, ne redis pas que l'équipe va regarder ou recontacter. Réponds seulement, en une ou deux phrases, à ce que la personne vient d'écrire (un prix, un délai, « et si… ? », une précision). Rien n'est transmis tant qu'elle n'a pas envoyé le formulaire : ne dis jamais que l'équipe est prévenue ou a déjà la demande. Seule exception : si elle demande quoi faire maintenant, qui contacter, ou redemande clairement quelqu'un, réponds en une phrase courte et termine par ${MARQUE_CONTACT} (le formulaire se réaffiche juste en dessous, avec sa phrase).`;
   }
   return `Passage de main : quand tu termines par ${MARQUE_CONTACT}, cette phrase est ajoutée automatiquement à la fin de ta réponse, avec le formulaire : « ${phraseMain(page, declaration)} » Ne l'écris donc jamais toi-même, ni une phrase du même genre, même si tu la vois dans tes réponses précédentes.`
     + (page === 'appli' && declaration ? ' Ne promets rien sur l\u2019argent (remplacement, montant facturé ou non) : c\u2019est l\u2019équipe qui décide après avoir vu la demande.' : '');
@@ -278,7 +287,7 @@ function consigneActions(page) {
   return `Boutons : quand ta réponse envoie la personne vers l'un de ces écrans, ajoute tout à la fin, sur une ligne seule, la balise correspondante (${MAX_ACTIONS} au plus, la plus utile d'abord) : ${liste}. Un bouton s'affichera sous ta réponse pour l'ouvrir ; garde quand même le chemin en toutes lettres dans ta phrase. N'invente aucune autre balise et n'en mets pas si aucun écran ne correspond. Tu ne fais jamais rien à la place de la personne, surtout pour l'argent (payer, résilier, annuler, changer de compte bancaire) : tu indiques l'écran, c'est elle qui appuie.`;
 }
 
-function lireReponse(texte, page, declaration, deja) {
+function lireReponse(texte, page, declaration) {
   // Balises de bouton : retirées du texte dans tous les cas, gardées seulement si elles sont dans la liste de la page.
   // Sur le site, les écrans de l'appli sont permis aussi : la bulle en fait un bouton « Dans l'appli ».
   const permises = page === 'site' ? { ...ACTIONS.site, ...ACTIONS.appli } : (ACTIONS[page] || {});
@@ -300,8 +309,7 @@ function lireReponse(texte, page, declaration, deja) {
   let reponse = texte.split(MARQUE_CONTACT).join('').replace(/\*\*(.+?)\*\*/g, '$1').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   const sansRefus = reponse.replace(REFUS, '').trim();
   if (sansRefus) reponse = sansRefus;
-  // Déjà passée plus haut : le formulaire revient, mais la phrase n'est pas répétée à chaque message.
-  if (contact && (!deja || !reponse)) reponse = (reponse ? reponse + '\n\n' : '') + phraseMain(page, declaration);
+  if (contact) reponse = (reponse ? reponse + '\n\n' : '') + phraseMain(page, declaration);
   return actions.length ? { reponse, contact, actions } : { reponse, contact };
 }
 
@@ -413,13 +421,13 @@ exports.supportChat = onRequest(
             ? 'La personne écrit depuis l\u2019appli famille : elle est déjà cliente. Guide-la dans l\u2019appli (« dans Réglages… »).'
             : 'La personne écrit depuis le site : elle découvre peut-être Papote.' },
           { type: 'text', text: consigneActions(page) },
-          { type: 'text', text: consigneMain(page, req.body.declaration === true, mainDejaPassee(messages)) },
+          { type: 'text', text: consigneMain(page, req.body.declaration === true, etatMain(messages)) },
         ],
         messages,
       });
       const brut = reponse.stop_reason === 'refusal' ? ''
         : reponse.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-      const lu = lireReponse(brut, page, req.body.declaration === true, mainDejaPassee(messages));
+      const lu = lireReponse(brut, page, req.body.declaration === true);
       if (lu.contact) {
         await base().collection('supportSansReponse').add({
           question: messages[messages.length - 1].content, conversation: messages, page,
@@ -455,4 +463,4 @@ exports.bilanSupport = async () => {
 };
 
 
-exports._test = { sansPersonne, sansBalises, QUOTAS, QUOTAS_JOUR, nettoyer, coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, mainDejaPassee, PHRASE_RAPPEL, PHRASE_DECLARATION, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };
+exports._test = { sansPersonne, sansBalises, QUOTAS, QUOTAS_JOUR, nettoyer, coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, etatMain, PHRASE_RAPPEL, PHRASE_DECLARATION, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };
