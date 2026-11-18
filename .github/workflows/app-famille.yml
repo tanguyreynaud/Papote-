@@ -61,7 +61,24 @@ jobs:
       # Tests sans navigateur ni émulateur : réseau mobile de l'admin (opérateur par fréquence, « Vu » sur l'alerte).
       - run: node --test ../reseau.test.mjs
       - run: npm ci
-      - run: npx playwright install --with-deps ${{ matrix.moteur }}
+      # Navigateur ${{ matrix.moteur }} de Playwright en cache (navigateurs et paquets système .deb) : l'installation complète
+      # prenait jusqu'à 21 min (paquets apt à 110 ko/s, 18/11) et faisait couper la tâche. Cache trouvé : seulement
+      # les dépendances système (install-deps), avec les .deb déjà là. Version de Playwright + navigateur + image.
+      - name: Version de Playwright (${{ matrix.moteur }})
+        id: pw
+        run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-${{ matrix.moteur }}-$ImageOS" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/apt-playwright
+          key: ${{ steps.pw.outputs.cle }}
+      - name: Installer ${{ matrix.moteur }} (Playwright)
+        run: |
+          if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps ${{ matrix.moteur }}; else npx playwright install --with-deps ${{ matrix.moteur }}; fi
+          mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
       - run: npm test
       - name: Captures en cas d'échec
         if: failure()

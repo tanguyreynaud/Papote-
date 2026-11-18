@@ -67,9 +67,45 @@ jobs:
           node-version: 22
       # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
       - run: npm install --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
-      - if: contains(matrix.mode, '--iphone')
-        run: npx playwright install --with-deps webkit
+      # Navigateur chromium de Playwright en cache (navigateurs et paquets système .deb) : l'installation complète
+      # prenait jusqu'à 21 min (paquets apt à 110 ko/s, 18/11) et faisait couper la tâche. Cache trouvé : seulement
+      # les dépendances système (install-deps), avec les .deb déjà là. Version de Playwright + navigateur + image.
+      - name: Version de Playwright (chromium)
+        id: pw
+        run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-chromium-$ImageOS" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/apt-playwright
+          key: ${{ steps.pw.outputs.cle }}
+      - name: Installer chromium (Playwright)
+        run: |
+          if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps chromium; else npx playwright install --with-deps chromium; fi
+          mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
+      # Navigateur webkit de Playwright en cache (navigateurs et paquets système .deb) : l'installation complète
+      # prenait jusqu'à 21 min (paquets apt à 110 ko/s, 18/11) et faisait couper la tâche. Cache trouvé : seulement
+      # les dépendances système (install-deps), avec les .deb déjà là. Version de Playwright + navigateur + image.
+      - name: Version de Playwright (webkit)
+        id: pwwk
+        if: contains(matrix.mode, '--iphone')
+        run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-webkit-$ImageOS" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: pwwk-cache
+        if: contains(matrix.mode, '--iphone')
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/apt-playwright
+          key: ${{ steps.pwwk.outputs.cle }}
+      - name: Installer webkit (Playwright)
+        if: contains(matrix.mode, '--iphone')
+        run: |
+          if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
+          if [ "${{ steps.pwwk-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps webkit; else npx playwright install --with-deps webkit; fi
+          mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
       - name: Balayage ${{ matrix.mode }} ${{ matrix.variantes }}
         env:
           GESTES_VARIANTES: ${{ matrix.variantes }}
