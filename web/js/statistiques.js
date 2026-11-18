@@ -112,10 +112,11 @@ function rendre() {
       barre(n, sources[0][1], 'clair'))))
     : h('p', { class: 'muted' }, 'Pas encore de visite avec sa provenance (comptée depuis le 17/11/2026).'));
 
-  // Jour par jour, le plus récent en haut.
+  // Jour par jour, le plus récent en haut. Le tableau défile de côté sur un téléphone : il se prend au clavier
+  // (tabindex, balayage accessibilité « scrollable-region-focusable »).
   const jours = [...r.jours].reverse();
   $('stats-jours').replaceChildren(jours.length
-    ? h('div', { class: 'table stat-jours' }, h('table', {},
+    ? h('div', { class: 'table stat-jours', tabindex: '0', role: 'region', 'aria-label': 'Jour par jour' }, h('table', {},
       h('thead', {}, h('tr', {}, h('th', {}, 'Jour'), h('th', { class: 'n' }, 'Visiteurs'), h('th', { class: 'n' }, 'Commande'), h('th', { class: 'n' }, 'Payer'), h('th', { class: 'n' }, 'Payées'))),
       h('tbody', {}, jours.map((j) => h('tr', {}, h('td', {}, jourCourt(j.jour)), h('td', { class: 'n' }, nombre(j.visite)), h('td', { class: 'n' }, nombre(j.commande)),
         h('td', { class: 'n' }, nombre(j.paiement)), h('td', { class: 'n' }, nombre(j.paye)))))))
