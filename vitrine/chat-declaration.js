@@ -66,7 +66,8 @@
     '.ps-decl button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}' +
     '.ps-decl .ps-d-motifs button,.ps-decl .ps-d-choix button{min-height:44px;text-align:left;border:1px solid var(--ps-ligne);background:var(--ps-fond);color:var(--ps-texte);border-radius:12px;padding:.55rem .8rem;font-size:1rem;overflow-wrap:anywhere}' +
     '.ps-decl .ps-d-motifs button:active,.ps-decl .ps-d-choix button:active{background:var(--ps-doux)}' +
-    '.ps-decl .ps-d-choix{display:flex;flex-wrap:wrap;gap:.4rem}' +
+    // Choix les uns sous les autres, tous de la même largeur (boutons de même taille, faciles à toucher).
+    '.ps-decl .ps-d-choix{display:flex;flex-direction:column;gap:.4rem}' +
     '.ps-decl .ps-d-choix button[aria-pressed=true]{background:var(--ps-indigo);border-color:var(--ps-indigo);color:#fff;font-weight:700}' +
     '.ps-decl fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:.4rem;min-width:0}' +
     '.ps-decl legend{padding:0;margin-bottom:.35rem;font-weight:700;font-size:1rem}' +
@@ -324,8 +325,12 @@
       f.enPrepa += fichiers.length;
       dessinerPhotos(f);
       fichiers.forEach(function (fichier) {
+        // Les photos gardent l'ordre du choix, même si une petite est prête avant une grande.
+        var rang = f.rang = (f.rang || 0) + 1;
         reduire(fichier).then(function (p) {
+          p.rang = rang;
           f.photos.push(p);
+          f.photos.sort(function (x, y) { return x.rang - y.rang; });
         }, function () {
           f.erreur.textContent = 'Une photo ne s’ouvre pas. Choisissez-en une autre.';
         }).then(function () {
