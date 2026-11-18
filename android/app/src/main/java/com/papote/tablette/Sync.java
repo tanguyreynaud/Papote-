@@ -289,6 +289,7 @@ final class Sync {
             }
             if (lastRemindersJson == null && c.optJSONObject("reminders") != null) lastRemindersJson = c.getJSONObject("reminders").toString();
             if (lastFamilyJson == null && c.optJSONObject("family") != null) lastFamilyJson = c.getJSONObject("family").toString();
+            if (lastFamilyJson != null && sosOrdre == null) sosOrdre = new JSONObject(lastFamilyJson).optJSONArray("sosOrdre");
             restaurerPhotosGardees();
         } catch (Exception e) {
             Log.w(TAG, "Copie sur la tablette illisible", e);
@@ -624,7 +625,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "volumeAppel", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "volumeAppel", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim", "sosOrdre");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -656,6 +657,23 @@ final class Sync {
                             : av.getJSONObject("arrayValue").optJSONArray("values");
                     for (int i = 0; vals != null && i < vals.length(); i++) admins.add(vals.getJSONObject(i).optString("stringValue"));
                 } catch (Exception ignored) { }
+                // Ordre d'appel du SOS choisi par un responsable (families/{fid}.sosOrdre, liste d'uid) ;
+                // absent : ordre par défaut (responsables d'abord). Republié tout de suite à la page :
+                // la relecture des proches (syncFamilyExtras) attend la nuit ou l'économie de forfait.
+                JSONArray ordre = null;
+                try {
+                    JSONObject so = ff.optJSONObject("sosOrdre");
+                    JSONObject sav = so == null ? null : so.optJSONObject("arrayValue");
+                    if (sav != null) {
+                        ordre = new JSONArray();
+                        JSONArray vals = sav.optJSONArray("values");
+                        for (int i = 0; vals != null && i < vals.length(); i++) {
+                            String u = vals.getJSONObject(i).optString("stringValue", "");
+                            if (!u.isEmpty()) ordre.put(u);
+                        }
+                    }
+                } catch (Exception ignored) { ordre = null; }
+                if (!String.valueOf(ordre).equals(String.valueOf(sosOrdre))) { sosOrdre = ordre; republierSosOrdre(); }
                 if (Meteo.applyFamily(context, http, ff) || !meteoReported) {
                     lastWeather = 0; // nouvelle ville : la météo est relue tout de suite
                     reportMeteo(fid);
@@ -1713,6 +1731,22 @@ final class Sync {
     /** Créateur de la famille (families/{fid}.createdBy), lu avec la fiche de la famille à chaque tour. */
     private String createdBy;
     private final java.util.Set<String> admins = new java.util.HashSet<>();
+    /** Ordre d'appel du SOS (families/{fid}.sosOrdre), null : ordre par défaut. */
+    private JSONArray sosOrdre = null;
+
+    /** La page reçoit le nouvel ordre du SOS sans attendre la relecture des proches. */
+    private void republierSosOrdre() {
+        if (lastFamilyJson == null) return;
+        try {
+            JSONObject p = new JSONObject(lastFamilyJson);
+            p.put("sosOrdre", sosOrdre == null ? JSONObject.NULL : sosOrdre);
+            lastFamilyJson = p.toString();
+            listener.onFamily(p);
+            saveCache();
+        } catch (JSONException e) {
+            Log.w(TAG, "Ordre SOS", e);
+        }
+    }
 
     private JSONArray trierProches(String fid, JSONArray people) {
         String createur = createdBy;
@@ -1814,7 +1848,8 @@ final class Sync {
             }
             oublierPhotosDisparues(people, birthdays);
             people = trierProches(fid, people);
-            JSONObject payload = new JSONObject().put("faces", faces).put("birthdays", birthdays).put("people", people);
+            JSONObject payload = new JSONObject().put("faces", faces).put("birthdays", birthdays).put("people", people)
+                    .put("sosOrdre", sosOrdre == null ? JSONObject.NULL : sosOrdre);
             String json = payload.toString();
             if (json.equals(lastFamilyJson)) return;
             lastFamilyJson = json;

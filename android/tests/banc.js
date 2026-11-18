@@ -52,6 +52,10 @@ function imitation(etat) {
     qrCode: () => 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
     // Chien de garde (Gardien.java) et garde-fous de la page.
     pouls: note('pouls'), gardeFou: note('gardeFou'),
+    // Redémarrage à la main (volume bas tenu 10 s) : redemarrer renvoie false avec etat.redemarrageKo.
+    redemarrageAffiche: note('redemarrageAffiche'), redemarrageNon: note('redemarrageNon'),
+    redemarrer: (...args) => { window.__appels.push({ nom: 'redemarrer', args }); return !window.__etat.redemarrageKo; },
+    sosEnCours: (o) => { window.__sos = o; },
   };
   // Caméra : window.__visage() fait « voir » un visage à toutes les surveillances en cours.
   window.__surveillances = new Set();

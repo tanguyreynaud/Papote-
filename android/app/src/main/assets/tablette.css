@@ -2065,3 +2065,32 @@ html .essai-appel-texte b { color: #4f46e5; white-space: nowrap; }
 html body.night .essai-appel { background: #252238; }
 html body.night .essai-appel-texte { color: #e8e6f3; }
 html body.night .essai-appel-texte b { color: #c7d2fe; }
+
+/* Redémarrer la tablette ? (volume bas tenu 10 s, Tanguy 18/11) : par-dessus tout, même l'écran de nuit. */
+.redemarrer {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 1200;
+  background: rgba(28, 25, 23, .55);
+  display: -webkit-flex; display: flex;
+  -webkit-align-items: center; align-items: center;
+  -webkit-justify-content: center; justify-content: center;
+}
+.redemarrer[hidden] { display: none; }
+.redemarrer-carte {
+  background: #fdfaf5; border-radius: 4vmin; padding: 6vmin 7vmin;
+  max-width: 86vw; text-align: center; box-sizing: border-box;
+  font-family: 'Atkinson Hyperlegible', sans-serif; color: #1c1917;
+}
+.redemarrer-titre {
+  margin: 0; font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif;
+  font-weight: 700; font-size: 7vmin; line-height: 1.15;
+}
+.redemarrer-detail { margin: 2vmin 0 0; font-size: 4.5vmin; color: #44403c; min-height: 1.3em; }
+.redemarrer-boutons { margin-top: 5vmin; display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center; }
+.redemarrer-btn {
+  width: 30vmin; height: 14vmin; margin: 0 2.5vmin; border: 0; border-radius: 3vmin;
+  font-family: 'Atkinson Hyperlegible', sans-serif; font-weight: 700; font-size: 6vmin; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.redemarrer-btn.oui { background: #4f46e5; }
+.redemarrer-btn.non { background: #57534e; }
+.redemarrer-btn[disabled] { opacity: .7; }

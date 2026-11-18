@@ -224,6 +224,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         });
         // La page, et par-dessus un lecteur vidéo natif plein écran.
         FrameLayout root = new FrameLayout(this);
+        racine = root;
         root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
         videoView = new VideoView(this);
@@ -761,6 +762,40 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.post(() -> callAudio.ring(on));
         }
 
+        // ----- Redémarrage à la main (volume bas tenu 10 s) -----
+
+        /** La page affiche la fenêtre « Redémarrer la tablette ? » : pas de fenêtre de secours. */
+        @JavascriptInterface
+        public void redemarrageAffiche() {
+            redemarrageAffichePage = true;
+        }
+
+        /** Oui dans la fenêtre de la page : true si la tablette va redémarrer. */
+        @JavascriptInterface
+        public boolean redemarrer() {
+            java.util.concurrent.FutureTask<Boolean> t = new java.util.concurrent.FutureTask<>(MainActivity.this::redemarrerOui);
+            handler.post(t);
+            try {
+                return t.get(3, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        /** Non, 20 s sans réponse, ou un appel arrive : la fenêtre de la page s'est fermée. */
+        @JavascriptInterface
+        public void redemarrageNon(String pourquoi) {
+            String p = pourquoi == null ? "Non" : pourquoi.length() > 60 ? pourquoi.substring(0, 60) : pourquoi;
+            handler.post(() -> fermerRedemarrage(p));
+        }
+
+        /** SOS en cours dans la page (redit chaque seconde) : pas de redémarrage. */
+        @JavascriptInterface
+        public void sosEnCours(boolean oui) {
+            sosPage = oui;
+            sosPageVuA = SystemClock.uptimeMillis();
+        }
+
         @JavascriptInterface
         public void inCall(boolean on) {
             handler.post(() -> callAudio.inCall(on));
@@ -1085,15 +1120,115 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
     }
 
-    /** Les boutons de volume ne font rien : le son reste au bon niveau. */
+    /**
+     * Les boutons de volume ne font rien : le son reste au bon niveau. Volume bas tenu 10 s : fenêtre
+     * « Redémarrer la tablette ? » (Redemarrage, Tanguy 18/11) ; le volume ne bouge pas pendant l'appui.
+     */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         int code = event.getKeyCode();
         if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
                 || code == KeyEvent.KEYCODE_VOLUME_MUTE) {
-            return !kioskPaused();
+            if (kioskPaused()) return false;
+            if (code == KeyEvent.KEYCODE_VOLUME_DOWN) {
+                // Android répète « appuyé » tant que le doigt reste : seul le premier lance le compte.
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                    handler.removeCallbacks(appuiLongVolume);
+                    handler.postDelayed(appuiLongVolume, Redemarrage.APPUI_MS);
+                } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                    handler.removeCallbacks(appuiLongVolume);
+                }
+            }
+            return true;
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    // ---------- Redémarrage à la main (volume bas tenu 10 s, Redemarrage) ----------
+
+    private FrameLayout racine;
+    /** Ouverture de la fenêtre (uptime), 0 : fermée. */
+    private volatile long redemarrageDemandeA;
+    private volatile boolean redemarrageAffichePage;
+    private volatile boolean sosPage;
+    private volatile long sosPageVuA;
+    private View redemarrageSecours;
+
+    private final Runnable appuiLongVolume = this::ouvrirRedemarrage;
+
+    private void ouvrirRedemarrage() {
+        if (redemarrageDemandeA != 0) return; // déjà ouverte
+        long maintenant = SystemClock.uptimeMillis();
+        String refus = Redemarrage.refus(kioskPaused(), callAudio != null && callAudio.busy(), AppelGsm.enCours(),
+                sosPage, sosPageVuA, maintenant);
+        if (refus != null) {
+            Journal.log(this, "GARDE-FOU : volume bas tenu 10 s, pas de fenêtre de redémarrage (" + refus + ")");
+            return;
+        }
+        redemarrageDemandeA = maintenant;
+        redemarrageAffichePage = false;
+        Journal.log(this, "GARDE-FOU : volume bas tenu 10 s, fenêtre « " + Redemarrage.TITRE + " »");
+        callPage("demanderRedemarrage", new JSONObject());
+        handler.postDelayed(redemarrageSecoursSiPageMuette, Redemarrage.ACCUSE_MS);
+        handler.postDelayed(redemarrageSansReponse, Redemarrage.REPONSE_MS);
+    }
+
+    /** La page n'a pas affiché la fenêtre (figée) : la même, dessinée par Android. */
+    private final Runnable redemarrageSecoursSiPageMuette = () -> {
+        if (redemarrageDemandeA == 0 || redemarrageAffichePage || racine == null || redemarrageSecours != null) return;
+        Journal.log(this, "GARDE-FOU : la page n'affiche pas la fenêtre de redémarrage, fenêtre de secours");
+        redemarrageSecours = Redemarrage.fenetre(this, new Redemarrage.Choix() {
+            @Override public boolean oui() { return redemarrerOui(); }
+            @Override public void non() { fermerRedemarrage("Non"); }
+        });
+        racine.addView(redemarrageSecours, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+    };
+
+    /** 20 s sans réponse : tout se ferme (la page ferme aussi la sienne d'elle-même). */
+    private final Runnable redemarrageSansReponse = () -> {
+        if (redemarrageDemandeA == 0) return;
+        callPage("fermerRedemarrage", new JSONObject());
+        fermerRedemarrage("sans réponse");
+    };
+
+    private void fermerRedemarrage(String pourquoi) {
+        if (redemarrageDemandeA == 0) return;
+        redemarrageDemandeA = 0;
+        handler.removeCallbacks(redemarrageSecoursSiPageMuette);
+        handler.removeCallbacks(redemarrageSansReponse);
+        if (redemarrageSecours != null && racine != null) racine.removeView(redemarrageSecours);
+        redemarrageSecours = null;
+        Journal.log(this, "GARDE-FOU : pas de redémarrage (" + pourquoi + ")");
+    }
+
+    /** Oui : la tablette redémarre (jamais d'extinction). false : pas lancé (fenêtre périmée, appel, refus d'Android). */
+    private boolean redemarrerOui() {
+        long maintenant = SystemClock.uptimeMillis();
+        if (!Redemarrage.ouiValable(redemarrageDemandeA, maintenant)) return false;
+        String refus = Redemarrage.refus(false, callAudio != null && callAudio.busy(), AppelGsm.enCours(), sosPage, sosPageVuA, maintenant);
+        if (refus != null) {
+            Journal.log(this, "GARDE-FOU : redémarrage demandé mais refusé (" + refus + ")");
+            return false;
+        }
+        redemarrageDemandeA = 0;
+        handler.removeCallbacks(redemarrageSecoursSiPageMuette);
+        handler.removeCallbacks(redemarrageSansReponse);
+        Journal.urgent(this, "GARDE-FOU : redémarrage demandé sur la tablette (volume bas 10 s, puis Oui)");
+        handler.postDelayed(() -> {
+            try {
+                dpm().reboot(admin());
+            } catch (Exception e) {
+                Journal.urgent(this, "GARDE-FOU : redémarrage impossible (" + e + ")");
+                callPage("redemarrageImpossible", new JSONObject());
+                if (redemarrageSecours != null && racine != null) {
+                    View v = redemarrageSecours;
+                    handler.postDelayed(() -> { if (racine != null) racine.removeView(v); }, 4_000);
+                    redemarrageSecours = null;
+                }
+            }
+        }, Redemarrage.AVANT_REDEMARRAGE_MS);
+        return true;
     }
 
     /**
@@ -1523,6 +1658,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override
     protected void onPause() {
         aLEcran = false;
+        handler.removeCallbacks(appuiLongVolume); // la touche relâchée ailleurs n'arrive jamais ici
         Gardien.aLEcran(false);
         if (web != null) web.onPause();
         handler.removeCallbacks(rehideBars);

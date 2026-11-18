@@ -2168,12 +2168,24 @@
     return null;
   }
 
-  // Les proches joignables par téléphone, responsables d'abord (ordre de la liste « Qui appeler ? » sinon).
+  // Ordre d'appel du SOS choisi par un responsable dans l'app (families/{fid}.sosOrdre, liste d'uid) ;
+  // null : ordre par défaut. Les proches absents de la liste suivent, dans l'ordre par défaut.
+  var sosOrdre = null;
+
+  // Les proches joignables par téléphone, dans l'ordre du SOS : celui choisi dans l'app s'il existe,
+  // sinon responsables d'abord (ordre de la liste « Qui appeler ? » ensuite). Deux passes plutôt que
+  // sort() : ordre stable sur les vieilles WebView.
   function phonePeople() {
-    var out = [];
-    for (var i = 0; i < people.length; i++) if (people[i].tel) out.push(people[i]);
-    out.sort(function (a, b) { return (b.responsable ? 1 : 0) - (a.responsable ? 1 : 0); });
-    return out;
+    var resp = [], autres = [], i, j;
+    for (i = 0; i < people.length; i++) if (people[i].tel) (people[i].responsable ? resp : autres).push(people[i]);
+    var defaut = resp.concat(autres);
+    if (!sosOrdre || !sosOrdre.length) return defaut;
+    var tete = [];
+    for (i = 0; i < sosOrdre.length; i++) {
+      for (j = 0; j < defaut.length; j++) if (defaut[j].uid === sosOrdre[i] && tete.indexOf(defaut[j]) < 0) tete.push(defaut[j]);
+    }
+    for (j = 0; j < defaut.length; j++) if (tete.indexOf(defaut[j]) < 0) tete.push(defaut[j]);
+    return tete;
   }
 
   var raccrochage = 0;
@@ -3096,14 +3108,118 @@
   // file, sans sonner par-dessus (Tanguy, 29/10). L'accueil, « Appeler » et le diaporama sonnent.
   // Redit chaque seconde : Android oublie une fenêtre qu'on ne lui redit plus (page arrêtée).
   function fenetreOuverte() {
-    var ids = ['overlay', 'reminder-alert', 'bday-alert'];
+    var ids = ['overlay', 'reminder-alert', 'bday-alert', 'redemarrer'];
     for (var i = 0; i < ids.length; i++) if ($(ids[i]) && isShown(ids[i])) return true;
     if (inCall()) return true;
     return !!callScreen && !callScreen.hasAttribute('hidden') && !pickerOpen();
   }
   setInterval(function () {
     try { if (android() && android().fenetre) android().fenetre(fenetreOuverte()); } catch (e) { }
+    // SOS en cours : Android n'ouvre pas la fenêtre « Redémarrer la tablette ? » (volume bas tenu 10 s).
+    try { if (android() && android().sosEnCours) android().sosEnCours(sosActif()); } catch (e) { }
+    // Un appel ou un SOS arrive pendant que la fenêtre est ouverte : elle se ferme.
+    if (redemarrerEl && !redemarrerEl.hasAttribute('hidden') && !redemarrerLance && (inCall() || sosActif())) fermerRedemarrage('appel ou SOS');
   }, 1000);
+
+  // ---------- Redémarrer la tablette (volume bas tenu 10 s, Tanguy 18/11) ----------
+  // Android (MainActivity, Redemarrage.java) appelle Papote.demanderRedemarrage après 10 s d'appui sur
+  // volume bas. Oui : la tablette redémarre (jamais d'extinction). Non, ou 20 s sans réponse : la fenêtre
+  // se ferme. Jamais pendant un appel ni un SOS. Si la page ne répond pas, Android dessine la même fenêtre.
+  var REDEMARRER_MS = 20000;
+  var redemarrerEl = null, redemarrerTimer = null, redemarrerLance = false;
+  var REDEMARRER_TITRE = 'Redémarrer la tablette ?';
+  var REDEMARRER_DETAIL = 'Elle s’éteint puis se rallume toute seule.';
+
+  function sosActif() {
+    if (sosEtat) return true;
+    return !!callScreen && !callScreen.hasAttribute('hidden') && /\bsos/.test(callScreen.className);
+  }
+
+  function construireRedemarrer() {
+    redemarrerEl = el2('div', 'redemarrer');
+    redemarrerEl.id = 'redemarrer';
+    redemarrerEl.setAttribute('hidden', '');
+    redemarrerEl.setAttribute('role', 'dialog');
+    redemarrerEl.setAttribute('aria-modal', 'true');
+    var carte = el2('div', 'redemarrer-carte');
+    var titre = el2('h1', 'redemarrer-titre', REDEMARRER_TITRE);
+    titre.id = 'redemarrer-titre';
+    redemarrerEl.setAttribute('aria-labelledby', 'redemarrer-titre');
+    var detail = el2('p', 'redemarrer-detail', REDEMARRER_DETAIL);
+    detail.id = 'redemarrer-detail';
+    var boutons = el2('div', 'redemarrer-boutons');
+    var oui = el2('button', 'redemarrer-btn oui', 'Oui');
+    oui.id = 'redemarrer-oui';
+    var non = el2('button', 'redemarrer-btn non', 'Non');
+    non.id = 'redemarrer-non';
+    boutons.appendChild(oui);
+    boutons.appendChild(non);
+    carte.appendChild(titre);
+    carte.appendChild(detail);
+    carte.appendChild(boutons);
+    redemarrerEl.appendChild(carte);
+    // Rien ne passe à l'accueil dessous (pas de photo ouverte par un toucher à côté de la fenêtre).
+    on(redemarrerEl, 'click', function (e) { e.stopPropagation(); });
+    on(oui, 'click', function () {
+      if (redemarrerLance || oui.disabled) return; // double toucher : un seul redémarrage
+      redemarrerLance = true;
+      oui.disabled = true;
+      non.disabled = true;
+      clearTimeout(redemarrerTimer);
+      titre.textContent = 'La tablette redémarre…';
+      var ok = false;
+      try { ok = android().redemarrer() === true; } catch (e) { ok = false; }
+      if (ok) return; // la tablette s'éteint dans un instant, puis se rallume
+      titre.textContent = 'Le redémarrage n’a pas marché.';
+      detail.textContent = '';
+      redemarrerTimer = setTimeout(function () { cacherRedemarrer(); }, 4000);
+    });
+    on(non, 'click', function () {
+      if (non.disabled) return;
+      fermerRedemarrage('Non');
+    });
+    document.body.appendChild(redemarrerEl);
+  }
+
+  function cacherRedemarrer() {
+    clearTimeout(redemarrerTimer);
+    redemarrerLance = false;
+    if (redemarrerEl) redemarrerEl.setAttribute('hidden', '');
+  }
+
+  // Fermeture sans redémarrer ; Android le note au journal (ligne GARDE-FOU).
+  function fermerRedemarrage(pourquoi) {
+    if (!redemarrerEl || redemarrerEl.hasAttribute('hidden')) return;
+    cacherRedemarrer();
+    try { if (android() && android().redemarrageNon) android().redemarrageNon(pourquoi); } catch (e) { }
+  }
+
+  function demanderRedemarrage() {
+    if (inCall() || sosActif() || etatAppelsInternet()) {
+      try { if (android() && android().redemarrageNon) android().redemarrageNon('appel ou SOS en cours'); } catch (e) { }
+      return;
+    }
+    if (!redemarrerEl) construireRedemarrer();
+    if (!redemarrerEl.hasAttribute('hidden')) return; // déjà ouverte
+    redemarrerLance = false;
+    $('redemarrer-titre').textContent = REDEMARRER_TITRE;
+    $('redemarrer-detail').textContent = REDEMARRER_DETAIL;
+    $('redemarrer-oui').disabled = false;
+    $('redemarrer-non').disabled = false;
+    wakeScreen(); // la nuit, l'écran se rallume pour la fenêtre
+    show(redemarrerEl, true);
+    try { if (android() && android().redemarrageAffiche) android().redemarrageAffiche(); } catch (e) { }
+    clearTimeout(redemarrerTimer);
+    redemarrerTimer = setTimeout(function () { fermerRedemarrage('sans réponse'); }, REDEMARRER_MS);
+  }
+
+  function redemarrageImpossible() {
+    if (!redemarrerEl || redemarrerEl.hasAttribute('hidden')) return;
+    $('redemarrer-titre').textContent = 'Le redémarrage n’a pas marché.';
+    $('redemarrer-detail').textContent = '';
+    clearTimeout(redemarrerTimer);
+    redemarrerTimer = setTimeout(function () { cacherRedemarrer(); }, 4000);
+  }
 
   // Périodes d'appel du jour, en minutes : un rappel qui tombe pendant un appel attend la fin,
   // et reste affiché d'autant plus longtemps (voir checkReminders).
@@ -3258,6 +3374,7 @@
   function onFamily(payload) {
     bootPret('proches');
     faces = payload.faces || {};
+    sosOrdre = Array.isArray(payload.sosOrdre) ? payload.sosOrdre : null;
     setPeople(payload.people);
     prochesLus = true;
     showSosButton(); // SOS caché tant que la famille n'a aucun proche, montré dès le premier
@@ -3385,7 +3502,11 @@
     closeOverlayForCall: closeOverlayForCall,
     essaiAppel: essaiAppel,
     appelAbouti: appelAbouti,
-    goHome: function () { showView('view-home'); }
+    goHome: function () { showView('view-home'); },
+    // Volume bas tenu 10 s (MainActivity) : « Redémarrer la tablette ? » Oui / Non.
+    demanderRedemarrage: demanderRedemarrage,
+    fermerRedemarrage: function () { if (redemarrerEl && !redemarrerLance) cacherRedemarrer(); },
+    redemarrageImpossible: redemarrageImpossible
   };
 
   // ---------- La nuit, l'écran se met en veille ----------

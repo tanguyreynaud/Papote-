@@ -189,3 +189,32 @@ test('SOS : SMS parti, l’écran le dit', async () => {
     assert.match(await ecran(b), /reçu votre SOS par SMS/);
   } finally { await b.fermer(); }
 });
+
+// Ordre d'appel du SOS choisi dans l'app (families/{fid}.sosOrdre, Tanguy 18/11).
+test('SOS : ordre choisi dans l\'app (Marc puis Julie) : Marc appelé en premier, puis Julie, puis Paul', async () => {
+  const b = await tablette();
+  try {
+    // Un uid inconnu (proche parti) est ignoré ; Paul, absent de la liste, vient à la suite.
+    await b.android('onFamily', { ...PROCHES, sosOrdre: ['marc', 'parti', 'julie'] });
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    assert.deepStrictEqual(await appelsTel(b), ['0611111111'], 'Marc d\'abord');
+    const MARC = { sortant: true, numero: '0611111111', uid: 'marc', name: 'Marc' };
+    await b.android('onGsm', { etat: 'appel', ...MARC });
+    await b.avancer(46000);
+    await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...MARC });
+    await b.avancer(2000);
+    assert.deepStrictEqual(await appelsTel(b), ['0611111111', '0612345678'], 'puis Julie');
+  } finally { await b.fermer(); }
+});
+
+test('SOS : ordre retiré dans l\'app (sosOrdre null) : retour à l\'ordre par défaut, responsable d\'abord', async () => {
+  const b = await tablette();
+  try {
+    await b.android('onFamily', { ...PROCHES, sosOrdre: ['marc'] });
+    await b.android('onFamily', { ...PROCHES, sosOrdre: null });
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    assert.deepStrictEqual(await appelsTel(b), ['0700000000']);
+  } finally { await b.fermer(); }
+});
