@@ -149,9 +149,25 @@ function dessiner() {
   );
 }
 
-// Lu dès la connexion admin (pastille du nombre à traiter), relu à chaque ouverture de l'onglet.
+// Lu à l'ouverture de l'onglet (clic, adresse #clients/declarations, ou onglet retenu de la dernière fois), relu à
+// chaque ouverture. Pas à la connexion : l'admin ne dépend pas de cette fonction pour ses autres pages.
+let admin = false;
+function siVisible() {
+  const z = zone();
+  if (admin && z && !z.hidden && z.closest('[data-panneau]') && !z.closest('[data-panneau]').hidden) charger();
+}
 onAuthStateChanged(getAuth(getApp('admin')), (user) => {
+  admin = false;
   if (!user) return;
-  user.getIdTokenResult().then((t) => { if (t.claims.admin === true) charger(); }).catch(() => null);
+  user.getIdTokenResult().then((t) => { admin = t.claims.admin === true; siVisible(); }).catch(() => null);
 });
-document.querySelectorAll('[data-panneau="clients"] .onglets [data-onglet="declarations"]').forEach((b) => b.addEventListener('click', () => charger()));
+window.addEventListener('hashchange', () => setTimeout(siVisible, 0));
+// Page ou onglet montrés par gestion.js (après la connexion, ou onglet retenu) : attribut hidden retiré.
+{
+  const z = zone();
+  const panneau = z && z.closest('[data-panneau]');
+  const suivre = new MutationObserver(() => siVisible());
+  if (z) suivre.observe(z, { attributes: true, attributeFilter: ['hidden'] });
+  if (panneau) suivre.observe(panneau, { attributes: true, attributeFilter: ['hidden'] });
+}
+document.querySelectorAll('[data-panneau="clients"] .onglets [data-onglet="declarations"]').forEach((b) => b.addEventListener('click', () => setTimeout(siVisible, 0)));

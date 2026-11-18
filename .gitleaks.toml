@@ -8,6 +8,10 @@ description = "Valeurs publiques ou factices de Papote"
 regexes = [
   '''sk_test_simulation''',
   '''whsec_simulation''',
+  # Faux jetons de connexion des tests du chat (parcours/chat-compte.parcours.js, chat-bulle.navigateur.js, branche main) :
+  # le contrôle lit tout l'historique du dépôt, la même exception est donc nécessaire ici.
+  '''eyJhbGciOiJIUzI1NiJ9\.faux\.faux-faux-faux''',
+  '''JETON-DE-TEST-0123456789abcdef''',
 ]
 # Clé web Firebase (publique, protégée par règles + App Check) et clé de site reCAPTCHA (publique).
 paths = [
