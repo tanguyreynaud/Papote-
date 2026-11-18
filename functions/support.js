@@ -1,6 +1,7 @@
 // Chat IA de support : répond aux questions des visiteurs du site vitrine et de l'appli famille.
 //
 //   supportChat  POST {messages: [{role: 'user'|'assistant', content}], page?} → {reponse, contact?}
+//                la réponse peut porter actions: ['depanner'] : boutons affichés par la bulle
 //                POST {messages, contact: {nom, telephone, email}} → {ok}  demande de rappel
 //   bilanSupport chaque lundi 9 h (lancée par taches.js) : e-mail à l'adresse de support avec le nombre de questions
 //                de la semaine et celles auxquelles l'IA n'a pas su répondre (supportSansReponse/),
@@ -217,13 +218,57 @@ function coordonneesValides(t) {
 // Phrase de refus hors sujet : à retirer quand l'IA l'a collée à la fin d'une vraie réponse.
 const REFUS = /\s*Je ne peux vous aider que pour Papote\s*[.:,]?\s*(Avez-vous|avez-vous) une question sur la tablette ou l[’']appli\s*\?\s*$/;
 
-function lireReponse(texte) {
+// Boutons que l'IA peut proposer sous sa réponse : elle écrit [ALLER:nom] sur une ligne seule à la fin.
+// Liste blanche par page : tout autre nom est ignoré. L'IA n'agit jamais elle-même (surtout pas sur
+// l'argent) : le bouton ouvre seulement le bon écran, c'est la personne qui appuie ensuite.
+const ACTIONS = {
+  appli: {
+    depanner: 'Réglages, « Dépanner la tablette »',
+    abonnement: 'Profil, partie Abonnement (paiement, factures, résiliation, renvoi de la tablette)',
+    wifi: 'Réglages, « Changer le Wi-Fi »',
+    inviter: 'page « Inviter »',
+    membres: 'Réglages, « Membres » et « Demandes pour rejoindre »',
+    volumes: 'Réglages, « Volumes »',
+    nuit: 'Réglages, « Écran éteint la nuit »',
+    options: 'Réglages, « Options de la tablette » (lecture à voix haute, météo, SOS, radio)',
+    notifications: 'page Notifications',
+    photos: 'page Photos',
+    messages: 'page Messages',
+    agenda: 'page Agenda',
+    profil: 'onglet Profil',
+  },
+  site: {
+    commander: 'page de commande',
+    resilier: 'page pour résilier sans se connecter',
+    cgv: 'conditions générales de vente',
+    confidentialite: 'page de confidentialité',
+    appli: 'appli famille (app.mapapote.fr)',
+  },
+};
+const MAX_ACTIONS = 2;
+const BALISE_ACTION = /\[ALLER\s*:\s*([a-z]+)\s*\]/gi;
+
+// Consigne ajoutée après le bloc mis en cache, selon la page.
+function consigneActions(page) {
+  const liste = Object.entries(ACTIONS[page] || {}).map(([nom, quoi]) => `[ALLER:${nom}] = ${quoi}`).join(' ; ');
+  return `Boutons : quand ta réponse envoie la personne vers l'un de ces écrans, ajoute tout à la fin, sur une ligne seule, la balise correspondante (${MAX_ACTIONS} au plus, la plus utile d'abord) : ${liste}. Un bouton s'affichera sous ta réponse pour l'ouvrir ; garde quand même le chemin en toutes lettres dans ta phrase. N'invente aucune autre balise et n'en mets pas si aucun écran ne correspond. Tu ne fais jamais rien à la place de la personne, surtout pour l'argent (payer, résilier, annuler, changer de compte bancaire) : tu indiques l'écran, c'est elle qui appuie.`;
+}
+
+function lireReponse(texte, page) {
+  // Balises de bouton : retirées du texte dans tous les cas, gardées seulement si elles sont dans la liste de la page.
+  const permises = ACTIONS[page] || {};
+  const actions = [];
+  texte = String(texte).replace(BALISE_ACTION, (_, nom) => {
+    nom = nom.toLowerCase();
+    if (Object.hasOwn(permises, nom) && !actions.includes(nom) && actions.length < MAX_ACTIONS) actions.push(nom);
+    return '';
+  });
   // La marque ne compte que si elle termine la réponse : l'IA l'écrit parfois pour dire qu'elle ne s'applique pas.
   const contact = texte.trim().endsWith(MARQUE_CONTACT);
-  let reponse = texte.split(MARQUE_CONTACT).join('').replace(/\*\*(.+?)\*\*/g, '$1').trim();
+  let reponse = texte.split(MARQUE_CONTACT).join('').replace(/\*\*(.+?)\*\*/g, '$1').replace(/[ \t]+\n/g, '\n').trim();
   const sansRefus = reponse.replace(REFUS, '').trim();
   if (sansRefus) reponse = sansRefus;
-  return { reponse, contact };
+  return actions.length ? { reponse, contact, actions } : { reponse, contact };
 }
 
 async function demandeDeRappel(ip, messages, contact) {
@@ -333,12 +378,13 @@ exports.supportChat = onRequest(
           { type: 'text', text: page === 'appli'
             ? 'La personne écrit depuis l\u2019appli famille : elle est déjà cliente. Guide-la dans l\u2019appli (« dans Réglages… »).'
             : 'La personne écrit depuis le site : elle découvre peut-être Papote.' },
+          { type: 'text', text: consigneActions(page) },
         ],
         messages,
       });
       const brut = reponse.stop_reason === 'refusal' ? ''
         : reponse.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-      const lu = lireReponse(brut);
+      const lu = lireReponse(brut, page);
       if (lu.contact) {
         await base().collection('supportSansReponse').add({
           question: messages[messages.length - 1].content, conversation: messages, page,
@@ -374,4 +420,4 @@ exports.bilanSupport = async () => {
 };
 
 
-exports._test = { sansPersonne, sansBalises, QUOTAS, QUOTAS_JOUR, nettoyer, coordonneesValides, lireReponse, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };
+exports._test = { sansPersonne, sansBalises, QUOTAS, QUOTAS_JOUR, nettoyer, coordonneesValides, lireReponse, ACTIONS, consigneActions, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };
