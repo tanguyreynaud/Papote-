@@ -19,6 +19,55 @@
   var PAGE = ['papote-famille.web.app', 'app.mapapote.fr'].indexOf(location.hostname) !== -1 ? 'appli' : 'site';
   var SUGGESTIONS = PAGE === 'appli' ? ['La tablette ne répond plus', 'Comment inviter un proche ?', 'Régler le volume de la tablette'] : ['Combien ça coûte ?', 'Faut-il une box internet ?', 'Comment se passe l’installation ?'];
 
+  // Boutons que l'assistant peut proposer sous sa réponse (le serveur renvoie actions: ['depanner']).
+  // Sur le site : de simples liens. Dans l'appli : l'appli déclare window.papoteAller(nom), qui ouvre
+  // l'écran et rend true ; sans elle (ancienne version de l'appli), aucun bouton n'est affiché.
+  // Aucun bouton n'agit à la place de la personne : il ouvre l'écran, c'est elle qui appuie ensuite.
+  var ECRANS = {
+    depanner: 'Ouvrir « Dépanner la tablette »', abonnement: 'Ouvrir mon abonnement', wifi: 'Ouvrir le réglage du Wi-Fi',
+    inviter: 'Ouvrir « Inviter »', membres: 'Voir les membres', volumes: 'Ouvrir « Volumes »', nuit: 'Ouvrir « Écran éteint la nuit »',
+    options: 'Ouvrir les options de la tablette', notifications: 'Ouvrir les notifications', photos: 'Ouvrir les photos',
+    messages: 'Ouvrir les messages', agenda: 'Ouvrir l’agenda', profil: 'Ouvrir mon profil',
+  };
+  var LIENS = {
+    commander: ['Commander', 'commande.html'], resilier: ['Ouvrir la page pour résilier', 'resilier.html'],
+    cgv: ['Lire les conditions de vente', 'cgv.html'], confidentialite: ['Lire la page de confidentialité', 'confidentialite.html'],
+    appli: ['Ouvrir l’appli famille', 'https://app.mapapote.fr/'],
+  };
+  // Du site vers l'appli : le bouton « Dans l'appli » ouvre app.mapapote.fr avec, dans le fragment de l'adresse
+  // (après #, jamais envoyé à un serveur), l'écran à ouvrir et les derniers messages. La bulle de l'appli les
+  // reprend, efface le fragment, puis ouvre l'écran dès que la personne est connectée.
+  var APPLI = 'https://app.mapapote.fr/';
+  var CLE_SUITE = 'papote-support-suite';
+  var SUITE_MESSAGES = 6, SUITE_CARACTERES = 1200, SUITE_MINUTES = 30;
+  function versBase64(texte) {
+    return btoa(unescape(encodeURIComponent(texte))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function depuisBase64(code) {
+    return decodeURIComponent(escape(atob(code.replace(/-/g, '+').replace(/_/g, '/'))));
+  }
+  function lienAppli(nom, messages) {
+    var m = messages.slice(-SUITE_MESSAGES).map(function (x) { return { r: x.role === 'user' ? 'u' : 'a', c: String(x.content).slice(0, SUITE_CARACTERES) }; });
+    return APPLI + '#chat=' + versBase64(JSON.stringify({ a: nom, m: m }));
+  }
+  // Fragment #chat=… lu une seule fois : rien n'en est gardé s'il est mal formé.
+  function lireSuite() {
+    var trouve = /(?:^|[#&])chat=([A-Za-z0-9_-]+)/.exec(location.hash || '');
+    if (!trouve) return null;
+    try {
+      var reste = location.hash.slice(1).split('&').filter(function (x) { return x && x.indexOf('chat=') !== 0; }).join('&');
+      history.replaceState(history.state, '', location.pathname + location.search + (reste ? '#' + reste : ''));
+    } catch (e) { /* adresse inchangée */ }
+    try {
+      var d = JSON.parse(depuisBase64(trouve[1]));
+      var messages = (Array.isArray(d.m) ? d.m : []).slice(-SUITE_MESSAGES).filter(function (x) {
+        return x && (x.r === 'u' || x.r === 'a') && typeof x.c === 'string' && x.c.trim();
+      }).map(function (x) { return { role: x.r === 'u' ? 'user' : 'assistant', content: x.c.slice(0, SUITE_CARACTERES) }; });
+      while (messages.length && messages[0].role !== 'user') messages.shift();
+      return { ecran: Object.prototype.hasOwnProperty.call(ECRANS, d.a) ? d.a : null, messages: messages };
+    } catch (e) { return null; }
+  }
+
   var css = '' +
     '.ps-bouton,.ps-panneau{--ps-fond:#fdfaf5;--ps-carte:#fff;--ps-texte:#24212f;--ps-gris:#5f5a6b;--ps-ligne:#e9e1d4;--ps-indigo:#4f46e5;--ps-indigo-fonce:#3730a3;--ps-doux:#e8e6fd;' +
     'font-family:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;position:fixed;z-index:2147483000;' + cote + ':20px;bottom:' + bas + 'px}' +
@@ -64,11 +113,34 @@
     '.ps-panneau .ps-fin{display:block;margin:.4rem auto 0;border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem 1.2rem;cursor:pointer}' +
     '.ps-erreur{color:#b91c1c;font-size:.95rem}' +
     '.ps-note{font-size:.8rem;color:var(--ps-gris);text-align:center;padding:0 .75rem .6rem;background:var(--ps-carte)}' +
+    '.ps-aller{align-self:flex-start;display:inline-block;border:0;background:var(--ps-indigo);color:#fff;border-radius:999px;padding:.6rem 1rem;font:inherit;font-weight:700;text-decoration:none;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '.ps-aller:hover{background:var(--ps-indigo-fonce)}' +
+    '.ps-panneau a.ps-aller:focus-visible{outline:3px solid #4338ca;outline-offset:2px}' +
     '.ps-rappeler{align-self:flex-start;border:1.5px solid var(--ps-indigo);background:#fff;color:var(--ps-indigo-fonce);border-radius:999px;padding:.5rem .9rem;font:inherit;font-weight:700;cursor:pointer}' +
     '@media (max-width:600px){.ps-panneau{width:100vw;height:100vh;height:100dvh;left:0;right:0;bottom:0;border-radius:0;max-height:none}}';
 
   var historique = [];
   try { historique = JSON.parse(sessionStorage.getItem(CLE)) || []; } catch (e) { historique = []; }
+  // Arrivée depuis le site par « Dans l'appli » : la conversation suit, et l'écran demandé attend la connexion
+  // (un lien de connexion reçu par e-mail peut rouvrir l'appli dans un autre onglet : d'où localStorage, 30 minutes).
+  var suite = PAGE === 'appli' ? lireSuite() : null;
+  if (suite) {
+    if (suite.messages.length) {
+      historique = suite.messages;
+      try { sessionStorage.setItem(CLE, JSON.stringify(historique)); } catch (e) { /* navigation privée */ }
+    }
+    try {
+      if (suite.ecran) localStorage.setItem(CLE_SUITE, JSON.stringify({ ecran: suite.ecran, messages: suite.messages, le: Date.now() }));
+    } catch (e) { /* navigation privée */ }
+  }
+  function ecranEnAttente() {
+    try {
+      var s = JSON.parse(localStorage.getItem(CLE_SUITE));
+      if (s && Date.now() - s.le < SUITE_MINUTES * 60000 && Object.prototype.hasOwnProperty.call(ECRANS, s.ecran)) return s;
+      if (s) localStorage.removeItem(CLE_SUITE);
+    } catch (e) { /* rien */ }
+    return null;
+  }
   // Coordonnées demandées à la première ouverture sur le site (pas dans l'appli : déjà clients).
   var contact = null;
   try { contact = JSON.parse(localStorage.getItem(CLE_CONTACT)); } catch (e) { contact = null; }
@@ -112,7 +184,7 @@
     envoyer.type = 'submit';
     saisie.appendChild(zone);
     saisie.appendChild(envoyer);
-    var note = el('div', 'ps-note', 'Réponses données par une IA. Pour parler à Tanguy : ' + EMAIL);
+    var note = el('div', 'ps-note', 'Réponses données par une IA. Pour nous écrire : ' + EMAIL);
     panneau.appendChild(tete);
     panneau.appendChild(fil);
     panneau.appendChild(saisie);
@@ -209,7 +281,7 @@
           })
           .then(function () {
             form.remove();
-            var merci = 'Merci ! Votre demande est bien arrivée, Tanguy va vous recontacter.';
+            var merci = 'Merci ! Votre demande est bien arrivée, nous vous recontactons très vite.';
             historique.push({ role: 'user', content: '(Demande de rappel envoyée)' });
             historique.push({ role: 'assistant', content: merci });
             sauver();
@@ -238,7 +310,7 @@
       var ancien = fil.querySelector('.ps-rappeler');
       if (ancien) ancien.remove();
       if (PAGE !== 'site') return;
-      var b = el('button', 'ps-rappeler', '📞 Être rappelé par Tanguy');
+      var b = el('button', 'ps-rappeler', '📞 Être rappelé');
       b.type = 'button';
       b.onclick = function () { b.remove(); proposerRappel(); };
       fil.appendChild(b);
@@ -265,6 +337,35 @@
       historique.forEach(function (m) { ajouter(m.role, m.content); });
     }
 
+    // Un bouton par action proposée, sous la dernière réponse seulement.
+    function boutonsAller(actions) {
+      (Array.isArray(actions) ? actions : []).slice(0, 2).forEach(function (nom) {
+        var b;
+        if (PAGE === 'appli') {
+          if (!Object.prototype.hasOwnProperty.call(ECRANS, nom) || typeof window.papoteAller !== 'function') return;
+          b = el('button', 'ps-aller', ECRANS[nom]);
+          b.type = 'button';
+          b.onclick = function () {
+            if (b.disabled) return; // double clic : un seul appel
+            b.disabled = true;
+            var fait = false;
+            try { fait = window.papoteAller(nom) === true; } catch (e) { fait = false; }
+            // L'écran est ouvert derrière : on replie la bulle pour le montrer. Sinon le bouton disparaît.
+            if (fait) ouvrir(false); else b.remove();
+          };
+        } else if (Object.prototype.hasOwnProperty.call(LIENS, nom)) {
+          b = el('a', 'ps-aller', LIENS[nom][0]);
+          b.href = LIENS[nom][1];
+        } else if (Object.prototype.hasOwnProperty.call(ECRANS, nom)) {
+          // Écran de l'appli proposé depuis le site : l'appli s'ouvre au bon endroit, avec la conversation.
+          b = el('a', 'ps-aller', 'Dans l’appli : ' + ECRANS[nom].replace(/^(Ouvrir|Voir) /, ''));
+          b.href = lienAppli(nom, historique);
+        } else return;
+        fil.appendChild(b);
+      });
+      fil.scrollTop = fil.scrollHeight;
+    }
+
     function ouvrir(oui) {
       panneau.classList.toggle('ps-ouvert', oui);
       bouton.style.display = oui ? 'none' : '';
@@ -278,6 +379,7 @@
       var idees = fil.querySelector('.ps-idees');
       if (idees) idees.remove();
       ['.ps-rappel', '.ps-rappeler'].forEach(function (c) { var n = fil.querySelector(c); if (n) n.remove(); });
+      Array.prototype.forEach.call(fil.querySelectorAll('.ps-aller'), function (n) { n.remove(); });
       historique.push({ role: 'user', content: question });
       ajouter('user', question);
       zone.value = '';
@@ -291,7 +393,7 @@
       fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: historique.slice(-12), page: PAGE }),
+        body: JSON.stringify({ messages: historique.slice(-12), page: PAGE, declaration: !!window.PapoteDeclaration }),
       })
         .then(function (r) { return r.json(); })
         .catch(function () { return {}; })
@@ -302,9 +404,27 @@
           ajouter('assistant', reponse);
           sauver();
           envoyer.disabled = false;
+          boutonsAller(d.actions);
           if (d.contact) proposerRappel(); else { boutonRappel(); zone.focus(); }
         });
     }
+
+    // Venu du site : sans écran demandé, la conversation se rouvre tout de suite. Avec un écran, on attend que
+    // l'appli sache l'ouvrir (personne connectée), sans rien afficher par-dessus ; la conversation reste dans la bulle.
+    if (suite && !suite.ecran && suite.messages.length) ouvrir(true);
+    (function attendreEcran(essais) {
+      var s = ecranEnAttente();
+      if (!s) return;
+      var fait = false;
+      try { fait = typeof window.papoteAller === 'function' && window.papoteAller(s.ecran) === true; } catch (e) { fait = false; }
+      if (fait) {
+        try { localStorage.removeItem(CLE_SUITE); } catch (e) { /* rien */ }
+        // Autre onglet (lien de connexion reçu par e-mail) : la conversation suit aussi.
+        if (!historique.length && s.messages && s.messages.length) { historique = s.messages; sauver(); }
+        return;
+      }
+      if (essais < 900) setTimeout(function () { attendreEcran(essais + 1); }, 1000);
+    })(0);
 
     bouton.onclick = function () { ouvrir(true); };
     fermer.onclick = function () { ouvrir(false); };
