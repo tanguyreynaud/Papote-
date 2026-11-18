@@ -61,8 +61,8 @@ test('admin : code de remplacement valable 7 jours, une seule tablette, double c
   assert.strictEqual(codes[0].id, code.replace('-', ''));
   const expire = codes[0].get('expire').toMillis();
   assert.ok(Math.abs(expire - Date.now() - 7 * 24 * 3600e3) < 120_000);
-  // La date d'échéance affichée est celle du serveur.
-  const jour = new Date(expire).toLocaleString('fr-FR', { day: 'numeric', month: 'long' });
+  // La date d'échéance affichée est celle du serveur, lue à l'heure de Paris comme l'écran (la CI tourne en UTC : vers minuit, un jour d'écart).
+  const jour = new Date(expire).toLocaleString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
   assert.ok(texte.includes(jour), `${texte} / ${jour}`);
 
   // Rouvert plus tard : le même code, toujours valable, est affiché (sans en créer un autre).
