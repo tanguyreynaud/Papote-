@@ -30,7 +30,7 @@ test('coupe les messages trop longs et trop nombreux', () => {
   assert.strictEqual(r[r.length - 1].content, 'fin');
 });
 
-const { coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, PHRASE_RAPPEL, PHRASE_DECLARATION } = require('./support')._test;
+const { coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, mainDejaPassee, PHRASE_RAPPEL, PHRASE_DECLARATION } = require('./support')._test;
 
 test('accepte un téléphone ou un e-mail', () => {
   assert.deepStrictEqual(coordonneesValides('06 12 34 56 78'), { telephone: '06 12 34 56 78' });
@@ -147,6 +147,15 @@ test('passage de main : la phrase est posée par le serveur, une seule fois', ()
   assert.strictEqual(lireReponse('Écran fissuré.\n[CONTACT]', 'site', true).reponse, 'Écran fissuré.\n\n' + PHRASE_RAPPEL);
   assert.strictEqual(lireReponse('25 € par mois.', 'site').reponse, '25 € par mois.');
   assert.match(consigneMain('site', false), /Ne l'écris donc jamais toi-même/);
+});
+
+test('passage de main : une fois faite, elle n\'est pas répétée à chaque message', () => {
+  const avant = [{ role: 'user', content: 'Double prélèvement' }, { role: 'assistant', content: 'L\'équipe doit vérifier.\n\n' + PHRASE_RAPPEL }, { role: 'user', content: 'Et je suis remboursée quand ?' }];
+  assert.strictEqual(mainDejaPassee(avant), true);
+  assert.strictEqual(mainDejaPassee(avant.slice(0, 1)), false);
+  assert.match(consigneMain('appli', false, true), /DÉJÀ été passée/);
+  assert.deepStrictEqual(lireReponse('Sous 14 jours.\n[CONTACT]', 'appli', false, true), { reponse: 'Sous 14 jours.', contact: true });
+  assert.deepStrictEqual(lireReponse('Sous 14 jours.', 'appli', false, true), { reponse: 'Sous 14 jours.', contact: false });
 });
 
 test('passage de main : phrase selon la page et la bulle', () => {
