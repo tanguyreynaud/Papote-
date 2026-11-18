@@ -85,7 +85,7 @@ test('Redémarrer : pendant un SOS, aucune fenêtre ; Android sait qu\'un SOS es
   try {
     await b.toucher('#sos-btn');
     await b.avancer(1500);
-    assert.strictEqual(await b.page.evaluate(() => window.__sos), true, 'SOS signalé à Android');
+    assert.strictEqual(await b.page.evaluate(() => window.__sosEnCours), true, 'SOS signalé à Android');
     await b.android('demanderRedemarrage', {});
     assert.ok(!(await b.visible('#redemarrer')), 'pas de fenêtre pendant le SOS');
     assert.deepStrictEqual(await noms(b, 'redemarrageNon'), ['appel ou SOS en cours']);

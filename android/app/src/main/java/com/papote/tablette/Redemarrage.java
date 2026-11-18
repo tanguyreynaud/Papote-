@@ -31,8 +31,6 @@ final class Redemarrage {
     static final long REPONSE_MS = 20_000;
     /** La page doit dire qu'elle affiche la fenêtre dans ce délai, sinon la fenêtre de secours s'ouvre. */
     static final long ACCUSE_MS = 2_000;
-    /** Le « SOS en cours » de la page (redit chaque seconde) ne compte plus au-delà : page figée. */
-    static final long SOS_FRAIS_MS = 10_000;
     /** Laisse le temps à la ligne du journal de partir avant le redémarrage. */
     static final long AVANT_REDEMARRAGE_MS = 1_500;
 
@@ -46,13 +44,14 @@ final class Redemarrage {
     // ---------- Décisions (sans Android) ----------
 
     /**
-     * null si la fenêtre peut s'ouvrir, sinon la raison (pour le journal). sosVuA : dernière fois que la
-     * page a dit « SOS en cours » (uptime), 0 jamais.
+     * null si la fenêtre peut s'ouvrir, sinon la raison (pour le journal). sosPage : la page a dit « SOS en
+     * cours » (seulement quand ça change) ; pageVivante : la page répond encore (Gardien). Une page figée en
+     * plein SOS ne bloque pas le redémarrage : le SOS se reprend au démarrage (A47).
      */
-    static String refus(boolean maintenance, boolean appel, boolean appelGsm, boolean sosPage, long sosVuA, long maintenant) {
+    static String refus(boolean maintenance, boolean appel, boolean appelGsm, boolean sosPage, boolean pageVivante) {
         if (maintenance) return "maintenance";
         if (appel || appelGsm) return "appel en cours";
-        if (sosPage && sosVuA > 0 && maintenant - sosVuA <= SOS_FRAIS_MS) return "SOS en cours";
+        if (sosPage && pageVivante) return "SOS en cours";
         return null;
     }
 

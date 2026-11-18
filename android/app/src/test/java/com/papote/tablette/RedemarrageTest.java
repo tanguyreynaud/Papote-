@@ -13,22 +13,23 @@ public class RedemarrageTest {
 
     @Test
     public void ouvertePourUneTabletteTranquille() {
-        assertNull(Redemarrage.refus(false, false, false, false, 0, T));
+        assertNull(Redemarrage.refus(false, false, false, false, true));
     }
 
     @Test
     public void jamaisPendantUnAppelOuUnSos() {
-        assertEquals("appel en cours", Redemarrage.refus(false, true, false, false, 0, T));
-        assertEquals("appel en cours", Redemarrage.refus(false, false, true, false, 0, T));
-        assertEquals("SOS en cours", Redemarrage.refus(false, false, false, true, T - 1_000, T));
-        assertEquals("maintenance", Redemarrage.refus(true, false, false, false, 0, T));
+        assertEquals("appel en cours", Redemarrage.refus(false, true, false, false, true));
+        assertEquals("appel en cours", Redemarrage.refus(false, false, true, false, true));
+        assertEquals("SOS en cours", Redemarrage.refus(false, false, false, true, true));
+        assertEquals("maintenance", Redemarrage.refus(true, false, false, false, true));
     }
 
     @Test
-    public void unSosQueLaPageNeRepetePlusNeBloquePas() {
-        // Page figée en plein SOS : au-delà de 10 s sans nouvelle, on peut redémarrer (le SOS se reprend).
-        assertNull(Redemarrage.refus(false, false, false, true, T - Redemarrage.SOS_FRAIS_MS - 1, T));
-        assertNull(Redemarrage.refus(false, false, false, true, 0, T));
+    public void unePageFigeeEnPleinSosNeBloquePas() {
+        // Page figée (Gardien : plus de pouls) : on peut redémarrer, le SOS se reprend au démarrage.
+        assertNull(Redemarrage.refus(false, false, false, true, false));
+        // Un appel bloque toujours, même page figée (Android refuserait de toute façon).
+        assertEquals("appel en cours", Redemarrage.refus(false, false, true, true, false));
     }
 
     @Test

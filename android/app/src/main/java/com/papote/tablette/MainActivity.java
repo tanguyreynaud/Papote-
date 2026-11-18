@@ -789,11 +789,10 @@ public class MainActivity extends Activity implements Sync.Listener {
             handler.post(() -> fermerRedemarrage(p));
         }
 
-        /** SOS en cours dans la page (redit chaque seconde) : pas de redémarrage. */
+        /** SOS en cours dans la page (dit seulement quand ça change) : pas de redémarrage. */
         @JavascriptInterface
         public void sosEnCours(boolean oui) {
             sosPage = oui;
-            sosPageVuA = SystemClock.uptimeMillis();
         }
 
         @JavascriptInterface
@@ -1151,7 +1150,6 @@ public class MainActivity extends Activity implements Sync.Listener {
     private volatile long redemarrageDemandeA;
     private volatile boolean redemarrageAffichePage;
     private volatile boolean sosPage;
-    private volatile long sosPageVuA;
     private View redemarrageSecours;
 
     private final Runnable appuiLongVolume = this::ouvrirRedemarrage;
@@ -1160,7 +1158,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         if (redemarrageDemandeA != 0) return; // déjà ouverte
         long maintenant = SystemClock.uptimeMillis();
         String refus = Redemarrage.refus(kioskPaused(), callAudio != null && callAudio.busy(), AppelGsm.enCours(),
-                sosPage, sosPageVuA, maintenant);
+                sosPage, Gardien.pageVivante());
         if (refus != null) {
             Journal.log(this, "GARDE-FOU : volume bas tenu 10 s, pas de fenêtre de redémarrage (" + refus + ")");
             return;
@@ -1206,7 +1204,7 @@ public class MainActivity extends Activity implements Sync.Listener {
     private boolean redemarrerOui() {
         long maintenant = SystemClock.uptimeMillis();
         if (!Redemarrage.ouiValable(redemarrageDemandeA, maintenant)) return false;
-        String refus = Redemarrage.refus(false, callAudio != null && callAudio.busy(), AppelGsm.enCours(), sosPage, sosPageVuA, maintenant);
+        String refus = Redemarrage.refus(false, callAudio != null && callAudio.busy(), AppelGsm.enCours(), sosPage, Gardien.pageVivante());
         if (refus != null) {
             Journal.log(this, "GARDE-FOU : redémarrage demandé mais refusé (" + refus + ")");
             return false;

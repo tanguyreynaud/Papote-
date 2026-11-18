@@ -55,7 +55,7 @@ function imitation(etat) {
     // Redémarrage à la main (volume bas tenu 10 s) : redemarrer renvoie false avec etat.redemarrageKo.
     redemarrageAffiche: note('redemarrageAffiche'), redemarrageNon: note('redemarrageNon'),
     redemarrer: (...args) => { window.__appels.push({ nom: 'redemarrer', args }); return !window.__etat.redemarrageKo; },
-    sosEnCours: (o) => { window.__sos = o; },
+    sosEnCours: (o) => { window.__sosEnCours = o; },
   };
   // Caméra : window.__visage() fait « voir » un visage à toutes les surveillances en cours.
   window.__surveillances = new Set();

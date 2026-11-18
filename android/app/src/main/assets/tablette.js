@@ -3116,7 +3116,11 @@
   setInterval(function () {
     try { if (android() && android().fenetre) android().fenetre(fenetreOuverte()); } catch (e) { }
     // SOS en cours : Android n'ouvre pas la fenêtre « Redémarrer la tablette ? » (volume bas tenu 10 s).
-    try { if (android() && android().sosEnCours) android().sosEnCours(sosActif()); } catch (e) { }
+    // Dit seulement quand ça change (pas d'appel à Android chaque seconde).
+    var sa = sosActif();
+    if (sa !== sosDit) {
+      try { if (android() && android().sosEnCours) { android().sosEnCours(sa); sosDit = sa; } } catch (e) { }
+    }
     // Un appel ou un SOS arrive pendant que la fenêtre est ouverte : elle se ferme.
     if (redemarrerEl && !redemarrerEl.hasAttribute('hidden') && !redemarrerLance && (inCall() || sosActif())) fermerRedemarrage('appel ou SOS');
   }, 1000);
@@ -3126,6 +3130,7 @@
   // volume bas. Oui : la tablette redémarre (jamais d'extinction). Non, ou 20 s sans réponse : la fenêtre
   // se ferme. Jamais pendant un appel ni un SOS. Si la page ne répond pas, Android dessine la même fenêtre.
   var REDEMARRER_MS = 20000;
+  var sosDit = null; // dernier état du SOS dit à Android (null : rien dit depuis le chargement)
   var redemarrerEl = null, redemarrerTimer = null, redemarrerLance = false;
   var REDEMARRER_TITRE = 'Redémarrer la tablette ?';
   var REDEMARRER_DETAIL = 'Elle s’éteint puis se rallume toute seule.';
