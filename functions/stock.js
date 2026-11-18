@@ -210,7 +210,15 @@ function routeDisponible(db, logger) {
   };
 }
 
+// Page d'accueil servie par la fonction accueil (Tanguy, 17/11 : « tout doit apparaître en même temps ») : l'état du
+// stock est écrit dans la page (<html data-stock="ok|complet">), le bon bouton s'affiche dès le premier dessin, sans
+// attendre /api/stock. etat : true (on vend), false (complet), null (stock illisible : la page le demande elle-même).
+function pageAvecStock(html, etat) {
+  if (etat == null) return html;
+  return html.replace(/<html lang="fr"(?![^>]*data-stock)/, `<html lang="fr" data-stock="${etat ? 'ok' : 'complet'}"`);
+}
+
 const ERREUR_COMPLET = () => new HttpsError('resource-exhausted',
   "Toutes nos tablettes sont réservées pour le moment. Inscrivez-vous sur mapapote.fr pour être prévenu dès qu'il y en a.");
 
-module.exports = { noterSession, paiementsOuverts, remplacer, adresseVisiteur, RESERVATIONS_MAX, tropDEssais, nettoyerReservations, ESSAIS_HEURE_IP, ESSAIS_HEURE_EMAIL, tablettesDisponibles, placesDisponibles, vendable, VENDRE_SANS_STOCK, delai, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, ERREUR_COMPLET, DUREE_PAIEMENT_MS };
+module.exports = { noterSession, paiementsOuverts, remplacer, adresseVisiteur, RESERVATIONS_MAX, tropDEssais, nettoyerReservations, ESSAIS_HEURE_IP, ESSAIS_HEURE_EMAIL, tablettesDisponibles, placesDisponibles, vendable, VENDRE_SANS_STOCK, delai, PRECOMMANDES, nombreDisponibles, reserver, liberer, routeDisponible, pageAvecStock, lireEtCompter, ERREUR_COMPLET, DUREE_PAIEMENT_MS };

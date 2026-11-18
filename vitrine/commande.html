@@ -3,6 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<script>
+  // Statistiques sans cookie ni donnée personnelle (functions/statistiques.js, page « Statistiques » de l'admin) :
+  // chaque étape une seule fois par visite (sessionStorage « papote-compte-… », oublié à la fermeture de l'onglet ;
+  // avant le 17/11 la clé « papote-paiement » servait aussi à l'heure du paiement : le clic Payer n'était jamais compté). La visite note
+  // seulement le nom du site d'où l'on vient (google.fr…), que le serveur range dans une liste fermée.
+  function compter(e, plus) {
+    try { if (sessionStorage.getItem('papote-compte-' + e)) return; sessionStorage.setItem('papote-compte-' + e, '1'); } catch (_) {}
+    var url = 'https://europe-west1-papote-famille.cloudfunctions.net/compter?e=' + e + (plus || '');
+    try { if (navigator.sendBeacon && navigator.sendBeacon(url)) return; } catch (_) {}
+    try { fetch(url, { method: 'POST', keepalive: true }).catch(function () {}); } catch (_) {}
+  }
+  (function () {
+    var r = '', u = '';
+    try { r = document.referrer ? new URL(document.referrer).hostname : ''; } catch (_) {}
+    try { u = new URLSearchParams(location.search).get('utm_source') || ''; } catch (_) {}
+    compter('visite', '&r=' + encodeURIComponent(r) + '&u=' + encodeURIComponent(u.slice(0, 30)));
+  })();
+</script>
 <title>Votre commande · Papote</title>
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#fdfaf5">
@@ -238,15 +256,6 @@ body .ps-bouton { bottom: 6.5rem; }
 </div>
 
 <script>
-  // Statistiques sans cookie : une seule fois par visite et par étape (outils/admin/statistiques.bat).
-  function compter(e) {
-    try { if (sessionStorage.getItem('papote-' + e)) return; sessionStorage.setItem('papote-' + e, '1'); } catch (_) {}
-    var url = 'https://europe-west1-papote-famille.cloudfunctions.net/compter?e=' + e;
-    try { if (navigator.sendBeacon && navigator.sendBeacon(url)) return; } catch (_) {}
-    fetch(url, { method: 'POST', keepalive: true }).catch(function () {});
-  }
-</script>
-<script>
 (function () {
   // Clé PUBLIQUE de l'intégration Sendcloud « Papote » (points relais Mondial Relay). Pas un secret.
   var SENDCLOUD_CLE = 'f8875927-f7be-4ad7-ac24-22fd11c0efc5';
@@ -340,6 +349,7 @@ body .ps-bouton { bottom: 6.5rem; }
   function choisirAdresse(f) {
     var p = f.properties || {};
     derniereAdresse = f;
+    compter('adresse');
     suggestions.hidden = true;
     champAdresse.value = p.label;
     // Commune seule (adresse exacte inconnue, Tanguy 29/10) : acceptée si la 4G passe bien sur au moins 95 % de
@@ -367,6 +377,7 @@ body .ps-bouton { bottom: 6.5rem; }
         }
         proche = { adresse: p.label, lat: c[1], lon: c[0], cp: p.postcode, niveau: commune ? 'commune' : d.niveau, eligible: !!d.eligible };
         if (commune) proche.insee = p.citycode;
+        compter(proche.eligible ? 'couverture-ok' : 'couverture-non');
         montrerVerdict();
         if (!proche.eligible && !relais) {
           // Pas de livraison ici : la liste des relais n'a plus de sens.
@@ -431,6 +442,7 @@ body .ps-bouton { bottom: 6.5rem; }
     ok[0].hidden = !procheOk();
     ok[1].hidden = !relais;
     ok[2].hidden = !(nomOk && melOk);
+    if (nomOk && melOk) compter('coordonnees');
     if (!procheOk() || !relais || !nomOk || !melOk) {
       payer.removeAttribute('href');
       payer.setAttribute('aria-disabled', 'true');

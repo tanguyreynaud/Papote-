@@ -9,7 +9,7 @@ name: Tests
 # faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['functions/**', 'outils/admin/**', 'vitrine/cgv.html', 'outils/cgv-pdf/**', '.github/workflows/tests.yml']
+    paths: ['functions/**', 'outils/admin/**', 'vitrine/cgv.html', 'vitrine/chat-support.js', 'outils/cgv-pdf/**', '.github/workflows/tests.yml']
   workflow_dispatch:
 
 # Un nouveau push sur la même branche de travail annule l'exécution encore en cours du commit précédent (CI plus
@@ -20,6 +20,26 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/claude/project-thread-dlattc' }}
 
 jobs:
+  # Bulle du chat (vitrine/chat-support.js) dans Chrome et Safari d'iPhone (WebKit), en parallèle des autres tests :
+  # jeton de l'appli envoyé, double clic, jeton lent ou absent, coupure (functions/chat-bulle.navigateur.js).
+  bulle-chat:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Playwright (hors du dépôt)
+        working-directory: ${{ runner.temp }}
+        run: npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.63.0 && npx playwright install --with-deps chromium webkit
+      - name: Bulle du chat, Chrome et WebKit iPhone
+        working-directory: functions
+        env:
+          NODE_PATH: ${{ runner.temp }}/node_modules
+          NAVIGATEURS: chromium,webkit
+        run: node --test chat-bulle.navigateur.js
+
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: 60
