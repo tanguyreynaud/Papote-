@@ -603,6 +603,25 @@
             </div>
           </form>
         </div>
+        <div id="alerte-pas-vue-card" class="card setting" hidden>
+          <div class="setting-head"><h2>Alerte si la tablette n'est pas utilisée</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="alerte-pas-vue-value" class="setting-value"></p>
+          <form id="form-alerte-pas-vue" class="setting-edit" hidden>
+            <p class="muted small">Les responsables reçoivent une notification si la tablette n'a ni vu ni senti <span class="grand-name"></span> pendant ce temps. C'est vérifié une fois par jour, à 10 h : l'alerte peut arriver jusqu'à un jour plus tard.</p>
+            <p class="choice-titre" id="alerte-pas-vue-titre">Me prévenir si la tablette n'est pas utilisée depuis :</p>
+            <div id="alerte-pas-vue-choix" class="choice choice-jours" role="radiogroup" aria-labelledby="alerte-pas-vue-titre">
+              <label><input type="radio" name="alerte-pas-vue" value="1">1 jour</label>
+              <label><input type="radio" name="alerte-pas-vue" value="2">2 jours</label>
+              <label><input type="radio" name="alerte-pas-vue" value="3">3 jours</label>
+              <label><input type="radio" name="alerte-pas-vue" value="4">4 jours</label>
+              <label><input type="radio" name="alerte-pas-vue" value="5">5 jours</label>
+            </div>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
+        </div>
         <div id="wifi-card" class="card" hidden>
           <div class="setting-head"><h2>Wi-Fi de la tablette</h2><button type="button" id="wifi-modify" class="link setting-modify">Modifier</button></div>
           <p id="wifi-current" class="setting-value"></p>

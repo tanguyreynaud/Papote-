@@ -1127,6 +1127,21 @@ test('veille : coucher de 19 h à 23 h 30, réveil de 5 h à 10 h, par demi-heur
   await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { veille: { active: true, de: 21, a: 6 }, rev: 4 }));
 });
 
+// Tanguy, 18/11 : l'alerte « pas vue » (functions/alertes.js) se règle de 1 à 5 jours, par un responsable seulement.
+test('délai de l\'alerte « pas vue » : entier de 1 à 5, par un responsable ; tout le reste refusé', async () => {
+  await famille();
+  const julie = proche('julie');
+  const regler = (v, extra = {}) => updateDoc(doc(julie, `families/${FID}`), { alertePasVueJours: v, ...extra });
+  for (const v of [1, 2, 3, 4, 5]) await assertSucceeds(regler(v));
+  await assertSucceeds(regler(3, { rev: 7 }));
+  for (const v of [0, 6, -1, 2.5, '3', true, null, [2], { jours: 2 }]) await assertFails(regler(v));
+  await assertFails(regler(2, { name: 'Mamie Rose' })); // jamais avec un autre champ
+  // Un proche (pas responsable) ne le règle pas, même dans les bornes ; la tablette non plus.
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}/members/paul`), fiche('paul', { status: 'active' })));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { alertePasVueJours: 4 }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}`), { alertePasVueJours: 4 }));
+});
+
 // Tanguy, 17/11 : le nom de la tablette acceptait un numéro de téléphone, des émojis et des balises (V6). Une lettre
 // au moins, jamais 4 chiffres, ni < >, ni émoji.
 test('nom de la tablette : un prénom (accents, trait d\'union, apostrophe), jamais un numéro de téléphone', async () => {

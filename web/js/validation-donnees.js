@@ -116,7 +116,7 @@ export const FLUX = [
     etapes: [
       { qui: 'papote', titre: 'Tablette débranchée', detail: 'Plus de 10 minutes sans courant : une notification aux responsables seulement, une fois par épisode.', cout: 'Push gratuit ; vérification toutes les 5 minutes (tâche planifiée, quelques centimes par mois en tout)', test: ['auto', 'Tests unitaires des alertes'] },
       { qui: 'papote', titre: 'Tablette qui ne répond plus', detail: '70 minutes sans signe de vie (2 h la nuit) : notification aux responsables. Rien pendant une pause hospitalisation.', cout: 'Gratuit', test: ['auto', 'Parcours « pause hospitalisation : aucune alerte »'] },
-      { qui: 'papote', titre: 'Mamie pas vue depuis 48 h', detail: 'Ni vue par la caméra, ni touchée depuis deux jours : une alerte aux responsables, envoyée à 10 h, pas de rappel tant que rien ne change.', cout: 'Gratuit', test: ['auto', 'Parcours « pas vue depuis deux jours »'] },
+      { qui: 'papote', titre: 'Mamie pas vue depuis 1 à 5 jours', detail: 'Ni vue par la caméra, ni touchée depuis le délai choisi par la famille (Réglages, 1 à 5 jours, 2 par défaut) : une alerte aux responsables, vérifiée chaque jour à 10 h (elle arrive donc entre le délai et un jour de plus), pas de rappel tant que rien ne change.', cout: 'Gratuit', test: ['auto', 'Parcours « pas vue depuis 2 jours » et « délai réglé par la famille »'] },
       { qui: 'tablette', titre: 'Vérifie ses notifications', detail: 'Une fois par jour, un essai de notification ; sans réponse, la tablette repasse à l\'écoute normale.', cout: 'Gratuit', test: ['main', 'Vérifié sur T-003 le 28/10'] },
     ],
   },
