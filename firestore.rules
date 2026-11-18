@@ -143,6 +143,16 @@ service cloud.firestore {
       return !('telephone' in d) || d.telephone == null
         || (d.telephone is string && d.telephone.matches('0[67]( ?[0-9]{2}){4}'));
     }
+    // Ordre d'appel du SOS choisi par un responsable (families/{fid}.sosOrdre) : les uid des proches, dans l'ordre où
+    // la tablette les appelle. 30 au plus (30 proches au plus par famille), sans doublon, chacun une chaîne non vide
+    // de 128 caractères au plus, sans « / ». Recollée puis recoupée, la liste doit revenir identique : un nombre (join
+    // l'écrit en chaîne) ou un « / » la changerait. Un proche absent de la liste est appelé après, dans l'ordre par
+    // défaut (responsables d'abord).
+    function sosOrdreOk(l) {
+      return l is list && l.size() <= 30 && l.toSet().size() == l.size()
+        && (l.size() == 0
+          || (l.join('/').split('/') == l && l.join('/').matches('[^/]{1,128}(/[^/]{1,128}){0,29}')));
+    }
     function isFamilyAdmin(fid) {
       let fam = get(familyPath(fid)).data;
       return isMember(fid)
@@ -353,6 +363,10 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['textSize', 'rev'])
             && isFamilyAdmin(fid)
             && request.resource.data.textSize in ['normal', 'grande', 'tres-grande'])
+          // Ordre d'appel du SOS (Réglages, « Ordre d'appel SOS ») : posé ou effacé (ordre par défaut) par un responsable.
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sosOrdre', 'rev'])
+            && isFamilyAdmin(fid)
+            && (!('sosOrdre' in request.resource.data) || sosOrdreOk(request.resource.data.sosOrdre)))
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admins'])
             && isFamilyAdmin(fid)
             && request.resource.data.admins is list

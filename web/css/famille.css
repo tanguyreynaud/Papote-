@@ -1646,3 +1646,24 @@ a { text-decoration: none; }
 #face-img, #face-empty, #tface-img, #tface-empty { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .ligne-touchable:active, .member-row:active, .notif[data-page]:active { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .read-badge:active, #face-img:active, #face-empty:active, #tface-img:active, #tface-empty:active { transform: scale(.96); }
+
+/* ---------- Ordre d'appel SOS (Réglages) ----------
+   Flèches ↑/↓ de même taille sur chaque ligne (pas de glisser-déposer) ; lignes de hauteur fixe (prénom coupé avec …)
+   pour que rien d'autre ne bouge quand deux proches échangent leur place ; le mot sous la liste a sa place réservée. */
+.sos-ordre-resume { margin: 8px 0 4px; padding-left: 26px; font-size: 16px; }
+.sos-ordre-resume li { padding: 3px 0; overflow-wrap: anywhere; }
+.sos-ordre-liste { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sos-ordre-ligne { display: flex; align-items: center; gap: 10px; min-height: 68px; padding: 6px 6px 6px 12px; border: 2px solid var(--line); border-radius: 14px; background: var(--surface); transition: border-color .2s, background-color .2s; }
+.sos-ordre-ligne.vient-de-bouger { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.sos-ordre-rang { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent-text); background: var(--accent); }
+.sos-ordre-nom { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 17px; font-weight: 600; }
+.sos-ordre-prenom, .sos-ordre-role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sos-ordre-role { font-size: 13px; font-weight: 400; color: var(--muted); }
+.sos-ordre-fleches { flex: none; display: flex; gap: 6px; }
+.sos-ordre-btn { width: 54px; height: 54px; padding: 0; border-radius: 12px; border: 2px solid var(--accent); color: var(--accent); background: var(--surface); touch-action: manipulation; }
+.sos-ordre-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.sos-ordre-btn:active:not(:disabled) { background: var(--accent); color: var(--accent-text); }
+.sos-ordre-btn:disabled { border-color: var(--line); color: var(--muted); opacity: .5; }
+.sos-ordre-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 2px; }
+.sos-ordre-annonce { min-height: 4.2em; margin: 10px 0 0; font-size: 15px; font-weight: 600; color: var(--accent); overflow-wrap: anywhere; }
+.sos-ordre-defaut { width: 100%; justify-content: center; min-height: 50px; margin-top: 4px; touch-action: manipulation; }
