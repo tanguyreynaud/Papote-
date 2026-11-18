@@ -197,3 +197,46 @@ test('Boutons du chat : false pendant que la tablette sonne, avant la connexion 
     await retourAccueil(paul);
   }
 });
+
+test('Boutons du chat : conversation reprise du site (#chat=…) : false pendant le démarrage, l\'écran s\'ouvre dès l\'accueil prêt', async () => {
+  const julie = await banc.telephone('Julie');
+  await g.familleInstallee(julie, { email: 'julie.aller4@exemple.fr', prenom: 'Julie' });
+
+  // Comme la bulle chargée dans l'appli : elle lit #chat=…, l'efface de l'adresse (replaceState de l'état actuel,
+  // le reste du fragment gardé), puis appelle papoteAller une fois par seconde jusqu'à true.
+  await julie.context.addInitScript(() => {
+    window.essaisAller = [];
+    const lu = new URLSearchParams(location.hash.slice(1));
+    if (!lu.has('chat')) return;
+    lu.delete('chat');
+    const reste = lu.toString();
+    history.replaceState(history.state, '', location.pathname + location.search + (reste ? `#${reste}` : ''));
+    const essayer = () => {
+      const r = typeof window.papoteAller === 'function' ? window.papoteAller('photos') : 'absent';
+      window.essaisAller.push(r);
+      if (r !== true) setTimeout(essayer, 1000);
+    };
+    window.addEventListener('DOMContentLoaded', essayer);
+  });
+  // Arrivée par le lien du site : une vraie ouverture de page (pas un simple changement de fragment).
+  await julie.page.goto('about:blank');
+  await g.ouvrir(julie, '#chat=eyJlY3JhbiI6InBob3RvcyJ9');
+  await g.attendreVue(julie, 'view-photos');
+  const essais = await julie.page.evaluate(() => window.essaisAller);
+  assert.strictEqual(essais[essais.length - 1], true, JSON.stringify(essais));
+  assert.ok(essais.slice(0, -1).every((r) => r !== true), `un seul true : ${JSON.stringify(essais)}`);
+  assert.ok(essais.length >= 2, `l'appli n'était pas prête au premier appel : ${JSON.stringify(essais)}`);
+  assert.strictEqual(await julie.page.evaluate(() => location.hash), '', 'le fragment #chat= est effacé');
+  await julie.page.waitForTimeout(1500);
+  assert.strictEqual((await julie.page.evaluate(() => window.essaisAller)).length, essais.length, 'plus d\'appel après true');
+  assert.strictEqual(await niveau(julie), 1);
+  await retourAccueil(julie);
+
+  // Une question ouverte (Se déconnecter ?) : false, la question reste.
+  await julie.page.click('.nav-item[data-tab="profile"]');
+  await julie.page.click('#view-profile [data-action="logout"]');
+  await julie.page.locator('.dialog-back:not(.closing) .dialog', { hasText: 'Se déconnecter' }).waitFor();
+  assert.strictEqual(await aller(julie, 'agenda'), false);
+  await g.attendreVue(julie, 'view-profile');
+  await g.repondre(julie, 'Annuler');
+});

@@ -3471,8 +3471,10 @@ function papoteAller(nom) {
   const ecran = ECRANS_ALLER[nom];
   if (!session?.family || sansAbonnement() || !$('view-sans-abo').hidden) return false;
   if (!$('call').hidden || !$('incoming').hidden || document.querySelector('.guide-back')) return false;
+  // Pas encore connecté, accueil pas prêt, question ouverte (Se déconnecter ?…) : false. La bulle qui reprend une
+  // conversation venue du site (#chat=…) rappelle chaque seconde : l'écran s'ouvre dès que l'accueil est là.
   if (!$('loading').hidden || VUES_PARCOURS.some((v) => !$(v).hidden)) return false;
-  while (fermerFenetre()) { /* question ouverte : « Annuler » */ }
+  if (document.querySelector('.dialog-back:not(.closing)')) return false;
   if (filmerOuvert()) fermerFilmer();
   // Deuxième appel avant la fin du retour à l'accueil : pas de second history.go ; le dernier écran l'emporte.
   if (allerEnAttente) {
