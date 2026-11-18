@@ -29,6 +29,9 @@
 # Code de sortie 1 si une vérification échoue : ne pas pousser, corriger d'abord.
 # Il faut : git, Node 22, curl (gitleaks est téléchargé une fois dans ~/.cache/papote), Java 21 pour les émulateurs.
 set -uo pipefail
+# Tout le script entre accolades : bash le lit en entier avant de commencer, un fichier changé pendant qu'il tourne
+# (git checkout, git pull d'une autre branche pendant les scénarios) ne le fait plus dérailler.
+{
 
 DEBUT=$(date +%s)
 TOUT=0; COMPLET=0; SECRETS_SEULS=0
@@ -57,7 +60,10 @@ titre() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
 # Lance une étape : etape "nom" commande... ; sortie dans un journal, affichée en entier si elle échoue.
 etape() {
   local nom="$1"; shift
-  local journal="$TMP/$(echo "$nom" | tr -c 'a-zA-Z0-9' '_').log"
+  # Nom court et fixe (numéro de l'étape) : construit sur le nom de l'étape, il dépassait la longueur permise
+  # quand plusieurs scénarios étaient touchés (« File name too long »).
+  N_ETAPE=$(( ${N_ETAPE:-0} + 1 ))
+  local journal="$TMP/etape-$N_ETAPE.log"
   titre "$nom"
   local t0; t0=$(date +%s)
   # (les lignes de progression « \r 12/172 écrans » de la galerie sont retirées du journal affiché)
@@ -281,3 +287,5 @@ if [ "$ECHECS" -gt 0 ]; then
   exit 1
 fi
 echo "Tout est bon ($TOTAL s) : vous pouvez pousser."
+exit 0
+}
