@@ -3430,6 +3430,81 @@ function ouvrirAbonnement() {
   document.querySelector('.nav-item[data-tab="profile"]').click();
   requestAnimationFrame(() => $('abo-card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
 }
+
+// ---------- Boutons de l'assistant (bulle chat-support.js) : window.papoteAller(nom) ----------
+// La bulle propose « Ouvrir “Dépanner la tablette” »… sous sa réponse ; le bouton appelle papoteAller(nom).
+// On montre l'écran tout de suite et on rend true ; false si ce n'est pas possible maintenant (la bulle retire
+// alors le bouton). Rien n'est jamais fait à la place de la personne : on ouvre l'écran, elle appuie.
+// Historique : on redescend d'abord sur l'accueil (history.go, asynchrone), puis on empile UNE entrée pour l'écran,
+// au popstate de ce retour : « retour » ramène donc à l'accueil, et deux appels de suite n'empilent rien de plus.
+const carteReglages = (id) => () => {
+  const carte = $(id);
+  // Carte réservée aux responsables (cachée) : la page Réglages, avec sa note « Réglages de la tablette » si elle est là.
+  const cible = carte && !carte.hidden ? carte : (!$('tablet-owner-note').hidden ? $('tablet-owner-note') : $('view-settings'));
+  cible.scrollIntoView({ block: 'start' });
+};
+const ALLER_PAGE = (nom, apres) => ({ etat: { page: nom, onglet: false }, montrer: () => openPage(nom, false), apres });
+const ALLER_ONGLET = (vue, carte) => ({
+  etat: carte ? { vue, carte } : { vue },
+  montrer: () => { stopPage?.(); stopPage = null; page = null; show(`view-${vue}`); },
+  apres: carte ? () => $(carte).scrollIntoView({ block: 'start' }) : null,
+});
+const ECRANS_ALLER = {
+  depanner: ALLER_PAGE('settings', carteReglages('remote-card')),
+  wifi: ALLER_PAGE('settings', carteReglages('wifi-card')),
+  membres: ALLER_PAGE('settings', () => (!$('requests-card').hidden ? $('requests-card') : $('members').closest('.card')).scrollIntoView({ block: 'start' })),
+  volumes: ALLER_PAGE('settings', carteReglages('volume-card')),
+  nuit: ALLER_PAGE('settings', carteReglages('sleep-card')),
+  options: ALLER_PAGE('settings', carteReglages('options-card')),
+  inviter: ALLER_PAGE('invite'),
+  abonnement: ALLER_ONGLET('profile', 'abo-card'),
+  profil: ALLER_ONGLET('profile'),
+  notifications: ALLER_ONGLET('notifs'),
+  photos: ALLER_PAGE('photos'),
+  messages: ALLER_PAGE('messages'),
+  agenda: ALLER_PAGE('agenda'),
+};
+let allerEnAttente = null; // écran à empiler quand le retour à l'accueil sera fini
+
+function papoteAller(nom) {
+  if (typeof nom !== 'string' || !Object.hasOwn(ECRANS_ALLER, nom)) return false;
+  const ecran = ECRANS_ALLER[nom];
+  if (!session?.family || sansAbonnement() || !$('view-sans-abo').hidden) return false;
+  if (!$('call').hidden || !$('incoming').hidden || document.querySelector('.guide-back')) return false;
+  if (!$('loading').hidden || VUES_PARCOURS.some((v) => !$(v).hidden)) return false;
+  while (fermerFenetre()) { /* question ouverte : « Annuler » */ }
+  if (filmerOuvert()) fermerFilmer();
+  // Deuxième appel avant la fin du retour à l'accueil : pas de second history.go ; le dernier écran l'emporte.
+  if (allerEnAttente) {
+    closeSheets();
+    closeViewer();
+    allerEnAttente.ecran = ecran;
+    ecran.montrer();
+    requestAnimationFrame(() => ecran.apres?.());
+    return true;
+  }
+  const attendre = niveau() > 0;
+  goHome(); // ferme feuilles et visionneuse ; au-dessus de l'accueil, lance history.go(-n)
+  ecran.montrer();
+  requestAnimationFrame(() => ecran.apres?.());
+  if (!attendre) { empiler(ecran.etat); return true; }
+  const enCours = { ecran };
+  allerEnAttente = enCours;
+  const finir = () => {
+    window.removeEventListener('popstate', finir);
+    clearTimeout(enCours.secours);
+    if (allerEnAttente !== enCours) return;
+    allerEnAttente = null;
+    if (niveau()) return;
+    empiler(enCours.ecran.etat);
+    // Le retour de l'historique a pu remettre la page en haut (défilement restauré) : la carte revient sous les yeux.
+    requestAnimationFrame(() => enCours.ecran.apres?.());
+  };
+  window.addEventListener('popstate', finir);
+  enCours.secours = setTimeout(finir, 3000);
+  return true;
+}
+window.papoteAller = papoteAller;
 $('abo-banner-btn').addEventListener('click', () => {
   const abo = session.family.abonnement;
   // La page de paiement met quelques secondes à s'ouvrir : la promesse rendue fait tourner le bouton (retour.js).
