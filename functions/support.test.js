@@ -158,7 +158,8 @@ test('passage de main : une fois faite, elle n\'est pas répétée à chaque mes
   const apres = avant.concat([{ role: 'user', content: '(Demande de rappel envoyée)' }, { role: 'assistant', content: 'Merci ! Votre demande est bien arrivée.' }, { role: 'user', content: 'Et maintenant ?' }]);
   assert.strictEqual(etatMain(apres), 'envoyee');
   assert.match(consigneMain('site', false, 'envoyee'), /DÉJÀ envoyé sa demande/);
-  assert.deepStrictEqual(lireReponse('Sous 14 jours.', 'appli'), { reponse: 'Sous 14 jours.', contact: false });
+  assert.deepStrictEqual(lireReponse('Sous 14 jours.\n[CONTACT]', 'appli', false, 'proposee'), { reponse: 'Sous 14 jours.', contact: true });
+  assert.deepStrictEqual(lireReponse('Nouveau souci.\n[CONTACT]', 'appli', false, 'envoyee'), { reponse: 'Nouveau souci.\n\n' + PHRASE_RAPPEL, contact: true });
 });
 
 test('passage de main : phrase selon la page et la bulle', () => {
