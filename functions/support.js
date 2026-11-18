@@ -288,7 +288,7 @@ function etatMain(messages) {
   let etat = '';
   for (const m of messages || []) {
     const c = String((m && m.content) || '');
-    if (m.role === 'user' && /^\((Demande|Déclaration)[^)]*envoyée\)$/.test(c.trim())) etat = 'envoyee';
+    if (m.role === 'user' && /^\((Demande|Déclaration)[^)]*envoyée[^)]*\)$/.test(c.trim())) etat = 'envoyee';
     else if (m.role === 'assistant' && [PHRASE_RAPPEL, PHRASE_DECLARATION].some((p) => c.includes(p.slice(0, 40)))) etat = 'proposee';
   }
   return etat;
