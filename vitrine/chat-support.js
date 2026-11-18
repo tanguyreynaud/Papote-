@@ -17,6 +17,13 @@
   var bas = (script.dataset && parseInt(script.dataset.bas, 10)) || 20;
   // Dans l'appli famille, la personne est déjà cliente : l'assistant la guide dans l'appli.
   var PAGE = ['papote-famille.web.app', 'app.mapapote.fr'].indexOf(location.hostname) !== -1 ? 'appli' : 'site';
+  // Dans l'appli : petite demande guidée (motif, questions, photos) quand l'assistant passe la main (chat-declaration.js).
+  if (PAGE === 'appli' && script.src) {
+    var decl = document.createElement('script');
+    decl.src = script.src.replace(/chat-support\.js([?#].*)?$/, 'chat-declaration.js');
+    decl.defer = true;
+    document.head.appendChild(decl);
+  }
   var SUGGESTIONS = PAGE === 'appli' ? ['La tablette ne répond plus', 'Comment inviter un proche ?', 'Régler le volume de la tablette'] : ['Combien ça coûte ?', 'Faut-il une box internet ?', 'Comment se passe l’installation ?'];
 
   var css = '' +
@@ -263,6 +270,18 @@
         fil.appendChild(idees);
       }
       historique.forEach(function (m) { ajouter(m.role, m.content); });
+      var dernier = historique[historique.length - 1];
+      if (dernier && dernier.contact && declarationPossible()) proposerDeclaration();
+    }
+
+    // Appli à jour (jeton exposé) et chat-declaration.js chargé : demande guidée ; sinon l'ancien « Être rappelé ».
+    function declarationPossible() { return PAGE === 'appli' && window.PapoteDeclaration && window.papoteJeton; }
+    function proposerDeclaration() {
+      window.PapoteDeclaration.proposer({
+        fil: fil, ajouter: ajouter, sauver: sauver,
+        historique: function () { return historique; },
+        fermer: function () { historique = []; sauver(); ouvrir(false); },
+      });
     }
 
     function ouvrir(oui) {
@@ -277,7 +296,7 @@
       if (!question || envoyer.disabled) return;
       var idees = fil.querySelector('.ps-idees');
       if (idees) idees.remove();
-      ['.ps-rappel', '.ps-rappeler'].forEach(function (c) { var n = fil.querySelector(c); if (n) n.remove(); });
+      ['.ps-rappel', '.ps-rappeler', '.ps-decl'].forEach(function (c) { var n = fil.querySelector(c); if (n) n.remove(); });
       historique.push({ role: 'user', content: question });
       ajouter('user', question);
       zone.value = '';
@@ -298,11 +317,11 @@
         .then(function (d) {
           attente.remove();
           var reponse = d.reponse || ('Je suis indisponible pour le moment. Écrivez-nous à ' + EMAIL + '.');
-          historique.push({ role: 'assistant', content: reponse });
+          historique.push(d.contact && declarationPossible() ? { role: 'assistant', content: reponse, contact: true } : { role: 'assistant', content: reponse });
           ajouter('assistant', reponse);
           sauver();
           envoyer.disabled = false;
-          if (d.contact) proposerRappel(); else { boutonRappel(); zone.focus(); }
+          if (d.contact) { if (declarationPossible()) proposerDeclaration(); else proposerRappel(); } else { boutonRappel(); zone.focus(); }
         });
     }
 

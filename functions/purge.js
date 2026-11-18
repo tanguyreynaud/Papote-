@@ -4,6 +4,7 @@
 //     - aide par écrit (chat) : supportDemandes/ et supportSansReponse/ de plus de 12 mois, et les fiches de
 //       contacts/ créées seulement par le chat (sans accord pour les nouvelles, ni liste d'attente, ni commande)
 //       sans question depuis 12 mois ;
+//     - declarations/ (bulle d'aide de l'appli) de plus de 12 mois, avec leurs photos ;
 //     - paniers/ (commandes non terminées) de plus de 12 mois ;
 //     - familles résiliées depuis plus de 3 mois (Tanguy, 3/11, fil Inspecter) : photos, vidéos, messages, membres…
 //       (gestion.effacerFamille), jamais une famille dont une commande vit encore chez Stripe. Une famille jamais
@@ -140,6 +141,7 @@ async function purger(db, maintenant = Date.now()) {
     supportDemandes: () => purgerCollection(db, 'supportDemandes', maintenant),
     supportSansReponse: () => purgerCollection(db, 'supportSansReponse', maintenant),
     paniers: () => purgerCollection(db, 'paniers', maintenant),
+    declarations: () => require('./declaration').purgerDeclarations(db, maintenant),
     contacts: () => purgerContactsChat(db, maintenant),
     familles: () => purgerFamilles(db, maintenant),
   };
