@@ -302,5 +302,8 @@ La personne a donné le code de commande et l’adresse e-mail de la commande : 
 ${l.length ? l.join('\n') : 'Commande enregistrée.'}`;
 }
 
-module.exports = { quiEcrit, lireFamille, resumeFamille, blocFiche, trouverCodeEmail, lireCommande, blocCommande };
+// Site, personne qui n'a pas encore donné son code ET son e-mail : comment obtenir le suivi de sa commande.
+const CONSIGNE_SUIVI = '# Suivi de commande\n\nSi la personne demande où en est sa commande ou son colis, demande-lui en une phrase le code de commande (8 caractères, par exemple ABCD-EFGH, sur l’e-mail de confirmation de commande) ET l’adresse e-mail utilisée pour la commande, les deux ensemble : tu pourras alors lui dire où en est sa commande. Ne demande jamais d’autre information (adresse, téléphone, numéro de carte).';
+
+module.exports = { CONSIGNE_SUIVI, quiEcrit, lireFamille, resumeFamille, blocFiche, trouverCodeEmail, lireCommande, blocCommande };
 module.exports._test = { lignesCommande, ligneTablette, court, enMillis };

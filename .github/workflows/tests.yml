@@ -22,21 +22,24 @@ concurrency:
 jobs:
   # Bulle du chat (vitrine/chat-support.js) dans Chrome et Safari d'iPhone (WebKit), en parallèle des autres tests :
   # jeton de l'appli envoyé, double clic, jeton lent ou absent, coupure (functions/chat-bulle.navigateur.js).
+  # Image officielle de Playwright : navigateurs et bibliothèques déjà installés (l'installation à la main de WebKit
+  # prenait plus de 10 min).
   bulle-chat:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    container: mcr.microsoft.com/playwright:v1.63.0-noble
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Playwright (hors du dépôt)
-        working-directory: ${{ runner.temp }}
-        run: npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.63.0 && npx playwright install --with-deps chromium webkit
+      - name: Playwright (hors du dépôt, navigateurs déjà dans l'image)
+        working-directory: /tmp
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: mkdir -p pw && cd pw && npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.63.0
       - name: Bulle du chat, Chrome et WebKit iPhone
         working-directory: functions
         env:
-          NODE_PATH: ${{ runner.temp }}/node_modules
+          HOME: /root
+          NODE_PATH: /tmp/pw/node_modules
           NAVIGATEURS: chromium,webkit
         run: node --test chat-bulle.navigateur.js
 

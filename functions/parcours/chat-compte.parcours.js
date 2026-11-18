@@ -206,10 +206,15 @@ test('site : suivi de commande avec le code ET l\'e-mail, jamais avec un seul de
   assert.match(r.suivi, /aucune commande ne correspond aux deux ensemble/);
   assert.doesNotMatch(r.suivi, /préparation|envoyé|MR445566/);
   // Le code seul, ou l'e-mail seul : aucune recherche.
-  assert.strictEqual((await demander(`Ma commande ${affiche} ?`, { page: 'site' })).suivi, null);
-  assert.strictEqual((await demander('Ma commande, e-mail paul.acheteur@exemple.fr ?', { page: 'site' })).suivi, null);
+  // Le code seul : aucune recherche, le chat demande les deux ensemble.
+  const seul = await demander(`Ma commande ${affiche} ?`, { page: 'site' });
+  assert.match(seul.suivi, /demande-lui en une phrase le code de commande .* ET l’adresse e-mail/);
+  assert.doesNotMatch(seul.suivi, /préparation|envoyé|MR445566/);
+  // Dans l'appli, pas cette consigne (la fiche du compte suffit).
+  assert.strictEqual((await demander('Où est ma commande ?', { page: 'appli' })).suivi, null);
+  assert.doesNotMatch((await demander('Ma commande, e-mail paul.acheteur@exemple.fr ?', { page: 'site' })).suivi, /Commande :/);
   // Deux mots ordinaires ne passent pas pour un code.
-  assert.strictEqual((await demander('Je viens avec deux questions, paul.acheteur@exemple.fr', { page: 'site' })).suivi, null);
+  assert.doesNotMatch((await demander('Je viens avec deux questions, paul.acheteur@exemple.fr', { page: 'site' })).suivi, /Commande :/);
 
   // Deviner des codes depuis une même adresse : 20 recherches, puis plus rien (le chat répond toujours).
   const { QUOTAS } = require('../support')._test;
@@ -219,7 +224,7 @@ test('site : suivi de commande avec le code ET l\'e-mail, jamais avec un seul de
     const avant = requetesIA.length;
     const rep = await s.requete('supportChat', { depuis, corps: { page: 'site', messages: [{ role: 'user', content: `Commande ${affiche} e-mail paul.acheteur@exemple.fr` }] } });
     if (rep.json && rep.json.contact) break; // quota de questions atteint
-    if (requetesIA[avant].system.some((b) => /^# Suivi de commande/.test(b.text))) trouves += 1;
+    if (requetesIA[avant].system.some((b) => /^# Suivi de commande \(lu/.test(b.text))) trouves += 1;
   }
   assert.strictEqual(trouves, QUOTAS.suivis, 'recherches plafonnées par adresse');
 });
