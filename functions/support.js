@@ -279,6 +279,20 @@ function consigneMain(page, declaration, etat) {
 const MAX_ACTIONS = 2;
 const BALISE_ACTION = /\[ALLER\s*:\s*([a-z]+)\s*\]/gi;
 
+// Filet : l'IA cite souvent le bon chemin (« Dépanner la tablette ») en oubliant la balise. Dans l'appli,
+// quand elle n'a mis aucun bouton, on le déduit du libellé exact de l'écran qu'elle a cité.
+const LIBELLES_ECRANS = [
+  [/Dépanner la tablette/i, 'depanner'], [/Changer le Wi-?Fi/i, 'wifi'], [/«\s*Volumes\s*»/i, 'volumes'],
+  [/Écran éteint la nuit/i, 'nuit'], [/Options de la tablette/i, 'options'],
+  [/Gérer le paiement et les factures|Résilier l[’']abonnement|Je renvoie la tablette|Annuler ma commande|Garder mon abonnement/i, 'abonnement'],
+  [/«\s*Membres\s*»|Demandes pour rejoindre/i, 'membres'], [/Inviter par e-mail/i, 'inviter'],
+];
+function boutonsDeduits(reponse, page) {
+  if (page !== 'appli') return [];
+  const trouves = LIBELLES_ECRANS.map(([motif, nom]) => ({ nom, ou: reponse.search(motif) })).filter((x) => x.ou >= 0);
+  return trouves.sort((a, b) => a.ou - b.ou).map((x) => x.nom).filter((n, i, t) => t.indexOf(n) === i).slice(0, MAX_ACTIONS);
+}
+
 // Consigne ajoutée après le bloc mis en cache, selon la page.
 function consigneActions(page) {
   const enListe = (o) => Object.entries(o || {}).map(([nom, quoi]) => `[ALLER:${nom}] = ${quoi}`).join(' ; ');
@@ -311,6 +325,7 @@ function lireReponse(texte, page, declaration, etat) {
   if (sansRefus) reponse = sansRefus;
   // Formulaire déjà proposé plus haut : il se réaffiche, mais la phrase n'est pas répétée à chaque message.
   if (contact && (etat !== 'proposee' || !reponse)) reponse = (reponse ? reponse + '\n\n' : '') + phraseMain(page, declaration);
+  if (!actions.length) actions.push(...boutonsDeduits(reponse, page));
   return actions.length ? { reponse, contact, actions } : { reponse, contact };
 }
 

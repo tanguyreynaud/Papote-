@@ -127,6 +127,14 @@ test('boutons : la passation de main reste reconnue avec une balise avant ou apr
   assert.strictEqual(lireReponse('Regardez.\n[CONTACT]\n[ALLER:abonnement]', 'appli').contact, true);
 });
 
+test('boutons : déduits du libellé cité quand l\'IA oublie la balise (appli seulement)', () => {
+  assert.deepStrictEqual(lireReponse('Allez dans Réglages, « Dépanner la tablette », puis « Redémarrer la tablette ».', 'appli').actions, ['depanner']);
+  assert.deepStrictEqual(lireReponse('Onglet Profil, « Gérer le paiement et les factures ». Sinon Réglages, « Changer le Wi-Fi », ou « Volumes ».', 'appli').actions, ['abonnement', 'wifi']);
+  assert.strictEqual(lireReponse('Allez dans Réglages, « Dépanner la tablette ».', 'site').actions, undefined);
+  assert.strictEqual(lireReponse('Bonjour, comment puis-je vous aider ?', 'appli').actions, undefined);
+  assert.deepStrictEqual(lireReponse('Réglages, « Dépanner la tablette ».\n[ALLER:nuit]', 'appli').actions, ['nuit']);
+});
+
 test('boutons : aucune action ne touche à l\'argent, et la consigne le dit', () => {
   for (const nom of [...Object.keys(ACTIONS.appli), ...Object.keys(ACTIONS.site)]) assert.doesNotMatch(nom, /pay|resili(?!er$)|annul|rembours/);
   assert.match(consigneActions('appli'), /\[ALLER:depanner\]/);
