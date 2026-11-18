@@ -28,6 +28,8 @@ const mail = require('./mail');
 // Base Firestore réglée dans .env (BASE_FIRESTORE), comme index.js et gestion.js.
 const { db: base } = require('./base');
 const stock = require('./stock');
+// Fiche du compte (appli) et suivi de commande par code + e-mail (site), en lecture seule : fiche-chat.js.
+const fiche = require('./fiche-chat');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const SITE_VITRINE = defineString('SITE_VITRINE', { default: 'https://mapapote.fr' });
@@ -46,6 +48,9 @@ const QUOTA_INSCRIPTIONS = 5;
 // remplir la boîte de Papote (un e-mail par rappel) ni la liste des contacts (audit 8, N5).
 const QUOTA_RAPPELS_JOUR = 30;
 const QUOTA_INSCRIPTIONS_JOUR = 60;
+// Recherches de commande par code + e-mail (site) : assez pour une conversation, trop peu pour deviner des codes.
+const QUOTA_SUIVIS = 20;
+const QUOTA_SUIVIS_JOUR = 400;
 const MARQUE_CONTACT = '[CONTACT]';
 const CONNAISSANCES = fs.readFileSync(path.join(__dirname, 'support-connaissances.md'), 'utf8');
 const MAX_MESSAGES = 12;
@@ -172,6 +177,28 @@ async function texteDuSite() {
   return site.texte;
 }
 
+// Fiche du compte (appli : jeton de connexion + famille vérifiés) ou suivi de commande (code ET e-mail écrits dans
+// la conversation), en lecture seule ; '' sinon. Jamais d'exception : une lecture ratée laisse le chat répondre sans.
+async function texteDuCompte(req, messages, ip, page) {
+  const maintenant = Date.now();
+  try {
+    const qui = await fiche.quiEcrit(req, { db: base, verifier: (j) => admin.auth().verifyIdToken(j) });
+    if (qui) return fiche.blocFiche(fiche.resumeFamille(await fiche.lireFamille(base, qui), qui, maintenant), maintenant);
+  } catch (e) {
+    logger.warn('Fiche du compte illisible pour le chat', e.message);
+  }
+  const demande = fiche.trouverCodeEmail(messages);
+  // Sur le site, sans code + e-mail encore : comment demander le suivi (n'existe que si cette recherche est en ligne).
+  if (!demande) return page === 'site' ? fiche.CONSIGNE_SUIVI : '';
+  if (!(await quotaOk(ip, 'suivis'))) return '';
+  try {
+    return fiche.blocCommande(await fiche.lireCommande(base, demande), maintenant);
+  } catch (e) {
+    logger.warn('Suivi de commande illisible pour le chat', e.message);
+    return '';
+  }
+}
+
 // Conversation envoyée par la page : rôles alternés, commence et finit par l'utilisateur.
 function nettoyer(messages) {
   if (!Array.isArray(messages)) return null;
@@ -186,8 +213,8 @@ function nettoyer(messages) {
 }
 
 // Compte une question (n), une demande de rappel ou une inscription ; false si le quota du jour est dépassé.
-const QUOTAS = { n: QUOTA_VISITEUR, rappels: QUOTA_RAPPELS, inscriptions: QUOTA_INSCRIPTIONS };
-const QUOTAS_JOUR = { n: QUOTA_TOTAL, rappels: QUOTA_RAPPELS_JOUR, inscriptions: QUOTA_INSCRIPTIONS_JOUR };
+const QUOTAS = { n: QUOTA_VISITEUR, rappels: QUOTA_RAPPELS, inscriptions: QUOTA_INSCRIPTIONS, suivis: QUOTA_SUIVIS };
+const QUOTAS_JOUR = { n: QUOTA_TOTAL, rappels: QUOTA_RAPPELS_JOUR, inscriptions: QUOTA_INSCRIPTIONS_JOUR, suivis: QUOTA_SUIVIS_JOUR };
 async function quotaOk(ip, champ = 'n') {
   const jour = new Date(Date.now()).toISOString().slice(0, 10);
   const visiteur = crypto.createHash('sha256').update(jour + ip).digest('hex').slice(0, 24);
@@ -407,7 +434,7 @@ exports.supportChat = onRequest(
 
     try {
       if (!client) client = new (require('@anthropic-ai/sdk'))({ apiKey: ANTHROPIC_API_KEY.value() });
-      const [texte, etat] = await Promise.all([texteDuSite(), texteDuStock()]);
+      const [texte, etat, compte] = await Promise.all([texteDuSite(), texteDuStock(), texteDuCompte(req, messages, ip, page)]);
       const reponse = await client.messages.create({
         model: MODELE,
         // La réflexion de l'IA compte dans max_tokens : assez de marge pour ne jamais couper une réponse.
@@ -418,6 +445,8 @@ exports.supportChat = onRequest(
           { type: 'text', text: `${CONNAISSANCES}\n\n# Contenu du site Papote\n\n${texte}`, cache_control: { type: 'ephemeral' } },
           // Après le bloc mis en cache : l'état du stock change sans invalider le cache du guide et du site.
           ...(etat ? [{ type: 'text', text: etat }] : []),
+          // Fiche du compte (appli, jeton vérifié) ou suivi de commande (code + e-mail) : lecture seule.
+          ...(compte ? [{ type: 'text', text: compte }] : []),
           { type: 'text', text: page === 'appli'
             ? 'La personne écrit depuis l\u2019appli famille : elle est déjà cliente. Guide-la dans l\u2019appli (« dans Réglages… »).'
             : 'La personne écrit depuis le site : elle découvre peut-être Papote.' },

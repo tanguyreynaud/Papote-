@@ -145,6 +145,26 @@
   var contact = null;
   try { contact = JSON.parse(localStorage.getItem(CLE_CONTACT)); } catch (e) { contact = null; }
 
+  // Dans l'appli famille, la personne est connectée : la bulle envoie son jeton de connexion et la famille ouverte,
+  // pour que l'assistant voie l'état de SON compte (tablette, abonnement, colis), en lecture seule (fiche-chat.js).
+  // L'appli expose window.papoteJeton() (promesse du jeton, ou null) et window.papoteFamille() (identifiant de la
+  // famille, ou null). Sans elles (site, ancienne appli) ou après 3 s sans jeton : question envoyée sans, comme avant.
+  function entetesCompte() {
+    var vide = { entetes: { 'Content-Type': 'application/json' }, famille: null };
+    try {
+      if (typeof window.papoteJeton !== 'function' || typeof window.papoteFamille !== 'function') return Promise.resolve(vide);
+      var famille = window.papoteFamille();
+      if (!famille) return Promise.resolve(vide);
+      var delai = new Promise(function (ok) { setTimeout(function () { ok(null); }, 3000); });
+      return Promise.race([Promise.resolve(window.papoteJeton()), delai]).then(function (jeton) {
+        if (!jeton || typeof jeton !== 'string') return vide;
+        return { entetes: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + jeton }, famille: String(famille) };
+      }, function () { return vide; });
+    } catch (e) {
+      return Promise.resolve(vide);
+    }
+  }
+
   function el(tag, cls, texte) {
     var n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -390,11 +410,12 @@
       attente.setAttribute('role', 'status');
       attente.setAttribute('aria-label', 'Papote écrit');
       for (var i = 0; i < 3; i++) attente.appendChild(el('span'));
-      fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: historique.slice(-12), page: PAGE, declaration: !!window.PapoteDeclaration }),
-      })
+      var corps = { messages: historique.slice(-12), page: PAGE, declaration: !!window.PapoteDeclaration };
+      entetesCompte()
+        .then(function (compte) {
+          if (compte.famille) corps.famille = compte.famille;
+          return fetch(API, { method: 'POST', headers: compte.entetes, body: JSON.stringify(corps) });
+        })
         .then(function (r) { return r.json(); })
         .catch(function () { return {}; })
         .then(function (d) {
