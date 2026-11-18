@@ -30,7 +30,7 @@ test('coupe les messages trop longs et trop nombreux', () => {
   assert.strictEqual(r[r.length - 1].content, 'fin');
 });
 
-const { coordonneesValides, lireReponse } = require('./support')._test;
+const { coordonneesValides, lireReponse, ACTIONS, consigneActions } = require('./support')._test;
 
 test('accepte un téléphone ou un e-mail', () => {
   assert.deepStrictEqual(coordonneesValides('06 12 34 56 78'), { telephone: '06 12 34 56 78' });
@@ -104,4 +104,30 @@ test('ni les consignes ni le guide du chat ne citent un prénom ou un numéro de
   const consignes = code.match(/const CONSIGNES = `([\s\S]*?)`;/)[1];
   assert.ok(!/Tanguy/.test(guide) && !/Tanguy/.test(consignes));
   assert.ok(!/0[67](?:[ .]?\d{2}){4}/.test(guide + consignes));
+});
+
+test('boutons [ALLER:x] : retirés du texte, gardés seulement s\'ils sont permis sur la page', () => {
+  assert.deepStrictEqual(lireReponse('Ouvrez Réglages, « Dépanner la tablette ».\n[ALLER:depanner]', 'appli'),
+    { reponse: 'Ouvrez Réglages, « Dépanner la tablette ».', contact: false, actions: ['depanner'] });
+  // Inconnue, ou réservée à l'autre page : ignorée, mais jamais laissée dans le texte.
+  const inconnu = lireReponse('Voici.\n[ALLER:payer]\n[ALLER:commander]', 'appli');
+  assert.deepStrictEqual(inconnu, { reponse: 'Voici.', contact: false });
+  assert.deepStrictEqual(lireReponse('Commandez ici.\n[ALLER:commander]', 'site').actions, ['commander']);
+  // Deux au plus, sans doublon, casse et espaces tolérés.
+  assert.deepStrictEqual(lireReponse('A.\n[ALLER:volumes] [aller: Volumes] [ALLER:nuit] [ALLER:wifi]', 'appli').actions, ['volumes', 'nuit']);
+  // Sans page connue : aucun bouton.
+  assert.strictEqual(lireReponse('A.\n[ALLER:depanner]').actions, undefined);
+});
+
+test('boutons : la passation de main reste reconnue avec une balise avant ou après', () => {
+  const lu = lireReponse('Regardez l\'abonnement.\n[ALLER:abonnement]\n[CONTACT]', 'appli');
+  assert.deepStrictEqual(lu, { reponse: 'Regardez l\'abonnement.', contact: true, actions: ['abonnement'] });
+  assert.strictEqual(lireReponse('Regardez.\n[CONTACT]\n[ALLER:abonnement]', 'appli').contact, true);
+});
+
+test('boutons : aucune action ne touche à l\'argent, et la consigne le dit', () => {
+  for (const nom of [...Object.keys(ACTIONS.appli), ...Object.keys(ACTIONS.site)]) assert.doesNotMatch(nom, /pay|resili(?!er$)|annul|rembours/);
+  assert.match(consigneActions('appli'), /\[ALLER:depanner\]/);
+  assert.doesNotMatch(consigneActions('appli'), /\[ALLER:commander\]/);
+  assert.match(consigneActions('site'), /c'est elle qui appuie/);
 });

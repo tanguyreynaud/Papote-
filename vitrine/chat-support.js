@@ -26,6 +26,21 @@
   }
   var SUGGESTIONS = PAGE === 'appli' ? ['La tablette ne répond plus', 'Comment inviter un proche ?', 'Régler le volume de la tablette'] : ['Combien ça coûte ?', 'Faut-il une box internet ?', 'Comment se passe l’installation ?'];
 
+  // Boutons que l'assistant peut proposer sous sa réponse (le serveur renvoie actions: ['depanner']).
+  // Sur le site : de simples liens. Dans l'appli : l'appli déclare window.papoteAller(nom), qui ouvre
+  // l'écran et rend true ; sans elle (ancienne version de l'appli), aucun bouton n'est affiché.
+  // Aucun bouton n'agit à la place de la personne : il ouvre l'écran, c'est elle qui appuie ensuite.
+  var ALLER = PAGE === 'appli' ? {
+    depanner: 'Ouvrir « Dépanner la tablette »', abonnement: 'Ouvrir mon abonnement', wifi: 'Ouvrir le réglage du Wi-Fi',
+    inviter: 'Ouvrir « Inviter »', membres: 'Voir les membres', volumes: 'Ouvrir « Volumes »', nuit: 'Ouvrir « Écran éteint la nuit »',
+    options: 'Ouvrir les options de la tablette', notifications: 'Ouvrir les notifications', photos: 'Ouvrir les photos',
+    messages: 'Ouvrir les messages', agenda: 'Ouvrir l’agenda', profil: 'Ouvrir mon profil',
+  } : {
+    commander: ['Commander', 'commande.html'], resilier: ['Ouvrir la page pour résilier', 'resilier.html'],
+    cgv: ['Lire les conditions de vente', 'cgv.html'], confidentialite: ['Lire la page de confidentialité', 'confidentialite.html'],
+    appli: ['Ouvrir l’appli famille', 'https://app.mapapote.fr/'],
+  };
+
   var css = '' +
     '.ps-bouton,.ps-panneau{--ps-fond:#fdfaf5;--ps-carte:#fff;--ps-texte:#24212f;--ps-gris:#5f5a6b;--ps-ligne:#e9e1d4;--ps-indigo:#4f46e5;--ps-indigo-fonce:#3730a3;--ps-doux:#e8e6fd;' +
     'font-family:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;position:fixed;z-index:2147483000;' + cote + ':20px;bottom:' + bas + 'px}' +
@@ -71,6 +86,9 @@
     '.ps-panneau .ps-fin{display:block;margin:.4rem auto 0;border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font:inherit;font-weight:700;padding:.7rem 1.2rem;cursor:pointer}' +
     '.ps-erreur{color:#b91c1c;font-size:.95rem}' +
     '.ps-note{font-size:.8rem;color:var(--ps-gris);text-align:center;padding:0 .75rem .6rem;background:var(--ps-carte)}' +
+    '.ps-aller{align-self:flex-start;display:inline-block;border:0;background:var(--ps-indigo);color:#fff;border-radius:999px;padding:.6rem 1rem;font:inherit;font-weight:700;text-decoration:none;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '.ps-aller:hover{background:var(--ps-indigo-fonce)}' +
+    '.ps-panneau a.ps-aller:focus-visible{outline:3px solid #4338ca;outline-offset:2px}' +
     '.ps-rappeler{align-self:flex-start;border:1.5px solid var(--ps-indigo);background:#fff;color:var(--ps-indigo-fonce);border-radius:999px;padding:.5rem .9rem;font:inherit;font-weight:700;cursor:pointer}' +
     '@media (max-width:600px){.ps-panneau{width:100vw;height:100vh;height:100dvh;left:0;right:0;bottom:0;border-radius:0;max-height:none}}';
 
@@ -304,6 +322,32 @@
       });
     }
 
+    // Un bouton par action proposée, sous la dernière réponse seulement.
+    function boutonsAller(actions) {
+      (Array.isArray(actions) ? actions : []).slice(0, 2).forEach(function (nom) {
+        if (!Object.prototype.hasOwnProperty.call(ALLER, nom)) return;
+        var b;
+        if (PAGE === 'appli') {
+          if (typeof window.papoteAller !== 'function') return;
+          b = el('button', 'ps-aller', ALLER[nom]);
+          b.type = 'button';
+          b.onclick = function () {
+            if (b.disabled) return; // double clic : un seul appel
+            b.disabled = true;
+            var fait = false;
+            try { fait = window.papoteAller(nom) === true; } catch (e) { fait = false; }
+            // L'écran est ouvert derrière : on replie la bulle pour le montrer. Sinon le bouton disparaît.
+            if (fait) ouvrir(false); else b.remove();
+          };
+        } else {
+          b = el('a', 'ps-aller', ALLER[nom][0]);
+          b.href = ALLER[nom][1];
+        }
+        fil.appendChild(b);
+      });
+      fil.scrollTop = fil.scrollHeight;
+    }
+
     function ouvrir(oui) {
       panneau.classList.toggle('ps-ouvert', oui);
       bouton.style.display = oui ? 'none' : '';
@@ -317,6 +361,7 @@
       var idees = fil.querySelector('.ps-idees');
       if (idees) idees.remove();
       ['.ps-rappel', '.ps-rappeler', '.ps-decl'].forEach(function (c) { var n = fil.querySelector(c); if (n) n.remove(); });
+      Array.prototype.forEach.call(fil.querySelectorAll('.ps-aller'), function (n) { n.remove(); });
       historique.push({ role: 'user', content: question });
       ajouter('user', question);
       zone.value = '';
@@ -342,6 +387,7 @@
           ajouter('assistant', reponse);
           sauver();
           envoyer.disabled = false;
+          boutonsAller(d.actions);
           if (d.contact) { if (declarationPossible()) proposerDeclaration(); else proposerRappel(); } else { boutonRappel(); zone.focus(); }
         });
     }
