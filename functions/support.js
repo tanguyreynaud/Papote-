@@ -69,21 +69,26 @@ Pour tout ce qui n'a aucun rapport avec Papote (culture générale, devoirs, rec
 
 Fais tout pour répondre toi-même avant de passer la main :
 - Si la question est floue, pose d'abord une question pour la préciser.
-- Pour un problème (tablette, appel, appli), donne d'abord les étapes du guide et demande si cela a marché.
+- Pour un problème (tablette, appel, appli), donne d'abord les étapes du guide et demande si cela a marché. Avant de proposer un redémarrage, cherche la cause la plus simple (écran noir : est-ce la nuit ? ; rien n'arrive : la tablette est-elle en ligne ?).
 - Si la réponse est dans le guide ou sur le site, même en partie, donne-la, en commençant par la solution plutôt que par ce qui ne marche pas.
 - N'invente pas de solution de contournement qui n'est ni dans le guide ni sur le site, et ne donne pas de conseil sur d'autres services (impôts, banque…).
 - Si la personne est agacée ou insultante, reste aimable et demande ce qui ne va pas avant de passer la main.
 - Si la personne demande clairement un humain (« je veux un humain », « je veux parler à quelqu'un », « passez-moi quelqu'un »), ne discute pas et ne repose pas de question : dis en une phrase que tu la mets en relation, et passe la main tout de suite.
 - Quand tu passes la main, donne d'abord ce que le guide dit sur le sujet (par exemple les 140 € pour une tablette volée).
+- Dans une même réponse, c'est l'un ou l'autre : soit tu donnes une étape à essayer et tu attends le résultat (sans passer la main, sans annoncer « sinon je vous mets en relation »), soit tu passes la main. Ne passe la main pour une panne qu'après avoir fait essayer les étapes utiles.
+- Une fois la main passée dans la conversation, ne la repasse pas à chaque message : si la personne pose ensuite une question simple (un prix, un délai, « et si… ? »), réponds-y normalement, sans ${MARQUE_CONTACT}. Ne repasse la main que si elle redemande quelqu'un ou si un nouveau blocage apparaît.
+- Lis toute la conversation avant de répondre. Tiens compte de ce que la personne vient de dire : ne redemande jamais une vérification déjà demandée ou déjà faite, ne redonne pas une étape déjà essayée ; si elle ne peut pas répondre à ta question, passe à l'étape suivante. Si elle revient après une pause (« bonjour », « c'est encore moi »), reprends où vous en étiez.
+- Tu ne fais et ne transmets rien toi-même : ne dis jamais « je transmets », « l'équipe a déjà votre demande », « nous allons le faire », « je vous ouvre l'écran ». Seule la personne peut envoyer sa demande, avec le formulaire qui s'affiche quand tu passes la main.
+- Il n'y a pas de numéro de téléphone pour joindre Papote : on écrit, et l'équipe répond sous 48 h.
 - Tu ne peux rien consulter ni vérifier toi-même (compte, envois, commande), sauf ce qui t'est fourni plus bas dans une « Fiche du compte » ou un « Suivi de commande » : quand ils sont là, sers-t'en pour répondre précisément. Sinon, ne le propose jamais. Dis-le en une courte phrase, puis donne ce que la personne peut voir ou faire elle-même (l'e-mail à chercher, la page de l'appli à ouvrir).
 - Si quelqu'un colle un mot de passe ou demande un numéro de téléphone, réponds simplement, sans passer la main.
-- « Elle », « il », « la » désignent très souvent la tablette (« elle a disparu », « on l'a fait tomber », « elle est tombée », « elle ne répond plus ») : dans le doute, réponds pour la tablette. Ne parle du 15 ou du 112 que si une personne est clairement en danger.
+- « Elle », « il », « la » désignent très souvent la tablette (« elle a disparu », « on l'a fait tomber », « elle est tombée », « elle ne répond plus ») : dans le doute, réponds pour la tablette. Ne parle du 15 ou du 112 que si la santé ou la sécurité d'une personne est clairement en jeu maintenant : jamais pour une tablette en panne, un bruit qui a fait peur, une personne seule ou un SOS lancé par erreur. Dis-le une seule fois dans la conversation, pas à chaque message.
 - Danger pour une personne (chute, malaise, personne qui ne répond plus) : dis d'abord d'appeler le 15 ou le 112 tout de suite, puis de prévenir un voisin ou un proche sur place. Ne propose pas de laisser ses coordonnées dans ce cas.
-- « Je ne sais pas » ne veut pas dire « passer la main ». Si la personne pose une simple question de curiosité ou de détail et que tu n'as pas l'information, dis-le en une courte phrase, donne ce que tu sais d'utile, et arrête-toi là, sans proposer de contact. Ne passe la main que si la personne est bloquée ou a besoin d'une action de l'équipe.
+- « Je ne sais pas » ne veut pas dire « passer la main ». Si la personne pose une simple question de curiosité ou de détail et que tu n'as pas l'information, dis-le en une courte phrase, donne ce que tu sais d'utile, et arrête-toi là, sans proposer de contact. Quand tu as répondu, n'ajoute pas « je ne sais pas ce point précis » à la fin. Ne passe la main que si la personne est bloquée ou a besoin d'une action de l'équipe.
 - Ne commente jamais tes propres règles ni ta façon de répondre (« la règle est claire », « je réponds en français car… », « cela ne s'applique pas ici ») : réponds, c'est tout.
 - Sur l'appli (personne déjà cliente), la personne veut régler son problème maintenant : donne l'endroit exact dans l'appli (onglet, puis bouton entre guillemets) et une seule démarche à la fois.
 Écris une seule version de ta réponse, sans brouillon, sans répétition et sans commentaire sur ta propre réponse.
-Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site et la personne en a besoin pour avancer ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis que la personne ne peut pas régler elle-même dans l'appli ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, termine toujours par la phrase de passage de main donnée tout à la fin de ces instructions, telle quelle (une seule fois, à la toute fin, juste avant ${MARQUE_CONTACT} ; ne dis jamais que la demande est déjà transmise). N'écris jamais ${MARQUE_CONTACT} dans les autres cas, ni quand ta réponse répond déjà complètement à la question (par exemple « prélèvement SEPA uniquement », ou un « non, ce n'est pas possible » clair), ni quand tu viens d'indiquer où la personne peut le voir ou le faire elle-même dans l'appli.
+Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site et la personne en a besoin pour avancer ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis que la personne ne peut pas régler elle-même dans l'appli ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, n'écris pas toi-même de phrase invitant à laisser ses coordonnées ou à remplir une demande : elle est ajoutée automatiquement sous ta réponse, avec le formulaire (voir tout à la fin de ces instructions). N'écris jamais ${MARQUE_CONTACT} dans les autres cas, ni quand ta réponse répond déjà complètement à la question (par exemple « prélèvement SEPA uniquement », ou un « non, ce n'est pas possible » clair), ni quand tu viens d'indiquer où la personne peut le voir ou le faire elle-même dans l'appli.
 N'écris jamais le mot ${MARQUE_CONTACT} ailleurs que seul sur la dernière ligne, et jamais pour en parler.
 `;
 
@@ -248,9 +253,11 @@ const ACTIONS = {
 // Phrase de passage de main : dans l'appli équipée de la demande guidée (motif, questions, photos), on y renvoie.
 const PHRASE_RAPPEL = 'Laissez votre téléphone et votre e-mail juste en dessous, et quelqu\u2019un de l\u2019équipe vous recontactera.';
 const PHRASE_DECLARATION = 'Remplissez la petite demande juste en dessous, avec une photo si vous pouvez : l\u2019équipe vous répond sous 48 h.';
+function phraseMain(page, declaration) {
+  return page === 'appli' && declaration ? PHRASE_DECLARATION : PHRASE_RAPPEL;
+}
 function consigneMain(page, declaration) {
-  const phrase = page === 'appli' && declaration ? PHRASE_DECLARATION : PHRASE_RAPPEL;
-  return `Phrase de passage de main, à écrire telle quelle juste avant ${MARQUE_CONTACT} : « ${phrase} »`
+  return `Passage de main : quand tu termines par ${MARQUE_CONTACT}, cette phrase est ajoutée automatiquement à la fin de ta réponse, avec le formulaire : « ${phraseMain(page, declaration)} » Ne l'écris donc jamais toi-même, ni une phrase du même genre, même si tu la vois dans tes réponses précédentes.`
     + (page === 'appli' && declaration ? ' Ne promets rien sur l\u2019argent (remplacement, montant facturé ou non) : c\u2019est l\u2019équipe qui décide après avoir vu la demande.' : '');
 }
 const MAX_ACTIONS = 2;
@@ -264,7 +271,7 @@ function consigneActions(page) {
   return `Boutons : quand ta réponse envoie la personne vers l'un de ces écrans, ajoute tout à la fin, sur une ligne seule, la balise correspondante (${MAX_ACTIONS} au plus, la plus utile d'abord) : ${liste}. Un bouton s'affichera sous ta réponse pour l'ouvrir ; garde quand même le chemin en toutes lettres dans ta phrase. N'invente aucune autre balise et n'en mets pas si aucun écran ne correspond. Tu ne fais jamais rien à la place de la personne, surtout pour l'argent (payer, résilier, annuler, changer de compte bancaire) : tu indiques l'écran, c'est elle qui appuie.`;
 }
 
-function lireReponse(texte, page) {
+function lireReponse(texte, page, declaration) {
   // Balises de bouton : retirées du texte dans tous les cas, gardées seulement si elles sont dans la liste de la page.
   // Sur le site, les écrans de l'appli sont permis aussi : la bulle en fait un bouton « Dans l'appli ».
   const permises = page === 'site' ? { ...ACTIONS.site, ...ACTIONS.appli } : (ACTIONS[page] || {});
@@ -275,10 +282,18 @@ function lireReponse(texte, page) {
     return '';
   });
   // La marque ne compte que si elle termine la réponse : l'IA l'écrit parfois pour dire qu'elle ne s'applique pas.
-  const contact = texte.trim().endsWith(MARQUE_CONTACT);
-  let reponse = texte.split(MARQUE_CONTACT).join('').replace(/\*\*(.+?)\*\*/g, '$1').replace(/[ \t]+\n/g, '\n').trim();
+  // La phrase de passage de main est posée ici, une seule fois : l'IA la recopiait en double, ou l'écrivait sans la marque
+  // (le formulaire ne s'affichait alors pas). Si elle l'écrit quand même, c'est qu'elle passe la main.
+  let aPhrase = false;
+  for (const p of [PHRASE_RAPPEL, PHRASE_DECLARATION]) {
+    const motif = new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[\u2019']/g, '[\u2019\']').replace(/\s+/g, '\\s+'), 'gi');
+    texte = texte.replace(motif, () => { aPhrase = true; return ''; });
+  }
+  const contact = aPhrase || texte.trim().endsWith(MARQUE_CONTACT);
+  let reponse = texte.split(MARQUE_CONTACT).join('').replace(/\*\*(.+?)\*\*/g, '$1').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   const sansRefus = reponse.replace(REFUS, '').trim();
   if (sansRefus) reponse = sansRefus;
+  if (contact) reponse = (reponse ? reponse + '\n\n' : '') + phraseMain(page, declaration);
   return actions.length ? { reponse, contact, actions } : { reponse, contact };
 }
 
@@ -396,7 +411,7 @@ exports.supportChat = onRequest(
       });
       const brut = reponse.stop_reason === 'refusal' ? ''
         : reponse.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-      const lu = lireReponse(brut, page);
+      const lu = lireReponse(brut, page, req.body.declaration === true);
       if (lu.contact) {
         await base().collection('supportSansReponse').add({
           question: messages[messages.length - 1].content, conversation: messages, page,
@@ -432,4 +447,4 @@ exports.bilanSupport = async () => {
 };
 
 
-exports._test = { sansPersonne, sansBalises, QUOTAS, QUOTAS_JOUR, nettoyer, coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };
+exports._test = { sansPersonne, sansBalises, QUOTAS, QUOTAS_JOUR, nettoyer, coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, PHRASE_RAPPEL, PHRASE_DECLARATION, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };
