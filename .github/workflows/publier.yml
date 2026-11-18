@@ -1,6 +1,7 @@
 # Bouton « Publier » (Tanguy, 3/11) : publie en ligne sans taper de commande sur le PC.
 # Lancer : GitHub > Actions > Publier > Run workflow, puis « Approve » (environnement production : rien ne part sans Tanguy).
 #   1. Vérifie que la CI de main et de l'admin (claude/project-thread-dlattc) est verte, sinon s'arrête.
+#      CI encore en cours sur le commit : attend qu'elle finisse (60 min au plus pour chacun, outils/publier/ci-verte.sh).
 #   2. Écrit les SHA publiés et ce qui change depuis la dernière publication.
 #   3. Fonctions depuis main (--only functions, --non-interactive : une fonction à supprimer ARRÊTE la publication,
 #      jamais de « oui » ni de --force), puis la vitrine, puis hébergement + règles depuis l'admin.
@@ -32,7 +33,8 @@ env:
 jobs:
   verifier:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # ci-verte.sh peut attendre jusqu'à 60 min la CI de main, puis 60 min celle de l'admin : 130 min au plus.
+    timeout-minutes: 130
     outputs:
       main: ${{ steps.sha.outputs.main }}
       admin: ${{ steps.sha.outputs.admin }}

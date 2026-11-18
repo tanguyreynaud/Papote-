@@ -2,23 +2,59 @@
 # Un changement de main peut donc la casser sans toucher web/ : c'est arrivé le 5/11 (famille préparée).
 # Ici, à chaque changement des fonctions sur main, les tests de bout en bout de l'app famille repartent,
 # avec l'app de dlattc et les fonctions de ce commit (Tanguy, 6/11). Gratuit (dépôt public).
+# Aussi sur les branches de lot (claude/lot-*, fusionnées dans main ensuite, Tanguy 18/11) : le commit arrive sur
+# main déjà vérifié, et le bouton « Publier » (outils/publier/ci-verte.sh, qui cherche par commit) n'a rien à attendre.
+# App testée sur un lot : le lot de l'admin qui va avec s'il existe (claude/lot-X-main ou claude/lot-X →
+# claude/lot-X-admin, fusionnés ensemble), sinon dlattc. À la main (Run workflow) : champ « admin ».
 name: App famille avec ces fonctions
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/lot-*']
     paths: ['functions/**', '.github/workflows/app-famille-croise.yml']
   workflow_dispatch:
+    inputs:
+      admin:
+        description: Branche de l'app famille à tester (vide = claude/project-thread-dlattc)
+        type: string
+        default: ''
+
+# Comme les autres vérifications : un nouveau push sur un lot annule l'exécution en cours du commit précédent ;
+# jamais sur main, où chaque commit garde la sienne pour le bouton « Publier ».
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Tests à l'heure de Paris, comme l'app montrée en France : « aujourd'hui », minuit, jour du mois… (Tanguy, 18/11).
+# Les machines de GitHub sont en UTC : sans ça, entre 23 h et minuit (22 h l'été) la date des tests n'était pas celle de Paris.
+env:
+  TZ: Europe/Paris
 
 jobs:
   app-famille:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - name: App famille (dlattc)
+      - name: Branche de l'app famille
+        id: admin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEMANDE: ${{ inputs.admin }}
+          BRANCHE: ${{ github.ref_name }}
+        run: |
+          admin=claude/project-thread-dlattc
+          if [ -n "$DEMANDE" ]; then
+            admin="$DEMANDE"
+          elif [[ "$BRANCHE" == claude/lot-* ]]; then
+            lot="${BRANCHE%-main}-admin"
+            if gh api "repos/${GITHUB_REPOSITORY}/branches/${lot}" --silent 2>/dev/null; then admin="$lot"; fi
+          fi
+          echo "App famille testée : $admin (fonctions : $BRANCHE ${GITHUB_SHA:0:7})" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "ref=$admin" >> "$GITHUB_OUTPUT"
+      - name: App famille (${{ steps.admin.outputs.ref }})
         uses: actions/checkout@v4
         with:
-          ref: claude/project-thread-dlattc
+          ref: ${{ steps.admin.outputs.ref }}
           fetch-depth: 0
       - name: Fonctions de ce commit
         uses: actions/checkout@v4
