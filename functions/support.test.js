@@ -79,3 +79,29 @@ test('le guide ne dit plus que la commande est fermée ni que deux abonnements v
   assert.ok(STOCK_DISPONIBLE.startsWith('# État du stock') && STOCK_EPUISE.startsWith('# État du stock'));
   assert.ok(STOCK_DISPONIBLE.includes('Commander') && STOCK_EPUISE.includes('Être prévenu'));
 });
+
+// 18/11 (banc élargi) : la marque écrite au milieu d'une phrase n'ouvre pas le formulaire de contact.
+test('la marque de contact ne compte que si elle termine la réponse', () => {
+  assert.strictEqual(lireReponse('Il faut une pièce d’identité.\n\n[CONTACT] ne s’applique pas ici.').contact, false);
+  assert.strictEqual(lireReponse('Il faut une pièce d’identité.\n\n[CONTACT] ne s’applique pas ici.').reponse.includes('[CONTACT]'), false);
+  assert.strictEqual(lireReponse('Quelqu’un va vous recontacter.\n[CONTACT]\n').contact, true);
+});
+
+// 18/11 (Tanguy) : ni prénom ni numéro de téléphone dans ce que le chat peut recopier des pages légales.
+test('le texte du site donné au chat ne contient ni prénom ni numéro de téléphone', () => {
+  const { sansPersonne } = require('./support')._test;
+  const lu = sansPersonne('Papote, nom commercial de Tanguy Reynaud, 111 avenue Thiers, contact@mapapote.fr, téléphone 06 76 77 11 70 (laissez un message, nous rappelons). Tanguy répond lui-même.');
+  assert.ok(!/Tanguy/.test(lu), lu);
+  assert.ok(!/0\d[ .]?\d{2}/.test(lu), lu);
+  assert.ok(/contact@mapapote\.fr/.test(lu));
+});
+
+test('ni les consignes ni le guide du chat ne citent un prénom ou un numéro de téléphone', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const guide = fs.readFileSync(path.join(__dirname, 'support-connaissances.md'), 'utf8');
+  const code = fs.readFileSync(path.join(__dirname, 'support.js'), 'utf8');
+  const consignes = code.match(/const CONSIGNES = `([\s\S]*?)`;/)[1];
+  assert.ok(!/Tanguy/.test(guide) && !/Tanguy/.test(consignes));
+  assert.ok(!/0[67](?:[ .]?\d{2}){4}/.test(guide + consignes));
+});
