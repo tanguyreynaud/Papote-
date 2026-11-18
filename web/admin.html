@@ -182,6 +182,11 @@
           <button type="button" data-onglet="liste">Clients</button>
           <button type="button" data-onglet="familles">Familles et tablettes</button>
           <button type="button" data-onglet="email">E-mail d'information</button>
+          <button type="button" data-onglet="declarations">Déclarations <span class="pastille" id="declarations-n" hidden></span></button>
+        </div>
+        <!-- Demandes de la bulle d'aide de l'appli, photos jointes (declarations.js) -->
+        <div data-onglet="declarations" id="declarations">
+          <div class="attente" role="status"><span class="roue"></span><p>Chargement des déclarations…</p></div>
         </div>
         <div data-onglet="liste">
           <div class="stats" id="kpi-clients"></div>

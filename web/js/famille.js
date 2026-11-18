@@ -46,6 +46,10 @@ const SETTINGS = {};
 const MAX_IMAGE_CHARS = 900_000; // un document Firestore est limité à 1 Mo
 
 let session = null; // { fid, family, member, uid }
+// Bulle d'aide (mapapote.fr/chat-support.js et chat-declaration.js, chargées dans cette page) : le serveur du chat
+// vérifie qui écrit et dans quelle famille (fiche de la famille en lecture seule, demande guidée avec photos).
+window.papoteJeton = () => (auth.currentUser ? auth.currentUser.getIdToken() : Promise.resolve(null));
+window.papoteFamille = () => (session && session.fid) || null;
 let stopMembers = null;
 let stopTabletBusy = null;
 let stopIncoming = null;

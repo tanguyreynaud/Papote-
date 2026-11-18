@@ -758,3 +758,17 @@ button.choix-fin-forfait.charge::after { border-color: rgba(255, 255, 255, .45);
 #stats-periode button { min-height: 44px; }
 .stat-jours td:first-child { white-space: nowrap; }
 .stat-jours th, .stat-jours td { padding-left: 6px; padding-right: 6px; }
+
+/* Clients > Déclarations (declarations.js) : demandes de la bulle d'aide de l'appli, photos jointes. */
+.decl .tete { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.decl .tete h3 { margin: 0; overflow-wrap: anywhere; }
+.decl p { overflow-wrap: anywhere; }
+.decl-traitee { opacity: .8; }
+.decl-reponses { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin: 8px 0; }
+.decl-reponses dt { font-weight: 700; }
+.decl-reponses dd { margin: 0 0 6px; }
+.decl-message { white-space: pre-wrap; background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.decl-photos { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.decl-photo { width: 120px; height: 120px; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.decl-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.decl-anciennes > summary { cursor: pointer; margin: 12px 0; font-weight: 700; }

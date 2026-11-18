@@ -613,5 +613,5 @@ module.exports = {
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
   ouvrir, ouvrirParApp, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, entrerFamillePreparee, familleRelieeParPapote, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
-  ouvrirTuile, retourAccueil, lire, liste, attendreBase, codesEmail, telDe,
+  ouvrirTuile, retourAccueil, lire, liste, attendreBase, codesEmail, telDe, pageAtelier,
 };
