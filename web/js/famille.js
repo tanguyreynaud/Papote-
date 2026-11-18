@@ -4568,6 +4568,42 @@ SETTINGS['sleep-card'] = {
   },
 };
 
+// Alerte « pas vue » (functions/alertes.js, chaque jour à 10 h) : families/{fid}.alertePasVueJours, entier de 1 à 5,
+// 2 par défaut (Tanguy, 18/11). Réglée par un responsable (firestore.rules) ; toute autre valeur est lue comme 2 jours,
+// comme le fait le serveur, ou ramenée dans les bornes.
+const JOURS_PAS_VUE_DEFAUT = 2;
+function joursPasVue() {
+  const v = session.family?.alertePasVueJours;
+  if (typeof v !== 'number' || !Number.isFinite(v)) return JOURS_PAS_VUE_DEFAUT;
+  return Math.min(5, Math.max(1, Math.round(v)));
+}
+const joursTexte = (n) => (n === 1 ? '1 jour' : `${n} jours`);
+function renderAlertePasVue() {
+  $('alerte-pas-vue-value').textContent = `Si elle n'est pas utilisée depuis ${joursTexte(joursPasVue())}`;
+}
+let alertePasVueEnCours = false;
+SETTINGS['alerte-pas-vue-card'] = {
+  fill() {
+    const coche = document.querySelector(`input[name="alerte-pas-vue"][value="${joursPasVue()}"]`);
+    if (coche) coche.checked = true;
+  },
+  async save() {
+    // Double appui : le second envoi ne part jamais (le bouton est aussi désactivé pendant l'envoi).
+    if (alertePasVueEnCours) return false;
+    const choisi = Number(document.querySelector('input[name="alerte-pas-vue"]:checked')?.value);
+    if (!Number.isInteger(choisi) || choisi < 1 || choisi > 5) return false;
+    const message = `Alerte enregistrée : après ${joursTexte(choisi)}`;
+    if (choisi === session.family?.alertePasVueJours) { toast(message); return true; }
+    alertePasVueEnCours = true;
+    try {
+      await saveFamily({ alertePasVueJours: choisi }, message);
+    } finally {
+      alertePasVueEnCours = false;
+    }
+    return true;
+  },
+};
+
 // Options de la tablette : families/{fid}.options = { lecture, sos, meteo, rappelsAccueil, radio { active, nom, url } }.
 const RADIOS = [
   { nom: 'France Inter', url: 'https://icecast.radiofrance.fr/franceinter-midfi.mp3' },
@@ -5022,6 +5058,8 @@ function applyFamily() {
   renderGenre();
   $('sleep-card').hidden = !amFamilyAdmin();
   renderSleep();
+  $('alerte-pas-vue-card').hidden = !amFamilyAdmin();
+  renderAlertePasVue();
   $('volume-card').hidden = !amFamilyAdmin();
   renderVolume();
   $('options-card').hidden = !amFamilyAdmin();

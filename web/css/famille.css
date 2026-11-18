@@ -471,6 +471,10 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .choice input, .days input { width: auto; margin: 0; display: inline; accent-color: var(--accent); }
+/* Délai de l'alerte « pas vue » : cinq choix de la même taille, trois par ligne sur un petit écran. */
+.choice-titre { margin: 14px 0 0; font-weight: 600; }
+.choice-jours { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); margin-top: 8px; }
+.choice-jours label { justify-content: center; min-height: 48px; white-space: nowrap; }
 /* Communes de la météo : une par ligne, le nom entier, à la ligne s'il est long (jamais coupé). */
 .communes-titre { margin: 14px 0 0; font-weight: 600; }
 .communes-liste { flex-direction: column; flex-wrap: nowrap; margin-top: 8px; }

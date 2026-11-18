@@ -322,6 +322,13 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['veille', 'rev'])
             && isFamilyAdmin(fid)
             && veilleOk(request.resource.data.veille))
+          // Délai de l'alerte « pas vue » (functions/alertes.js, chaque jour à 10 h) : un nombre entier de jours, de 1 à 5,
+          // réglé par un responsable dans Réglages (Tanguy, 18/11). Le serveur ramène toute autre valeur à 2 jours.
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['alertePasVueJours', 'rev'])
+            && isFamilyAdmin(fid)
+            && request.resource.data.alertePasVueJours is int
+            && request.resource.data.alertePasVueJours >= 1
+            && request.resource.data.alertePasVueJours <= 5)
           // Ville de la météo choisie par la famille (l'emporte sur celle de la tablette).
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['meteoVille', 'rev'])
             && isFamilyAdmin(fid)
