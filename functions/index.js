@@ -374,16 +374,26 @@ async function membreActif(fid, uid) {
 }
 
 // Responsable de la famille : créateur ou désigné dans admins, et toujours membre (un ancien responsable
-// parti de la famille peut rester dans admins : il ne doit plus toucher à l'abonnement).
+// parti de la famille peut rester dans admins : il ne doit plus toucher à l'abonnement). Tout responsable gère
+// l'abonnement, qu'il paie ou non (regles.peutGererAbonnement) ; un simple proche, non.
 async function familleDuResponsable(fid, uid) {
   if (typeof fid !== 'string' || !fid) throw new HttpsError('invalid-argument', 'Famille manquante.');
   const snap = await db.doc(`families/${fid}`).get();
   if (!snap.exists) throw new HttpsError('not-found', 'Famille introuvable.');
   const fam = snap.data();
-  if ((fam.createdBy !== uid && !(fam.admins || []).includes(uid)) || !(await membreActif(fid, uid))) {
+  const membre = await db.doc(`families/${fid}/members/${uid}`).get();
+  if (!regles.peutGererAbonnement(fam, uid, membre.exists ? membre.data() : null)) {
     throw new HttpsError('permission-denied', 'Réservé aux responsables de la famille.');
   }
   return fam;
+}
+
+// Le responsable qui fait le geste dans l'appli (copie des e-mails d'arrêt et de reprise), ou null pour l'admin.
+async function auteurDuGeste(fid, request) {
+  if (request.auth.token.admin === true) return null;
+  const { uid, email } = compteVerifie(request);
+  const membre = await db.doc(`families/${fid}/members/${uid}`).get();
+  return { email, prenom: (membre.exists && membre.get('name')) || null };
 }
 
 // Invitation d'un proche par e-mail depuis l'appli famille : un vrai e-mail part, avec le lien du code
@@ -820,7 +830,7 @@ exports.resilierAbonnement = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   const fam = await familleGeree(fid, request);
   const id = await abonnementVise(fid, fam, request);
   return arreterAbonnement({
-    fid, fam, id,
+    fid, fam, id, auteur: await auteurDuGeste(fid, request),
     // Arrêté depuis l'admin (impayé, abus…) : le client ne peut pas le reprendre seul (Tanguy, 30/10).
     parPapote: request.auth.token.admin === true && (request.data || {}).par === 'papote',
     admin: request.auth.token.admin === true,
@@ -898,7 +908,8 @@ exports.resilierSansCompte = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.a
 
 // Arrêt de l'abonnement id de la famille fid à la fin du mois en cours : depuis l'appli, l'admin, ou tout seul après
 // 30 jours de pause pour impayé (arretsImpayes, impaye : true).
-async function arreterAbonnement({ fid, fam, id, parPapote, admin = false, deces = false, impaye = false }) {
+// auteur : le responsable qui l'a demandé dans l'appli ({ email, prenom }), qui reçoit aussi l'e-mail s'il ne paie pas.
+async function arreterAbonnement({ fid, fam, id, parPapote, admin = false, deces = false, impaye = false, auteur = null }) {
   const abo = await stripe().subscriptions.retrieve(id);
   const maintenant = Date.now();
   const le = regles.premierPrelevementDe(abo, maintenant) || regles.dateResiliation(finDePeriodeMs(abo), maintenant);
@@ -920,7 +931,7 @@ async function arreterAbonnement({ fid, fam, id, parPapote, admin = false, deces
   // Deux responsables (ou deux onglets) qui demandent l'arrêt en même temps : un seul e-mail.
   if (await premiereDemande(id, `arret-${Math.ceil(le / 1000)}`)) {
     const montant = impaye ? regles.penaliteRestitution((await db.doc(`commandes/${id}`).get()).data() || {}) : null;
-    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote, deces, impaye, montant }));
+    await mailArret(id, fam, (infos) => mail.resiliationEnregistree({ ...infos, le, parPapote, deces, impaye, montant }), auteur);
   }
   return { le };
 }
@@ -966,18 +977,27 @@ async function premiereDemande(commandeId, cle) {
   });
 }
 
-// E-mail au client qui a payé (adresse de la commande) quand l'arrêt est demandé ou annulé.
-async function mailArret(commandeId, fam, faire) {
+// E-mail au client qui a payé (adresse de la commande) quand l'arrêt est demandé ou annulé ; si le geste vient d'un
+// autre responsable de la famille (auteur), l'e-mail du payeur le dit, et ce responsable en reçoit une copie
+// (regles.destinatairesArret, Tanguy 18/11).
+async function mailArret(commandeId, fam, faire, auteur = null) {
+  let c;
   try {
-    const c = await db.doc(`commandes/${commandeId}`).get();
-    const email = c.exists && c.get('email');
-    if (!email) return;
-    await envoyerMail(email, faire({
-      nom: c.get('nom') || null, famille: fam.name || null,
-      tablettePretee: fam.abonnement && fam.abonnement.tablette !== 'achetee',
-    }));
+    c = await db.doc(`commandes/${commandeId}`).get();
   } catch (e) {
     logger.error(`Commande ${commandeId} : e-mail d'arrêt non parti`, e.message);
+    return;
+  }
+  const nom = (c.exists && c.get('nom')) || null;
+  const commun = { famille: fam.name || null, tablettePretee: fam.abonnement && fam.abonnement.tablette !== 'achetee' };
+  for (const d of regles.destinatairesArret(c.exists && c.get('email'), auteur)) {
+    try {
+      await envoyerMail(d.email, faire(d.copie
+        ? { ...commun, nom: auteur.prenom || null, copie: true, payeur: nom }
+        : { ...commun, nom, par: d.par }));
+    } catch (e) {
+      logger.error(`Commande ${commandeId} : e-mail d'arrêt non parti${d.copie ? ' (copie au responsable)' : ''}`, e.message);
+    }
   }
 }
 
@@ -1018,7 +1038,7 @@ exports.annulerResiliation = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE
   // Le retour disparaît (rien à rendre, plus de 140 € à prélever) ; un arrêt plus tard en recréera un.
   if (r) await ref.update({ restitution: FieldValue.delete(), retourAnnule: { le: Date.now(), par: 'papote', avant: r.avant || null } });
   await appliquer(fid, id);
-  if (await premiereDemande(id, 'reprise')) await mailArret(id, fam, (infos) => mail.resiliationAnnulee(infos));
+  if (await premiereDemande(id, 'reprise')) await mailArret(id, fam, (infos) => mail.resiliationAnnulee(infos), await auteurDuGeste(fid, request));
   return { ok: true };
 });
 

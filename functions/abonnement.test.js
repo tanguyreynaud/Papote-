@@ -395,3 +395,36 @@ test('hospitalisation : plus de 14 jours dans le mois qui finit au prélèvement
   assert.strictEqual(a.moisOffertHospitalisation({ pause: { motif: 'hospitalisation', le: { toMillis: () => debut + 10 * JOUR }, jusqua: { toMillis: () => fin + 10 * JOUR } } }, fin), true);
   assert.strictEqual(a.moisOffertHospitalisation({}, fin), false);
 });
+
+// Tanguy, 18/11 : tout responsable gère l'abonnement (résilier, garder, portail Stripe, factures), payeur ou non ;
+// un simple proche, non.
+test('gestion de l\'abonnement : tout responsable membre, payeur ou non ; jamais un simple proche', () => {
+  const fam = { createdBy: 'julie', admins: ['paul'] };
+  const actif = { status: 'active' };
+  assert.strictEqual(a.peutGererAbonnement(fam, 'julie', actif), true, 'le créateur (qui paie) garde la main');
+  assert.strictEqual(a.peutGererAbonnement(fam, 'paul', actif), true, 'un responsable qui ne paie pas aussi');
+  assert.strictEqual(a.peutGererAbonnement(fam, 'paul', {}), true, 'fiche ancienne sans statut : active');
+  assert.strictEqual(a.peutGererAbonnement(fam, 'marie', actif), false, 'un simple proche, non');
+  assert.strictEqual(a.peutGererAbonnement(fam, 'paul', null), false, 'responsable parti de la famille, non');
+  assert.strictEqual(a.peutGererAbonnement(fam, 'paul', { status: 'pending' }), false, 'en attente, non');
+  assert.strictEqual(a.peutGererAbonnement({ createdBy: 'julie' }, 'paul', actif), false, 'sans admins');
+  assert.strictEqual(a.peutGererAbonnement(null, 'julie', actif), false);
+  assert.strictEqual(a.peutGererAbonnement(fam, '', actif), false);
+});
+
+test('e-mail d\'arrêt : le payeur toujours, et le responsable qui l\'a fait s\'il a une autre adresse', () => {
+  // Le payeur résilie lui-même (même adresse, casse comprise) : un seul e-mail, comme avant.
+  assert.deepStrictEqual(a.destinatairesArret('julie@exemple.fr', { email: 'Julie@Exemple.fr', prenom: 'Julie' }),
+    [{ email: 'julie@exemple.fr', copie: false, par: null }]);
+  // Un autre responsable : le payeur sait qui l'a demandé, le responsable reçoit sa copie.
+  assert.deepStrictEqual(a.destinatairesArret('julie@exemple.fr', { email: 'paul@exemple.fr', prenom: 'Paul' }), [
+    { email: 'julie@exemple.fr', copie: false, par: 'Paul' },
+    { email: 'paul@exemple.fr', copie: true, par: null },
+  ]);
+  // Admin, site sans compte, arrêt automatique : le payeur seulement.
+  assert.deepStrictEqual(a.destinatairesArret('julie@exemple.fr', null), [{ email: 'julie@exemple.fr', copie: false, par: null }]);
+  // Commande sans adresse : le responsable reçoit l'e-mail normal.
+  assert.deepStrictEqual(a.destinatairesArret(null, { email: 'paul@exemple.fr', prenom: 'Paul' }),
+    [{ email: 'paul@exemple.fr', copie: false, par: null }]);
+  assert.deepStrictEqual(a.destinatairesArret(null, null), []);
+});

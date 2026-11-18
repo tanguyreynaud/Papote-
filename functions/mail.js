@@ -640,7 +640,9 @@ function retourTablette({ nom, avant, retractation, montant, deces }) {
 
 // Arrêt demandé (par le client dans l'appli, ou par Papote depuis l'admin) : confirmation écrite, avec la date
 // d'arrêt et la suite (la loi demande de confirmer une résiliation sur un support durable).
-function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, deces, impaye, montant }) {
+// Demandée par un responsable qui ne paie pas (Tanguy, 18/11) : par = son prénom dans l'e-mail du payeur ; copie = l'e-mail
+// que reçoit ce responsable (nom = son prénom, payeur = le nom de la commande).
+function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, deces, impaye, montant, par = null, copie = false, payeur = null }) {
   // Arrêt automatique après 30 jours de pause pour impayé (Tanguy, 11/11) : plus rien ne marche déjà, pas de
   // dernier mois, et le retour de la tablette est à faire.
   if (impaye) {
@@ -662,27 +664,39 @@ function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, d
       tablettePretee
         ? `La tablette prêtée est à nous renvoyer sans frais, mais rien ne presse : vous aurez deux mois après l'arrêt, et nous vous enverrons le mode d'emploi le ${dateEnClair(le)}. ${RETOUR_DECES}`
         : null,
-      'Nous n\'enverrons plus aucune nouvelle de Papote à cette adresse.',
+      copie ? copieAuPayeur(payeur) : 'Nous n\'enverrons plus aucune nouvelle de Papote à cette adresse.',
     ].filter(Boolean), { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
   }
   return message(parPapote ? 'Papote arrête votre abonnement' : 'Votre résiliation Papote est enregistrée', [
     bonjour(nom),
     parPapote
       ? `Nous arrêtons l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''}.`
-      : `Votre demande de résiliation de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} est bien enregistrée.`,
+      : par
+        ? `<b>${echapper(par)}</b>, responsable de la famille, a demandé dans l'appli la résiliation de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''}. Elle est bien enregistrée.`
+        : `Votre demande de résiliation de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} est bien enregistrée.`,
+    copie && !parPapote ? copieAuPayeur(payeur) : null,
     `Tout continue de fonctionner jusqu'au <b>${dateEnClair(le)}</b>. Ce dernier mois est prélevé à l'arrêt, puis plus rien.`,
     tablettePretee
-      ? `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez la renvoyer dès maintenant : dans l'appli Papote, onglet Profil, touchez « Je renvoie la tablette ». Sinon, nous vous enverrons le mode d'emploi par e-mail le ${dateEnClair(le)}.`
+      ? `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez la renvoyer dès maintenant : dans l'appli Papote, onglet Profil, touchez « Je renvoie la tablette ». Sinon, nous enverrons le mode d'emploi par e-mail ${copie ? 'à la personne qui paie l\'abonnement' : 'à cette adresse'} le ${dateEnClair(le)}.`
       : 'La tablette est à vous : vous n\'avez rien à renvoyer.',
     parPapote ? '' : 'Vous changez d\'avis d\'ici là ? Dans l\'appli Papote, onglet Profil, touchez « Garder mon abonnement ».',
   ].filter(Boolean), APPLI_RETOUR);
 }
 
-// Résiliation annulée (« Garder mon abonnement ») : rien ne change.
-function resiliationAnnulee({ nom, famille }) {
+// La copie envoyée au responsable qui a fait le geste sans payer : le payeur est prévenu lui aussi.
+function copieAuPayeur(payeur) {
+  return `${payeur ? `<b>${echapper(payeur)}</b>, qui paie l'abonnement,` : 'La personne qui paie l\'abonnement'} reçoit aussi un e-mail.`;
+}
+
+// Résiliation annulée (« Garder mon abonnement ») : rien ne change. par / copie / payeur : comme resiliationEnregistree.
+function resiliationAnnulee({ nom, famille, par = null, copie = false, payeur = null }) {
+  const de = famille ? ` de <b>${echapper(famille)}</b>` : '';
   return message('Votre abonnement Papote continue', [
     bonjour(nom),
-    `La résiliation de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} est annulée : tout continue comme avant, sans rien à faire.`,
+    par
+      ? `<b>${echapper(par)}</b>, responsable de la famille, a annulé dans l'appli la résiliation de l'abonnement Papote${de} : tout continue comme avant, sans rien à faire.`
+      : `La résiliation de l'abonnement Papote${de} est annulée : tout continue comme avant, sans rien à faire.`,
+    copie ? copieAuPayeur(payeur) : null,
   ], APPLI_RETOUR);
 }
 
