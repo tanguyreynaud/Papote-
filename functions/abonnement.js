@@ -472,7 +472,33 @@ function peutModifier(actuel) {
   return !(actuel && actuel.statut === 'offert');
 }
 
+// Gestion de l'abonnement depuis l'appli (résilier, garder, payer, portail Stripe pour la carte ou le compte, factures) :
+// tout responsable de la famille, qu'il paie ou non (Tanguy, 18/11 : le responsable agit au nom de la famille,
+// l'abonnement reste celui du client Stripe qui paie). Responsable = créateur ou désigné dans admins, et toujours
+// membre actif (un ancien responsable parti de la famille peut rester dans admins). Un simple proche, non.
+// membre : la fiche families/{fid}/members/{uid} (ou null si absente).
+function peutGererAbonnement(famille, uid, membre) {
+  if (!famille || !uid || !membre) return false;
+  const responsable = famille.createdBy === uid || (Array.isArray(famille.admins) && famille.admins.includes(uid));
+  return responsable && (membre.status || 'active') !== 'pending';
+}
+
+// Qui reçoit l'e-mail d'arrêt ou de reprise : toujours l'adresse de la commande (celui qui paie) ; et, si le geste
+// vient d'un responsable dans l'appli avec une autre adresse, ce responsable aussi (copie : true), pour qu'il ait
+// la preuve de sa demande. auteur : { email, prenom } ou null (admin, site sans compte, arrêt automatique).
+function destinatairesArret(emailCommande, auteur) {
+  const payeur = String(emailCommande || '').trim().toLowerCase();
+  const lui = auteur && String(auteur.email || '').trim().toLowerCase();
+  const liste = [];
+  if (payeur) liste.push({ email: payeur, copie: false, par: lui && lui !== payeur ? (auteur.prenom || null) : null });
+  // Sans adresse de commande (cas ancien) : le responsable reçoit l'e-mail comme s'il payait.
+  if (lui && lui !== payeur) liste.push({ email: lui, copie: Boolean(payeur), par: null });
+  return liste;
+}
+
 module.exports = {
+  peutGererAbonnement,
+  destinatairesArret,
   enMillis,
   PLUS_DE_TEMPS_JOURS,
   refusPlusDeTemps,

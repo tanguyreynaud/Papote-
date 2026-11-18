@@ -69,7 +69,12 @@ test('décès : arrêt avec le motif « décès », e-mails de deuil sans « Mer
   const { contacts } = await s.appeler('gestionClients', {}, a.TANGUY);
   const fiche = contacts.find((c) => c.email === paul.email);
   assert.ok(fiche && fiche.desinscrit, 'désinscrit des nouvelles');
-  assert.deepStrictEqual(mailsA(julie.email), [], 'rien d\'autre à Julie');
+  // Julie, responsable qui l'a fait sans payer, a reçu la copie de l'arrêt (Tanguy, 18/11), et rien d'autre ensuite.
+  assert.deepStrictEqual(mailsA(julie.email), ['Nous pensons bien à vous'], 'rien d\'autre à Julie');
+  const copie = mailsComplets(julie.email)[0].texte;
+  assert.match(copie, /condoléances/);
+  assert.match(copie, /qui paie l'abonnement, reçoit aussi un e-mail/);
+  assert.doesNotMatch(copie, /plus aucune nouvelle/);
   assert.strictEqual((await famille(fid)).abonnement.statut, 'resilie');
 });
 

@@ -317,3 +317,70 @@ test('Résilier sans compte : 20 essais par jour et par adresse internet, même 
   const autre = await s.requete('resilierSansCompte', { corps: { email: 'devine@exemple.fr', code: 'ABCDEFGH' }, depuis: '198.51.100.9' });
   assert.strictEqual(autre.statut, 404, 'une autre adresse internet n\'est pas bloquée');
 });
+
+// Tanguy, 18/11 : tout responsable gère l'abonnement au nom de la famille (résilier, garder, portail Stripe pour la
+// carte ou le compte, factures), même s'il ne paie pas ; un simple proche, non. L'abonnement reste celui du payeur.
+test('un responsable qui ne paie pas résilie, garde, ouvre le portail et les factures ; un simple proche ne peut rien ; le payeur garde la main', async () => {
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const marie = await s.compte('Marie', 'marie@exemple.fr');
+  const { id, fid } = await familleAbonnee(julie);
+  await a.rejoindre(paul, fid);
+  await a.rejoindre(marie, fid);
+  await s.db.doc(`families/${fid}`).update({ admins: [paul.uid] });
+  await s.calme();
+  const client = (await famille(fid)).abonnement.stripeCustomerId;
+  s.boite.length = 0;
+
+  // Marie, simple proche : tout est refusé, rien ne bouge chez Stripe.
+  for (const nom of ['resilierAbonnement', 'annulerResiliation', 'portailClient', 'facturesFamille']) {
+    await assert.rejects(s.appeler(nom, { fid }, marie), /responsables/, nom);
+  }
+  assert.strictEqual(abo(id).cancel_at, null);
+  assert.deepStrictEqual(s.boite, []);
+
+  // Paul, responsable sans payer : portail Stripe du client qui paie, et les factures de la famille.
+  const { url } = await s.appeler('portailClient', { fid }, paul);
+  assert.ok(url, 'page Stripe ouverte');
+  const { factures } = await s.appeler('facturesFamille', { fid }, paul);
+  assert.ok(Array.isArray(factures) && factures.length >= 1, 'les factures du payeur');
+  assert.strictEqual((await famille(fid)).abonnement.stripeCustomerId, client, 'toujours le client Stripe du payeur');
+
+  // Paul résilie (double appui : une seule demande) : Julie, qui paie, le sait ; Paul a sa copie.
+  const [r1, r2] = await Promise.all([s.appeler('resilierAbonnement', { fid }, paul), s.appeler('resilierAbonnement', { fid }, paul)]);
+  await s.calme();
+  assert.strictEqual(r1.le, r2.le);
+  assert.strictEqual(abo(id).cancel_at, Math.ceil(r1.le / 1000), 'arrêt prévu chez Stripe');
+  assert.strictEqual(abo(id).customer, client, 'abonnement du payeur, rien de recréé');
+  assert.ok((await famille(fid)).abonnement.resiliationLe, 'l\'appli montre l\'arrêt');
+  assert.deepStrictEqual(mailsA(julie.email), ['Votre résiliation Papote est enregistrée']);
+  assert.deepStrictEqual(mailsA(paul.email), ['Votre résiliation Papote est enregistrée']);
+  assert.match(s.boite.find((m) => m.a === julie.email).texte, /Paul, responsable de la famille, a demandé dans l'appli la résiliation/);
+  assert.match(s.boite.find((m) => m.a === paul.email).texte, /Bonjour Paul[\s\S]*Votre demande de résiliation[\s\S]*qui paie l'abonnement, reçoit aussi un e-mail/);
+  assert.deepStrictEqual(mailsA(marie.email), []);
+
+  // Paul garde l'abonnement : même chose pour la reprise.
+  s.boite.length = 0;
+  assert.deepStrictEqual(await s.appeler('annulerResiliation', { fid }, paul), { ok: true });
+  await s.calme();
+  assert.strictEqual(abo(id).cancel_at, null);
+  assert.deepStrictEqual(mailsA(julie.email), ['Votre abonnement Papote continue']);
+  assert.deepStrictEqual(mailsA(paul.email), ['Votre abonnement Papote continue']);
+  assert.match(s.boite.find((m) => m.a === julie.email).texte, /Paul, responsable de la famille, a annulé dans l'appli la résiliation/);
+
+  // Julie, qui paie, peut toujours tout faire elle-même : un seul e-mail, à elle, sans copie à Paul.
+  s.boite.length = 0;
+  assert.ok((await s.appeler('portailClient', { fid }, julie)).url);
+  await s.appeler('resilierAbonnement', { fid }, julie);
+  await s.calme();
+  assert.ok(abo(id).cancel_at, 'arrêt prévu');
+  assert.deepStrictEqual(mailsA(julie.email), ['Votre résiliation Papote est enregistrée']);
+  assert.match(s.boite.find((m) => m.a === julie.email).texte, /Votre demande de résiliation/);
+  assert.deepStrictEqual(mailsA(paul.email), []);
+
+  // Paul n'est plus responsable : il ne touche plus à l'abonnement.
+  await s.db.doc(`families/${fid}`).update({ admins: [] });
+  for (const nom of ['annulerResiliation', 'portailClient', 'facturesFamille']) {
+    await assert.rejects(s.appeler(nom, { fid }, paul), /responsables/, nom);
+  }
+});

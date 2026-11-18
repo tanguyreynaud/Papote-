@@ -277,3 +277,30 @@ test('installer : rien pour le proche âgé, l\'appli Papote pour la famille, ja
   }
   assert.match(mail.installationFinie({ prenom: 'Julie', famille: 'Mamie' }).text, /Chacun reçoit un lien et utilise l'appli Papote sur son téléphone/);
 });
+
+test('résiliation par un responsable qui ne paie pas : le payeur sait qui l\'a demandée, le responsable a sa copie', () => {
+  const le = Date.UTC(2027, 0, 5);
+  const payeur = mail.resiliationEnregistree({ nom: 'Julie Martin', famille: 'Mamie Jeanne', le, tablettePretee: true, par: 'Paul' });
+  assert.strictEqual(payeur.subject, 'Votre résiliation Papote est enregistrée');
+  assert.match(payeur.text, /Paul, responsable de la famille, a demandé dans l'appli la résiliation de l'abonnement Papote de Mamie Jeanne/);
+  assert.match(payeur.text, /Garder mon abonnement/);
+  assert.match(payeur.text, /mode d'emploi par e-mail à cette adresse/);
+  const copie = mail.resiliationEnregistree({ nom: 'Paul', famille: 'Mamie Jeanne', le, tablettePretee: true, copie: true, payeur: 'Julie Martin' });
+  assert.strictEqual(copie.subject, 'Votre résiliation Papote est enregistrée');
+  assert.match(copie.text, /Bonjour Paul/);
+  assert.match(copie.text, /Votre demande de résiliation/);
+  assert.match(copie.text, /Julie Martin, qui paie l'abonnement, reçoit aussi un e-mail/);
+  assert.match(copie.text, /mode d'emploi par e-mail à la personne qui paie l'abonnement/);
+  // Sans « par » : le texte d'avant.
+  assert.match(mail.resiliationEnregistree({ nom: 'Julie', famille: 'Mamie Jeanne', le, tablettePretee: false }).text, /Votre demande de résiliation/);
+  const garde = mail.resiliationAnnulee({ nom: 'Julie Martin', famille: 'Mamie Jeanne', par: 'Paul' });
+  assert.match(garde.text, /Paul, responsable de la famille, a annulé dans l'appli la résiliation/);
+  const gardeCopie = mail.resiliationAnnulee({ nom: 'Paul', famille: 'Mamie Jeanne', copie: true, payeur: null });
+  assert.match(gardeCopie.text, /La personne qui paie l'abonnement reçoit aussi un e-mail/);
+  const deuil = mail.resiliationEnregistree({ nom: 'Paul', famille: 'Mamie Jeanne', le, tablettePretee: true, deces: true, copie: true, payeur: 'Julie Martin' });
+  assert.match(deuil.text, /condoléances/);
+  assert.match(deuil.text, /Julie Martin, qui paie l'abonnement, reçoit aussi un e-mail/);
+  assert.match(deuil.text, /mode d'emploi à la personne qui paie l'abonnement/);
+  assert.doesNotMatch(deuil.text, /plus aucune nouvelle/);
+  for (const m of [payeur, copie, garde, gardeCopie, deuil]) assert.doesNotMatch(`${m.subject} ${m.text}`, /Linote|undefined|null/);
+});
