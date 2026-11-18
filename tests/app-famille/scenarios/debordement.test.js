@@ -141,40 +141,91 @@ test('Textes longs : nom de la tablette, prénoms, e-mails, Wi-Fi, communes pass
 });
 
 // V9 (testeur, 17/11) : « Installer l'app » flottait sur les tuiles, et le message du bas (« Photo envoyée ») se
-// posait dessus. Il est maintenant dans la page, sous les tuiles : il ne cache rien, en haut comme tout en bas de
-// l'accueil, et tout en bas le message ne se pose pas dessus, sur Android (390 × 844) comme sur iPhone SE (375 × 667, 320 × 568).
+// posait dessus. Il est dans la page, sous les tuiles. Recontrôle du 18/11 : en pastille indigo ombrée, coupée par la
+// barre du bas selon la hauteur de l'écran et les cartes du haut, il avait encore l'air de flotter sur les tuiles ;
+// c'est maintenant une ligne de la page, de la largeur des tuiles. Vérifié à chaque pas du défilement, debout et
+// couché, du plus petit iPhone (320 × 568) au grand Android (412 × 915), zoom de la page à 130 % (écran plus étroit
+// en px CSS) et grands caractères à 130 % (Réglages d'Android), avec et sans carte en haut de l'accueil, le message du
+// bas affiché ; aussi sous WebKit (CI, iPhone 15 et SE).
+const TAILLES_V9 = [[390, 844], [375, 667], [320, 568], [412, 915], [844, 390], [667, 375]];
+
+/** Ce que cache ou ce qui cache « Installer l'app », à chaque pas du défilement de l'accueil. */
+async function installerCache(t) {
+  return t.page.evaluate(async () => {
+    const out = new Set();
+    const bouton = document.getElementById('btn-install');
+    // Le message du bas, à sa place habituelle.
+    const toast = document.createElement('p');
+    toast.className = 'toast';
+    toast.textContent = 'Photo envoyée';
+    document.body.append(toast);
+    const nom = (el) => el.id || (typeof el.className === 'string' ? el.className : el.tagName);
+    const CONTENU = '.tile, .card, .badges > *, #tablette-en-route';
+    const max = document.documentElement.scrollHeight - innerHeight;
+    const pas = [];
+    for (let y = 0; y < max; y += 40) pas.push(y);
+    pas.push(max);
+    for (const y of pas) {
+      window.scrollTo(0, y);
+      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+      const b = bouton.getBoundingClientRect();
+      const ici = `défilé de ${Math.round(scrollY)} px`;
+      if (getComputedStyle(bouton).position !== 'static') out.add(`bouton ${getComputedStyle(bouton).position}`);
+      // Une ligne de la page, pas une pastille posée : la largeur des tuiles.
+      const tuiles = document.querySelector('#view-home .tiles').getBoundingClientRect();
+      if (Math.abs(b.left - tuiles.left) > 1 || Math.abs(b.right - tuiles.right) > 1) out.add(`bouton pas de la largeur des tuiles (${Math.round(b.left)}-${Math.round(b.right)} / ${Math.round(tuiles.left)}-${Math.round(tuiles.right)})`);
+      // Aucune tuile ni carte ne partage sa place.
+      for (const el of document.querySelectorAll(`#view-home :is(${CONTENU})`)) {
+        if (el.closest('[hidden]') || el.contains(bouton)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width && r.height && r.left < b.right - 1 && r.right > b.left + 1 && r.top < b.bottom - 1 && r.bottom > b.top + 1) out.add(`${nom(el)} sous le bouton (${ici})`);
+      }
+      // Ce qui est dessiné à sa place : le bouton n'est jamais au-dessus d'une tuile ou d'une carte.
+      for (let i = 1; i < 6; i += 1) {
+        for (let j = 1; j < 4; j += 1) {
+          const x = b.left + (b.width * i) / 6;
+          const yy = b.top + (b.height * j) / 4;
+          if (yy < 0 || yy >= innerHeight) continue;
+          const pile = document.elementsFromPoint(x, yy);
+          const dessous = pile.slice(1).find((e) => !e.closest('#btn-install') && e.closest(CONTENU));
+          if (pile[0]?.closest('#btn-install') && dessous) out.add(`bouton sur ${nom(dessous.closest(CONTENU))} (${ici})`);
+          // Tout en bas de l'accueil : en entier, ni sous la barre du bas ni sous le message.
+          if (y === max && !pile[0]?.closest('#btn-install')) out.add(`tout en bas, bouton caché par ${nom(pile[0])}`);
+        }
+      }
+      if (y === max && (b.top < 0 || b.bottom > document.getElementById('nav').getBoundingClientRect().top + 1)) out.add(`tout en bas, bouton pas en entier au-dessus de la barre (${Math.round(b.top)}-${Math.round(b.bottom)})`);
+    }
+    toast.remove();
+    window.scrollTo(0, 0);
+    return [...out];
+  });
+}
+
 test('V9 : « Installer l\'app » ne cache jamais rien, et le message du bas ne se pose pas dessus', async () => {
   const julie = await banc.telephone('Julie');
   await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await julie.page.locator('#btn-install').waitFor({ state: 'visible' });
-  for (const [largeur, hauteur] of [[390, 844], [375, 667], [320, 568]]) {
-    await julie.page.setViewportSize({ width: largeur, height: hauteur });
-    for (const ou of ['haut', 'bas']) {
-      const chevauchements = await julie.page.evaluate((bas) => {
-        if (bas) window.scrollTo(0, document.documentElement.scrollHeight);
-        else window.scrollTo(0, 0);
-        const bouton = document.getElementById('btn-install');
-        // Le message du bas, à sa place habituelle.
-        const toast = document.createElement('p');
-        toast.className = 'toast';
-        toast.textContent = 'Photo envoyée';
-        document.body.append(toast);
-        const b = bouton.getBoundingClientRect();
-        const croise = (r) => r.width && r.height && r.left < b.right - 1 && r.right > b.left + 1 && r.top < b.bottom - 1 && r.bottom > b.top + 1;
-        const out = [];
-        // Le message du bas passe un instant sur ce qui défile dessous ; tout en bas de l'accueil, là où le bouton
-        // se pose, il ne le couvre pas.
-        const autres = [...document.querySelectorAll(`#view-home .tile, #view-home .card, #view-home .badges > *, #nav${bas ? ', .toast' : ''}`)]
-          .filter((el) => !el.closest('[hidden]') && el !== bouton && !el.contains(bouton));
-        for (const el of autres) if (croise(el.getBoundingClientRect())) out.push(`${el.id || el.className} sur le bouton`);
-        // Le bouton, quand il est à l'écran, y est en entier au-dessus de la barre du bas.
-        const nav = document.getElementById('nav').getBoundingClientRect();
-        if (b.bottom > 0 && b.top < innerHeight && b.bottom > nav.top + 1) out.push(`bouton sous la barre du bas (${Math.round(b.bottom)} > ${Math.round(nav.top)})`);
-        if (getComputedStyle(bouton).position !== 'static') out.push(`bouton ${getComputedStyle(bouton).position}`);
-        toast.remove();
-        return out;
-      }, ou === 'bas');
-      assert.deepStrictEqual(chevauchements, [], `${largeur} × ${hauteur}, ${ou} de l'accueil`);
+  const echecs = [];
+  for (const cartes of [false, true]) {
+    // Les cartes du haut de l'accueil (« Ajoutez votre photo », tablette en route) poussent le bouton vers la barre.
+    await julie.page.evaluate((oui) => {
+      for (const id of ['face-nudge', 'tablette-en-route']) document.getElementById(id).hidden = !oui;
+    }, cartes);
+    for (const reglage of ['normal', 'zoom 130 %', 'caractères 130 %']) {
+      await julie.page.evaluate((grand) => {
+        for (const el of document.querySelectorAll('body *')) el.style.fontSize = '';
+        if (!grand) return;
+        const tailles = [...document.querySelectorAll('body *')].map((el) => [el, parseFloat(getComputedStyle(el).fontSize)]);
+        for (const [el, px] of tailles) el.style.fontSize = `${px * 1.3}px`;
+      }, reglage === 'caractères 130 %');
+      for (const [l, h] of TAILLES_V9) {
+        const z = reglage === 'zoom 130 %' ? 1.3 : 1;
+        await julie.page.setViewportSize({ width: Math.round(l / z), height: Math.round(h / z) });
+        await julie.page.waitForTimeout(100);
+        const res = await installerCache(julie);
+        if (res.length) echecs.push(`${l} × ${h}, ${reglage}, ${cartes ? 'avec' : 'sans'} cartes en haut : ${res.join(' ; ')}`);
+      }
     }
   }
+  assert.deepStrictEqual(echecs, []);
 });

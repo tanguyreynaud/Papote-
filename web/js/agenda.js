@@ -269,6 +269,7 @@ $('add-reminder').addEventListener('click', () => {
   $('agenda-seg').hidden = false;
   $('rem-title').value = '';
   $('bday-name').value = '';
+  $('bday-name-error').hidden = true;
   $('bday-year').value = '';
   bdayPhoto = null;
   montrerPhoto();
@@ -302,6 +303,7 @@ function openEdit(coll, data) {
   } else {
     $('reminder-title').textContent = "Modifier l'anniversaire";
     $('bday-name').value = data.name || '';
+    $('bday-name-error').hidden = true;
     $('bday-day').value = String(data.day || 1);
     $('bday-month').value = String(data.month || 1);
     $('bday-year').value = data.year ? String(data.year) : '';
@@ -405,6 +407,7 @@ function cacherDoublon() {
   if (seg === 'birthday') $('btn-reminder').textContent = editing ? 'Enregistrer' : "Ajouter l'anniversaire";
 }
 ['bday-name', 'bday-day', 'bday-month'].forEach((id) => $(id).addEventListener('input', cacherDoublon));
+$('bday-name').addEventListener('input', () => { if (/\p{L}/u.test($('bday-name').value)) $('bday-name-error').hidden = true; });
 // Renvoie true s'il faut s'arrêter pour montrer l'avertissement.
 function prevenirDoublon(data) {
   const cle = `${sansAccents(data.name)}|${data.day}|${data.month}`;
@@ -428,7 +431,13 @@ function birthdayData() {
   const month = Number($('bday-month').value);
   const yearText = $('bday-year').value.trim();
   const year = yearText ? Number(yearText) : null;
-  if (!name) return fail('Écrivez le prénom.');
+  // Vide ou sans lettre : le mot sous le champ du prénom (18/11), rien n'est envoyé.
+  if (!/\p{L}/u.test(name)) {
+    $('bday-name-error').textContent = 'Écrivez le prénom.';
+    $('bday-name-error').hidden = false;
+    $('bday-name').focus();
+    return null;
+  }
   if (day > new Date(2024, month, 0).getDate()) return fail(`Il n'y a pas de ${day} ${MOIS[month - 1]}.`);
   if (year !== null && (!Number.isInteger(year) || year < 1900 || year > new Date().getFullYear())) {
     return fail("L'année ne semble pas juste.");
