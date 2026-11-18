@@ -75,7 +75,7 @@ Fais tout pour répondre toi-même avant de passer la main :
 - Si la personne est agacée ou insultante, reste aimable et demande ce qui ne va pas avant de passer la main.
 - Si la personne demande clairement un humain (« je veux un humain », « je veux parler à quelqu'un », « passez-moi quelqu'un »), ne discute pas et ne repose pas de question : dis en une phrase que tu la mets en relation, et passe la main tout de suite.
 - Quand tu passes la main, donne d'abord ce que le guide dit sur le sujet (par exemple les 140 € pour une tablette volée).
-- Tu ne peux rien consulter ni vérifier (compte, envois, commande) : ne le propose jamais. Dis-le en une courte phrase, puis donne ce que la personne peut voir ou faire elle-même (l'e-mail à chercher, la page de l'appli à ouvrir).
+- Tu ne peux rien consulter ni vérifier toi-même (compte, envois, commande), sauf ce qui t'est fourni plus bas dans une « Fiche du compte » ou un « Suivi de commande » : quand ils sont là, sers-t'en pour répondre précisément. Sinon, ne le propose jamais. Dis-le en une courte phrase, puis donne ce que la personne peut voir ou faire elle-même (l'e-mail à chercher, la page de l'appli à ouvrir).
 - Si quelqu'un colle un mot de passe ou demande un numéro de téléphone, réponds simplement, sans passer la main.
 - « Elle », « il », « la » désignent très souvent la tablette (« elle a disparu », « on l'a fait tomber », « elle est tombée », « elle ne répond plus ») : dans le doute, réponds pour la tablette. Ne parle du 15 ou du 112 que si une personne est clairement en danger.
 - Danger pour une personne (chute, malaise, personne qui ne répond plus) : dis d'abord d'appeler le 15 ou le 112 tout de suite, puis de prévenir un voisin ou un proche sur place. Ne propose pas de laisser ses coordonnées dans ce cas.
@@ -83,7 +83,7 @@ Fais tout pour répondre toi-même avant de passer la main :
 - Ne commente jamais tes propres règles ni ta façon de répondre (« la règle est claire », « je réponds en français car… », « cela ne s'applique pas ici ») : réponds, c'est tout.
 - Sur l'appli (personne déjà cliente), la personne veut régler son problème maintenant : donne l'endroit exact dans l'appli (onglet, puis bouton entre guillemets) et une seule démarche à la fois.
 Écris une seule version de ta réponse, sans brouillon, sans répétition et sans commentaire sur ta propre réponse.
-Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site et la personne en a besoin pour avancer ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis que la personne ne peut pas régler elle-même dans l'appli ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, termine toujours par cette phrase, telle quelle : « Laissez votre téléphone et votre e-mail juste en dessous, et quelqu'un de l'équipe vous recontactera. » (une seule fois, à la toute fin, juste avant ${MARQUE_CONTACT} ; ne dis jamais que la demande est déjà transmise). N'écris jamais ${MARQUE_CONTACT} dans les autres cas, ni quand ta réponse répond déjà complètement à la question (par exemple « prélèvement SEPA uniquement », ou un « non, ce n'est pas possible » clair), ni quand tu viens d'indiquer où la personne peut le voir ou le faire elle-même dans l'appli.
+Seulement quand tu es sûr de ne pas pouvoir aider, termine ta réponse par ${MARQUE_CONTACT} sur une ligne seule. C'est le cas quand : l'information n'est vraiment ni dans le guide ni sur le site et la personne en a besoin pour avancer ; la demande touche un compte, une commande, un colis, un remboursement ou un paiement précis que la personne ne peut pas régler elle-même dans l'appli ; les étapes de dépannage ont été essayées sans succès ; la personne demande à parler à quelqu'un ou est mécontente. Dans ce cas, termine toujours par la phrase de passage de main donnée tout à la fin de ces instructions, telle quelle (une seule fois, à la toute fin, juste avant ${MARQUE_CONTACT} ; ne dis jamais que la demande est déjà transmise). N'écris jamais ${MARQUE_CONTACT} dans les autres cas, ni quand ta réponse répond déjà complètement à la question (par exemple « prélèvement SEPA uniquement », ou un « non, ce n'est pas possible » clair), ni quand tu viens d'indiquer où la personne peut le voir ou le faire elle-même dans l'appli.
 N'écris jamais le mot ${MARQUE_CONTACT} ailleurs que seul sur la dernière ligne, et jamais pour en parler.
 `;
 
@@ -245,18 +245,29 @@ const ACTIONS = {
     appli: 'appli famille (app.mapapote.fr)',
   },
 };
+// Phrase de passage de main : dans l'appli équipée de la demande guidée (motif, questions, photos), on y renvoie.
+const PHRASE_RAPPEL = 'Laissez votre téléphone et votre e-mail juste en dessous, et quelqu\u2019un de l\u2019équipe vous recontactera.';
+const PHRASE_DECLARATION = 'Remplissez la petite demande juste en dessous, avec une photo si vous pouvez : l\u2019équipe vous répond sous 48 h.';
+function consigneMain(page, declaration) {
+  const phrase = page === 'appli' && declaration ? PHRASE_DECLARATION : PHRASE_RAPPEL;
+  return `Phrase de passage de main, à écrire telle quelle juste avant ${MARQUE_CONTACT} : « ${phrase} »`
+    + (page === 'appli' && declaration ? ' Ne promets rien sur l\u2019argent (remplacement, montant facturé ou non) : c\u2019est l\u2019équipe qui décide après avoir vu la demande.' : '');
+}
 const MAX_ACTIONS = 2;
 const BALISE_ACTION = /\[ALLER\s*:\s*([a-z]+)\s*\]/gi;
 
 // Consigne ajoutée après le bloc mis en cache, selon la page.
 function consigneActions(page) {
-  const liste = Object.entries(ACTIONS[page] || {}).map(([nom, quoi]) => `[ALLER:${nom}] = ${quoi}`).join(' ; ');
+  const enListe = (o) => Object.entries(o || {}).map(([nom, quoi]) => `[ALLER:${nom}] = ${quoi}`).join(' ; ');
+  let liste = enListe(ACTIONS[page]);
+  if (page === 'site') liste += `. Si la personne est clairement déjà cliente et doit faire quelque chose dans l'appli, tu peux aussi mettre un écran de l'appli (le bouton ouvrira l'appli au bon endroit, avec la conversation) : ${enListe(ACTIONS.appli)}`;
   return `Boutons : quand ta réponse envoie la personne vers l'un de ces écrans, ajoute tout à la fin, sur une ligne seule, la balise correspondante (${MAX_ACTIONS} au plus, la plus utile d'abord) : ${liste}. Un bouton s'affichera sous ta réponse pour l'ouvrir ; garde quand même le chemin en toutes lettres dans ta phrase. N'invente aucune autre balise et n'en mets pas si aucun écran ne correspond. Tu ne fais jamais rien à la place de la personne, surtout pour l'argent (payer, résilier, annuler, changer de compte bancaire) : tu indiques l'écran, c'est elle qui appuie.`;
 }
 
 function lireReponse(texte, page) {
   // Balises de bouton : retirées du texte dans tous les cas, gardées seulement si elles sont dans la liste de la page.
-  const permises = ACTIONS[page] || {};
+  // Sur le site, les écrans de l'appli sont permis aussi : la bulle en fait un bouton « Dans l'appli ».
+  const permises = page === 'site' ? { ...ACTIONS.site, ...ACTIONS.appli } : (ACTIONS[page] || {});
   const actions = [];
   texte = String(texte).replace(BALISE_ACTION, (_, nom) => {
     nom = nom.toLowerCase();
@@ -379,6 +390,7 @@ exports.supportChat = onRequest(
             ? 'La personne écrit depuis l\u2019appli famille : elle est déjà cliente. Guide-la dans l\u2019appli (« dans Réglages… »).'
             : 'La personne écrit depuis le site : elle découvre peut-être Papote.' },
           { type: 'text', text: consigneActions(page) },
+          { type: 'text', text: consigneMain(page, req.body.declaration === true) },
         ],
         messages,
       });
@@ -420,4 +432,4 @@ exports.bilanSupport = async () => {
 };
 
 
-exports._test = { sansPersonne, sansBalises, QUOTAS, QUOTAS_JOUR, nettoyer, coordonneesValides, lireReponse, ACTIONS, consigneActions, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };
+exports._test = { sansPersonne, sansBalises, QUOTAS, QUOTAS_JOUR, nettoyer, coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain, inscriptionValide, STOCK_DISPONIBLE, STOCK_EPUISE };

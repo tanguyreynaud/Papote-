@@ -30,7 +30,7 @@ test('coupe les messages trop longs et trop nombreux', () => {
   assert.strictEqual(r[r.length - 1].content, 'fin');
 });
 
-const { coordonneesValides, lireReponse, ACTIONS, consigneActions } = require('./support')._test;
+const { coordonneesValides, lireReponse, ACTIONS, consigneActions, consigneMain } = require('./support')._test;
 
 test('accepte un téléphone ou un e-mail', () => {
   assert.deepStrictEqual(coordonneesValides('06 12 34 56 78'), { telephone: '06 12 34 56 78' });
@@ -111,6 +111,8 @@ test('boutons [ALLER:x] : retirés du texte, gardés seulement s\'ils sont permi
     { reponse: 'Ouvrez Réglages, « Dépanner la tablette ».', contact: false, actions: ['depanner'] });
   // Inconnue, ou réservée à l'autre page : ignorée, mais jamais laissée dans le texte.
   const inconnu = lireReponse('Voici.\n[ALLER:payer]\n[ALLER:commander]', 'appli');
+  // Sur le site, un écran de l'appli est permis (bouton « Dans l'appli »).
+  assert.deepStrictEqual(lireReponse('Changez de carte dans l\'appli.\n[ALLER:abonnement]', 'site').actions, ['abonnement']);
   assert.deepStrictEqual(inconnu, { reponse: 'Voici.', contact: false });
   assert.deepStrictEqual(lireReponse('Commandez ici.\n[ALLER:commander]', 'site').actions, ['commander']);
   // Deux au plus, sans doublon, casse et espaces tolérés.
@@ -130,4 +132,12 @@ test('boutons : aucune action ne touche à l\'argent, et la consigne le dit', ()
   assert.match(consigneActions('appli'), /\[ALLER:depanner\]/);
   assert.doesNotMatch(consigneActions('appli'), /\[ALLER:commander\]/);
   assert.match(consigneActions('site'), /c'est elle qui appuie/);
+});
+
+test('passage de main : phrase selon la page et la bulle', () => {
+  assert.match(consigneMain('site', true), /Laissez votre téléphone et votre e-mail/);
+  assert.match(consigneMain('appli', false), /Laissez votre téléphone et votre e-mail/);
+  assert.match(consigneMain('appli', true), /Remplissez la petite demande/);
+  assert.match(consigneMain('appli', true), /Ne promets rien sur l’argent/);
+  assert.match(consigneActions('site'), /déjà cliente/);
 });
