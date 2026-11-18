@@ -662,7 +662,7 @@ function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, d
       `Vous n'avez rien d'autre à faire : l'abonnement s'arrête le <b>${dateEnClair(le)}</b>, sans démarche ni justificatif. Le mois en cours est le dernier mois d'abonnement prélevé.`,
       { encadre: 'Les photos, les vidéos et les messages de la famille restent dans l\'appli Papote pendant trois mois après l\'arrêt. Pour tout garder : onglet Photos, « Tout télécharger ».' },
       tablettePretee
-        ? `La tablette prêtée est à nous renvoyer sans frais, mais rien ne presse : vous aurez deux mois après l'arrêt, et nous vous enverrons le mode d'emploi le ${dateEnClair(le)}. ${RETOUR_DECES}`
+        ? `La tablette prêtée est à nous renvoyer sans frais, mais rien ne presse : vous aurez deux mois après l'arrêt, et nous enverrons le mode d'emploi ${copie ? 'à la personne qui paie l\'abonnement' : 'à cette adresse'} le ${dateEnClair(le)}. ${RETOUR_DECES}`
         : null,
       copie ? copieAuPayeur(payeur) : 'Nous n\'enverrons plus aucune nouvelle de Papote à cette adresse.',
     ].filter(Boolean), { texte: 'Ouvrir l\'appli Papote', lien: APPLI });

@@ -297,5 +297,10 @@ test('résiliation par un responsable qui ne paie pas : le payeur sait qui l\'a 
   assert.match(garde.text, /Paul, responsable de la famille, a annulé dans l'appli la résiliation/);
   const gardeCopie = mail.resiliationAnnulee({ nom: 'Paul', famille: 'Mamie Jeanne', copie: true, payeur: null });
   assert.match(gardeCopie.text, /La personne qui paie l'abonnement reçoit aussi un e-mail/);
-  for (const m of [payeur, copie, garde, gardeCopie]) assert.doesNotMatch(`${m.subject} ${m.text}`, /Linote|undefined|null/);
+  const deuil = mail.resiliationEnregistree({ nom: 'Paul', famille: 'Mamie Jeanne', le, tablettePretee: true, deces: true, copie: true, payeur: 'Julie Martin' });
+  assert.match(deuil.text, /condoléances/);
+  assert.match(deuil.text, /Julie Martin, qui paie l'abonnement, reçoit aussi un e-mail/);
+  assert.match(deuil.text, /mode d'emploi à la personne qui paie l'abonnement/);
+  assert.doesNotMatch(deuil.text, /plus aucune nouvelle/);
+  for (const m of [payeur, copie, garde, gardeCopie, deuil]) assert.doesNotMatch(`${m.subject} ${m.text}`, /Linote|undefined|null/);
 });
