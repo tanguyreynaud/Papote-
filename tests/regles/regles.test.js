@@ -545,6 +545,36 @@ test('invitation par e-mail : à l\'adresse invitée seulement, consommée en en
   await assertFails(getDoc(doc(proche('paulo'), `families/${FID}`)));
 });
 
+// Ordre d'appel du SOS (Réglages, « Ordre d'appel SOS ») : une liste d'uid posée par un responsable, rien d'autre.
+test('ordre d\'appel SOS : posé ou effacé par un responsable, jamais par un proche ; liste d\'uid bornée, sans doublon', async () => {
+  await deuxFamilles();
+  // Julie (propriétaire) et Paul (responsable désigné) : posé, avec le marqueur de la tablette, puis effacé.
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: ['paul', 'julie', 'lea'], rev: 3 }));
+  await assertSucceeds(updateDoc(doc(proche('paul'), `families/${FID}`), { sosOrdre: ['lea', 'paul'] }));
+  await assertSucceeds(updateDoc(doc(proche('paul'), `families/${FID}`), { sosOrdre: deleteField(), rev: 4 }));
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: [] }));
+  // 30 proches au plus : 30 passe, 31 non.
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: Array.from({ length: 30 }, (_, i) => `p${i}`) }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: Array.from({ length: 31 }, (_, i) => `p${i}`) }));
+  // Léa (proche, pas responsable), Marc (en attente), Ève (autre famille), la tablette : refusé.
+  await assertFails(updateDoc(doc(proche('lea'), `families/${FID}`), { sosOrdre: ['lea', 'julie'] }));
+  await assertFails(updateDoc(doc(proche('lea'), `families/${FID}`), { sosOrdre: deleteField() }));
+  await assertFails(updateDoc(doc(proche('marc'), `families/${FID}`), { sosOrdre: ['marc'] }));
+  await assertFails(updateDoc(doc(proche('eve'), `families/${FID}`), { sosOrdre: ['eve'] }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}`), { sosOrdre: ['julie'] }));
+  // Mal formé : pas une liste, un nombre, une chaîne vide ou trop longue, un doublon.
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: 'paul' }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: { paul: 1 } }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: ['paul', 12] }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: ['paul', ''] }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: ['x'.repeat(129)] }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: ['paul', 'lea', 'paul'] }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: ['paul/lea'] }));
+  // Jamais avec un autre champ (le nom, les responsables) dans la même écriture.
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: ['paul'], admins: ['paul', 'lea'] }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { sosOrdre: ['paul'], createdBy: 'paul' }));
+});
+
 test('responsables : désignés par un responsable, jamais au détriment du propriétaire ; un proche ne touche pas à la liste', async () => {
   await deuxFamilles();
   await assertSucceeds(updateDoc(doc(proche('paul'), `families/${FID}`), { admins: ['paul', 'lea'] }));

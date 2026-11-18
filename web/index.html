@@ -544,6 +544,21 @@
             </div>
           </form>
         </div>
+        <div id="sos-ordre-card" class="card setting" hidden>
+          <div class="setting-head"><h2>Ordre d'appel SOS</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <div id="sos-ordre-value" class="setting-value sos-ordre-value"></div>
+          <form id="form-sos-ordre" class="setting-edit" hidden>
+            <p class="muted small">Quand votre proche appuie sur SOS, la tablette envoie un SMS à toute la famille, puis appelle les proches un par un, dans cet ordre, jusqu'à ce que quelqu'un réponde. Touchez ↑ ou ↓ pour changer la place d'un proche.</p>
+            <ol id="sos-ordre-liste" class="sos-ordre-liste"></ol>
+            <p id="sos-ordre-annonce" class="sos-ordre-annonce" aria-live="polite"></p>
+            <p id="sos-ordre-sans" class="muted small" hidden></p>
+            <button type="button" id="sos-ordre-defaut" class="secondary sos-ordre-defaut">Revenir à l'ordre par défaut</button>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
+        </div>
         <div id="volume-card" class="card setting" hidden>
           <div class="setting-head"><h2>Volumes</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <p id="volume-text" class="setting-value"></p>

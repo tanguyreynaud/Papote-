@@ -2942,6 +2942,7 @@ function renderMembers(all) {
   renderFace();
   setNotifMembers(members);
   renderTelephonesAppels(members);
+  renderSosOrdre();
   renderActivity();
   renderRemote();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
@@ -4630,6 +4631,165 @@ SETTINGS['options-card'] = {
   },
 };
 
+// Ordre d'appel du SOS (Tanguy, 18/11) : families/{fid}.sosOrdre = [uid…], choisi par un responsable dans Réglages.
+// La tablette (tablette.js, startSosTelephone) envoie un SMS à tous puis appelle un par un les proches qui ont un
+// portable enregistré. Par défaut : les responsables d'abord, puis l'ordre de « Qui voulez-vous appeler ? » (ceux mis
+// en tête, le créateur, puis les prénoms par ordre alphabétique : Sync.trierProches). Un proche absent de sosOrdre
+// (arrivé après, numéro ajouté après) est appelé après ceux de la liste, dans l'ordre par défaut. Rien d'enregistré
+// (« Revenir à l'ordre par défaut ») : le champ est effacé. firestore.rules (sosOrdreOk) borne la liste.
+const SOS_ORDRE_PAUSE_MS = 450; // après un ↑/↓, les flèches ignorent un 2e appui (double appui, doigt qui insiste)
+const alphaFr = new Intl.Collator('fr', { sensitivity: 'base' });
+const enTeteMs = (m) => (m.enTete && typeof m.enTete.toMillis === 'function' ? m.enTete.toMillis() : 0);
+const estResponsable = (uid) => !!session?.family && (session.family.createdBy === uid || (session.family.admins || []).includes(uid));
+
+// Les proches que la tablette appelle au SOS : pas une tablette, pas une demande en attente, un portable 06/07.
+const prochesAppelables = () => allMembers.filter((m) => m.role !== 'tablette' && (!m.status || m.status === 'active') && telPropre(m.telephone));
+
+function ordreSosDefaut(proches) {
+  const createur = session?.family?.createdBy;
+  const tries = [...proches].sort((a, b) => {
+    const ta = enTeteMs(a);
+    const tb = enTeteMs(b);
+    if ((ta > 0) !== (tb > 0)) return ta > 0 ? -1 : 1;
+    if (ta > 0 && ta !== tb) return ta - tb;
+    if ((a.id === createur) !== (b.id === createur)) return a.id === createur ? -1 : 1;
+    return alphaFr.compare(a.name || '', b.name || '');
+  });
+  // Tri stable : les responsables d'abord, chacun gardant sa place (comme phonePeople sur la tablette).
+  return tries.sort((a, b) => Number(estResponsable(b.id)) - Number(estResponsable(a.id)));
+}
+
+// L'ordre suivi par la tablette : celui choisi, puis les autres dans l'ordre par défaut.
+function ordreSos(proches, choisi = session?.family?.sosOrdre) {
+  const defaut = ordreSosDefaut(proches);
+  if (!Array.isArray(choisi)) return defaut;
+  const parUid = new Map(proches.map((m) => [m.id, m]));
+  const tete = [...new Set(choisi)].map((uid) => parUid.get(uid)).filter(Boolean);
+  return [...tete, ...defaut.filter((m) => !tete.includes(m))];
+}
+
+function renderSosOrdre() {
+  const carte = $('sos-ordre-card');
+  if (!carte || !session?.family) return;
+  carte.hidden = !amFamilyAdmin();
+  if (carte.hidden) return;
+  const proches = ordreSos(prochesAppelables());
+  const val = $('sos-ordre-value');
+  if (!proches.length) {
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = 'Personne n\'a encore de numéro de portable enregistré : chacun l\'ajoute dans Profil.';
+    val.replaceChildren(p);
+    return;
+  }
+  const ol = document.createElement('ol');
+  ol.className = 'sos-ordre-resume';
+  ol.replaceChildren(...proches.map((m) => {
+    const li = document.createElement('li');
+    li.textContent = m.name || 'Proche';
+    return li;
+  }));
+  const note = document.createElement('p');
+  note.className = 'muted small';
+  note.textContent = Array.isArray(session.family.sosOrdre) ? 'Ordre choisi par la famille.' : 'Ordre par défaut : les responsables d\'abord.';
+  val.replaceChildren(ol, note);
+}
+
+let sosOrdreEdit = []; // uids dans l'ordre affiché pendant la modification
+let sosOrdreDefautDemande = false;
+let sosOrdreDernierAppui = 0;
+let sosOrdreBouge = null; // uid du proche qui vient de changer de place (mis en valeur)
+
+const FLECHE = (haut) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${haut ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'}"/></svg>`;
+
+function dessinerSosOrdre(focus) {
+  const parUid = new Map(prochesAppelables().map((m) => [m.id, m]));
+  sosOrdreEdit = sosOrdreEdit.filter((uid) => parUid.has(uid));
+  const liste = $('sos-ordre-liste');
+  liste.replaceChildren(...sosOrdreEdit.map((uid, i) => {
+    const m = parUid.get(uid);
+    const li = document.createElement('li');
+    li.className = `sos-ordre-ligne${uid === sosOrdreBouge ? ' vient-de-bouger' : ''}`;
+    li.dataset.uid = uid;
+    const rang = document.createElement('span');
+    rang.className = 'sos-ordre-rang';
+    rang.textContent = String(i + 1);
+    const nom = document.createElement('span');
+    nom.className = 'sos-ordre-nom';
+    const prenom = document.createElement('span');
+    prenom.className = 'sos-ordre-prenom';
+    prenom.textContent = m.name || 'Proche';
+    nom.append(prenom);
+    if (estResponsable(uid)) {
+      const r = document.createElement('span');
+      r.className = 'sos-ordre-role';
+      r.textContent = 'Responsable';
+      nom.append(r);
+    }
+    const fleches = document.createElement('span');
+    fleches.className = 'sos-ordre-fleches';
+    for (const [sens, haut] of [[-1, true], [1, false]]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `sos-ordre-btn ${haut ? 'monter' : 'descendre'}`;
+      b.innerHTML = FLECHE(haut);
+      b.setAttribute('aria-label', `${haut ? 'Monter' : 'Descendre'} ${m.name || 'ce proche'}`);
+      b.disabled = haut ? i === 0 : i === sosOrdreEdit.length - 1;
+      b.addEventListener('click', () => deplacerSos(uid, sens));
+      fleches.append(b);
+    }
+    li.append(rang, nom, fleches);
+    return li;
+  }));
+  if (focus) liste.querySelector(`li[data-uid="${CSS.escape(focus.uid)}"] .${focus.haut ? 'monter' : 'descendre'}:not(:disabled)`)?.focus({ preventScroll: true });
+}
+
+function deplacerSos(uid, sens) {
+  // Double appui : la ligne a déjà bougé, le 2e appui tomberait sur le proche d'à côté. Ignoré.
+  if (Date.now() - sosOrdreDernierAppui < SOS_ORDRE_PAUSE_MS) return;
+  const i = sosOrdreEdit.indexOf(uid);
+  const j = i + sens;
+  if (i < 0 || j < 0 || j >= sosOrdreEdit.length) return;
+  sosOrdreDernierAppui = Date.now();
+  [sosOrdreEdit[i], sosOrdreEdit[j]] = [sosOrdreEdit[j], sosOrdreEdit[i]];
+  sosOrdreDefautDemande = false;
+  sosOrdreBouge = uid;
+  dessinerSosOrdre({ uid, haut: sens < 0 });
+  const m = allMembers.find((x) => x.id === uid);
+  $('sos-ordre-annonce').textContent = `${m?.name || 'Ce proche'} passe en n° ${j + 1} (pas encore enregistré).`;
+}
+
+$('sos-ordre-defaut').addEventListener('click', () => {
+  sosOrdreEdit = ordreSosDefaut(prochesAppelables()).map((m) => m.id);
+  sosOrdreDefautDemande = true;
+  sosOrdreBouge = null;
+  dessinerSosOrdre();
+  $('sos-ordre-annonce').textContent = 'Ordre par défaut remis (pas encore enregistré).';
+});
+
+SETTINGS['sos-ordre-card'] = {
+  fill() {
+    const proches = prochesAppelables();
+    sosOrdreEdit = ordreSos(proches).map((m) => m.id);
+    sosOrdreDefautDemande = false;
+    sosOrdreBouge = null;
+    sosOrdreDernierAppui = 0;
+    $('sos-ordre-annonce').textContent = '';
+    const sans = allMembers.filter((m) => m.role !== 'tablette' && (!m.status || m.status === 'active') && !telPropre(m.telephone));
+    $('sos-ordre-sans').hidden = !sans.length;
+    $('sos-ordre-sans').textContent = sans.length
+      ? `Sans numéro de portable, pas appelé${sans.length > 1 ? 's' : ''} par la tablette : ${sans.map((m) => m.name || 'Proche').join(', ')}. Chacun ajoute son numéro dans Profil.`
+      : '';
+    $('sos-ordre-defaut').hidden = proches.length < 2;
+    dessinerSosOrdre();
+  },
+  async save() {
+    if (sosOrdreDefautDemande) await saveFamily({ sosOrdre: deleteField() }, 'Ordre par défaut envoyé à la tablette');
+    else await saveFamily({ sosOrdre: [...sosOrdreEdit] }, 'Ordre d\'appel SOS envoyé à la tablette');
+    return true;
+  },
+};
+
 // Volumes : families/{fid}.volume (vidéos, messages lus, radio), volumeSonnerie (appels qui arrivent)
 // et volumeAppel (voix du proche en visio et au téléphone, au plus fort si absent), de 10 à 100.
 const volumeActuel = () => (Number.isInteger(session.family.volume) ? session.family.volume : 80);
@@ -4785,6 +4945,7 @@ function applyFamily() {
   renderVolume();
   $('options-card').hidden = !amFamilyAdmin();
   renderOptions();
+  renderSosOrdre();
   $('meteo-card').hidden = !amFamilyAdmin();
   renderMeteo();
   $('delete-family-info').hidden = !amOwner();
