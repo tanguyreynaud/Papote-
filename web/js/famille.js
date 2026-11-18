@@ -3033,8 +3033,8 @@ function renderMembers(all) {
           const choix = await chooseAction(m.name, options);
           if (choix === 'admin') {
             const msg = isAdmin
-              ? `Retirer le rôle de responsable à ${m.name} ? Cette personne ne pourra plus accepter de membres ni changer les réglages.`
-              : `Rendre ${m.name} responsable ? Cette personne pourra accepter des membres et changer les réglages de la tablette.`;
+              ? `Retirer le rôle de responsable à ${m.name} ? Cette personne ne pourra plus accepter de membres, changer les réglages ni gérer l'abonnement.`
+              : `Rendre ${m.name} responsable ? Cette personne pourra accepter des membres, changer les réglages de la tablette et gérer l'abonnement (moyen de paiement, factures, résiliation).`;
             if (await askConfirm(msg, isAdmin ? 'Retirer le rôle' : 'Rendre responsable')) setFamilyAdmin(m.id, !isAdmin);
           } else if (choix === 'tete') {
             const msg = m.enTete
@@ -3404,7 +3404,7 @@ async function renderFactures() {
     liste.append(li);
   }
 }
-// Commande payée sur le site : le propriétaire la relie avec son code, ou avec l'e-mail du compte.
+// Commande payée sur le site : un responsable la relie avec son code, ou avec l'e-mail du compte.
 document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const input = form.querySelector('.order-code');
@@ -3596,7 +3596,7 @@ $('btn-resilier').addEventListener('click', async () => {
   if (!partir) { toast('Merci de rester avec Papote'); return; }
   await withAboError(async () => {
     const { le } = await resilier(session.fid);
-    notice(`Résiliation enregistrée. Papote s'arrêtera le ${dateLongue(le) || quand || 'dernier jour du mois en cours'}.`);
+    notice(`Résiliation enregistrée. Papote s'arrêtera le ${dateLongue(le) || quand || 'dernier jour du mois en cours'}. Un e-mail de confirmation part à l'adresse de la commande.`);
   });
 });
 
@@ -3850,8 +3850,9 @@ function renderAbonnement() {
   useOrderCodeFromSite(abo?.statut, amFamilyAdmin());
   const admin = amFamilyAdmin(); // l'abonnement : tout responsable de la famille (Tanguy, 27/10)
   const statut = abo?.statut;
-  // Bloc Abonnement du Profil (avant « Mon compte ») : tout le monde voit l'état,
-  // seuls les responsables peuvent payer, changer de carte ou résilier.
+  // Bloc Abonnement du Profil (avant « Mon compte ») : tout le monde voit l'état ; tout responsable, qu'il paie ou
+  // non, peut payer, changer de carte ou de compte, voir les factures, résilier ou garder (Tanguy, 18/11). Un
+  // simple proche, non. L'abonnement reste celui du client Stripe qui paie : le responsable agit pour la famille.
   $('abo-card').hidden = false;
   $('abo-readonly').hidden = admin || !abo;
   if (!abo) {
