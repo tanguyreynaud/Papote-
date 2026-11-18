@@ -12,7 +12,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import {
   db, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, onSnapshot, writeBatch, serverTimestamp, bumpRev, increment, deleteField,
-  loadMembership, joinFamily, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
+  loadMembership, joinFamily, familleDuCode, leaveFamily, watchMembers, currentUser, savedFamilyId, saveFamilyId,
   addPost, deletePost, loadMedia, formatCode, normalizeCode, toDate, CodeInconnuError,
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
@@ -232,15 +232,22 @@ $('form-join').addEventListener('submit', async (e) => {
   button.textContent = 'Un instant…';
   showError($('join-error'), '');
   const code = normalizeCode($('join-code').value);
+  const pour = inviteCode() ? invitePour() : null;
   try {
     const fidRejoint = await joinFamily(code, savedPrenom());
     // Invité aussi par e-mail : l'invitation est remplie, on l'efface.
     if (myEmail()) deleteDoc(doc(db, 'families', fidRejoint, 'invitations', myEmail())).catch(() => {});
     forgetInviteCode();
+    // Déjà dans une autre famille : l'accueil s'ouvre sur celle-là et dit que la demande est partie.
+    demandeEnvoyee = { fid: fidRejoint, pour };
     await enterApp();
   } catch (err) {
-    if (err instanceof CodeInconnuError) console.warn('Code refusé');
-    else console.error(err);
+    if (err instanceof CodeInconnuError) {
+      console.warn('Code refusé');
+      // Code venu d'un lien : il était caché ; on le montre pour qu'il puisse être corrigé.
+      forgetInviteCode();
+      $('join-code-wrap').hidden = false;
+    } else console.error(err);
     showError($('join-error'), err instanceof CodeInconnuError ? CODE_INCONNU
       : 'Impossible de rejoindre pour le moment. Vérifiez la connexion internet.');
   } finally {
@@ -461,8 +468,8 @@ const VUES_PARCOURS = ['view-login', 'view-link-email', 'view-moi', 'view-invite
 // « Retour » sur un écran de parcours : son propre bouton Retour s'il en a un, sinon « Voulez-vous quitter ? »
 // (app Android). false : rien de prévu, l'historique suit son cours.
 function retourParcours(vue) {
-  const bouton = $('btn-join-back');
-  if (!bouton.hidden && bouton.offsetParent) { bouton.click(); return true; }
+  const bouton = [$('btn-join-back'), $('join-later')].find((b) => !b.hidden && b.offsetParent);
+  if (bouton) { bouton.click(); return true; }
   if (!dansAppAndroid() || !peutFermer()) return false;
   proposerDeQuitter(false);
   return true;
@@ -5917,6 +5924,8 @@ for (const input of [$('join-code'), ...document.querySelectorAll('.order-code')
 const INVITE_CODE_KEY = 'papote.codeInvite';
 let myFamilies = []; // [{ fid, name }]
 let skipInvites = false;
+// Demande pour rejoindre une famille faite alors qu'on est déjà dans une autre : dite une fois sur l'accueil.
+let demandeEnvoyee = null;
 let stopPending = null;
 let sharedPending = false;
 let rappelerPending = false; // ouvert par « Rappeler » sur une notification d'appel manqué
@@ -6080,7 +6089,9 @@ document.querySelectorAll('[data-action=other-family]').forEach((btn) => btn.add
   showJoin(myFamilies.length > 0);
 }));
 
-$('btn-join-back').addEventListener('click', () => enterApp());
+// « Retour » et « Plus tard » : le lien d'invitation est oublié (sinon il serait reproposé aussitôt).
+$('btn-join-back').addEventListener('click', () => { forgetInviteCode(); enterApp(); });
+$('join-later').addEventListener('click', () => { forgetInviteCode(); enterApp(); });
 $('btn-skip-invites').addEventListener('click', () => { skipInvites = true; enterApp(); });
 
 // Plusieurs familles : le nom en haut de l'accueil ouvre la liste, dans la page.
@@ -6106,22 +6117,33 @@ function showLogin(legacy) {
 // Code famille : un responsable accepte l'arrivée.
 const JOIN_AIDE = "Entrez le code famille qu'on vous a envoyé : un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.";
 
-function showJoin(canGoBack) {
+// lienInconnu : lien ou QR code d'invitation dont le code ne correspond à aucune famille (code montré, avec le mot).
+function showJoin(canGoBack, { lienInconnu = false } = {}) {
   $('join-account').textContent = `Connecté avec ${myEmail()}`;
-  $('btn-join-back').hidden = !canGoBack;
-  // Venu de sa famille : « Retour » en haut à droite, pas de déconnexion ici.
-  $('join-logout').hidden = canGoBack;
-  const code = inviteCode();
+  showError($('join-error'), '');
+  let code = inviteCode();
   const pour = code ? invitePour() : null;
-  if (code) $('join-code').value = formatCode(normalizeCode(code));
+  if (lienInconnu) {
+    forgetInviteCode();
+    $('join-code').value = formatCode(normalizeCode(code));
+    showError($('join-error'), CODE_INCONNU);
+    code = null;
+  } else if (code) $('join-code').value = formatCode(normalizeCode(code));
+  // Lien d'invitation reçu par quelqu'un qui a déjà sa famille (Tanguy, 18/11) : « Rejoindre » ou « Plus tard ».
+  const proposition = !!code && canGoBack;
+  $('join-later').hidden = !proposition;
+  // Venu de sa famille : « Retour » en haut à droite (sauf quand « Plus tard » est là), pas de déconnexion ici.
+  $('btn-join-back').hidden = !canGoBack || proposition;
+  $('join-logout').hidden = canGoBack;
   // Lien d'invitation d'un proche : le code est déjà là, il n'y a qu'à toucher « Rejoindre ».
   $('join-code-wrap').hidden = !!code;
   $('join-title').textContent = code
     ? (pour ? `Rejoindre la famille de ${pour}` : 'Rejoindre la famille')
     : 'Rejoindre une famille'; // pas « Vous êtes invité » : il ne l'est peut-être pas (V7 du 17/11)
-  $('join-help').textContent = code
-    ? 'Touchez « Rejoindre » : un responsable de la famille acceptera votre arrivée.'
-    : JOIN_AIDE;
+  $('join-help').textContent = !code ? JOIN_AIDE
+    : proposition
+      ? 'Touchez « Rejoindre » : un responsable de la famille acceptera votre arrivée. Vous gardez aussi vos autres familles.'
+      : 'Touchez « Rejoindre » : un responsable de la famille acceptera votre arrivée.';
   show('view-join');
 }
 
@@ -6215,7 +6237,22 @@ async function enterApp() {
       else showJoin(false);
       return;
     }
-    const chosen = active.find((m) => m.fid === saved) || active[0];
+    // Lien ou QR code d'invitation ouvert par un proche qui a déjà sa famille (Tanguy, 18/11) : avant, il était
+    // oublié sans un mot. Déjà dans cette famille : l'appli s'y ouvre. Demande déjà faite ou invitation par e-mail
+    // laissée pour plus tard : rien de plus. Sinon : « Rejoindre la famille de X » (Rejoindre / Plus tard).
+    let choisie = saved;
+    const lien = inviteCode();
+    if (lien) {
+      const fidLien = await familleDuCode(lien);
+      if (fidLien && active.some((m) => m.fid === fidLien)) choisie = fidLien;
+      else if (fidLien && memberships.some((m) => m.fid === fidLien)) demandeEnvoyee = { fid: fidLien, pour: invitePour(), deja: true };
+      else if (!fidLien || !invitationsLues.some((inv) => inv.fid === fidLien)) {
+        showJoin(true, { lienInconnu: fidLien === null });
+        return;
+      }
+      forgetInviteCode();
+    }
+    const chosen = active.find((m) => m.fid === choisie) || active[0];
     saveFamilyId(chosen.fid);
     lectureSession = loadMembership();
     myFamilies = await Promise.all(active.map(async (m) => ({ fid: m.fid, name: await familyName(m.fid) || 'Famille' })));
@@ -6255,6 +6292,7 @@ async function enterApp() {
   goHome();
   renderOutbox();
   flushOutbox();
+  annoncerDemande();
   accueilPremiereFois();
   if (sharedPending) { sharedPending = false; openShared(); }
   if (sepaOkPending) {
@@ -6269,6 +6307,16 @@ async function enterApp() {
   else if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (reglagesPending) { reglagesPending = false; openPage('settings'); }
   else if (abonnementPending) { abonnementPending = false; ouvrirAbonnement(); }
+}
+
+function annoncerDemande() {
+  const demande = demandeEnvoyee;
+  demandeEnvoyee = null;
+  if (!demande || demande.fid === session?.fid) return;
+  const famille = demande.pour ? `la famille de ${demande.pour}` : 'cette famille';
+  notice(demande.deja
+    ? `Vous avez déjà demandé à rejoindre ${famille} : un responsable doit accepter votre arrivée.`
+    : `Demande envoyée pour rejoindre ${famille} : un responsable va accepter votre arrivée. Elle apparaîtra ici, avec vos autres familles.`);
 }
 
 function renderFamilySwitch(current) {
