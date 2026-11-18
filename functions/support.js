@@ -173,7 +173,7 @@ async function texteDuSite() {
 
 // Fiche du compte (appli : jeton de connexion + famille vérifiés) ou suivi de commande (code ET e-mail écrits dans
 // la conversation), en lecture seule ; '' sinon. Jamais d'exception : une lecture ratée laisse le chat répondre sans.
-async function texteDuCompte(req, messages, ip) {
+async function texteDuCompte(req, messages, ip, page) {
   const maintenant = Date.now();
   try {
     const qui = await fiche.quiEcrit(req, { db: base, verifier: (j) => admin.auth().verifyIdToken(j) });
@@ -182,7 +182,9 @@ async function texteDuCompte(req, messages, ip) {
     logger.warn('Fiche du compte illisible pour le chat', e.message);
   }
   const demande = fiche.trouverCodeEmail(messages);
-  if (!demande || !(await quotaOk(ip, 'suivis'))) return '';
+  // Sur le site, sans code + e-mail encore : comment demander le suivi (n'existe que si cette recherche est en ligne).
+  if (!demande) return page === 'site' ? fiche.CONSIGNE_SUIVI : '';
+  if (!(await quotaOk(ip, 'suivis'))) return '';
   try {
     return fiche.blocCommande(await fiche.lireCommande(base, demande), maintenant);
   } catch (e) {
@@ -344,7 +346,7 @@ exports.supportChat = onRequest(
 
     try {
       if (!client) client = new (require('@anthropic-ai/sdk'))({ apiKey: ANTHROPIC_API_KEY.value() });
-      const [texte, etat, compte] = await Promise.all([texteDuSite(), texteDuStock(), texteDuCompte(req, messages, ip)]);
+      const [texte, etat, compte] = await Promise.all([texteDuSite(), texteDuStock(), texteDuCompte(req, messages, ip, page)]);
       const reponse = await client.messages.create({
         model: MODELE,
         // La réflexion de l'IA compte dans max_tokens : assez de marge pour ne jamais couper une réponse.
