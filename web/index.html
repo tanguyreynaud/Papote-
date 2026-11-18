@@ -169,8 +169,9 @@
       <form id="form-moi" class="card" novalidate>
         <h2>Vos informations</h2>
         <label>Votre prénom
-          <input id="moi-prenom" autocomplete="given-name" maxlength="40" placeholder="Julie">
+          <input id="moi-prenom" autocomplete="given-name" maxlength="40" placeholder="Julie" aria-describedby="moi-prenom-error">
         </label>
+        <p id="moi-prenom-error" class="error" hidden></p>
         <p class="genre-titre">Vous êtes</p><div class="genre-choix" role="radiogroup" aria-label="Vous êtes"><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Une femme</button><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Un homme</button></div>
                 <p class="genre-titre">Votre photo</p>
         <button type="button" class="moi-visage" id="moi-visage">
@@ -741,7 +742,7 @@
           <div class="setting-head"><h2>Mon prénom</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <p id="my-name-value" class="setting-value"></p>
           <form id="form-my-name" class="setting-edit" hidden>
-            <input id="my-name" maxlength="40" autocomplete="given-name" aria-label="Mon prénom">
+            <input id="my-name" maxlength="40" autocomplete="given-name" aria-label="Mon prénom" aria-describedby="my-name-error">
             <p id="my-name-error" class="error" hidden></p>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
@@ -992,8 +993,9 @@
       </div>
       <div id="bday-fields" hidden>
         <label>Prénom
-          <input id="bday-name" maxlength="40" placeholder="Léa">
+          <input id="bday-name" maxlength="40" placeholder="Léa" aria-describedby="bday-name-error">
         </label>
+        <p id="bday-name-error" class="error" hidden></p>
         <div class="bday-date">
           <label>Jour
             <select id="bday-day"></select>

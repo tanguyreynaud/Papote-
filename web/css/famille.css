@@ -1108,19 +1108,24 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 body:has(#hors-ligne-bandeau:not([hidden])) .install-fab { display: none; }
 /* Dans la page, sous les tuiles (testeur, V9 du 17/11) : collant, il passait sur les tuiles et le message du bas
    (« Photo envoyée ») se posait dessus. Il ne cache plus rien : la marge du bas le garde au-dessus de la barre et
-   de la place des messages. */
+   de la place des messages.
+   Recontrôle du 18/11 : en pastille indigo ombrée, à moitié visible sous la barre du bas (selon la hauteur de
+   l'écran et les cartes du haut), il avait encore l'air de flotter sur les tuiles. C'est maintenant une ligne de la
+   page, de la largeur des tuiles, blanche comme elles : coupée par la barre, elle défile comme le reste. */
 #view-home:has(#btn-install:not([hidden])) { padding-bottom: calc(168px + env(safe-area-inset-bottom)); }
 .install-fab {
   display: flex;
-  width: fit-content;
-  margin: 22px auto 0;
-  gap: 8px;
-  padding: 14px 22px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-text);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 40%, transparent);
-  white-space: nowrap;
+  position: static;
+  width: 100%;
+  margin: 14px 0 0;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow);
+  white-space: normal;
+  text-align: center;
 }
 .install-fab svg { width: 22px; height: 22px; }
 /* Fin de l'installation de la tablette et connexion : l'installation de l'app proposée aussi (27/10). */
@@ -1145,7 +1150,9 @@ body:has(#hors-ligne-bandeau:not([hidden])) .install-fab { display: none; }
 .volume-row { display: flex; align-items: center; gap: 12px; }
 .volume-row input { flex: 1; margin: 0; padding: 0; accent-color: var(--accent); background: none; border: none; }
 .volume-value { min-width: 52px; text-align: right; font-weight: 700; }
-.disabled-card { opacity: .5; pointer-events: none; }
+/* Famille complète : « Inviter par e-mail » ne s'estompe plus en entier (texte à 2,2:1, illisible pour une vue faible,
+   balayage d'accessibilité) ; le champ et le bouton sont vraiment désactivés, les invitations en cours restent lisibles. */
+.disabled-card { pointer-events: none; }
 
 /* Chat d'aide (chat-support.js) : seulement sur la page Support. */
 body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: none !important; }

@@ -225,6 +225,104 @@ test('Prénom vidé (V6) : refusé avec un mot ; prénom changé (V5) : l\'anniv
   await g.attendreBase(async () => ((await g.lire(`families/${fid}`)).rev || 0) > rev2, 'photo : rev');
 });
 
+// Prénom vide ou sans lettre (recontrôle du testeur, 18/11 : refusé sans aucun mot) : partout où l'on tape un prénom
+// (« Vos informations » au premier lancement, en rejoignant par le code famille, par une invitation ; Profil ; prénom
+// d'un anniversaire), un mot clair juste sous le champ, parti dès qu'une lettre est tapée ; rien n'est envoyé.
+async function motSousLeChamp(t, champ, erreur, motif) {
+  const mot = t.page.locator(erreur);
+  await mot.waitFor({ state: 'visible', timeout: 5_000 });
+  assert.match(await mot.innerText(), motif);
+  const [c, e] = await Promise.all([t.page.locator(champ).boundingBox(), mot.boundingBox()]);
+  assert.ok(e.y >= c.y + c.height - 1 && e.y - (c.y + c.height) < 40, `${erreur} juste sous ${champ} (champ ${Math.round(c.y + c.height)}, mot ${Math.round(e.y)})`);
+}
+
+async function prenomRefuseDansVosInformations(t, quoi) {
+  await g.attendreVue(t, 'view-moi');
+  await t.page.fill('#moi-tel', g.telDe(quoi));
+  await t.page.click('#form-moi .genre-btn[data-genre="homme"]');
+  await t.page.setInputFiles('#moi-in', await g.photo({ largeur: 400, hauteur: 400, texte: quoi }));
+  await t.page.locator('#moi-photo').waitFor({ state: 'visible' });
+  await t.page.selectOption('#moi-jour', '3');
+  await t.page.selectOption('#moi-mois', '4');
+  await t.page.selectOption('#moi-annee', '1980');
+  for (const vide of ['', '   ', "- '"]) {
+    await t.page.fill('#moi-prenom', vide);
+    await t.page.click('#form-moi button[type=submit]');
+    await motSousLeChamp(t, '#moi-prenom', '#moi-prenom-error', /Indiquez votre prénom/);
+    assert.ok(await t.page.locator('#moi-error').isHidden(), `${quoi} : pas d'autre message en bas`);
+    assert.strictEqual(await g.vue(t), 'view-moi', `${quoi} : « Vos informations » reste ouvert (« ${vide} »)`);
+  }
+  // Une lettre tapée : le mot s'en va tout de suite, avant même « Continuer ».
+  await t.page.locator('#moi-prenom').pressSequentially('P');
+  await t.page.locator('#moi-prenom-error').waitFor({ state: 'hidden', timeout: 2_000 });
+}
+
+test('Prénom vide ou sans lettre : un mot sous le champ partout où l\'on tape un prénom, parti dès qu\'il est corrigé, rien d\'envoyé', async () => {
+  // Premier lancement, sans famille.
+  const julie = await banc.telephone('Julie');
+  await g.seConnecter(julie, 'julie@exemple.fr');
+  await prenomRefuseDansVosInformations(julie, 'premier lancement');
+  assert.deepStrictEqual(await g.liste('families'), [], 'rien d\'écrit');
+  await julie.page.fill('#moi-prenom', 'Julie');
+  await julie.page.click('#form-moi button[type=submit]');
+  await julie.page.waitForFunction(() => document.getElementById('view-moi').hidden);
+  const tab = await g.tabletteAllumee({ commande: { email: 'julie@exemple.fr' } });
+  const fid = await g.installer(julie, tab, { nom: 'Mamie Emma' });
+  await g.fermerAccueil(julie);
+  const membres = (await g.liste(`families/${fid}/members`)).length;
+
+  // Rejoindre par le code famille.
+  const { code } = await g.lire(`families/${fid}`);
+  const paul = await banc.telephone('Paul');
+  await g.seConnecter(paul, 'paul@exemple.fr', `?code=${code}`);
+  await prenomRefuseDansVosInformations(paul, 'code famille');
+
+  // Invitation par e-mail.
+  await julie.page.click('#btn-invite');
+  await g.attendreVue(julie, 'view-invite');
+  await julie.page.fill('#invite-email', 'lea@exemple.fr');
+  await julie.page.click('#form-invite button[type=submit]');
+  await g.toast(julie, 'Invitation envoyée à');
+  const lien = /\?code=([A-Z0-9-]+)&pour=([^\s"<>]+)/.exec(g.dernierMail('lea@exemple.fr').texte);
+  const lea = await banc.telephone('Léa');
+  await g.seConnecter(lea, 'lea@exemple.fr', `?code=${lien[1]}&pour=${lien[2]}`);
+  await prenomRefuseDansVosInformations(lea, 'invitation');
+  assert.strictEqual((await g.liste(`families/${fid}/members`)).length, membres, 'personne n\'est entré dans la famille');
+  await julie.page.click('#view-invite .back');
+  await g.attendreVue(julie, 'view-home');
+
+  // Profil : le mot sous le champ s'en va dès qu'une lettre est tapée.
+  await profil(julie);
+  await modifier(julie, 'my-name-card');
+  await julie.page.fill('#my-name', "- '");
+  await enregistrer(julie, 'my-name-card');
+  await motSousLeChamp(julie, '#my-name', '#my-name-error', /Indiquez votre prénom/);
+  await julie.page.locator('#my-name').pressSequentially('J');
+  await julie.page.locator('#my-name-error').waitFor({ state: 'hidden', timeout: 2_000 });
+  const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'julie@exemple.fr').id;
+  assert.strictEqual((await g.lire(`families/${fid}/members/${uid}`)).name, 'Julie', 'rien d\'écrit');
+  await julie.page.fill('#my-name', '');
+  await enregistrer(julie, 'my-name-card');
+  await motSousLeChamp(julie, '#my-name', '#my-name-error', /Indiquez votre prénom/);
+
+  // Agenda : prénom d'un anniversaire.
+  await julie.page.click('.nav-item[data-tab="home"]');
+  await g.attendreVue(julie, 'view-home');
+  await g.ouvrirTuile(julie, 'agenda');
+  const avant = (await g.liste(`families/${fid}/birthdays`)).length;
+  await julie.page.click('#add-reminder');
+  await julie.page.locator('#sheet-reminder').waitFor({ state: 'visible' });
+  await julie.page.click('#agenda-seg .seg[data-seg="birthday"]');
+  for (const vide of ['', '  ', '-']) {
+    await julie.page.fill('#bday-name', vide);
+    await julie.page.click('#btn-reminder');
+    await motSousLeChamp(julie, '#bday-name', '#bday-name-error', /Écrivez le prénom/);
+  }
+  await julie.page.locator('#bday-name').pressSequentially('L');
+  await julie.page.locator('#bday-name-error').waitFor({ state: 'hidden', timeout: 2_000 });
+  assert.strictEqual((await g.liste(`families/${fid}/birthdays`)).length, avant, 'aucun anniversaire écrit');
+});
+
 test('Photo retirée (V2) : ne revient pas après actualisation ni à la réouverture, la carte « Ajoutez votre photo » est due', async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });

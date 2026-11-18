@@ -4409,7 +4409,7 @@ SETTINGS['my-name-card'] = {
   async save() {
     const name = $('my-name').value.trim();
     // Vide (ou sans lettre) : refusé avec un mot, le prénom d'avant reste (audit 17/11 : ignoré sans rien dire).
-    showError($('my-name-error'), /\p{L}/u.test(name) ? '' : 'Indiquez votre prénom : la famille le verra.');
+    showError($('my-name-error'), /\p{L}/u.test(name) ? '' : PRENOM_MANQUANT);
     if (!/\p{L}/u.test(name)) return false;
     if (name === session.member.name) return true;
     await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { name });
@@ -5724,6 +5724,7 @@ function showMoi() {
   $('moi-sans-tel').checked = savedTel() === SANS_TEL;
   sansTelAffiche();
   $('moi-error').hidden = true;
+  $('moi-prenom-error').hidden = true;
   moiComplet();
   show('view-moi');
 }
@@ -5732,7 +5733,13 @@ $('form-moi').addEventListener('submit', (e) => {
   // Double appui sur « Continuer » : la famille ne s'ouvre qu'une fois (l'écran est déjà parti au premier).
   if ($('view-moi').hidden) return;
   const prenom = $('moi-prenom').value.trim();
-  if (!/\p{L}/u.test(prenom)) { showError($('moi-error'), 'Indiquez votre prénom : la famille le verra.'); return; }
+  // Vide (ou sans lettre) : le mot sous le champ, pas en bas sous « Continuer » où on ne le voyait pas (18/11).
+  if (!/\p{L}/u.test(prenom)) {
+    $('moi-error').hidden = true;
+    showError($('moi-prenom-error'), PRENOM_MANQUANT);
+    $('moi-prenom').focus();
+    return;
+  }
   if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
   if (!visageGarde()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
   const sansTel = $('moi-sans-tel').checked;
@@ -5772,6 +5779,11 @@ function moiComplet() {
 }
 // Prénom : seulement des lettres (accents compris), espace, tiret et apostrophe.
 const HORS_PRENOM = /[^\p{L}\p{M} '’-]/gu;
+// Prénom vide ou sans lettre (« Vos informations », Profil) : ce mot sous le champ, parti dès qu'une lettre est tapée.
+const PRENOM_MANQUANT = 'Indiquez votre prénom : la famille le verra.';
+for (const [champ, erreur] of [['moi-prenom', 'moi-prenom-error'], ['my-name', 'my-name-error']]) {
+  $(champ).addEventListener('input', () => { if (/\p{L}/u.test($(champ).value)) $(erreur).hidden = true; });
+}
 document.addEventListener('input', (e) => {
   const el = e.target;
   if (el.autocomplete !== 'given-name') return;
