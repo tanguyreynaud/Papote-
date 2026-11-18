@@ -2,8 +2,11 @@
 //
 //   alertesTablettes  toutes les 5 minutes : une notification par épisode (débranchée depuis
 //                     plus de 10 min, ou silencieuse depuis plus de 1 h 10)
-//   alerteMatin       chaque jour à 10 h (Paris, lancée par taches.js) : « {nom} n'a pas été vue depuis deux jours » si la
-//                     tablette ne l'a ni vue (lastSeen, caméra) ni touchée (lastActive) depuis 48 h
+//   alerteMatin       chaque jour à 10 h (Paris, lancée par taches.js) : « {nom} n'a pas été vue depuis N jours » si la
+//                     tablette ne l'a ni vue (lastSeen, caméra) ni touchée (lastActive) depuis N × 24 h ; N réglé par
+//                     la famille de 1 à 5 jours (families/{fid}.alertePasVueJours, 2 par défaut, appli famille, Réglages).
+//                     Le contrôle n'a lieu qu'une fois par jour : l'alerte arrive entre N et N + 1 jours après le
+//                     dernier signe de vie.
 //
 // L'épisode est noté sur la fiche de la tablette (alerteType, alerteLe) et remis à zéro quand
 // tout revient, pour ne pas prévenir toutes les 5 minutes. La décision est dans etatAlerte,
@@ -184,18 +187,46 @@ function derniereVue(tablette) {
 // « Pas vue depuis deux jours » (Tanguy, 2026-10-28 : une journée sans toucher la tablette, c'est normal ;
 // un week-end chez les enfants aussi ; au-delà de 48 h, un coup de fil vaut le coup). Jamais vue : on compte
 // depuis l'arrivée de la tablette dans la famille (joinedAt), sinon rien.
+// Délai réglable par la famille de 1 à 5 jours (Tanguy, 18/11/2026) : families/{fid}.alertePasVueJours, écrit par
+// l'appli famille (Réglages) et vérifié par firestore.rules. PAS_VUE_MS reste le délai par défaut (2 jours).
 const PAS_VUE_MS = 48 * 60 * 60 * 1000;
-function pasVueDepuisLongtemps(tablette, maintenant) {
-  const vue = derniereVue(tablette) || enMillis(tablette.joinedAt);
-  return Boolean(vue) && maintenant - vue > PAS_VUE_MS;
+const JOURS_PAS_VUE_DEFAUT = 2;
+const JOURS_PAS_VUE_MIN = 1;
+const JOURS_PAS_VUE_MAX = 5;
+const JOUR_MS = 24 * 60 * 60 * 1000;
+
+// Réglage de la famille -> nombre de jours sûr (entier de 1 à 5). Absent ou illisible : 2 ; hors bornes : ramené
+// dans les bornes ; décimal : arrondi.
+function joursPasVue(valeur) {
+  if (typeof valeur !== 'number' || !Number.isFinite(valeur)) return JOURS_PAS_VUE_DEFAUT;
+  return Math.min(JOURS_PAS_VUE_MAX, Math.max(JOURS_PAS_VUE_MIN, Math.round(valeur)));
 }
 
-// Due si aucune tablette ne l'a vue ni sentie depuis deux jours, et qu'au moins une tablette répond :
+// « 1 jour », « 3 jours ».
+function joursTexte(jours) {
+  return jours === 1 ? '1 jour' : `${jours} jours`;
+}
+
+// Texte de l'alerte pour un délai donné (en jours, déjà sûr).
+function messagePasVue(nom, jours) {
+  return {
+    titre: `${nom} n'a pas été vue depuis ${joursTexte(jours)}`,
+    texte: `La tablette ne l'a ni vue ni sentie depuis plus de ${jours * 24} heures. Un petit appel pour prendre des nouvelles ?`,
+  };
+}
+
+function pasVueDepuisLongtemps(tablette, maintenant, jours) {
+  const vue = derniereVue(tablette) || enMillis(tablette.joinedAt);
+  const delai = jours === undefined ? PAS_VUE_MS : joursPasVue(jours) * JOUR_MS;
+  return Boolean(vue) && maintenant - vue > delai;
+}
+
+// Due si aucune tablette ne l'a vue ni sentie depuis le délai de la famille (jours), et qu'au moins une tablette répond :
 // une tablette hors ligne (box ou prise coupée) a déjà valu l'alerte « ne répond plus » aux responsables,
 // inutile d'inquiéter en plus (D2, Tanguy 2026-10-27).
-function alertePasVueDue(tablettes, maintenant) {
+function alertePasVueDue(tablettes, maintenant, jours) {
   if (!tablettes.length) return false;
-  if (tablettes.some((t) => !pasVueDepuisLongtemps(t, maintenant))) return false;
+  if (tablettes.some((t) => !pasVueDepuisLongtemps(t, maintenant, jours))) return false;
   // Le compte d'appels de la tablette ne donne jamais de nouvelles : seules celles qui en ont donné comptent.
   return tablettes.some((t) => enMillis(t.lastOnline) && etatAlerte(t, maintenant) !== 'silence');
 }
@@ -223,21 +254,18 @@ exports.alerteMatin = async () => {
     const docsTablettes = membres.docs.filter((m) => m.get('role') === 'tablette');
     const idsTablettes = docsTablettes.map((t) => t.id);
     const tablettes = docsTablettes.map((t) => t.data());
-    if (!alertePasVueDue(tablettes, maintenant)) continue;
+    const jours = joursPasVue(famille.alertePasVueJours);
+    if (!alertePasVueDue(tablettes, maintenant, jours)) continue;
     // Épisode = dernier signe de vie connu : déjà prévenu pour celui-ci, on attend qu'elle soit revue.
     const depuis = Math.max(0, ...tablettes.map((t) => derniereVue(t) || 0));
     if (famille.alertePasVue && enMillis(famille.alertePasVue.depuis) === depuis) continue;
     const responsables = [...new Set([famille.createdBy, ...(famille.admins || [])].filter(Boolean))];
     const nom = famille.name || 'Mamie';
     try {
-      const n = await envoyer(db, fam.id, responsables, {
-        type: 'alerte',
-        titre: `${nom} n'a pas été vue depuis deux jours`,
-        texte: "La tablette ne l'a ni vue ni sentie depuis 48 heures. Un petit appel pour prendre des nouvelles ?",
-      }, 6 * 3600);
+      const n = await envoyer(db, fam.id, responsables, { type: 'alerte', ...messagePasVue(nom, jours) }, 6 * 3600);
       await fam.ref.update({ alertePasVue: { le: new Date(maintenant), depuis: new Date(depuis) }, alerteMatinLe: FieldValue.delete() });
       await journal.noter(db, { genre: 'pas-vue', fid: fam.id, tablette: idsTablettes.length === 1 ? idsTablettes[0] : null, telephones: n });
-      logger.info(`Famille ${fam.id} : pas vue depuis deux jours, ${n} téléphone(s)`);
+      logger.info(`Famille ${fam.id} : pas vue depuis ${joursTexte(jours)}, ${n} téléphone(s)`);
     } catch (e) {
       logger.error(`Famille ${fam.id} : alerte « pas vue » non envoyée`, e.message);
     }
@@ -252,3 +280,6 @@ exports.alertePasVueDue = alertePasVueDue;
 exports.HORAIRE_PAS_VUE = HORAIRE_PAS_VUE;
 exports.numeroInconnu = numeroInconnu;
 exports.PAS_VUE_MS = PAS_VUE_MS;
+exports.joursPasVue = joursPasVue;
+exports.messagePasVue = messagePasVue;
+exports.JOURS_PAS_VUE_DEFAUT = JOURS_PAS_VUE_DEFAUT;

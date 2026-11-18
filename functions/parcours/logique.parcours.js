@@ -484,7 +484,7 @@ test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tan
   await enLigne();
   await s.tache('alerteMatin');
   assert.strictEqual(alertes().length, 1, 'plus de 48 h : alerte');
-  assert.match(alertes()[0].titre, /pas été vue depuis deux jours/);
+  assert.match(alertes()[0].titre, /pas été vue depuis 2 jours/, 'sans réglage : 2 jours');
   assert.deepStrictEqual(alertes()[0].uids, [julie.uid], 'aux responsables seulement, pas à Marc');
   s.avancer(1);
   await enLigne();
@@ -505,6 +505,34 @@ test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tan
   s.avancer(3);
   await s.tache('alerteMatin');
   assert.strictEqual(alertes().length, 2, 'hors ligne : rien');
+});
+
+test('délai « pas vue » réglé par la famille (1 à 5 jours) : 1 jour prévient dès le lendemain, 4 jours attend', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const { fid, t } = await familleAbonnee(paul);
+  const famille = s.db.doc(`families/${fid}`);
+  const tablette = s.db.doc(`families/${fid}/members/${t.tabletUid}`);
+  const H = 3600e3;
+  await famille.update({ alertePasVueJours: 1 });
+  await tablette.update({ lastSeen: new Date(Date.now() - 30 * H), lastOnline: new Date(Date.now()) });
+  s.notifications.length = 0;
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 1, '1 jour : 30 h sans la voir suffit');
+  assert.match(alertes()[0].titre, /pas été vue depuis 1 jour$/);
+  assert.match(alertes()[0].texte, /plus de 24 heures/);
+
+  // Nouvel épisode avec 4 jours : 3 jours sans la voir, rien ; le lendemain, l'alerte dit 4 jours.
+  await famille.update({ alertePasVueJours: 4 });
+  await tablette.update({ lastActive: new Date(Date.now()) });
+  s.avancer(3);
+  await tablette.update({ lastOnline: new Date(Date.now()) });
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 1, '4 jours : pas encore après 3 jours');
+  s.avancer(1.1);
+  await tablette.update({ lastOnline: new Date(Date.now()) });
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 2);
+  assert.match(alertes()[1].titre, /pas été vue depuis 4 jours$/);
 });
 
 test('tâches regroupées (tachesHoraires) : l\'alerte « pas vue » part à 10 h (Paris), pas à 3 h, sans erreur des autres tâches', async () => {
