@@ -25,7 +25,12 @@ jobs:
     # Ubuntu 24.04 fixé : ubuntu-latest est passé en 26.04 le 06/11 et Playwright 1.56.1 (outils/galerie)
     # n'y installe pas Chromium (« Playwright does not support chromium on ubuntu26.04-x64 »).
     runs-on: ubuntu-24.04
-    timeout-minutes: 45 # 30 + le 1er remplissage du cache Playwright (apt jusqu’à 20 min, 18/11)
+    timeout-minutes: 45
+    # Image officielle de Playwright 1.56.1 (même version que le package.json) : navigateurs et paquets système
+    # déjà dedans. L'apt des runners (110 ko/s le 18/11) prenait jusqu'à 21 min et faisait couper des jobs.
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -48,61 +53,8 @@ jobs:
           node-version: 22
       # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
       - run: npm install --no-audit --no-fund
-      # Navigateur chromium de Playwright en cache (navigateurs et paquets système .deb) : l'installation complète
-      # prenait jusqu'à 21 min (paquets apt à 110 ko/s, 18/11) et faisait couper la tâche. Cache trouvé : seulement
-      # les dépendances système (install-deps), avec les .deb déjà là. Version de Playwright + navigateur + image.
-      - name: Version de Playwright (chromium)
-        id: pw
-        run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-chromium-$ImageOS" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
-        id: pw-cache
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/.cache/apt-playwright
-          key: ${{ steps.pw.outputs.cle }}
-      - name: Installer chromium (Playwright)
-        run: |
-          if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
-          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps chromium; else npx playwright install --with-deps chromium; fi
-          mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
-      # Gardé dès l'installation finie, même si les tests échouent ensuite (le cache d'un job rouge n'était pas gardé).
-      - uses: actions/cache/save@v4
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/.cache/apt-playwright
-          key: ${{ steps.pw.outputs.cle }}
-      # Navigateur webkit de Playwright en cache (navigateurs et paquets système .deb) : l'installation complète
-      # prenait jusqu'à 21 min (paquets apt à 110 ko/s, 18/11) et faisait couper la tâche. Cache trouvé : seulement
-      # les dépendances système (install-deps), avec les .deb déjà là. Version de Playwright + navigateur + image.
-      - name: Version de Playwright (webkit)
-        id: pwwk
-        if: contains(matrix.mode, '--iphone')
-        run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-webkit-$ImageOS" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
-        id: pwwk-cache
-        if: contains(matrix.mode, '--iphone')
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/.cache/apt-playwright
-          key: ${{ steps.pwwk.outputs.cle }}
-      - name: Installer webkit (Playwright)
-        if: contains(matrix.mode, '--iphone')
-        run: |
-          if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
-          if [ "${{ steps.pwwk-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps webkit; else npx playwright install --with-deps webkit; fi
-          mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
-      # Gardé dès l'installation finie, même si les tests échouent ensuite (le cache d'un job rouge n'était pas gardé).
-      - uses: actions/cache/save@v4
-        if: contains(matrix.mode, '--iphone') && steps.pwwk-cache.outputs.cache-hit != 'true'
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/.cache/apt-playwright
-          key: ${{ steps.pwwk.outputs.cle }}
+      # Déjà dans l'image (rien n'est téléchargé) ; ne servirait que si la version du package changeait sans l'image.
+      - run: npx playwright install chromium ${{ contains(matrix.mode, '--iphone') && 'webkit' || '' }}
       - name: Balayage ${{ matrix.mode }}
         run: node galerie.js ${{ matrix.mode }} --vitrine=ici --emails=ici
       - name: Rapports
@@ -122,7 +74,12 @@ jobs:
   # Deux fois : Chromium (Chrome, Android) et WebKit (moteur de Safari, iPhone), Tanguy 17/11.
   commande-site:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35 # 15 + le 1er remplissage du cache Playwright (apt jusqu’à 20 min, 18/11)
+    timeout-minutes: 15
+    # Image officielle de Playwright 1.56.1 (même version que le package.json) : navigateurs et paquets système
+    # déjà dedans. L'apt des runners (110 ko/s le 18/11) prenait jusqu'à 21 min et faisait couper des jobs.
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -136,32 +93,7 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      # Navigateur ${{ matrix.navigateur }} de Playwright en cache (navigateurs et paquets système .deb) : l'installation complète
-      # prenait jusqu'à 21 min (paquets apt à 110 ko/s, 18/11) et faisait couper la tâche. Cache trouvé : seulement
-      # les dépendances système (install-deps), avec les .deb déjà là. Version de Playwright + navigateur + image.
-      - name: Version de Playwright (${{ matrix.navigateur }})
-        id: pw
-        run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-${{ matrix.navigateur }}-$ImageOS" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
-        id: pw-cache
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/.cache/apt-playwright
-          key: ${{ steps.pw.outputs.cle }}
-      - name: Installer ${{ matrix.navigateur }} (Playwright)
-        run: |
-          if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
-          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps ${{ matrix.navigateur }}; else npx playwright install --with-deps ${{ matrix.navigateur }}; fi
-          mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
-      # Gardé dès l'installation finie, même si les tests échouent ensuite (le cache d'un job rouge n'était pas gardé).
-      - uses: actions/cache/save@v4
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/.cache/apt-playwright
-          key: ${{ steps.pw.outputs.cle }}
+      - run: npx playwright install ${{ matrix.navigateur }}
       - name: Parcours de commande sur téléphone (${{ matrix.navigateur }})
         run: node --test commande-site.test.js
         env:

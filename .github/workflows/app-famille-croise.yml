@@ -14,6 +14,11 @@ jobs:
   app-famille:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    # Image officielle de Playwright 1.63.0 (même version que le package.json) : navigateurs et paquets système
+    # déjà dedans. L'apt des runners (110 ko/s le 18/11) prenait jusqu'à 21 min et faisait couper des jobs.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
     steps:
       - name: App famille (dlattc)
         uses: actions/checkout@v4
@@ -24,6 +29,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: .main
+      # Conteneur : le dossier appartient au runner, git (preparer.js, git archive) le refuserait sans ceci.
+      - run: git config --global --add safe.directory '*'
+        working-directory: .
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -43,34 +51,8 @@ jobs:
         working-directory: .main/functions
       - run: npm ci
         working-directory: tests/app-famille
-      # Navigateur chromium de Playwright en cache (navigateurs et paquets système .deb) : l'installation complète
-      # prenait jusqu'à 21 min (paquets apt à 110 ko/s, 18/11) et faisait couper la tâche. Cache trouvé : seulement
-      # les dépendances système (install-deps), avec les .deb déjà là. Version de Playwright + navigateur + image.
-      - name: Version de Playwright (chromium)
-        id: pw
+      - run: npx playwright install chromium
         working-directory: tests/app-famille
-        run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-chromium-$ImageOS" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
-        id: pw-cache
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/.cache/apt-playwright
-          key: ${{ steps.pw.outputs.cle }}
-      - name: Installer chromium (Playwright)
-        working-directory: tests/app-famille
-        run: |
-          if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
-          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps chromium; else npx playwright install --with-deps chromium; fi
-          mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
-      # Gardé dès l'installation finie, même si les tests échouent ensuite (le cache d'un job rouge n'était pas gardé).
-      - uses: actions/cache/save@v4
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/.cache/apt-playwright
-          key: ${{ steps.pw.outputs.cle }}
       - run: npm test
         working-directory: tests/app-famille
         env:
