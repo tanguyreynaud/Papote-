@@ -73,7 +73,7 @@ jobs:
       - name: Version de Playwright (chromium)
         id: pw
         run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-chromium-$ImageOS" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         id: pw-cache
         with:
           path: |
@@ -85,6 +85,14 @@ jobs:
           if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
           if [ "${{ steps.pw-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps chromium; else npx playwright install --with-deps chromium; fi
           mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
+      # Gardé dès l'installation finie, même si les tests échouent ensuite (le cache d'un job rouge n'était pas gardé).
+      - uses: actions/cache/save@v4
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/apt-playwright
+          key: ${{ steps.pw.outputs.cle }}
       # Navigateur webkit de Playwright en cache (navigateurs et paquets système .deb) : l'installation complète
       # prenait jusqu'à 21 min (paquets apt à 110 ko/s, 18/11) et faisait couper la tâche. Cache trouvé : seulement
       # les dépendances système (install-deps), avec les .deb déjà là. Version de Playwright + navigateur + image.
@@ -92,7 +100,7 @@ jobs:
         id: pwwk
         if: contains(matrix.mode, '--iphone')
         run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-webkit-$ImageOS" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         id: pwwk-cache
         if: contains(matrix.mode, '--iphone')
         with:
@@ -106,6 +114,14 @@ jobs:
           if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
           if [ "${{ steps.pwwk-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps webkit; else npx playwright install --with-deps webkit; fi
           mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
+      # Gardé dès l'installation finie, même si les tests échouent ensuite (le cache d'un job rouge n'était pas gardé).
+      - uses: actions/cache/save@v4
+        if: contains(matrix.mode, '--iphone') && steps.pwwk-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/apt-playwright
+          key: ${{ steps.pwwk.outputs.cle }}
       - name: Balayage ${{ matrix.mode }} ${{ matrix.variantes }}
         env:
           GESTES_VARIANTES: ${{ matrix.variantes }}
