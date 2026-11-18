@@ -112,7 +112,7 @@
     envoyer.type = 'submit';
     saisie.appendChild(zone);
     saisie.appendChild(envoyer);
-    var note = el('div', 'ps-note', 'Réponses données par une IA. Pour parler à l\'équipe Papote : ' + EMAIL);
+    var note = el('div', 'ps-note', 'Réponses données par une IA. Pour nous écrire : ' + EMAIL);
     panneau.appendChild(tete);
     panneau.appendChild(fil);
     panneau.appendChild(saisie);
@@ -209,7 +209,7 @@
           })
           .then(function () {
             form.remove();
-            var merci = 'Merci ! Votre demande est bien arrivée, nous allons vous recontacter.';
+            var merci = 'Merci ! Votre demande est bien arrivée, nous vous recontactons très vite.';
             historique.push({ role: 'user', content: '(Demande de rappel envoyée)' });
             historique.push({ role: 'assistant', content: merci });
             sauver();
@@ -238,7 +238,7 @@
       var ancien = fil.querySelector('.ps-rappeler');
       if (ancien) ancien.remove();
       if (PAGE !== 'site') return;
-      var b = el('button', 'ps-rappeler', '📞 Être rappelé par l\'équipe Papote');
+      var b = el('button', 'ps-rappeler', '📞 Être rappelé');
       b.type = 'button';
       b.onclick = function () { b.remove(); proposerRappel(); };
       fil.appendChild(b);
