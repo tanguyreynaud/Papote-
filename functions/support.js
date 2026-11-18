@@ -311,7 +311,7 @@ const BALISE_ACTION = /\[ALLER\s*:\s*([a-z]+)\s*\]/gi;
 const LIBELLES_ECRANS = [
   [/Dépanner la tablette/i, 'depanner'], [/Changer le Wi-?Fi/i, 'wifi'], [/«\s*Volumes\s*»/i, 'volumes'],
   [/Écran éteint la nuit/i, 'nuit'], [/Options de la tablette/i, 'options'],
-  [/Gérer le paiement et les factures|Résilier l[’']abonnement|Je renvoie la tablette|Annuler ma commande|Garder mon abonnement/i, 'abonnement'],
+  [/Gérer le paiement et les factures|Abonnement et paiement|Changer de moyen de paiement|Régler le paiement|Résilier l[’']abonnement|Je renvoie la tablette|Annuler ma commande|Garder mon abonnement/i, 'abonnement'],
   [/«\s*Membres\s*»|Demandes pour rejoindre/i, 'membres'], [/Inviter par e-mail/i, 'inviter'],
 ];
 function boutonsDeduits(reponse, page) {
