@@ -50,7 +50,7 @@ jobs:
         id: pw
         working-directory: tests/app-famille
         run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-chromium-$ImageOS" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         id: pw-cache
         with:
           path: |
@@ -63,6 +63,14 @@ jobs:
           if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
           if [ "${{ steps.pw-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps chromium; else npx playwright install --with-deps chromium; fi
           mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
+      # Gardé dès l'installation finie, même si les tests échouent ensuite (le cache d'un job rouge n'était pas gardé).
+      - uses: actions/cache/save@v4
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/apt-playwright
+          key: ${{ steps.pw.outputs.cle }}
       - run: npm test
         working-directory: tests/app-famille
         env:
