@@ -36,6 +36,8 @@
 //   quota*             plafonds de stockage par famille appliqués par le serveur (quota.js)
 //   gestion*           page de gestion admin : stock, commandes, factures, comptabilité (gestion.js)
 //   brevoWebhook       Brevo prévient ici d'un e-mail perdu (adresse fausse, boîte pleine, bloqué…) : courriels-perdus.js
+//   declarationChat    POST depuis la bulle d'aide de l'appli (connectée) : casse, chargeur, vol, colis, panne, photos jointes (declaration.js)
+//   gestionDeclarations appel depuis l'admin : liste des déclarations, photos, « traitée » (declaration.js)
 //   iaAdmin            appel depuis l'admin (#aide) : « que faire si… » avec le guide et l'état du parc, sans rien faire (ia-admin.js)
 //
 // État écrit sur families/{fid}.abonnement (voir abonnement.js), avec rev + 1 pour que la
@@ -2884,6 +2886,10 @@ const support = require('./support');
 exports.supportChat = support.supportChat;
 // IA de l'admin (page #aide) : répond avec le guide et l'état du parc lu en direct, n'agit jamais (ia-admin.js).
 exports.iaAdmin = require('./ia-admin').iaAdmin;
+// Déclaration guidée depuis la bulle d'aide de l'appli (casse, chargeur, vol, colis, panne), photos jointes ; vue admin.
+const declaration = require('./declaration');
+exports.declarationChat = declaration.declarationChat;
+exports.gestionDeclarations = declaration.gestionDeclarations;
 
 // Tablette volée ou perdue : un seul geste coupe son identité (ordre verrouiller/usine, fiches membre, comptes Auth,
 // clé App Check, fiche stock « perdue »). Admin seulement. Détail et ordre des étapes : tablette-volee.js.
