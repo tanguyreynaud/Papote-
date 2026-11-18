@@ -24,16 +24,19 @@ function fonctions() {
   }
   const sha = run('git rev-parse origin/main');
   const deja = fs.existsSync(marque) && fs.readFileSync(marque, 'utf8').trim() === sha
-    && fs.existsSync(path.join(dossier, 'functions', 'node_modules'));
+    && fs.existsSync(path.join(dossier, 'functions', 'node_modules'))
+    && fs.existsSync(path.join(dossier, 'vitrine'));
   if (deja) {
     console.log(`Fonctions de main ${sha.slice(0, 7)} déjà prêtes.`);
     return;
   }
   console.log(`Fonctions de main ${sha.slice(0, 7)} : extraction et installation…`);
   fs.rmSync(path.join(dossier, 'functions'), { recursive: true, force: true });
+  fs.rmSync(path.join(dossier, 'vitrine'), { recursive: true, force: true });
   fs.mkdirSync(dossier, { recursive: true });
-  // git archive | tar : tar existe aussi sous Windows 10 et plus.
-  run(`git archive --format=tar -o "${path.join(dossier, 'functions.tar')}" ${sha} functions`);
+  // git archive | tar : tar existe aussi sous Windows 10 et plus. vitrine/ : la bulle d'aide (chat-support.js et
+  // chat-declaration.js), servie par mapapote.fr dans l'app (scenarios/declaration.test.js).
+  run(`git archive --format=tar -o "${path.join(dossier, 'functions.tar')}" ${sha} functions vitrine`);
   run(`tar -xf functions.tar`, dossier);
   fs.rmSync(path.join(dossier, 'functions.tar'));
   execSync('npm ci --no-audit --no-fund', { cwd: path.join(dossier, 'functions'), stdio: 'inherit' });
