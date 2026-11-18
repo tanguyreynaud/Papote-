@@ -43,8 +43,26 @@ jobs:
         working-directory: .main/functions
       - run: npm ci
         working-directory: tests/app-famille
-      - run: npx playwright install --with-deps chromium
+      # Navigateur chromium de Playwright en cache (navigateurs et paquets système .deb) : l'installation complète
+      # prenait jusqu'à 21 min (paquets apt à 110 ko/s, 18/11) et faisait couper la tâche. Cache trouvé : seulement
+      # les dépendances système (install-deps), avec les .deb déjà là. Version de Playwright + navigateur + image.
+      - name: Version de Playwright (chromium)
+        id: pw
         working-directory: tests/app-famille
+        run: echo "cle=playwright-$(node -p "require('playwright/package.json').version")-chromium-$ImageOS" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/apt-playwright
+          key: ${{ steps.pw.outputs.cle }}
+      - name: Installer chromium (Playwright)
+        working-directory: tests/app-famille
+        run: |
+          if [ -d ~/.cache/apt-playwright ]; then sudo cp ~/.cache/apt-playwright/*.deb /var/cache/apt/archives/ 2>/dev/null || true; fi
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = true ]; then npx playwright install-deps chromium; else npx playwright install --with-deps chromium; fi
+          mkdir -p ~/.cache/apt-playwright && cp /var/cache/apt/archives/*.deb ~/.cache/apt-playwright/ 2>/dev/null || true
       - run: npm test
         working-directory: tests/app-famille
         env:
