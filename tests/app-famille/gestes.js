@@ -409,8 +409,14 @@ async function centre(t, selecteur) {
     // Un ancêtre sous le doigt : l'élément ne prend pas le toucher (pointer-events: none, bouton qui travaille).
     return !d || e === d || e.contains(d) || d.contains(e) ? null : `${d.tagName.toLowerCase()}${d.id ? `#${d.id}` : ''}${d.className && typeof d.className === 'string' ? `.${d.className.trim().split(/\s+/).join('.')}` : ''}`;
   });
+  // Un toast (petit message, 2,5 s) posé sur le bouton : le proche attend qu'il parte, le test aussi (vu dans WebKit
+  // le 18/11 : « Merci de rester avec Papote » au-dessus de « Résilier l'abonnement » juste après la fenêtre fermée).
+  const sousToast = async () => /^p#toast\b/.test(await dessus() || '')
+    && t.page.locator('#toast').waitFor({ state: 'hidden', timeout: 5_000 }).then(() => true, () => false);
+  await sousToast();
   if (await dessus()) {
     await el.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+    await sousToast();
     const cache = await dessus();
     if (cache) throw new Error(`[${t.nom}] ${selecteur} caché par ${cache} : impossible à toucher`);
   }
