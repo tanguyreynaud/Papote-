@@ -103,3 +103,18 @@ test('accusé de réception : délai de 48 h, jamais de prénom de l\'équipe', 
 test('chaque motif a un libellé', () => {
   for (const [k, v] of Object.entries(MOTIFS)) assert.ok(v.libelle, k);
 });
+
+test('repère « déclaration envoyée » de la bulle reconnu par le serveur, pour chaque motif', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { etatMain } = require('./support')._test;
+  const source = fs.readFileSync(path.join(__dirname, '..', 'vitrine', 'chat-declaration.js'), 'utf8');
+  const fenetre = {};
+  new Function('window', 'document', source)(fenetre, {});
+  const repere = source.match(/content: ('\(Déclaration « ' \+ m\.libelle[^;]*?envoyée\)')/);
+  assert.ok(repere, 'repère trouvé dans la bulle');
+  const fabriquer = new Function('m', `return ${repere[1]};`);
+  for (const m of fenetre.PapoteDeclaration._motifs) {
+    assert.strictEqual(etatMain([{ role: 'user', content: 'Écran cassé' }, { role: 'user', content: fabriquer(m) }]), 'envoyee', m.libelle);
+  }
+});
