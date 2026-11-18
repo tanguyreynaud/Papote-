@@ -130,3 +130,45 @@ test('« pas vue depuis deux jours » part chaque jour à 10 h (Paris), hors des
   assert.strictEqual(enVeille(undefined, Date.parse('2026-10-29T09:00:00Z')), false);
   assert.strictEqual(enVeille({ active: true, de: 23, a: 12 }, Date.parse('2026-10-29T09:00:00Z')), false);
 });
+
+test('délai « pas vue » réglé par la famille : entier de 1 à 5 jours, 2 par défaut, toute valeur bizarre ramenée', () => {
+  const { joursPasVue } = require('./alertes');
+  assert.strictEqual(joursPasVue(undefined), 2);
+  assert.strictEqual(joursPasVue(null), 2);
+  assert.strictEqual(joursPasVue('3'), 2, 'texte : défaut');
+  assert.strictEqual(joursPasVue(NaN), 2);
+  assert.strictEqual(joursPasVue(Infinity), 2);
+  assert.strictEqual(joursPasVue(true), 2);
+  for (const n of [1, 2, 3, 4, 5]) assert.strictEqual(joursPasVue(n), n);
+  assert.strictEqual(joursPasVue(0), 1, 'trop petit : 1');
+  assert.strictEqual(joursPasVue(-4), 1);
+  assert.strictEqual(joursPasVue(12), 5, 'trop grand : 5');
+  assert.strictEqual(joursPasVue(2.6), 3, 'décimal : arrondi');
+});
+
+test('délai « pas vue » de 1, 3 ou 5 jours : la tablette compte le bon nombre de jours', () => {
+  const vue = (h) => ({ lastSeen: new Date(midi - h * H) });
+  assert.strictEqual(pasVueDepuisLongtemps(vue(23), midi, 1), false);
+  assert.strictEqual(pasVueDepuisLongtemps(vue(25), midi, 1), true, '1 jour : plus de 24 h suffit');
+  assert.strictEqual(pasVueDepuisLongtemps(vue(49), midi, 3), false, '3 jours : 49 h, pas encore');
+  assert.strictEqual(pasVueDepuisLongtemps(vue(73), midi, 3), true);
+  assert.strictEqual(pasVueDepuisLongtemps(vue(119), midi, 5), false);
+  assert.strictEqual(pasVueDepuisLongtemps(vue(121), midi, 5), true);
+  assert.strictEqual(pasVueDepuisLongtemps(vue(49), midi, 'n importe quoi'), true, 'réglage illisible : 2 jours');
+  assert.strictEqual(pasVueDepuisLongtemps(vue(49), midi, 99), false, 'réglage trop grand : 5 jours');
+  const enLigne = new Date(midi - MIN);
+  assert.strictEqual(alertePasVueDue([{ ...vue(30), lastOnline: enLigne }], midi, 1), true);
+  assert.strictEqual(alertePasVueDue([{ ...vue(30), lastOnline: enLigne }], midi), false, 'sans réglage : 2 jours');
+  assert.strictEqual(alertePasVueDue([{ ...vue(80), lastOnline: enLigne }], midi, 4), false);
+});
+
+test('texte de l\'alerte « pas vue » : le nombre de jours choisi, « 1 jour » au singulier', () => {
+  const { messagePasVue } = require('./alertes');
+  assert.deepStrictEqual(messagePasVue('Mamie Jeanne', 1), {
+    titre: "Mamie Jeanne n'a pas été vue depuis 1 jour",
+    texte: "La tablette ne l'a ni vue ni sentie depuis plus de 24 heures. Un petit appel pour prendre des nouvelles ?",
+  });
+  assert.strictEqual(messagePasVue('Mamie', 2).titre, "Mamie n'a pas été vue depuis 2 jours");
+  assert.strictEqual(messagePasVue('Mamie', 3).titre, "Mamie n'a pas été vue depuis 3 jours");
+  assert.match(messagePasVue('Mamie', 5).texte, /plus de 120 heures/);
+});
