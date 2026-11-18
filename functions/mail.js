@@ -339,7 +339,7 @@ function listeAttenteConfirmee({ prenom, telephone, desinscription }) {
   return message('C\'est noté : nous vous prévenons dès qu\'une tablette est prête', [
     bonjour(prenom),
     'Toutes nos tablettes sont parties, nous en préparons de nouvelles. Dès que l\'une d\'elles est prête pour vous, vous recevez un e-mail avec le lien pour commander.',
-    telephone ? `Vous nous avez aussi laissé le <b>${echapper(telephone)}</b> : Tanguy vous appelle directement si c\'est plus simple.` : null,
+    telephone ? `Vous nous avez aussi laissé le <b>${echapper(telephone)}</b> : nous vous appelons directement si c\'est plus simple.` : null,
     { fiche: FICHE_OFFRE },
     'En attendant, votre proche n\'a rien à préparer : la tablette arrive configurée, prête à brancher.',
   ], { texte: 'Découvrir Papote', lien: SITE }, {
@@ -948,7 +948,7 @@ function rappelConfirme({ nom, telephone }) {
   return message('Bien reçu : nous vous rappelons', [
     bonjour(nom),
     `Votre demande est bien arrivée${telephone ? ` : nous vous rappelons au <b>${echapper(telephone)}</b>` : ''}, en général dans la journée (du lundi au samedi).`,
-    'C\'est Tanguy, qui prépare les tablettes lui-même, qui vous appelle. Si c\'est plus simple, répondez à cet e-mail avec votre question.',
+    'C\'est l\'équipe Papote, qui prépare les tablettes, qui vous appelle. Si c\'est plus simple, répondez à cet e-mail avec votre question.',
   ], { texte: 'Découvrir Papote', lien: SITE });
 }
 

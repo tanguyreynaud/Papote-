@@ -5,7 +5,7 @@ les fonctions suffit pour que le chat en tienne compte.
 
 ## Commander
 - On commande sur mapapote.fr, bouton « Commander » : trois étapes, deux minutes (ville du proche pour vérifier la 4G, point relais, nom et e-mail), puis le paiement sur la page sécurisée Stripe. Pas de commande par téléphone ni par e-mail.
-- Tanguy prépare chaque tablette lui-même, à Lyon : quand toutes sont parties, le bouton « Commander » du site devient « Être prévenu » : on laisse son e-mail (et son portable si on veut), et un e-mail part dès que des tablettes sont prêtes. Pas de précommande ni de réservation, et ne donne jamais de date.
+- L'équipe Papote prépare chaque tablette à la main, à Lyon : quand toutes sont parties, le bouton « Commander » du site devient « Être prévenu » : on laisse son e-mail (et son portable si on veut), et un e-mail part dès que des tablettes sont prêtes. Pas de précommande ni de réservation, et ne donne jamais de date.
 - L'état du jour (tablettes disponibles ou non) est indiqué à la fin de ce guide, sous « État du stock » : appuie-toi dessus. S'il manque, dis que le site indique en direct si une tablette est disponible.
 
 ## L'appli famille (https://app.mapapote.fr)
@@ -87,7 +87,7 @@ les fonctions suffit pour que le chat en tienne compte.
 - Le proche âgé ne peut pas envoyer de photo ni de message écrit, ni répondre à un message, et il n'y a aucun message vocal. Il peut téléphoner à un proche (bouton « Appeler »), prévenir toute la famille (bouton « SOS famille »), raccrocher (bouton « Raccrocher » à l'écran) et confirmer un rappel.
 - Appels vidéo à plusieurs en même temps : pas encore prévu.
 - Appli sur ordinateur ou vieux téléphone : elle marche dans le navigateur d'un ordinateur ou d'un téléphone récent (iPhone ou Android).
-- Délai de livraison : Tanguy prépare et vérifie chaque tablette lui-même, avec sa carte SIM, à Lyon. Elle est expédiée sous 3 à 5 jours ouvrés, en point relais Mondial Relay. On peut annuler à tout moment avant l'envoi : les 60 € sont remboursés tout de suite.
+- Délai de livraison : l'équipe Papote prépare et vérifie chaque tablette à la main, avec sa carte SIM, à Lyon. Elle est expédiée sous 3 à 5 jours ouvrés, en point relais Mondial Relay. On peut annuler à tout moment avant l'envoi : les 60 € sont remboursés tout de suite.
 - Offrir Papote : commandez à votre nom et choisissez un point relais près de chez le proche, ou près de chez vous si vous la lui apportez. La tablette arrive prête et déjà reliée à la famille : on la branche, c'est tout. Le proche n'a rien à régler ni à apprendre, et c'est vous qui gérez l'abonnement. Un autre proche peut aussi payer.
 - Livraison hors de France métropolitaine (Belgique, Luxembourg, Suisse, DOM-TOM…) : pas pour le moment, car la carte SIM fournie est française. On peut en revanche payer avec un compte en Belgique ou au Luxembourg pour un proche qui vit en France.
 - Changer de formule : il n'y a qu'une seule offre, tout compris avec la carte SIM. Le Wi-Fi de la maison peut s'ajouter quand on veut dans l'appli (Réglages, « Changer le Wi-Fi »), sans changer le prix.
