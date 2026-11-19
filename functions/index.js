@@ -2997,6 +2997,8 @@ exports.jetonInstallation = onCall({ maxInstances: 2 }, installationQr.jetonInst
 exports.inscrireTablette = onCall({ maxInstances: 2 }, installationQr.inscrireTablette);
 exports.annulerInstallation = onCall({ timeoutSeconds: 300, memory: '512MiB', maxInstances: 2 }, installation.annulerInstallation);
 
+const jumelagePush = require('./jumelage-push');
+
 // Famille préparée dès la commande (famille-preparee.js) : la tablette affiche son code, le serveur la fait
 // entrer dans la famille de sa commande sans que personne ne scanne. gestionJumelage met ensuite sa fiche à jour.
 exports.jumelageAutomatique = onDocumentCreated(
@@ -3006,14 +3008,21 @@ exports.jumelageAutomatique = onDocumentCreated(
     // Nouveau code d'une tablette à qui un ordre « carte SIM » n'a pas encore été exécuté : l'ordre y est recopié.
     await gestion.simTablette().reporter(event.data.ref, event.data.data())
       .catch((e) => logger.error(`Carte SIM : ordre non reporté sur ${event.params.code}`, e.message));
+    // Réveil de la tablette (jumelage-push.js) : elle relit son code tout de suite, et sait que les réveils arrivent.
+    await jumelagePush.prevenir(event.params.code, event.data.data(), { logger });
   });
 
-// Résultat du test de la carte SIM écrit par la tablette dans son code (pairings/{code}.simTest) : recopié sur sa
+// Modification du code d'une tablette : réveil de la tablette si ça la concerne (jumelage-push.js), puis
+// résultat du test de la carte SIM écrit par la tablette dans son code (pairings/{code}.simTest) : recopié sur sa
 // fiche du stock (stock/{id}.simTest, avec le verdict), que l'admin relit (sim-installation.js).
 exports.simInstallation = onDocumentUpdated(
   { document: 'pairings/{code}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },
   async (event) => {
     const apres = event.data.after.data();
+    // Famille prête ou nouvel ordre de l'admin : la tablette est prévenue, elle ne relit plus son code en boucle.
+    if (apres && jumelagePush.doitPrevenir(event.data.before.data(), apres)) {
+      await jumelagePush.prevenir(event.params.code, apres, { logger });
+    }
     if (!apres || !apres.simTest) return;
     await gestion.simTablette().copier(event.params.code, event.data.before.data(), apres);
   });
