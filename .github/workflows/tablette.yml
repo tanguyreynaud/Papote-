@@ -14,7 +14,8 @@ on:
 jobs:
   scenarios:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # 176 scénarios ≈ 27 à 31 min sur le runner (19/11) : 30 min coupait la fin de la suite (annulée, pas rouge).
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
