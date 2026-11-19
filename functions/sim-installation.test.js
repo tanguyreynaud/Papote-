@@ -223,3 +223,45 @@ test('refusSimNonTestee : test fait avec appel, l\'envoi demande aussi le SMS et
   assert.match(m.refusSimNonTestee(fiche({ avecAppel: true, sms: null, appel: null }), ligne), /testez à nouveau/);
   assert.strictEqual(m.refusSimNonTestee(fiche({ avecAppel: false }), ligne), '', 'test sans numéro d\'essai : comme avant');
 });
+
+// Répondeur de la ligne de la tablette (##002#, Tanguy 19/11) : affiché, ne bloque jamais l'envoi.
+test('resultatPropre : répondeur recopié, validé et borné', () => {
+  const r = m.resultatPropre({ ...resultat(), repondeur: { ok: true, essais: 1.2, x: 1 } });
+  assert.deepStrictEqual(r.repondeur, { ok: true, essais: 1, raison: null });
+  assert.deepStrictEqual(m.resultatPropre({ ...resultat(), repondeur: { ok: 'oui', essais: 99, raison: 'autre' } }).repondeur, { ok: false, essais: 10, raison: null });
+  assert.deepStrictEqual(m.resultatPropre({ ...resultat(), repondeur: { ok: false, essais: 2, raison: 'refuse' } }).repondeur, { ok: false, essais: 2, raison: 'refuse' });
+  assert.strictEqual(m.resultatPropre(resultat()).repondeur, null);
+});
+
+test('verdict : répondeur coupé, en cours, refusé par l\'opérateur, appli trop vieille ; jamais bloquant', () => {
+  const coupe = v(resultat({ repondeur: { ok: true, essais: 1 } }));
+  assert.strictEqual(coupe.ok, true);
+  assert.strictEqual(coupe.repondeur.ok, true);
+  assert.match(coupe.repondeur.message, /Répondeur de la ligne coupé/);
+
+  const enCours = v(resultat());
+  assert.strictEqual(enCours.ok, true, 'la carte reste bonne pendant que le répondeur se coupe');
+  assert.strictEqual(enCours.repondeur.attente, true);
+
+  const vieux = v(resultat(), { maintenant: T0 + 5000 + m.REPONDEUR_MS + 1 });
+  assert.strictEqual(vieux.repondeur.attente, false);
+  assert.match(vieux.repondeur.message, /mettez à jour l'appli Papote/);
+
+  const refuse = v(resultat({ repondeur: { ok: false, essais: 1, raison: 'refuse' } }));
+  assert.strictEqual(refuse.ok, true, 'un refus de l\'opérateur ne bloque pas l\'envoi');
+  assert.match(refuse.repondeur.message, /espace client/);
+  assert.match(v(resultat({ repondeur: { ok: false, essais: 2, raison: 'delai' } })).repondeur.message, /réessaiera toute seule/);
+  assert.match(v(resultat({ repondeur: { ok: false, essais: 0, raison: 'sans-permission' } })).repondeur.message, /autorisation Téléphone/);
+
+  for (const raison of [...m.RAISONS_REPONDEUR, null]) {
+    const msg = m.etatRepondeur({ repondeur: { ok: false, raison } }, T0).message;
+    assert.doesNotMatch(msg, /urgent|danger|erreur grave|panne/i, raison);
+  }
+  // Carte pas inscrite : la tablette n'essaie pas, rien à dire sur le répondeur.
+  assert.strictEqual(v(resultat({ etat: 'sans-reseau', inscrite: false })).repondeur, null);
+});
+
+test('refusSimNonTestee : un répondeur pas coupé ne bloque pas l\'envoi', () => {
+  const fiche = { ref: 'T-009', simId: 's1', simTest: { ...m.resultatPropre(resultat({ repondeur: { ok: false, essais: 2, raison: 'refuse' } })), le: Date.now(), ok: true, simAttendue: ICCID } };
+  assert.strictEqual(m.refusSimNonTestee(fiche, { iccid: ICCID }), '');
+});
