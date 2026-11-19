@@ -225,7 +225,7 @@ function toast(text, duree = 2500) {
 
 // Seul le code famille fait entrer ici (le numéro de commande ne sert plus à entrer : A53, Tanguy 16/11 ; celui qui a
 // payé entre par son invitation ou le lien de l'e-mail de confirmation). Un seul appel à la fois (double appui).
-const CODE_INCONNU = 'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à un responsable de vous inviter.';
+const CODE_INCONNU = 'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à la personne qui vous l’a envoyé de vous inviter.';
 $('form-join').addEventListener('submit', async (e) => {
   e.preventDefault();
   const button = e.target.querySelector('button[type=submit]');
@@ -233,6 +233,7 @@ $('form-join').addEventListener('submit', async (e) => {
   button.disabled = true;
   const libelle = button.textContent;
   button.textContent = 'Un instant…';
+  const debutJoin = Date.now();
   showError($('join-error'), '');
   const code = normalizeCode($('join-code').value);
   const pour = inviteCode() ? invitePour() : null;
@@ -245,6 +246,9 @@ $('form-join').addEventListener('submit', async (e) => {
     demandeEnvoyee = { fid: fidRejoint, pour };
     await enterApp();
   } catch (err) {
+    // Réponse immédiate (code refusé) : « Un instant… » restait invisible et un 2e appui semblait ne rien faire
+    // (banc d'utilisateurs du 19/11). Il reste au moins 0,6 s avant que le message revienne.
+    await new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - debutJoin))));
     if (err instanceof CodeInconnuError) {
       console.warn('Code refusé');
       // Code venu d'un lien : il était caché ; on le montre pour qu'il puisse être corrigé.
@@ -258,6 +262,8 @@ $('form-join').addEventListener('submit', async (e) => {
     button.textContent = libelle;
   }
 });
+// Le code est retouché : l'ancien message d'erreur s'en va.
+$('join-code').addEventListener('input', () => { if (!$('join-error').hidden) showError($('join-error'), ''); });
 
 // ---------- Navigation : l'accueil et une page par type d'envoi ----------
 // Chaque page ouverte ajoute une entrée d'historique : le bouton retour d'Android ramène à l'écran
@@ -4012,6 +4018,8 @@ function showRemote(text, cls = '') {
   $('remote-result').textContent = text;
   $('remote-result').className = `remote-result ${cls}`;
   $('remote-result-box').hidden = !text;
+  // Le résultat est sous les boutons, parfois hors de l'écran : on l'amène sous les yeux (banc du 19/11).
+  if (text) requestAnimationFrame(() => $('remote-result-box').scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }));
 }
 
 async function sendCommand(type, extra = {}) {
@@ -4030,7 +4038,8 @@ async function sendCommand(type, extra = {}) {
     showRemote("La commande n'a pas pu être envoyée.", 'warn');
     return;
   }
-  showRemote('Envoyé, en attente de la tablette…');
+  showRemote(tabletteEnLigne() ? 'Envoyé, en attente de la tablette…'
+    : "Envoyé. La tablette est hors ligne : elle le fera dès qu'elle sera de nouveau connectée.", tabletteEnLigne() ? '' : 'warn');
   stopCommand?.();
   let timer = setTimeout(() => showRemote("La tablette n'a pas encore répondu. Elle exécutera la commande dès qu'elle sera connectée.", 'warn'), 90_000);
   stopCommand = onSnapshot(ref2, (snap) => {
@@ -4340,7 +4349,8 @@ function renderWifi() {
   $('wifi-modify').hidden = !enLigne;
   $('wifi-current').textContent = enLigne
     ? (wifiCourant() || 'Réseau actuel pas encore connu')
-    : 'Tablette hors ligne : changez le Wi-Fi directement sur la tablette, dans ses réglages.';
+    // Même diagnostic que le bandeau de l'accueil (banc du 19/11 : les deux messages se contredisaient).
+    : 'Tablette hors ligne : le Wi-Fi se change ici quand elle est connectée. Si la box ou son code a changé, réglez-le directement sur la tablette, dans ses réglages.';
 }
 
 
@@ -4365,7 +4375,10 @@ function renderRemote() {
   renderLogsButton();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
-    $('remote-tablet').textContent = online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
+    // Hors ligne : dit que les actions attendront son retour (banc du 19/11 : on croyait qu'elles agissaient tout de suite).
+    $('remote-tablet').textContent = !tabletteEnLigne()
+      ? `Tablette hors ligne${online ? ` (vue ${ago(online.getTime())})` : ''} : ces actions partiront dès qu'elle sera de nouveau connectée.`
+      : online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
   }
 }
 
@@ -4623,7 +4636,7 @@ SETTINGS['sleep-card'] = {
   },
   async save() {
     const veille = veilleChoisie($('sleep-on').checked, $('sleep-from'), $('sleep-to'));
-    await saveFamily({ veille }, 'Mise en veille enregistrée');
+    await saveFamily({ veille }, 'Écran éteint la nuit : enregistré');
     return true;
   },
 };
