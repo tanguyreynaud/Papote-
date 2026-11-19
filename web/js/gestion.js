@@ -4469,6 +4469,35 @@ function afficherCourrier() {
   );
 }
 
+// « Relever maintenant » (remis le 19/11, Tanguy) : relève factures@ tout de suite (gestionCourrierMaintenant), puis
+// relit les données pour mettre à jour le détail ci-dessus et « À faire ». Un seul relevé à la fois (double appui).
+let releveEnCours = false;
+$('btn-courrier').addEventListener('click', async () => {
+  if (releveEnCours) return;
+  releveEnCours = true;
+  const b = $('btn-courrier');
+  const etat = $('courrier-etat');
+  b.disabled = true;
+  boutonCharge(b, true);
+  etat.className = 'small muted';
+  etat.textContent = 'Relevé en cours…';
+  try {
+    const r = await appeler('gestionCourrierMaintenant');
+    donnees = await lireDonnees(true);
+    afficherTout();
+    const n = (r && r.erreurs && r.erreurs.length) || 0;
+    etat.className = n ? 'small error' : 'small muted';
+    etat.textContent = n ? `Relevé fait, ${pluriel(n, 'problème')} : détail ci-dessus.` : 'Relevé fait.';
+  } catch (e) {
+    etat.className = 'small error';
+    etat.textContent = `Relevé impossible : ${messageErreur(e)}`;
+  } finally {
+    releveEnCours = false;
+    boutonCharge(b, false);
+    b.disabled = false;
+  }
+});
+
 // ---------- Livres comptables archivés (clôture du mois) ----------
 
 // Points à vérifier dans les factures de vente du dernier mois clos (gestion/archives, fiche.controle).

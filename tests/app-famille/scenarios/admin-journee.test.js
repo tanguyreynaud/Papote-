@@ -329,3 +329,43 @@ test('admin : « problème au dernier relevé de factures@ » ouvre Dépenses su
   assert.ok(ordre.every((i) => i >= 0), `les trois dépenses sont listées : ${lignes.join(' | ')}`);
   assert.deepStrictEqual([...ordre].sort((a, b) => a - b), ordre, `plus récente en haut : ${lignes.join(' | ')}`);
 });
+
+test('admin : « Relever maintenant » sous le détail de factures@ : « Relevé en cours… », double appui = un seul relevé, détail mis à jour ; panne dite dans la page', async () => {
+  // Boîte factures@ du relevé : un port fermé de cette machine (rien ne part en ligne), la connexion est refusée
+  // tout de suite et le vrai relevé (gestionCourrierMaintenant) écrit son erreur dans gestion/courrier.
+  const avant = process.env.FACTURES_IMAP;
+  process.env.FACTURES_IMAP = '127.0.0.1:1:factures-test@exemple.fr';
+  try {
+    await s.db.doc('gestion/courrier').set({ le: Date.now() - 3600e3, rangees: [], ignorees: [], erreurs: [] });
+    const t = await ouvrirAdmin('relever', { hash: '#compta/depenses' });
+    const p = t.page;
+    const bouton = p.locator('#btn-courrier');
+    const etat = p.locator('#courrier-etat');
+    await bouton.waitFor({ state: 'visible' });
+    assert.strictEqual(await bouton.innerText(), 'Relever maintenant');
+    const hauteur = (await bouton.boundingBox()).height;
+    // Réponse retenue un instant : l'attente doit se voir.
+    await p.route('**/gestionCourrierMaintenant', async (r) => { await new Promise((ok) => setTimeout(ok, 800)); await r.continue(); });
+    await bouton.dblclick();
+    await etat.filter({ hasText: 'Relevé en cours…' }).waitFor();
+    assert.ok(await bouton.isDisabled(), 'bouton éteint pendant le relevé');
+    assert.ok(Math.abs((await bouton.boundingBox()).height - hauteur) < 1, 'même hauteur pendant le relevé');
+    await etat.filter({ hasText: /Relevé fait, 1 problème/ }).waitFor({ timeout: 20_000 });
+    assert.strictEqual(g.nbAppels('gestionCourrierMaintenant'), 1, 'double appui : un seul relevé');
+    assert.ok(!(await bouton.isDisabled()), 'bouton rallumé');
+    assert.match(await p.locator('#courrier').innerText(), /factures-test@exemple\.fr/, 'le détail montre le nouveau relevé');
+    await p.unroute('**/gestionCourrierMaintenant');
+
+    // Serveur en panne : un mot clair dans la page, le bouton revient.
+    banc.pannes.set('gestionCourrierMaintenant', { status: 'UNAVAILABLE' });
+    await bouton.click();
+    await etat.filter({ hasText: 'Relevé impossible' }).waitFor();
+    assert.match(await etat.getAttribute('class'), /error/);
+    assert.ok(!(await bouton.isDisabled()));
+    assert.strictEqual(g.nbAppels('gestionCourrierMaintenant'), 2);
+    banc.tolerer(t, /status of 503 .*gestionCourrierMaintenant/); // la panne jouée ci-dessus, voulue
+  } finally {
+    if (avant === undefined) delete process.env.FACTURES_IMAP;
+    else process.env.FACTURES_IMAP = avant;
+  }
+});
