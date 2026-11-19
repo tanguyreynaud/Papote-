@@ -19,7 +19,8 @@ import com.google.firebase.messaging.RemoteMessage;
  *   appel    un proche appelle : la page relit les appels qui sonnent (papoteReveil) ;
  *   ordre    test du son demandé par le téléphone : la page relit les ordres ;
  *   famille  la fiche de la famille a changé (envoi, rappel, réglage) : tour de synchronisation ;
- *   version  nouvelle version publiée : vérification de la mise à jour.
+ *   version  nouvelle version publiée : vérification de la mise à jour ;
+ *   jumelage tablette pas encore reliée : son code a changé (famille prête, ordre de l'admin), id = le code.
  *
  * Jeton de la tablette : families/{fid}/members/{uid}/private/push = { tablette: [jeton] } (écrit par
  * Sync avec le compte de la tablette). Sans google-services.json à la construction, Firebase n'est pas
@@ -117,6 +118,13 @@ public class Push extends FirebaseMessagingService {
         p.edit().putString("pushJeton", jeton).remove("pushJetonEcrit").remove("pushPingRecu").remove("pushPingDemande").apply();
         Journal.log(c, "Push : nouveau jeton, à écrire dans la famille");
         MainActivity.surPush("jeton", null);
+    }
+
+    /** Jeton de réveil connu (null sans services Google ou tant que Google ne l'a pas donné). */
+    static String jeton(Context c) {
+        if (!disponible(c)) return null;
+        String jeton = prefs(c).getString("pushJeton", null);
+        return jeton == null || jeton.isEmpty() ? null : jeton;
     }
 
     /** Jeton à écrire (null si déjà écrit ou inconnu). */

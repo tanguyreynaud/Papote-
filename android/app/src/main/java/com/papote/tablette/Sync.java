@@ -150,6 +150,8 @@ final class Sync {
     Sync(Context context, SharedPreferences prefs, Listener listener) {
         this.context = context.getApplicationContext();
         this.prefs = prefs;
+        // Réveil du jumelage refusé par d'anciennes règles : nouvel essai à chaque démarrage.
+        if (prefs.contains("pairingPushRefuse")) prefs.edit().remove("pairingPushRefuse").apply();
         this.firebase = new Firebase(context, prefs);
         AppCheck.setIdToken(firebase::token);
         this.http = new Http(context);
@@ -431,8 +433,13 @@ final class Sync {
             // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code. Hors ligne, Android
             // prévient du retour d'internet (watchNetwork) ; un essai par minute reste en secours.
             boolean offline = "offline".equals(lastState);
-            long delai = pairingActive() ? 4_000
+            long delai = pairingActive() ? delaiJumelage(android.os.SystemClock.elapsedRealtime() - jumelageVifDepuis, jumelagePrevenu())
                     : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : tourDuJour()) : POLL_MS;
+            // Code en attente : renouvelé à l'heure dite (15 min), même quand la relecture n'est qu'un secours.
+            if (pairingActive() && prefs.getString("pairing", null) != null) {
+                long reste = prefs.getLong("pairingExpires", 0) - System.currentTimeMillis();
+                if (reste > 0) delai = Math.min(delai, reste + 1_000);
+            }
             // Jamais au-delà de l'échéance du signal « en ligne » (batterie à jour toutes les 30 min).
             handler.postDelayed(this, Math.min(delai, avantSignal()));
         }
@@ -2693,6 +2700,53 @@ final class Sync {
     private static final long PAIRING_MS = 15 * 60_000;
     private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+    /** Tablette pas encore reliée : tour rapide pendant ce temps après la dernière activité, lent ensuite. */
+    static final long JUMELAGE_VIF_MS = 10 * 60_000;
+    static final long JUMELAGE_TOUR_VIF_MS = 4_000;
+    static final long JUMELAGE_TOUR_LENT_MS = 15_000;
+    /** Le serveur prévient la tablette (push « jumelage ») : la relecture n'est plus qu'un secours. */
+    static final long JUMELAGE_SECOURS_VIF_MS = 60_000;
+    static final long JUMELAGE_SECOURS_LENT_MS = 10 * 60_000;
+    /** Dernière activité de l'installation (démarrage, écran touché, ordre reçu), horloge depuis l'allumage. */
+    private volatile long jumelageVifDepuis = android.os.SystemClock.elapsedRealtime();
+
+    /**
+     * Écart entre deux lectures du jumelage. Une tablette oubliée allumée en stock relisait le serveur toutes
+     * les 4 s sans fin (données de la carte SIM et lectures pour rien, 19/11).
+     *   prevenue (le serveur a déjà réveillé la tablette pour ce code, donc ses réveils arrivent) : le serveur
+     *     prévient à chaque changement ; relecture de secours toutes les 60 s pendant les 10 minutes qui suivent
+     *     une activité, toutes les 10 minutes ensuite ;
+     *   sinon (pas de services Google, serveur pas à jour, réveil perdu) : 4 s puis 15 s, comme avant.
+     */
+    static long delaiJumelage(long depuisActiviteMs, boolean prevenue) {
+        boolean vif = depuisActiviteMs >= 0 && depuisActiviteMs < JUMELAGE_VIF_MS;
+        if (prevenue) return vif ? JUMELAGE_SECOURS_VIF_MS : JUMELAGE_SECOURS_LENT_MS;
+        return vif ? JUMELAGE_TOUR_VIF_MS : JUMELAGE_TOUR_LENT_MS;
+    }
+
+    private void jumelageVif() {
+        jumelageVifDepuis = android.os.SystemClock.elapsedRealtime();
+    }
+
+    /** Le serveur a déjà réveillé la tablette pour le code affiché : ses réveils arrivent. */
+    private boolean jumelagePrevenu() {
+        String code = prefs.getString("pairing", null);
+        return code != null && code.equals(prefs.getString("pairingPushVu", null));
+    }
+
+    /**
+     * Réveil « jumelage » du serveur (Push) : le code de la tablette a changé (famille prête, ordre de l'admin),
+     * ou vient d'être créé (premier réveil, qui prouve que les réveils arrivent). Relecture tout de suite.
+     */
+    void jumelageReveil(String code) {
+        handler.post(() -> {
+            if (!pairingActive()) return;
+            String mien = prefs.getString("pairing", null);
+            if (mien != null && mien.equals(code)) prefs.edit().putString("pairingPushVu", mien).apply();
+            poke();
+        });
+    }
+
     boolean pairingActive() {
         return prefs.getString("fid", null) == null && prefs.getString("code", null) == null;
     }
@@ -2700,6 +2754,7 @@ final class Sync {
     void wifiDone() {
         handler.post(() -> {
             prefs.edit().putBoolean("wifiDone", true).apply();
+            jumelageVif();
             poke();
         });
     }
@@ -2879,6 +2934,7 @@ final class Sync {
             if (toStart) prefs.edit().remove("wifiDone").remove("bienvenueVue").apply();
             else if (prefs.getBoolean("wifiDone", false)) prefs.edit().remove("wifiDone").apply();
             else prefs.edit().remove("bienvenueVue").apply();
+            jumelageVif();
             poke();
         });
     }
@@ -2887,13 +2943,14 @@ final class Sync {
     void welcomeSeen() {
         handler.post(() -> {
             prefs.edit().putBoolean("bienvenueVue", true).apply();
+            jumelageVif();
             poke();
         });
     }
 
     // ---------- « Installer la carte SIM » (admin, préparation de l'envoi, 13/11) ----------
     // Le serveur pose pairings/{code}.ordre = {id, type: simTest | simPin} ; la tablette, qui relit son
-    // pairing toutes les 4 s, l'exécute une fois par id et répond dans pairings/{code}.simTest.
+    // pairing dès que le serveur la réveille (push « jumelage ») ou, sans réveil, toutes les 4 s, l'exécute une fois par id et répond dans pairings/{code}.simTest.
 
     private void ordreSim(String code, JSONObject f) {
         try {
@@ -2912,6 +2969,7 @@ final class Sync {
             }
             if (id == null || id.isEmpty() || id.equals(prefs.getString("simOrdreFait", ""))) return;
             prefs.edit().putString("simOrdreFait", id).apply();
+            jumelageVif(); // quelqu'un prépare la tablette depuis l'admin : réponses rapides
             Journal.log(context, "Installer la carte SIM : ordre " + type + " (" + id + ")");
             if ("simPin".equals(type)) {
                 prefs.edit().putString("simPinOrdre", id).putString("simPinCode", code)
@@ -3024,6 +3082,16 @@ final class Sync {
         }
     }
 
+    private static JSONObject ecritureJumelage(String code, JSONObject fields) throws JSONException {
+        return new JSONObject()
+                .put("update", new JSONObject()
+                        .put("name", Firebase.docName("pairings/" + code))
+                        .put("fields", fields))
+                .put("updateTransforms", new JSONArray().put(new JSONObject()
+                        .put("fieldPath", "createdAt").put("setToServerValue", "REQUEST_TIME")))
+                .put("currentDocument", new JSONObject().put("exists", false));
+    }
+
     private String newPairing(String name) {
         java.security.SecureRandom rnd = new java.security.SecureRandom();
         StringBuilder sb = new StringBuilder();
@@ -3042,14 +3110,20 @@ final class Sync {
             // N° de série : le serveur reconnaît la tablette préparée et relie sa commande à la famille.
             String serie = serialNumber();
             if (serie != null) fields.put("serie", Firebase.string(serie));
-            JSONObject write = new JSONObject()
-                    .put("update", new JSONObject()
-                            .put("name", Firebase.docName("pairings/" + code))
-                            .put("fields", fields))
-                    .put("updateTransforms", new JSONArray().put(new JSONObject()
-                            .put("fieldPath", "createdAt").put("setToServerValue", "REQUEST_TIME")))
-                    .put("currentDocument", new JSONObject().put("exists", false));
-            firebase.commit(new JSONArray().put(write));
+            // Jeton de réveil : le serveur prévient la tablette quand son code change, au lieu qu'elle le relise
+            // sans arrêt. Règles pas encore à jour (champ refusé) : le même code sans le jeton, comme avant.
+            String jeton = prefs.getBoolean("pairingPushRefuse", false) ? null : Push.jeton(context);
+            if (jeton != null) fields.put("push", Firebase.string(jeton));
+            try {
+                firebase.commit(new JSONArray().put(ecritureJumelage(code, fields)));
+            } catch (Firebase.ApiException e) {
+                if (jeton == null || e.code != 403) throw e;
+                fields.remove("push");
+                firebase.commit(new JSONArray().put(ecritureJumelage(code, fields)));
+                // Réussi sans le jeton : c'est bien lui que les règles refusent. On ne réessaie qu'au prochain démarrage.
+                prefs.edit().putBoolean("pairingPushRefuse", true).apply();
+                Journal.log(context, "Jumelage : le serveur ne connaît pas encore le réveil, relecture comme avant");
+            }
             prefs.edit().putString("pairing", code).putLong("pairingExpires", expires).apply();
             return code;
         } catch (Exception e) {

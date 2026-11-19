@@ -3501,6 +3501,8 @@
     onFamilyLost: function () { if (window.papoteAppelsForget) window.papoteAppelsForget(); },
     // Réveil par le serveur (Push.java) : un proche appelle, un ordre, la famille a changé.
     onPush: function (p) { if (window.papoteReveil) window.papoteReveil(p && p.type, p && p.id); },
+    // Jeton App Check : Android a fini de chercher un jeton neuf (réussi ou non), appels.js le relit.
+    onAppCheck: function () { if (window.papoteAppCheckPret) window.papoteAppCheckPret(); },
     // Appels par la carte SIM (AppelGsm.java) ; gsmEnCours : appels.js refuse une visio pendant ce temps.
     onGsm: onGsm,
     gsmEnCours: function () { return !!gsm; },
