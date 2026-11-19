@@ -1200,6 +1200,8 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 
 .join-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .join-top .brand { margin: 0; }
+/* « Plus tard » sous « Rejoindre » : même taille que le bouton principal. */
+#join-later { justify-content: center; min-height: 54px; font-size: 16px; font-weight: 700; }
 .join-top .small-btn { flex: none; min-height: 44px; padding: 0 18px; }
 .site-link { display: flex; align-items: center; justify-content: center; text-decoration: none; margin-top: 16px; border-radius: 14px; font-weight: 600; }
 .remote-buttons .primary { min-height: 50px; }

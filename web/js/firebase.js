@@ -163,6 +163,22 @@ export async function loadMembership() {
 
 export class CodeInconnuError extends Error {}
 
+/**
+ * Famille d'un code d'invitation (lien ou QR code), sans la rejoindre : l'id de la famille, null si le code ne
+ * correspond à aucune famille (ou est celui d'une tablette), undefined si la base n'a pas pu être lue (réseau).
+ */
+export async function familleDuCode(rawCode) {
+  const code = normalizeCode(rawCode || '');
+  if (!code) return null;
+  try {
+    const invite = await getDoc(doc(db, 'invites', code));
+    if (!invite.exists() || invite.data().kind === 'tablette') return null;
+    return invite.data().fid || null;
+  } catch (e) {
+    return undefined;
+  }
+}
+
 export async function joinFamily(rawCode, name, role = 'famille') {
   const code = normalizeCode(rawCode);
   const user = await ensureSignedIn();
