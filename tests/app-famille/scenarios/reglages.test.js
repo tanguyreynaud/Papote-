@@ -139,7 +139,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   // Dépannage : « Obtenir l'état », la tablette répond.
   await julie.page.locator('#remote-card').waitFor({ state: 'visible' });
   await julie.page.click('#remote-card [data-cmd="status"]');
-  await julie.page.locator('#remote-result', { hasText: /en attente de la tablette|elle le fera dès qu'elle sera de nouveau connectée/ }).waitFor();
+  await julie.page.locator('#remote-result', { hasText: /en attente de la tablette|elle la recevra dès qu'elle sera de nouveau connectée/ }).waitFor();
   const [cmd] = await g.attendreBase(async () => { const l = await g.liste(`families/${fid}/commands`); return l.filter((c) => c.type === 'status').length && l.filter((c) => c.type === 'status'); }, 'commande écrite');
   assert.strictEqual(cmd.state, 'pending');
   assert.ok([tab.tabletUid, tab.callsUid].includes(cmd.target));

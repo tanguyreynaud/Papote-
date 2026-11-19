@@ -225,6 +225,7 @@ function toast(text, duree = 2500) {
 
 // Seul le code famille fait entrer ici (le numéro de commande ne sert plus à entrer : A53, Tanguy 16/11 ; celui qui a
 // payé entre par son invitation ou le lien de l'e-mail de confirmation). Un seul appel à la fois (double appui).
+let dernierCodeRefuse = null;
 const CODE_INCONNU = 'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à la personne qui vous l’a envoyé de vous inviter.';
 $('form-join').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -255,7 +256,10 @@ $('form-join').addEventListener('submit', async (e) => {
       forgetInviteCode();
       $('join-code-wrap').hidden = false;
     } else console.error(err);
-    showError($('join-error'), err instanceof CodeInconnuError ? CODE_INCONNU
+    // Même code refusé une 2e fois : le message change pour montrer que l'app a bien réessayé (banc du 19/11).
+    const encore = err instanceof CodeInconnuError && dernierCodeRefuse === code;
+    if (err instanceof CodeInconnuError) dernierCodeRefuse = code;
+    showError($('join-error'), encore ? `Toujours refusé : ${CODE_INCONNU}` : err instanceof CodeInconnuError ? CODE_INCONNU
       : 'Impossible de rejoindre pour le moment. Vérifiez la connexion internet.');
   } finally {
     button.disabled = false;
@@ -1569,7 +1573,8 @@ async function addVideoFile(file) {
   $('video-hint').hidden = false;
   try {
     const result = await prepareVideo(file, (done, total) => {
-      setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s. Restez sur cet écran.`);
+      // « 1 / 3 s » ne parlait pas (banc du 19/11) : on dit ce qui se passe et que rien n'est encore parti.
+      setStatus(`Préparation de la vidéo avant l'envoi (${Math.round(done)} s sur ${Math.round(total)}). Restez sur cet écran.`);
     }, MAX_VIDEO_SECONDS, demanderToucherVideo);
     pendingVideo = { blob: result.blob, mime: result.mime, thumb: result.thumb, duration: result.duration };
     oublierApercuVideo();
@@ -4038,8 +4043,9 @@ async function sendCommand(type, extra = {}) {
     showRemote("La commande n'a pas pu être envoyée.", 'warn');
     return;
   }
+  // Hors ligne : ce n'est pas une erreur, la demande attend la tablette (banc du 19/11 : en rouge, elle inquiétait).
   showRemote(tabletteEnLigne() ? 'Envoyé, en attente de la tablette…'
-    : "Envoyé. La tablette est hors ligne : elle le fera dès qu'elle sera de nouveau connectée.", tabletteEnLigne() ? '' : 'warn');
+    : "Demande envoyée. La tablette est hors ligne : elle la recevra dès qu'elle sera de nouveau connectée.");
   stopCommand?.();
   let timer = setTimeout(() => showRemote("La tablette n'a pas encore répondu. Elle exécutera la commande dès qu'elle sera connectée.", 'warn'), 90_000);
   stopCommand = onSnapshot(ref2, (snap) => {
