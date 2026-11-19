@@ -855,3 +855,47 @@ test('identifiant client par défaut : l\'adresse qui a reçu l\'e-mail du vende
   assert.strictEqual(g.destinataireDuMail({ to: adr(boite), text: 'pas de transfert' }, boite), null);
   assert.strictEqual(g.destinataireDuMail({}, boite), null);
 });
+
+// ---- lireDocument : cause exacte de l'échec, reprise seulement pour une panne passagère (19/11) ----
+
+test('lireDocument : cause exacte dans le message ; 400 sans reprise, 529/délai/crédit repris', async () => {
+  const Anthropic = require('@anthropic-ai/sdk');
+  const cleIA = require('./cle-ia');
+  const signalements = [];
+  const avant = cleIA.signalerCleIA;
+  cleIA.signalerCleIA = async (e) => { signalements.push(e); return null; };
+  const echoue = (erreur) => ({ beta: { messages: { create: async () => { throw erreur; } } } });
+  const api = (statut, type, message) => Anthropic.APIError.generate(statut, { type: 'error', error: { type, message } }, undefined, new Headers());
+  const texte = Buffer.from('Commande n° 123, total 19,99 €', 'utf8').toString('base64');
+  const lire = async (erreur) => {
+    try {
+      await g.lireDocument(texte, 'text/plain', { client: echoue(erreur) });
+    } catch (e) {
+      return e;
+    }
+    assert.fail('aurait dû échouer');
+  };
+  try {
+    const e400 = await lire(api(400, 'invalid_request_error', 'messages.0.content.0.source: invalid'));
+    assert.strictEqual(e400.code, 'failed-precondition');
+    assert.match(e400.message, /^La lecture automatique a refusé ce document\. Remplissez la fiche à la main\. \(erreur 400 invalid_request_error : messages\.0\.content\.0\.source: invalid\)$/);
+    assert.strictEqual(g.aReessayer(e400), false, 'un 400 n\'est pas relu chaque heure');
+    assert.ok(!e400.message.includes('Commande n° 123'), 'jamais le contenu du document');
+
+    const e529 = await lire(api(529, 'overloaded_error', 'Overloaded'));
+    assert.strictEqual(e529.code, 'unavailable');
+    assert.strictEqual(e529.message, 'La lecture automatique ne répond pas. Remplissez la fiche à la main. (erreur 529 overloaded_error : Overloaded)');
+    assert.strictEqual(g.aReessayer(e529), true);
+
+    const delai = await lire(new Anthropic.APIConnectionTimeoutError());
+    assert.strictEqual(delai.code, 'unavailable');
+    assert.match(delai.message, /\(délai dépassé\)$/);
+
+    const credit = await lire(api(400, 'invalid_request_error', 'Your credit balance is too low to access the Anthropic API.'));
+    assert.strictEqual(credit.code, 'unavailable', 'crédit épuisé : repris une fois rechargé');
+    assert.match(credit.message, /\(crédit Anthropic épuisé, erreur 400 invalid_request_error : Your credit balance/);
+    assert.strictEqual(signalements.length, 4, 'chaque échec passe par l\'alerte clé / crédit');
+  } finally {
+    cleIA.signalerCleIA = avant;
+  }
+});

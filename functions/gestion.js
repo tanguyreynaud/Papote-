@@ -2321,8 +2321,12 @@ Un « justificatif d'achat », un récapitulatif ou un bon de commande qui ne s'
 numéro de facture est une confirmation de commande (confirmationCommande vrai), même s'il donne le montant payé.
 Pour des cartes SIM, relève aussi le forfait : Go par mois, renouvellement automatique, durée, fin de forfait, identifiant client.`;
 
-// contenu : fichier en base64. Erreur HttpsError lisible si la lecture échoue.
-async function lireDocument(contenu, type) {
+// contenu : fichier en base64. Erreur HttpsError lisible si la lecture échoue, avec la cause exacte entre
+// parenthèses (19/11 : « ne répond pas » seul ne disait pas pourquoi). Code 'unavailable' pour une panne passagère
+// (429, 5xx, 529, délai, connexion, crédit épuisé, clé refusée) : l'e-mail est repris à l'heure suivante ;
+// 'failed-precondition' pour un 400/413 (paramètre ou document refusé), qui se reproduirait à l'identique.
+// client : pour les tests seulement.
+async function lireDocument(contenu, type, { client: clientTest = null } = {}) {
   const document = type === 'application/pdf'
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: contenu } }
     : type === 'text/plain'
@@ -2330,8 +2334,8 @@ async function lireDocument(contenu, type) {
       : { type: 'image', source: { type: 'base64', media_type: type, data: contenu } };
   let reponse;
   try {
-    const Anthropic = require('@anthropic-ai/sdk');
-    const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+    const Anthropic = clientTest ? null : require('@anthropic-ai/sdk');
+    const client = clientTest || new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
     reponse = await client.beta.messages.create({
       model: MODELE_LECTURE,
       max_tokens: 16000,
@@ -2342,10 +2346,17 @@ async function lireDocument(contenu, type) {
       output_config: { format: { type: 'json_schema', schema: SCHEMA_FACTURE } },
     });
   } catch (e) {
-    logger.warn('Lecture de facture impossible', e.message);
-    // Clé refusée (401/403) : alerte à Papote, au plus une fois par 24 h (cle-ia.js). Ne lève jamais d'erreur.
-    await require('./cle-ia').signalerCleIA(e, { source: 'la lecture des factures', db });
-    throw new HttpsError('unavailable', 'La lecture automatique ne répond pas. Remplissez la fiche à la main.');
+    const cleIA = require('./cle-ia');
+    const cause = cleIA.causeErreurIA(e);
+    logger.warn('Lecture de facture impossible', cause);
+    // Clé refusée (401/403) ou crédit épuisé : alerte à Papote, au plus une fois par 24 h (cle-ia.js). Ne lève
+    // jamais d'erreur.
+    await cleIA.signalerCleIA(e, { source: 'la lecture des factures', db });
+    if (cleIA.erreurDefinitive(e)) {
+      throw new HttpsError('failed-precondition', `La lecture automatique a refusé ce document. Remplissez la fiche à la main. (${cause})`);
+    }
+    const credit = cleIA.creditEpuise(e) ? 'crédit Anthropic épuisé, ' : '';
+    throw new HttpsError('unavailable', `La lecture automatique ne répond pas. Remplissez la fiche à la main. (${credit}${cause})`);
   }
   const bloc = (reponse.content || []).find((b) => b.type === 'text');
   if (reponse.stop_reason !== 'end_turn' || !bloc) {
@@ -3779,6 +3790,9 @@ function destinataireDuMail(mailLu, boite) {
 }
 
 const COURRIER_LUS_PAR_JOUR = 60;
+// Un e-mail dont la lecture a échoué est repris à l'heure suivante seulement pour une panne passagère.
+const aReessayer = (e) => Boolean(e) && e.code === 'unavailable';
+
 async function releverFactures() {
   const { ImapFlow } = require('imapflow');
   const { simpleParser } = require('mailparser');
@@ -3854,8 +3868,11 @@ async function releverFactures() {
               }
             } catch (e) {
               bilan.erreurs.push(`${piece.filename || 'pièce'} (« ${sujet} ») : ${e.message}`);
-              // Lecture indisponible : l'e-mail reste non lu et sera repris à l'heure suivante.
-              if (e.code === 'unavailable') reessayer = true;
+              // Lecture indisponible (panne passagère) : l'e-mail reste non lu et sera repris à l'heure suivante.
+              // Un document refusé (400/413, 'failed-precondition') ne l'est pas : l'erreur et sa cause restent
+              // dans « erreurs », l'e-mail est marqué traité (sinon il serait relu chaque heure pendant 4 jours,
+              // pour la même erreur, en prenant la place des autres dans le plafond du jour).
+              if (aReessayer(e)) reessayer = true;
             }
           }
           if (reessayer) continue;
@@ -4396,5 +4413,5 @@ exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeFournisseur, destinataireDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
-  avancementPropre, gardeFous,
+  avancementPropre, gardeFous, lireDocument, aReessayer,
 };
