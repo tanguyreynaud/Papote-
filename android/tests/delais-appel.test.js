@@ -263,12 +263,14 @@ test('SOS : double appui sur « Raccrocher » : un seul raccrochage, un seul arr
     await sos(b);
     await b.android('onGsm', { etat: 'appel', ...PAUL });
     await b.avancer(3000);
+    assert.deepStrictEqual(await numeros(b), ['0700000000'], 'la chaîne du SOS a commencé par Paul');
     await b.page.evaluate(() => { const h = document.querySelector('.call-hangup'); h.click(); h.click(); });
     assert.strictEqual(await raccroches(b), 1);
     assert.strictEqual((await journal(b)).filter((l) => /arrêté/.test(l)).length, 1);
     await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...PAUL });
     await b.avancer(60000);
-    assert.deepStrictEqual(await numeros(b), ['0700000000']);
+    assert.deepStrictEqual(await numeros(b), ['0700000000'], 'ni Julie ni Marc');
+    assert.deepStrictEqual(await b.page.evaluate(() => window.__internet), [], 'pas d’appel par internet non plus');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

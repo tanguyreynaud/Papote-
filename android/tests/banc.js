@@ -122,7 +122,13 @@ async function ouvrir(heure = '2026-10-26T10:00:00', etat = {}) {
   const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, timezoneId: 'Europe/Paris', locale: 'fr-FR', permissions: ['camera', 'microphone'] });
   const page = await context.newPage();
-  await page.clock.install({ time: new Date(heure + '+01:00') });
+  // Horloge arrêtée : elle n'avance que par avancer / patienter / fastForward. Laissée « au fil du vrai temps »
+  // (install seul), Playwright la fait aussi avancer en tâche de fond, et cette boucle peut la RAMENER EN ARRIÈRE
+  // (jusqu'à 2 s mesurées) quand elle finit après un avancer : un décompte du SOS démarré juste avant reculait
+  // alors hors de avancer(5100) (CI du lot 19-11d, delais-appel « double appui », 19/11).
+  const debut = new Date(heure + '+01:00');
+  await page.clock.install({ time: new Date(debut.getTime() - 1000) });
+  await page.clock.pauseAt(debut);
   await page.addInitScript(imitation, etat);
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
