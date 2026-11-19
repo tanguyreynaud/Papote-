@@ -74,7 +74,7 @@ function imitation(etat) {
     wifiStatus: () => JSON.stringify(window.__etat.reseau || { wifi: 'Box', internet: true, mobile: false, sim: false }),
     pushReady: () => !!window.__etat.push,
     simBudget: () => JSON.stringify(window.__etat.forfait || { plafondMo: 1000, consoMo: 0, niveau: 0, sim: false, cycleDebut: '2026-10-01' }),
-    logError: note('logError'), wifiDone: note('wifiDone'),
+    logError: note('logError'), logAppel: note('logAppel'), wifiDone: note('wifiDone'),
     welcomeBack: note('welcomeBack'), welcomeSeen: note('welcomeSeen'),
     testSon: note('testSon'), getPairing: () => null, ring: note('ring'), inCall: note('inCall'),
     // Appels par la carte SIM (etat.telephone : la tablette sait téléphoner) ; phoneCall renvoie false avec etat.telephoneKo,

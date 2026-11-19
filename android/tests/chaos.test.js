@@ -53,6 +53,7 @@ test('Une conversation téléphone de 20 min, écran immobile, n’est jamais co
     await b.toucher('#view-home .call-btn');
     await choisir(b, 'Julie');
     await b.android('onGsm', { etat: 'appel', sortant: true, uid: 'julie', name: 'Julie' });
+    await b.avancer(6000); // un vrai décroché : avant 4,5 s, ce serait sa messagerie
     await b.etat({ appelGsm: { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' } });
     await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
     await b.avancer(20 * MIN);
