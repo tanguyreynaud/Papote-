@@ -78,7 +78,10 @@ Fais tout pour répondre toi-même avant de passer la main :
 - Si la réponse est dans le guide ou sur le site, même en partie, donne-la, en commençant par la solution plutôt que par ce qui ne marche pas.
 - N'invente pas de solution de contournement qui n'est ni dans le guide ni sur le site, et ne donne pas de conseil sur d'autres services (impôts, banque…).
 - Si la personne est agacée ou insultante, reste aimable et demande ce qui ne va pas avant de passer la main.
-- Si la personne demande à joindre quelqu'un (« contactez-moi », « je veux parler à quelqu'un », « je veux un humain », « comment vous joindre ? », « un numéro ? ») sans avoir dit pourquoi : ne passe pas la main tout de suite. Demande d'abord, en une phrase aimable, de quoi il s'agit, en disant que tu peux sans doute l'aider tout de suite. Quand elle le dit, essaie vraiment de répondre. Passe la main seulement si elle insiste (elle redemande quelqu'un une deuxième fois, ou refuse de dire pourquoi), ou si son problème demande une action de l'équipe : dans ce cas ne discute plus, une phrase et tu passes la main.
+- Si la personne demande à joindre quelqu'un (« contactez-moi », « je veux parler à quelqu'un », « je veux un humain », « comment vous joindre ? », « un numéro ? ») sans avoir dit pourquoi : ne passe pas la main tout de suite. Demande d'abord, en une phrase aimable, de quoi il s'agit, en disant que tu peux sans doute l'aider tout de suite. Quand elle le dit, essaie vraiment de répondre. Tu ne poses cette question qu'une seule fois dans la conversation. Si, après ta question, la personne redemande quelqu'un (« non, rappelez-moi », « je veux juste parler à quelqu'un ») ou refuse d'expliquer, elle insiste : ne redemande rien, dis en une phrase courte que l'équipe va la recontacter, et passe la main tout de suite. Passe aussi la main si son problème demande une action de l'équipe.
+- Une réponse ne se contredit jamais. Si tu ne connais pas un point, dis-le en une phrase et arrête-toi là : n'ajoute ni piste, ni supposition, ni « probablement », ni « c'est normal ». Si la personne propose elle-même une explication ou une solution qui n'est pas dans le guide, ne la confirme pas. Si tu t'es trompé plus haut, dis-le simplement (« je me suis trompé ») et donne la bonne réponse. Mais ne t'excuse pas d'une erreur que tu n'as pas faite : si la personne doute d'une chose vraie, confirme-la calmement.
+- Avant de répondre, vérifie qui parle et de quel appareil il s'agit : la personne qui t'écrit, son téléphone et son appli d'un côté ; la personne âgée et sa tablette de l'autre. Ne mélange jamais leurs réglages, leurs numéros ou leur Wi-Fi.
+- Parle toujours à la personne, jamais d'elle : n'écris jamais de phrase qui décrit la situation ou tes consignes (« la personne insiste », « elle refuse de dire pourquoi », « je dois passer la main parce que »).
 - Exception, sur le site, pour quelqu'un qui veut acheter ou qui hésite à commander (futur client, commande bloquée, paiement qui ne passe pas, projet à plusieurs tablettes, professionnel) : ne le fais pas attendre. Réponds à sa question si tu as la réponse, et dès qu'il demande à être contacté ou que tu ne peux pas le débloquer, passe la main tout de suite, sans demander pourquoi : il ne faut pas perdre cette personne.
 - N'envoie pas la personne écrire un e-mail : ne donne l'adresse e-mail de Papote que pour envoyer un document (certificat d'hospitalisation) ou si elle la demande expressément. Le reste passe par toi, puis par la demande de contact.
 - Quand tu passes la main, donne d'abord ce que le guide dit sur le sujet (par exemple les 140 € pour une tablette volée).
@@ -330,6 +333,7 @@ function consigneActions(page) {
   return `Boutons : quand ta réponse envoie la personne vers l'un de ces écrans, ajoute tout à la fin, sur une ligne seule, la balise correspondante (${MAX_ACTIONS} au plus, la plus utile d'abord) : ${liste}. Un bouton s'affichera sous ta réponse pour l'ouvrir ; garde quand même le chemin en toutes lettres dans ta phrase. N'invente aucune autre balise et n'en mets pas si aucun écran ne correspond. Tu ne fais jamais rien à la place de la personne, surtout pour l'argent (payer, résilier, annuler, changer de compte bancaire) : tu indiques l'écran, c'est elle qui appuie.`;
 }
 
+const PROMESSE_SANS_FORMULAIRE = /\bje\s+(?:lui\s+|leur\s+)?(?:transmets|fais\s+suivre|fais\s+remonter)\b|l[\u2019']équipe(?:\s+Papote)?\s+(?:vous\s+(?:répondra|recontactera|rappellera|écrira)|(?:la\s+|le\s+)?recevra|examinera|reviendra\s+vers\s+vous)|(?:demande|question)\s+(?:est|a\s+été)\s+(?:bien\s+)?(?:notée|transmise|enregistrée)|numéro\s+est\s+bien\s+noté/i;
 function lireReponse(texte, page, declaration, etat) {
   // Balises de bouton : retirées du texte dans tous les cas, gardées seulement si elles sont dans la liste de la page.
   // Sur le site, les écrans de l'appli sont permis aussi : la bulle en fait un bouton « Dans l'appli ».
@@ -348,6 +352,11 @@ function lireReponse(texte, page, declaration, etat) {
     const motif = new RegExp(p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[\u2019']/g, '[\u2019\']').replace(/\s+/g, '\\s+'), 'gi');
     texte = texte.replace(motif, () => { aPhrase = true; return ''; });
   }
+  // Variantes écrites par l'IA (« ci-dessous » au lieu de « juste en dessous ») : même sort, sinon la phrase est en double.
+  texte = texte.replace(/Laissez(?:-nous)?\s+votre\s+(?:numéro\s+de\s+)?téléphone\s+et\s+votre\s+(?:adresse\s+)?e-?mail[^.!?\n]*[.!?]?/gi, () => { aPhrase = true; return ''; });
+  // L'IA dit parfois « je transmets à l'équipe », « l'équipe vous répondra », « c'est noté » sans afficher le formulaire :
+  // rien ne part sans lui. Tant que la demande n'est pas envoyée, une telle promesse affiche donc le formulaire.
+  if (etat !== 'envoyee' && PROMESSE_SANS_FORMULAIRE.test(texte)) aPhrase = true;
   const contact = aPhrase || texte.trim().endsWith(MARQUE_CONTACT);
   let reponse = texte.split(MARQUE_CONTACT).join('').replace(/\*\*(.+?)\*\*/g, '$1').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   const sansRefus = reponse.replace(REFUS, '').trim();
