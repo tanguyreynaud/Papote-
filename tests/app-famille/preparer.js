@@ -20,13 +20,16 @@ function fonctions() {
   // Un lot de l'admin (claude/lot-X-admin) se teste contre les fonctions de son lot jumeau (claude/lot-X-main) s'il
   // existe : les deux partent ensemble au même « Publier » (19/11 : écran admin testé contre des fonctions sans sa partie).
   let branche = 'main';
-  const lot = /^claude\/lot-(.+)-admin$/.exec(process.env.GITHUB_REF_NAME || '');
+  // La branche : celle de la CI, sinon celle où l'on est (outils/verifier-avant-pousser.sh teste comme la CI).
+  let brancheIci = process.env.GITHUB_REF_NAME || '';
+  if (!brancheIci) try { brancheIci = run('git rev-parse --abbrev-ref HEAD'); } catch (e) { /* pas de git : main */ }
+  const lot = /^claude\/lot-(.+)-admin$/.exec(brancheIci);
   if (lot) {
     try { run(`git fetch --quiet origin claude/lot-${lot[1]}-main`); branche = `claude/lot-${lot[1]}-main`; } catch (e) { /* pas de jumeau : main */ }
   }
   // Pareil pour une branche de travail de l'admin qui a besoin d'un changement des fonctions (claude/X-admin) : testée
   // contre sa jumelle claude/X-main ou claude/X si elle existe (19/11, case « Hors-forfait bloqué »), main sinon.
-  const travail = !lot && /^claude\/(.+)-admin$/.exec(process.env.GITHUB_REF_NAME || '');
+  const travail = !lot && /^claude\/(.+)-admin$/.exec(brancheIci);
   if (travail) {
     for (const jumelle of [`claude/${travail[1]}-main`, `claude/${travail[1]}`]) {
       try { run(`git fetch --quiet origin ${jumelle}`); branche = jumelle; break; } catch (e) { /* pas cette jumelle */ }
