@@ -20,6 +20,7 @@ const app = initializeApp({
   messagingSenderId: '807031084851',
   appId: '1:807031084851:web:b8048e2952cb1e893b1046',
 });
+const APP_CHECK_MARGE_MS = 5 * 60_000;
 // App Check : la tablette prouve qu'elle est une vraie tablette Papote (jeton fourni par l'app
 // Android, PapoteAndroid.appCheckToken). Seulement si la tablette a reçu sa clé à l'installation ;
 // sans clé, rien ne change. (Pas de « await » au premier niveau : les WebView d'avant 89 refusent tout le fichier.)
@@ -30,6 +31,10 @@ try {
         getToken: async () => {
           const t = JSON.parse(window.PapoteAndroid.appCheckToken() || 'null');
           if (!t || !t.token) throw new Error('pas de jeton App Check');
+          // Jeton presque expiré (l'app Android le garde quand le renouvellement a raté) : on le refuse, pour
+          // que Firebase attende avant de redemander. Rendu tel quel, il le redemandait en boucle sans pause :
+          // 1,4 cœur pendant des dizaines de minutes sur T-003 (profil du 19/11).
+          if (!(t.expireTimeMillis - Date.now() > APP_CHECK_MARGE_MS)) throw new Error('jeton App Check presque expiré');
           return { token: t.token, expireTimeMillis: t.expireTimeMillis };
         },
       }),
