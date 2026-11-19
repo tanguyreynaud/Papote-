@@ -2988,9 +2988,39 @@ final class Sync {
                     .put("currentDocument", new JSONObject().put("exists", true));
             firebase.commit(new JSONArray().put(write));
             Journal.log(context, "Installer la carte SIM : essai " + r.etat + " (" + id + ")");
+            // Carte inscrite au réseau français : le répondeur de la ligne est coupé (##002#, Tanguy 19/11), après le
+            // résultat du test (l'admin n'attend pas) et après l'appel d'essai (rien pendant un appel).
+            if (r.inscrite && !r.itinerance && "208".equals(r.mcc)) ecrireRepondeur(code, Repondeur.couper(context));
         } catch (Exception e) {
             Log.w(TAG, "Essai de la carte SIM", e);
             Journal.log(context, "Installer la carte SIM : essai pas envoyé (" + e.getMessage() + ")");
+        }
+    }
+
+    /**
+     * Le répondeur, écrit à part (simTest.repondeur) : des règles pas encore à jour refusent seulement cette
+     * écriture, jamais le résultat du test de la carte écrit juste avant.
+     */
+    private void ecrireRepondeur(String code, Repondeur.Resultat rep) {
+        try {
+            JSONObject rf = new JSONObject()
+                    .put("ok", new JSONObject().put("booleanValue", rep.ok))
+                    .put("essais", new JSONObject().put("integerValue", String.valueOf(rep.essais)));
+            if (rep.raison != null) rf.put("raison", Firebase.string(rep.raison));
+            JSONObject write = new JSONObject()
+                    .put("update", new JSONObject()
+                            .put("name", Firebase.docName("pairings/" + code))
+                            .put("fields", new JSONObject().put("simTest", new JSONObject().put("mapValue",
+                                    new JSONObject().put("fields", new JSONObject().put("repondeur",
+                                            new JSONObject().put("mapValue", new JSONObject().put("fields", rf))))))))
+                    .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("simTest.repondeur")))
+                    .put("updateTransforms", new JSONArray().put(new JSONObject()
+                            .put("fieldPath", "simTest.le").put("setToServerValue", "REQUEST_TIME")))
+                    .put("currentDocument", new JSONObject().put("exists", true));
+            firebase.commit(new JSONArray().put(write));
+        } catch (Exception e) {
+            Log.w(TAG, "Répondeur de la carte SIM", e);
+            Journal.log(context, "Installer la carte SIM : état du répondeur pas envoyé (" + e.getMessage() + ")");
         }
     }
 
