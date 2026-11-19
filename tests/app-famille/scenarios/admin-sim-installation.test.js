@@ -49,7 +49,9 @@ async function aLEtapeSim() {
 
 const message = (t) => t.page.locator('.pc-sim-message');
 const suivantEteint = (t) => t.page.locator('.pc-suivant').isDisabled();
-const coches = (t) => t.page.locator('.pc-sim-coches li').evaluateAll((li) => li.map((x) => `${x.classList.contains('ok') ? '✓' : '·'} ${x.innerText.replace(/\s+/g, ' ').trim()}`));
+const toutesCoches = (t) => t.page.locator('.pc-sim-coches li').evaluateAll((li) => li.map((x) => `${x.classList.contains('ok') ? '✓' : '·'} ${x.innerText.replace(/\s+/g, ' ').trim()}`));
+// Les coches de la carte, sans celle du répondeur (19/11, présente seulement avec les fonctions qui la donnent).
+const coches = async (t) => (await toutesCoches(t)).filter((c) => !/Répondeur/.test(c));
 const nbOrdres = () => banc.appels.filter((x) => x.nom === 'gestionStock' && x.data && x.data.action === 'simOrdre').length;
 
 /** Attend que le message de l'étape (relu toutes les 3 s) corresponde. */
@@ -226,4 +228,33 @@ test('carte SIM : numéro d\'essai noté une fois, puis « SMS parti » et « Ap
     // Numéro retiré : les autres scénarios testent sans SMS ni appel.
     await s.appeler('gestionStock', { action: 'simNumero', numero: '' }, a.TANGUY);
   }
+});
+
+// Répondeur de la ligne coupé par la tablette (##002#, Tanguy 19/11) : une coche de plus, jamais bloquante, et une
+// phrase calme quand l'opérateur refuse. Seulement avec des fonctions serveur qui le donnent (branche claude/sim-repondeur).
+const fonctionsAvecRepondeur = (() => {
+  try { return typeof require(require('node:path').join(process.env.PAPOTE_FONCTIONS || require('node:path').join(__dirname, '..', '.fonctions', 'functions'), 'sim-installation.js')).etatRepondeur === 'function'; } catch (e) { return false; }
+})();
+test('carte SIM : « Répondeur coupé » après le test ; refus de l\'opérateur expliqué sans bloquer « C\'est fait »', { skip: !fonctionsAvecRepondeur && 'fonctions sans répondeur' }, async () => {
+  const { t, tablette } = await aLEtapeSim();
+  const p = t.page;
+  await a.afficherCode(tablette);
+  await tester(t, tablette);
+  // Résultat de la carte d'abord : la coche du répondeur attend, « C'est fait » s'allume déjà.
+  await g.repondreSim(tablette);
+  await attendreMessage(t, /La carte marche/);
+  await p.waitForFunction(() => [...document.querySelectorAll('.pc-sim-coches li')].some((li) => /Répondeur coupé : en cours…/.test(li.textContent)));
+  assert.ok(!(await suivantEteint(t)), 'la carte suffit pour passer à la suite');
+  assert.ok(await p.locator('.pc-sim-repondeur').isHidden());
+  // L'opérateur refuse : phrase calme sous le verdict, l'envoi reste possible.
+  await g.repondreSim(tablette, { repondeur: { ok: false, essais: 1, raison: 'refuse' } });
+  await p.waitForFunction(() => /espace client/.test(document.querySelector('.pc-sim-repondeur')?.textContent || ''));
+  assert.doesNotMatch(await p.locator('.pc-sim-repondeur').innerText(), /erreur|échec|!/i, 'rien d\'anxiogène');
+  assert.ok((await toutesCoches(t)).includes('· Répondeur coupé : pas encore'));
+  assert.ok(!(await suivantEteint(t)));
+  // Coupé : coche verte, plus de phrase.
+  await g.repondreSim(tablette, { repondeur: { ok: true, essais: 1 } });
+  await p.waitForFunction(() => [...document.querySelectorAll('.pc-sim-coches li.ok')].some((li) => /Répondeur coupé/.test(li.textContent)));
+  assert.ok(await p.locator('.pc-sim-repondeur').isHidden());
+  assert.strictEqual((await s.lire(`stock/${tablette.fiche}`)).simTest.repondeur.ok, true);
 });

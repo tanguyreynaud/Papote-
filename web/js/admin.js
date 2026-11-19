@@ -309,7 +309,9 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         const message = creer('p', { className: 'pc-sim-message', hidden: true });
         // Numéro d'essai (Tanguy, 17/11) : pendant le test, la tablette lui envoie un SMS puis l'appelle ~20 s.
         const numZone = creer('div', { className: 'pc-sim-numero' });
-        zone.append(boutons, info, coches, message, numZone);
+        // Répondeur de la ligne (##002#, Tanguy 19/11) : ce qu'il en est quand il n'est pas coupé (n'empêche pas l'envoi).
+        const repNote = creer('p', { className: 'small muted pc-sim-repondeur', role: 'status', hidden: true });
+        zone.append(boutons, info, coches, message, repNote, numZone);
         let attendue = '';
         let numero = null; // null : pas encore lu ; '' : aucun numéro noté
         let numSaisie = false;
@@ -391,7 +393,12 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
                 : `SMS parti${v.attente ? ' : en cours…' : (v.sms ? ' : pas encore' : '')}`),
               ligne(c.appel, c.appel ? `Appel passé${v.appel && v.appel.secondes != null ? ` (${Math.round(v.appel.secondes)} s)` : ''}`
                 : `Appel passé${v.attente ? ' : en cours…' : (v.appel ? ' : pas encore' : '')}`),
-            ] : []));
+            ] : []),
+            // Après le test, la tablette coupe le répondeur de sa ligne : coche en plus, jamais bloquante.
+            ...(v.repondeur ? [ligne(v.repondeur.ok, `Répondeur coupé${v.repondeur.ok ? '' : (v.repondeur.attente ? ' : en cours…' : ' : pas encore')}`)] : []));
+          const rep = v.repondeur;
+          repNote.hidden = !rep || rep.ok || rep.attente || !rep.message;
+          repNote.textContent = rep && !rep.ok && !rep.attente ? rep.message || '' : '';
           message.hidden = !v.message;
           message.textContent = v.message || '';
           message.classList.toggle('ok', !!v.ok);

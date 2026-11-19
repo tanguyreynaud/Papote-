@@ -778,3 +778,5 @@ button.choix-fin-forfait.charge::after { border-color: rgba(255, 255, 255, .45);
 .pc-sim-numero p { margin: 0; }
 .pc-sim-numero .pc-sim-numero-lien { min-height: 0; padding: 0; color: var(--accent); font-weight: 700; font-size: inherit; display: inline; }
 .pc-sim-numero-aide { margin: 0; color: var(--muted); }
+/* Répondeur de la ligne pas encore coupé (19/11) : une phrase discrète sous le verdict, rien d'alarmant. */
+.pc-sim-repondeur { margin: 0; }
