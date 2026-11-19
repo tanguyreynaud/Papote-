@@ -537,6 +537,17 @@ service cloud.firestore {
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40;
+        // « Déjà dans vos contacts » (Tanguy, 19/11) : le numéro de la tablette que ce proche a enregistré dans les
+        // contacts de son téléphone (chiffres seuls), noté sur sa propre fiche pour tous ses téléphones. Ce champ seul,
+        // par le proche lui-même (pas en attente), un portable français ou retiré.
+        allow update: if signedIn()
+          && uid == request.auth.uid
+          && resource.data.get('role', '') == 'famille'
+          && resource.data.get('status', 'active') != 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['contactTablette'])
+          && (!('contactTablette' in request.resource.data)
+              || (request.resource.data.contactTablette is string
+                  && request.resource.data.contactTablette.matches('^0[67][0-9]{8}$')));
         // Photo de la personne qui a la tablette : choisie par un responsable dans l'app.
         allow update: if isFamilyAdmin(fid)
           && resource.data.role == 'tablette'

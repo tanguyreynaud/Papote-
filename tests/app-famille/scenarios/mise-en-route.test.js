@@ -90,26 +90,182 @@ test('M8 : « Enregistrez le numéro de Mamie Emma » sur l\'accueil dès que la
   // Les deux boutons ont la même taille.
   const [b1, b2] = await Promise.all(['#contact-oui', '#contact-fait'].map((id) => julie.page.locator(id).boundingBox()));
   assert.ok(Math.abs(b1.height - b2.height) < 1 && Math.abs(b1.width - b2.width) < 2, `boutons de même taille (${b1.width}×${b1.height}, ${b2.width}×${b2.height})`);
-  // « Enregistrer le numéro » : la fiche contact part tout de suite, la carte se ferme ensuite.
+  // « Enregistrer le numéro » : la fiche contact part tout de suite. Le téléphone ne dit pas si elle a été ajoutée :
+  // la carte reste, avec « C'est fait » (même taille) à la place de « C'est déjà fait » (Tanguy, 19/11).
   const telechargement = julie.page.waitForEvent('download');
   await julie.page.click('#contact-oui');
   assert.strictEqual(await julie.page.locator('#contact-oui').innerText(), 'Un instant…', 'réaction visible tout de suite');
   const fichier = await telechargement;
   // Le WebKit de Playwright remplace les espaces du nom proposé par « _ » (le nom donné par l'app reste « Mamie Emma.vcf »).
   assert.match(fichier.suggestedFilename(), banc.WEBKIT ? /^Mamie[ _]Emma\.vcf$/ : /Mamie Emma\.vcf/);
-  await g.texteFenetre(julie).then((t) => assert.match(t, /Fiche contact de Mamie Emma prête/));
+  await g.texteFenetre(julie).then((t) => assert.match(t, /Fiche contact de Mamie Emma prête.*« C'est fait »/));
   await g.repondre(julie, 'OK').catch(() => null);
+  await julie.page.locator('#contact-fait', { hasText: 'C\'est fait' }).waitFor();
+  await julie.page.locator('#contact-oui', { hasText: 'Enregistrer le numéro' }).waitFor();
+  assert.ok(await julie.page.locator('#contact-encart').isVisible(), 'rien n\'est supposé enregistré');
+  assert.strictEqual((await g.lire(`families/${fid}/members/${await uidDe(fid, 'julie@exemple.fr')}`)).contactTablette, undefined);
+  await julie.page.click('#contact-fait');
+  await g.toast(julie, 'C\'est noté.');
   await julie.page.locator('#contact-encart').waitFor({ state: 'hidden' });
+  await g.attendreBase(async () => (await g.lire(`families/${fid}/members/${await uidDe(fid, 'julie@exemple.fr')}`)).contactTablette === '0698765432', 'noté sur sa fiche');
   await julie.page.reload();
   await g.attendreVue(julie, 'view-home', 30_000);
   await julie.page.waitForTimeout(1500);
-  assert.ok(await julie.page.locator('#contact-encart').isHidden(), 'fermée une fois pour toutes sur ce téléphone');
+  assert.ok(await julie.page.locator('#contact-encart').isHidden(), 'partie une fois pour toutes');
   // Nouvelle carte SIM, nouveau numéro : la carte revient ; « C'est déjà fait » la ferme.
   await s.db.doc(`families/${fid}/members/${tab.tabletUid}`).update({ telephone: '07 11 22 33 44' });
   await julie.page.locator('#contact-encart').waitFor({ state: 'visible' });
+  assert.strictEqual(await julie.page.locator('#contact-fait').innerText(), 'C\'est déjà fait');
   await julie.page.click('#contact-fait');
   await g.toast(julie, 'C\'est noté.');
   assert.ok(await julie.page.locator('#contact-encart').isHidden());
+  await g.attendreBase(async () => (await g.lire(`families/${fid}/members/${await uidDe(fid, 'julie@exemple.fr')}`)).contactTablette === '0711223344', 'nouveau numéro noté');
+});
+
+const uidDe = async (fid, email) => (await g.liste(`families/${fid}/members`)).find((m) => m.email === email).id;
+
+/** Écritures de l'app sur un champ de la base (requêtes Write de Firestore vues par le navigateur). */
+function espionnerEcritures(t, champ) {
+  const compte = { n: 0 };
+  t.page.on('request', (r) => {
+    if (r.method() !== 'POST' || !/\/Write\//.test(r.url())) return;
+    let corps = r.postData() || '';
+    try { corps = decodeURIComponent(corps.replace(/\+/g, ' ')); } catch (e) { /* tel quel */ }
+    compte.n += (corps.match(new RegExp(`"fieldPaths":\\["${champ}"\\]`, 'g')) || []).length;
+  });
+  return compte;
+}
+
+/** La ligne de la tablette dans Réglages > Membres. */
+const contactMembre = (t) => t.page.locator('#members .member-contact');
+
+// Tanguy, 19/11 : « Enregistrer dans mes contacts » (ligne de la tablette, Réglages > Membres). Sur le web, une fiche
+// .vcf ne dit pas si la personne l'a ajoutée : « C'est fait » à côté, que le proche touche. Ensuite « Déjà dans vos
+// contacts », noté sur SA fiche : tient après actualisation et sur son autre téléphone ; un autre proche voit toujours
+// le bouton ; un nouveau numéro de tablette le fait revenir. Double appui : une fiche, une écriture.
+test('Contacts : « Enregistrer dans mes contacts » sur le web, « C\'est fait », puis « Déjà dans vos contacts » partout', async () => {
+  const julie = await banc.telephone('Julie');
+  const paul = await banc.telephone('Paul');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
+  await s.db.doc(`families/${fid}/members/${tab.tabletUid}`).update({ telephone: '06 12 34 56 78' });
+  const uid = await uidDe(fid, 'julie@exemple.fr');
+  const fiches = [];
+  julie.page.on('download', (d) => fiches.push(d.suggestedFilename()));
+  const ecritures = espionnerEcritures(julie, 'contactTablette');
+  await g.ouvrirTuile(julie, 'settings');
+  await contactMembre(julie).locator('button', { hasText: 'Enregistrer dans mes contacts' }).waitFor();
+  assert.deepStrictEqual(await contactMembre(julie).locator('button').allInnerTexts(), ['Enregistrer dans mes contacts'], 'le bouton seul au départ');
+
+  // Double appui : « Un instant… » tout de suite, une seule fiche.
+  await g.doubleAppui(julie, '#members .member-vcard');
+  assert.strictEqual(await contactMembre(julie).locator('.member-vcard').innerText(), 'Un instant…', 'réaction visible tout de suite');
+  await g.texteFenetre(julie).then((t) => assert.match(t, /Fiche contact de Mamie Emma prête/));
+  await g.repondre(julie, 'OK').catch(() => null);
+  await contactMembre(julie).locator('.member-vcard', { hasText: 'Enregistrer dans mes contacts' }).waitFor();
+  assert.deepStrictEqual(fiches.length, 1, `une seule fiche : ${fiches}`);
+  // « C'est fait » à côté, de la même taille ; rien n'est supposé enregistré.
+  const [b1, b2] = await Promise.all(['.member-vcard', '.member-contact-fait'].map((c) => contactMembre(julie).locator(c).boundingBox()));
+  assert.ok(Math.abs(b1.height - b2.height) < 1 && Math.abs(b1.width - b2.width) < 2, `boutons de même taille (${b1.width}×${b1.height}, ${b2.width}×${b2.height})`);
+  assert.strictEqual((await g.lire(`families/${fid}/members/${uid}`)).contactTablette, undefined);
+  assert.strictEqual(ecritures.n, 0);
+
+  // « C'est fait » en double appui : « Déjà dans vos contacts » tout de suite, une seule écriture.
+  await g.doubleAppui(julie, '#members .member-contact-fait');
+  await contactMembre(julie).locator('.member-contact-ok', { hasText: 'Déjà dans vos contacts' }).waitFor();
+  assert.strictEqual(await contactMembre(julie).locator('button').count(), 0, 'plus de bouton');
+  await g.attendreBase(async () => (await g.lire(`families/${fid}/members/${uid}`)).contactTablette === '0612345678', 'noté sur sa fiche');
+  await julie.page.waitForTimeout(1500);
+  assert.strictEqual(ecritures.n, 1, 'une seule écriture');
+  assert.ok(await julie.page.locator('#contact-encart').isHidden(), 'la carte de l\'accueil aussi');
+
+  // Actualisation : toujours « Déjà dans vos contacts ».
+  await julie.page.reload();
+  await g.attendreVue(julie, 'view-home', 30_000);
+  await g.ouvrirTuile(julie, 'settings');
+  await contactMembre(julie).locator('.member-contact-ok', { hasText: 'Déjà dans vos contacts' }).waitFor();
+
+  // Son autre téléphone, connecté au même compte : pareil.
+  const julie2 = await banc.telephone('Julie, 2e téléphone');
+  await g.seConnecter(julie2, 'julie@exemple.fr');
+  await g.attendreVue(julie2, 'view-home', 30_000);
+  await g.fermerAccueil(julie2);
+  await g.ouvrirTuile(julie2, 'settings');
+  await contactMembre(julie2).locator('.member-contact-ok', { hasText: 'Déjà dans vos contacts' }).waitFor();
+
+  // Paul, un autre proche : le bouton, toujours.
+  await g.ouvrirTuile(paul, 'settings');
+  await contactMembre(paul).locator('button', { hasText: 'Enregistrer dans mes contacts' }).waitFor();
+  assert.strictEqual(await contactMembre(paul).locator('.member-contact-ok').count(), 0);
+
+  // Nouvelle carte SIM : le bouton revient chez Julie, sur ses deux téléphones, sans actualiser.
+  await s.db.doc(`families/${fid}/members/${tab.tabletUid}`).update({ telephone: '07 12 34 56 78' });
+  for (const t of [julie, julie2]) {
+    await contactMembre(t).locator('button', { hasText: 'Enregistrer dans mes contacts' }).waitFor();
+    assert.strictEqual(await contactMembre(t).locator('.member-contact-ok').count(), 0);
+  }
+});
+
+// App Android récente (?contacts=1) : le bouton ouvre « Créer un contact » d'Android, rempli (papote://contact, avec la
+// clé du téléphone), sans fiche .vcf ni autorisation. Enregistré : l'app rouvre la page avec ?contactFait=<numéro>, noté
+// tout seul. Pas de réponse d'Android (annulé, ou une appli de contacts qui ne dit rien) : « C'est fait » reste là.
+test('Contacts : dans l\'app Android, « Créer un contact » d\'Android, puis « Déjà dans vos contacts » à son retour', async () => {
+  const julie = await banc.telephone('Julie');
+  await g.ouvrirParApp(julie, '?quitter=1&contacts=1&cle=c1e5ecrete');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie.android@exemple.fr', prenom: 'Julie' });
+  await s.db.doc(`families/${fid}/members/${tab.tabletUid}`).update({ telephone: '06 12 34 56 78' });
+  const uid = await uidDe(fid, 'julie.android@exemple.fr');
+  const fiches = [];
+  julie.page.on('download', (d) => fiches.push(d.suggestedFilename()));
+  const demandes = await g.espionnerNavigation(julie);
+  await g.ouvrirTuile(julie, 'settings');
+  await g.doubleAppui(julie, '#members .member-vcard');
+  assert.strictEqual(await contactMembre(julie).locator('.member-vcard').innerText(), 'Un instant…');
+  await contactMembre(julie).locator('.member-contact-fait', { hasText: 'C\'est fait' }).waitFor();
+  await julie.page.waitForTimeout(500);
+  const liens = demandes.filter((u) => u.startsWith('intent://contact?'));
+  assert.strictEqual(liens.length, 1, `une seule ouverture de « Créer un contact » : ${JSON.stringify(demandes)}`);
+  assert.match(liens[0], /#Intent;scheme=papote;package=fr\.mapapote\.famille;end$/);
+  const p = new URL(liens[0].replace(/^intent:/, 'https:').replace(/#Intent.*$/, '')).searchParams;
+  assert.deepStrictEqual([p.get('cle'), p.get('nom'), p.get('tel')], ['c1e5ecrete', 'Mamie Emma (Papote)', '+33612345678']);
+  assert.strictEqual(fiches.length, 0, 'pas de fiche .vcf dans l\'app');
+  assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing)').count(), 0, 'aucune fenêtre');
+  assert.strictEqual((await g.lire(`families/${fid}/members/${uid}`)).contactTablette, undefined, 'rien de noté sans réponse d\'Android');
+
+  // Un autre numéro rapporté (ancienne carte SIM) : ignoré.
+  await g.ouvrir(julie, '?quitter=1&contacts=1&cle=c1e5ecrete&contactFait=0699999999');
+  await g.attendreVue(julie, 'view-home', 30_000);
+  await julie.page.waitForTimeout(1500);
+  assert.strictEqual((await g.lire(`families/${fid}/members/${uid}`)).contactTablette, undefined, 'un autre numéro ne compte pas');
+
+  // Enregistré dans Android : l'app rouvre la page (Contact.java → Ouverture), noté tout seul, une écriture.
+  const ecritures = espionnerEcritures(julie, 'contactTablette');
+  await g.ouvrir(julie, '?quitter=1&contacts=1&cle=c1e5ecrete&contactFait=0612345678');
+  await g.attendreVue(julie, 'view-home', 30_000);
+  await g.attendreBase(async () => (await g.lire(`families/${fid}/members/${uid}`)).contactTablette === '0612345678', 'noté sur sa fiche');
+  assert.ok(!julie.page.url().includes('contactFait'), 'adresse nettoyée');
+  await g.ouvrirTuile(julie, 'settings');
+  await contactMembre(julie).locator('.member-contact-ok', { hasText: 'Déjà dans vos contacts' }).waitFor();
+  await julie.page.waitForTimeout(1000);
+  assert.strictEqual(ecritures.n, 1, 'une seule écriture');
+  // Page rechargée par la suite (l'adresse n'a plus contactFait) : rien de plus.
+  await julie.page.reload();
+  await g.attendreVue(julie, 'view-home', 30_000);
+  await julie.page.waitForTimeout(1000);
+  assert.strictEqual(ecritures.n, 1);
+});
+
+// Hors de l'app Android (pas de referrer de l'app), ?contactFait= ne fait rien : un lien ne peut pas cacher le bouton.
+test('Contacts : ?contactFait= hors de l\'app Android est ignoré', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await s.db.doc(`families/${fid}/members/${tab.tabletUid}`).update({ telephone: '06 12 34 56 78' });
+  await g.ouvrir(julie, '?quitter=1&contacts=1&contactFait=0612345678');
+  await g.attendreVue(julie, 'view-home', 30_000);
+  await g.ouvrirTuile(julie, 'settings');
+  await contactMembre(julie).locator('button', { hasText: 'Enregistrer dans mes contacts' }).waitFor();
+  await julie.page.waitForTimeout(1000);
+  assert.strictEqual((await g.lire(`families/${fid}/members/${await uidDe(fid, 'julie@exemple.fr')}`)).contactTablette, undefined);
 });
 
 // A29 (Tanguy 12/11) : « il ne doit y avoir aucune trace de l'ancien parcours », seul Papote relie une tablette.

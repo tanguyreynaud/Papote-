@@ -260,16 +260,20 @@ test('Navigateur : « Recevoir les appels » → numéro → prélèvement ; dou
   await remplacee(julie, 'contact-encart', '1 / 2', 'appels → numéro');
   assert.strictEqual(await julie.page.evaluate(() => window.__demandes), 1, 'une seule demande');
 
-  // 4. « Enregistrer le numéro » en double appui : une seule fiche contact.
+  // 4. « Enregistrer le numéro » en double appui : une seule fiche contact. Le téléphone ne dit pas si elle a été
+  // ajoutée : la carte reste, avec « C'est fait » (Tanguy, 19/11) ; « C'est fait » en double appui la fait partir.
   let fiches = 0;
   julie.page.on('download', () => { fiches++; });
-  await surveiller(julie);
   await g.doubleAppui(julie, '#contact-oui');
   assert.strictEqual(await julie.page.locator('#contact-oui').innerText(), 'Un instant…', 'réaction visible tout de suite');
   await g.texteFenetre(julie).then((txt) => assert.match(txt, /Fiche contact de Mamie Emma prête/));
   await g.repondre(julie, 'OK');
-  await remplacee(julie, 'sepa-encart', null, 'numéro → prélèvement');
+  await julie.page.locator('#contact-fait', { hasText: 'C\'est fait' }).waitFor();
   assert.strictEqual(fiches, 1, 'une seule fiche contact');
+  await surveiller(julie);
+  await g.doubleAppui(julie, '#contact-fait');
+  await g.toast(julie, 'C\'est noté.');
+  await remplacee(julie, 'sepa-encart', null, 'numéro → prélèvement');
 
   // 6. « Passer au prélèvement » en double appui : une seule page Stripe.
   const [requete] = await Promise.all([

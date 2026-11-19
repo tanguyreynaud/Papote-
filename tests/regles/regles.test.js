@@ -1180,3 +1180,31 @@ test('nom de la tablette : un prénom (accents, trait d\'union, apostrophe), jam
   for (const n of ['Mamie Jeanne', 'Pépé d\'Émile-André 2', 'Mamie 75']) await assertSucceeds(nom(n));
   for (const n of ['06 12 34 56 78', '0612345678', '+33 6 12 34 56 78', 'Mamie 0612', '1234', '---', '', 'M'.repeat(41), 'Mamie 🙂', '🙂🙂', 'Mamie <b>Rose</b>', 'Mamie ♥', 'Mamie_Rose', 'Mamie\nRose']) await assertFails(nom(n)).catch((e) => { throw new Error(`« ${n} » : ${e.message}`); });
 });
+
+// Tanguy, 19/11 : « Enregistrer dans mes contacts » devient « Déjà dans vos contacts » sur tous les téléphones du
+// proche. contactTablette : le numéro de la tablette enregistré (chiffres seuls), sur sa propre fiche, ce champ seul.
+test('contact de la tablette : noté par le proche sur sa propre fiche, un portable en chiffres ; personne d\'autre', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled((ctx) => Promise.all([
+    setDoc(doc(ctx.firestore(), `families/${FID}/members/paul`), fiche('paul', { status: 'active' })),
+    setDoc(doc(ctx.firestore(), `families/${FID}/members/marc`), fiche('marc', { status: 'pending' })),
+  ]));
+  const noter = (qui, uid, v, extra = {}) => updateDoc(doc(proche(qui), `families/${FID}/members/${uid}`), { contactTablette: v, ...extra });
+  await assertSucceeds(noter('paul', 'paul', '0612345678'));
+  await assertSucceeds(noter('paul', 'paul', '0712345678')); // nouveau numéro de la tablette
+  await assertSucceeds(noter('paul', 'paul', deleteField()));
+  await assertSucceeds(noter('julie', 'julie', '0612345678')); // une responsable aussi, pour elle-même
+  for (const v of ['06 12 34 56 78', '+33612345678', '0112345678', '061234567', '06123456789', 612345678, true, null, ['0612345678'], 'x'.repeat(400)]) {
+    await assertFails(noter('paul', 'paul', v)).catch((e) => { throw new Error(`${JSON.stringify(v)} : ${e.message}`); });
+  }
+  // Jamais avec un autre champ qu'il ne pourrait pas écrire seul, ni sur la fiche d'un autre, ni en attente, ni par la tablette.
+  await assertFails(noter('paul', 'paul', '0612345678', { canCall: true }));
+  await assertFails(noter('paul', 'paul', '0612345678', { name: 'Paulo' }));
+  await assertFails(noter('julie', 'paul', '0612345678'));
+  await assertFails(noter('paul', 'julie', '0612345678'));
+  await assertFails(noter('marc', 'marc', '0612345678'));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/members/tab`), { contactTablette: '0612345678' }));
+  // Les autres proches le lisent comme le reste de la fiche (rien de secret) ; un inconnu non.
+  await assertSucceeds(getDoc(doc(proche('julie'), `families/${FID}/members/paul`)));
+  await assertFails(getDoc(doc(proche('eve'), `families/${FID}/members/paul`)));
+});

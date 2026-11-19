@@ -2982,14 +2982,12 @@ function renderMembers(all) {
       tel.href = `tel:${telTablette.replace(/\s/g, '')}`;
       tel.textContent = telTablette;
       name.append(tel);
-      // Enregistrer le numéro de la tablette dans ses contacts (Tanguy, 2/11) : une fiche contact (vCard) que le
-      // téléphone propose d'ajouter ; la tablette sonne alors avec le bon nom quand elle appelle.
-      const fiche = document.createElement('button');
-      fiche.type = 'button';
-      fiche.className = 'link small member-vcard';
-      fiche.textContent = 'Enregistrer dans mes contacts';
-      fiche.addEventListener('click', () => enregistrerContact(session.family.name, telTablette, fiche));
-      name.append(fiche);
+      // Enregistrer le numéro de la tablette dans ses contacts (Tanguy, 2/11) : la tablette sonne alors avec le bon
+      // nom quand elle appelle. Une fois fait, « Déjà dans vos contacts » (Tanguy, 19/11 : voir remplirContactMembre).
+      const contact = document.createElement('span');
+      contact.className = 'member-contact';
+      name.append(contact);
+      remplirContactMembre(contact);
     }
     if (m.role === 'famille') {
       const f = session.family;
@@ -5379,12 +5377,55 @@ export function vcardTablette(nom, tel) {
   return ['BEGIN:VCARD', 'VERSION:3.0', `FN:${propre} (Papote)`, `N:;${propre} (Papote);;;`,
     `TEL;TYPE=CELL:${intl}`, 'NOTE:Tablette Papote', 'END:VCARD', ''].join('\r\n');
 }
-function enregistrerContact(nom, tel, bouton) {
-  bouton.disabled = true;
-  const texte = bouton.textContent;
+// « Enregistrer dans mes contacts » (Tanguy, 19/11) : enregistré une fois, c'est « Déjà dans vos contacts » sur tous les
+// téléphones de CE proche, après actualisation aussi. C'est noté sur sa fiche (members/{uid}.contactTablette : le
+// numéro de la tablette enregistré, chiffres seuls) ; un nouveau numéro de tablette fait revenir le bouton. On ne lit
+// jamais les contacts du téléphone (impossible sur iPhone, et cette autorisation fait peur sur Android).
+//
+// « Réussi » ne se devine pas :
+// - app Android récente (?contacts=1) : l'écran « Créer un contact » d'Android s'ouvre déjà rempli (papote://contact,
+//   Contact.java) ; s'il répond « enregistré », l'app rouvre la page avec ?contactFait=<numéro> et c'est noté tout seul ;
+// - ailleurs (Chrome, Safari d'iPhone, app d'avant) : une fiche .vcf est donnée au téléphone, qui ne dit jamais si la
+//   personne l'a vraiment ajoutée. « C'est fait » apparaît alors à côté : c'est elle qui le dit, d'un toucher.
+const chiffresTel = (t) => String(t || '').replace(/\D/g, '');
+function contactDejaFait() {
+  const tel = numeroTablette();
+  return !!tel && !!session?.member && chiffresTel(session.member.contactTablette) === chiffresTel(tel);
+}
+// Fiche proposée sur cette page (« C'est fait » à côté) : `fid|numéro`.
+let contactPropose = '';
+const cleContact = () => `${session?.fid}|${chiffresTel(numeroTablette())}`;
+// Un seul enregistrement à la fois (double appui) : « Un instant… » 1,5 s, puis le bouton revient.
+let contactEnCours = false;
+// Numéro rapporté « enregistré » par l'app Android (?contactFait=), noté dès que la famille est chargée.
+let contactRetourApp = '';
+
+function appContacts() {
+  try { return sessionStorage.getItem('papote.contacts') === '1' && !!cleApp(); } catch (e) { return false; }
+}
+
+function proposerContact(bouton) {
+  const tel = numeroTablette();
+  if (!tel || contactEnCours || !session?.fid) return;
+  contactEnCours = true;
+  const nom = session.family.name;
   // « Un instant… » tient sur une ligne : le bouton garde sa hauteur, rien ne bouge en dessous.
   bouton.style.minHeight = `${hauteurExacte(bouton)}px`;
+  bouton.disabled = true;
   bouton.textContent = 'Un instant…';
+  if (appContacts()) ouvrirContactApp(nom, tel);
+  else telechargerFiche(nom, tel);
+  contactPropose = cleContact();
+  setTimeout(() => { contactEnCours = false; majContacts(); }, 1500);
+}
+
+// App Android : son écran « Créer un contact », rempli (nom et numéro), sans aucune autorisation à demander.
+function ouvrirContactApp(nom, tel) {
+  const p = new URLSearchParams({ cle: cleApp(), nom: `${nom} (Papote)`, tel: `+33${chiffresTel(tel).slice(1)}` });
+  location.href = `intent://contact?${p}#Intent;scheme=papote;package=fr.mapapote.famille;end`;
+}
+
+function telechargerFiche(nom, tel) {
   try {
     const url = URL.createObjectURL(new Blob([vcardTablette(nom, tel)], { type: 'text/vcard' }));
     const a = document.createElement('a');
@@ -5396,13 +5437,69 @@ function enregistrerContact(nom, tel, bouton) {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
     // Un instant après l'appui (le bouton dit « Un instant… ») : le 2e appui d'un double appui tombe sur le bouton
     // désactivé, pas sur la fenêtre, qu'il refermait avant qu'on ait pu la lire.
-    setTimeout(() => notice(`Fiche contact de ${nom} prête : ouvrez-la pour l'ajouter à vos contacts.`), 450);
+    setTimeout(() => notice(`Fiche contact de ${nom} prête : ouvrez-la pour l'ajouter à vos contacts, puis touchez « C'est fait ».`), 450);
   } catch (e) {
     console.error(e);
     notice("La fiche contact n'a pas pu être créée. Notez le numéro : " + tel);
-  } finally {
-    setTimeout(() => { bouton.disabled = false; bouton.textContent = texte; bouton.style.minHeight = ''; }, 1500);
   }
+}
+
+// « C'est fait », « C'est déjà fait » ou le retour de l'app Android : noté sur ma fiche, une seule écriture.
+let contactEcriture = false;
+async function noterContactFait(tel) {
+  const v = chiffresTel(tel);
+  if (!v || contactEcriture || !session?.fid || !session.member || chiffresTel(session.member.contactTablette) === v) return;
+  contactEcriture = true;
+  const avant = session.member.contactTablette;
+  // Tout de suite à l'écran (la base confirme ensuite, même sans réseau sur le moment).
+  session.member = { ...session.member, contactTablette: v };
+  contactPropose = '';
+  majContacts();
+  try {
+    await updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { contactTablette: v });
+  } catch (e) {
+    console.warn('Contact de la tablette non noté', e);
+    session.member = { ...session.member, contactTablette: avant };
+    majContacts();
+    toast('Ce n\'est pas encore noté. Réessayez dans un moment.');
+  } finally {
+    contactEcriture = false;
+  }
+}
+
+// La ligne de la tablette dans « Membres » (Réglages) : le bouton, « C'est fait » à côté une fois la fiche proposée,
+// ou « Déjà dans vos contacts ».
+function remplirContactMembre(el) {
+  const tel = numeroTablette();
+  if (!tel || !session?.member) { el.replaceChildren(); return; }
+  if (contactDejaFait()) {
+    const ok = document.createElement('span');
+    ok.className = 'member-contact-ok';
+    ok.textContent = 'Déjà dans vos contacts';
+    el.replaceChildren(ok);
+    return;
+  }
+  const oui = document.createElement('button');
+  oui.type = 'button';
+  oui.className = 'secondary member-vcard';
+  oui.textContent = contactEnCours ? 'Un instant…' : 'Enregistrer dans mes contacts';
+  oui.disabled = contactEnCours;
+  oui.addEventListener('click', () => proposerContact(oui));
+  const boutons = [oui];
+  if (contactPropose === cleContact()) {
+    const fait = document.createElement('button');
+    fait.type = 'button';
+    fait.className = 'secondary member-contact-fait';
+    fait.textContent = 'C\'est fait';
+    fait.addEventListener('click', () => noterContactFait(numeroTablette()));
+    boutons.push(fait);
+  }
+  el.replaceChildren(...boutons);
+}
+
+function majContacts() {
+  renderContact();
+  document.querySelectorAll('.member-contact').forEach(remplirContactMembre);
 }
 
 // Dès que la tablette a un numéro (carte SIM), la tuile Photos laisse la place à
@@ -5429,19 +5526,21 @@ $('tile-phone').addEventListener('click', (e) => {
 });
 
 // « Enregistrez le numéro de Mamie Emma » sur l'accueil (M8, Tanguy 12/11) : ses appels arrivent du numéro de la
-// carte SIM, que beaucoup ne décrochent pas s'il est inconnu. Fermé une fois sur ce téléphone, revient si le numéro change.
-const CONTACT_KEY = 'papote.contactTablette';
-function lireContact() { try { return JSON.parse(localStorage.getItem(CONTACT_KEY) || '{}') || {}; } catch (e) { return {}; } }
-function noterContact(fid, tel) {
-  const v = lireContact();
-  v[fid] = tel;
-  try { localStorage.setItem(CONTACT_KEY, JSON.stringify(v)); } catch (e) { /* rien : la carte reviendra simplement */ }
-}
+// carte SIM, que beaucoup ne décrochent pas s'il est inconnu. Partie une fois le contact noté sur ma fiche (« C'est
+// déjà fait », ou enregistré : voir noterContactFait), sur tous mes téléphones ; revient si le numéro change.
+// Avant le 19/11, la carte fermée n'était notée que sur ce téléphone : ce souvenir local est oublié.
+try { localStorage.removeItem('papote.contactTablette'); } catch (e) { /* rien */ }
 function renderContact() {
   const tel = numeroTablette();
+  // Retour de l'app Android : enregistré dans les contacts, pour ce numéro-là seulement.
+  if (contactRetourApp && tel && session?.member) {
+    const v = contactRetourApp;
+    contactRetourApp = '';
+    if (v === chiffresTel(tel)) noterContactFait(tel);
+  }
   // Proche sans numéro : la tablette ne l'appellera jamais, la carte n'a pas de sens pour lui.
   const voir = !!(session?.fid && tel && session.member && session.member.role !== 'tablette'
-    && telPropre(session.member.telephone) && lireContact()[session.fid] !== tel);
+    && telPropre(session.member.telephone) && !contactDejaFait());
   badgeDu('contact-encart', voir);
   if (!voir) return;
   const nom = session.family.name;
@@ -5452,17 +5551,14 @@ function renderContact() {
   numero.textContent = tel;
   $('contact-texte').replaceChildren(`Quand ${nom} vous appelle depuis sa tablette, votre téléphone affiche le `, numero,
     `. Enregistrez-le dans vos contacts : vous saurez tout de suite que c'est ${nom}.`);
+  const oui = $('contact-oui');
+  if (!contactEnCours) { oui.disabled = false; oui.textContent = 'Enregistrer le numéro'; oui.style.minHeight = ''; }
+  $('contact-fait').textContent = contactPropose === cleContact() ? 'C\'est fait' : 'C\'est déjà fait';
 }
-$('contact-oui').addEventListener('click', () => {
-  const tel = numeroTablette();
-  if (!tel) return;
-  enregistrerContact(session.family.name, tel, $('contact-oui'));
-  noterContact(session.fid, tel);
-  setTimeout(renderContact, 1500);
-});
+$('contact-oui').addEventListener('click', () => proposerContact($('contact-oui')));
 $('contact-fait').addEventListener('click', () => {
-  noterContact(session.fid, numeroTablette());
-  renderContact();
+  if (contactEcriture || contactDejaFait()) return;
+  noterContactFait(numeroTablette());
   toast('C\'est noté.');
 });
 
@@ -6330,6 +6426,10 @@ async function start() {
     // sans elle l'app ne fait rien (un lien piégé d'une autre page ne peut ni appeler ni fermer, audit A2).
     if (params.get('cle')) try { sessionStorage.setItem('papote.cle', params.get('cle')); } catch (e) { /* rien */ }
     try { sessionStorage.setItem('papote.pause', params.get('pause') === '1' ? '1' : '0'); } catch (e) { /* rien */ }
+    // L'app sait ouvrir « Créer un contact » d'Android (Contact.java, papote://contact) et dire s'il a été enregistré.
+    try { sessionStorage.setItem('papote.contacts', params.get('contacts') === '1' ? '1' : '0'); } catch (e) { /* rien */ }
+    // Rouverte par l'app après « Enregistrer » dans « Créer un contact » : le numéro enregistré.
+    if (/^0[67]\d{8}$/.test(params.get('contactFait') || '')) contactRetourApp = params.get('contactFait');
   }
   // Arrivé par le lien ou le QR code d'invitation : le code est gardé le temps de se connecter.
   if (params.get('code')) rememberInviteCode(params.get('code'), params.get('pour'));
