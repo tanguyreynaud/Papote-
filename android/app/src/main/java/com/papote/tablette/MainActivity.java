@@ -758,7 +758,8 @@ public class MainActivity extends Activity implements Sync.Listener {
 
         /**
          * Test du son demandé par le téléphone du proche (commande « son », lue par appels.js) :
-         * « sonnerie » = 3 s de la sonnerie d'appel, « voix » = une phrase, au volume demandé (10-100).
+         * « sonnerie » = 3 s de la sonnerie d'appel, « voix » ou « appel » = une phrase, au volume demandé
+         * (10-100). Chaque essai coupe le son de l'essai d'avant (EssaiSon).
          */
         @JavascriptInterface
         public void testSon(String quoi, int volume, String texte) {
@@ -775,7 +776,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         public void ring(boolean on) {
             // Papote en pause (abonnement) : pas de sonnerie.
             if (on && enPause()) return;
-            handler.post(() -> callAudio.ring(on));
+            // Un vrai appel pendant un essai de la sonnerie : la fin programmée de l'essai ne le coupe pas.
+            handler.post(() -> { essai.appelReel(); callAudio.ring(on); });
         }
 
         // ----- Redémarrage à la main (volume bas tenu 10 s) -----
@@ -1260,21 +1262,31 @@ public class MainActivity extends Activity implements Sync.Listener {
     private boolean essaiSon;
     private final Runnable volumesEnregistres = () -> { essaiSon = false; setVolumes(); };
 
+    // Un seul son à la fois : chaque essai coupe le précédent (EssaiSon, Tanguy 19/11).
+    private final EssaiSon essai = new EssaiSon(new EssaiSon.Sortie() {
+        @Override public void volume(String quoi, int pourcent) {
+            AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            // « voix » et « appel » : une phrase dite par la voix de la tablette (flux des médias), au niveau
+            // de la barre choisie ; « sonnerie » : le flux de la sonnerie.
+            int flux = "sonnerie".equals(quoi) ? AudioManager.STREAM_RING : AudioManager.STREAM_MUSIC;
+            am.setStreamVolume(flux, am.getStreamMaxVolume(flux) * pourcent / 100, 0);
+        }
+        @Override public void sonnerie(boolean on) { callAudio.ring(on); }
+        @Override public void parler(String texte) { ttsPendingGuide = false; speakNow(texte); }
+        @Override public void taire() {
+            if (!ttsPendingGuide) ttsPending = null;
+            if (tts != null && lectureEnCours) tts.stop();
+        }
+        @Override public void plusTard(Runnable r, long ms) { handler.postDelayed(r, ms); }
+        @Override public void annuler(Runnable r) { handler.removeCallbacks(r); }
+    });
+
     private void playSoundTest(String quoi, int volume, String texte) {
-        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        int v = Math.max(10, Math.min(100, volume));
         essaiSon = true;
         handler.removeCallbacks(volumesEnregistres);
         handler.postDelayed(volumesEnregistres, 12_000);
         try {
-            if ("sonnerie".equals(quoi)) {
-                am.setStreamVolume(AudioManager.STREAM_RING, am.getStreamMaxVolume(AudioManager.STREAM_RING) * v / 100, 0);
-                callAudio.ring(true);
-                handler.postDelayed(() -> callAudio.ring(false), 3000);
-            } else {
-                am.setStreamVolume(AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC) * v / 100, 0);
-                speakNow(texte == null || texte.trim().isEmpty() ? "Bonjour, vous m'entendez bien ?" : texte);
-            }
+            essai.jouer(quoi, volume, texte);
         } catch (Exception e) {
             Log.w(TAG, "Test du son", e);
         }
