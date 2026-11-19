@@ -20,7 +20,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-save playwright@1.56.1
+      # firebase : appcheck.test.js fait tourner le vrai code App Check de Firebase (même version que appels.js).
+      - run: npm install --no-save playwright@1.56.1 firebase@12.19.0
       - run: npx playwright install --with-deps chromium
       - name: Scénarios de l'écran (android/tests)
         run: node --test --test-concurrency=1 android/tests/*.test.js
