@@ -41,28 +41,30 @@ jobs:
       options: --ipc=host
     strategy:
       fail-fast: false
+      # Les tâches les plus longues d'abord : avec plus de 20 tâches à la fois (limite de GitHub), les dernières
+      # attendent une place ; ce sont alors les plus courtes (19/11 : les gestes, partis 10 min en retard, faisaient
+      # toute la durée de la CI).
       matrix:
-        mode:
-          - '--double famille admin'
-          - '--appui famille admin'
-          - '--boutons famille admin'
-          # Identifiants : l'admin et l'app famille dans deux tâches parallèles (~10 et ~13 min) au lieu d'une de 23 min
-          # (19/11) ; chacune passe une fois, comme avant (« --identifiants admin famille » = admin puis famille).
-          - '--identifiants admin'
-          - '--identifiants famille'
-          - '--accessibilite famille admin'
-          - 'famille admin'
-          # App et admin dans WebKit (moteur de Safari) en iPhone SE et iPhone 15 : simulé, pas un vrai iPhone.
-          - '--iphone famille admin'
-        # Gestes : chaque variante (gestes.js, VARIANTES) tourne dans exactement une des 3 tâches (GESTES_VARIANTES).
-        # Les 3 listes réunies = les 6 variantes : une variante ajoutée dans gestes.js doit être ajoutée ici.
         include:
+          # Gestes : chaque variante (gestes.js, VARIANTES) tourne dans exactement une des 3 tâches (GESTES_VARIANTES),
+          # ~17 min chacune. Vérifié par l'étape « Chaque variante de gestes dans exactement une tâche ».
           - mode: '--gestes famille'
             variantes: 'normal,paysage'
           - mode: '--gestes famille'
             variantes: 'zoom 130 %,texte +30 %'
           - mode: '--gestes famille'
             variantes: 'mode sombre,noms très longs'
+          - mode: '--accessibilite famille admin'
+          # Identifiants : l'admin et l'app famille dans deux tâches parallèles (~10 et ~14 min) au lieu d'une de 23 min
+          # (19/11) ; chacune passe une fois, comme avant (« --identifiants admin famille » = admin puis famille).
+          - mode: '--identifiants famille'
+          - mode: '--boutons famille admin'
+          - mode: '--appui famille admin'
+          - mode: '--double famille admin'
+          - mode: '--identifiants admin'
+          # App et admin dans WebKit (moteur de Safari) en iPhone SE et iPhone 15 : simulé, pas un vrai iPhone.
+          - mode: '--iphone famille admin'
+          - mode: 'famille admin'
     defaults:
       run:
         working-directory: outil/outils/galerie
@@ -83,6 +85,28 @@ jobs:
       - run: npm install --no-audit --no-fund
       # Déjà dans l'image (rien n'est téléchargé) ; ne servirait que si la version du package changeait sans l'image.
       - run: npx playwright install chromium ${{ contains(matrix.mode, '--iphone') && 'webkit' || '' }}
+      # Les 3 tâches de gestes réunies = toutes les variantes de gestes.js, chacune une fois ; et cette tâche en est une.
+      # Une variante ajoutée dans gestes.js (main) sans être ajoutée ici rend la CI rouge au lieu d'être oubliée.
+      - name: Chaque variante de gestes dans exactement une tâche
+        if: matrix.variantes
+        env:
+          GESTES_VARIANTES: ${{ matrix.variantes }}
+          TACHES: 'normal,paysage|zoom 130 %,texte +30 %|mode sombre,noms très longs'
+        run: |
+          node -e '
+            const toutes = require("./gestes").VARIANTES.map((v) => v.nom).sort();
+            const taches = process.env.TACHES.split("|");
+            const vues = taches.flatMap((t) => t.split(",")).sort();
+            if (JSON.stringify(vues) !== JSON.stringify(toutes)) {
+              console.error(`::error::Variantes des tâches de gestes (${vues.join(" ; ")}) différentes de gestes.js (${toutes.join(" ; ")}) : balayages.yml à mettre à jour.`);
+              process.exit(1);
+            }
+            if (!taches.includes(process.env.GESTES_VARIANTES)) {
+              console.error(`::error::Tâche de gestes « ${process.env.GESTES_VARIANTES} » absente de TACHES.`);
+              process.exit(1);
+            }
+            console.log(`${toutes.length} variantes, chacune dans une des ${taches.length} tâches de gestes.`);
+          '
       - name: Balayage ${{ matrix.mode }} ${{ matrix.variantes }}
         env:
           GESTES_VARIANTES: ${{ matrix.variantes }}

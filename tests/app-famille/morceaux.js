@@ -9,7 +9,8 @@
 //                               de scenarios/*.test.js)
 //
 // Un scénario ajouté doit être rangé ici dans un morceau, sinon la CI est rouge (aucun scénario oublié). Morceaux
-// équilibrés sur les durées mesurées en CI (la plus longue de Chromium, run 44517288935 du 19/11, et WebKit iPhone 15, run 44174180414) : garder des totaux proches.
+// équilibrés sur les durées mesurées en CI (pour chaque fichier, la plus longue de Chromium, run 44517288935, et de WebKit
+// iPhone 15 et SE, run 44522085882, du 19/11 : ~13 min de scénarios par morceau) : garder des totaux proches.
 
 const { execSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -17,22 +18,21 @@ const path = require('node:path');
 
 const MORCEAUX = [
   [
-    'admin-colis-en-route.test.js', 'appel-android.test.js', 'chat-aller.test.js', 'debordement.test.js',
-    'limites.test.js', 'natif.test.js', 'partage.test.js', 'proches.test.js', 'reglages.test.js', 'renvoi.test.js',
-    'retour.test.js', 'sos-ordre.test.js', 'sos.test.js', 'tel-unique.test.js', 'touchers.test.js',
-    'webkit-liste.test.js',
+    'admin-colis-en-route.test.js', 'admin-remplacement.test.js', 'admin-sim-installation.test.js',
+    'changement-compte.test.js', 'deux-proches.test.js', 'envois.test.js', 'limites.test.js', 'natif.test.js',
+    'proches.test.js', 'reglages.test.js', 'reseau.test.js', 'resiliation-responsables.test.js', 'sos-ordre.test.js',
+    'sos.test.js', 'tel-unique.test.js', 'webkit-liste.test.js',
   ],
   [
-    'admin-sim-bloquee.test.js', 'agenda.test.js', 'alerte-pas-vue.test.js', 'appels.test.js',
-    'changement-compte.test.js', 'declaration.test.js', 'deux-proches.test.js', 'horsligne.test.js',
-    'largeur.test.js', 'mauvais-jours.test.js', 'mes-informations.test.js', 'mise-en-route.test.js', 'reseau.test.js',
-    'resiliation.test.js', 'sepa.test.js',
+    'accueil.test.js', 'admin-journee.test.js', 'agenda.test.js', 'alerte-pas-vue.test.js', 'appels.test.js',
+    'badges.test.js', 'chat-aller.test.js', 'clavier-bas.test.js', 'debordement.test.js', 'installation.test.js',
+    'largeur.test.js', 'mauvais-jours.test.js', 'mes-informations.test.js', 'photos-multiples.test.js',
+    'resiliation.test.js',
   ],
   [
-    'abonnement.test.js', 'accueil.test.js', 'admin-journee.test.js', 'admin-remplacement.test.js',
-    'admin-sim-installation.test.js', 'badges.test.js', 'clavier-bas.test.js', 'deconnexion.test.js',
-    'envois.test.js', 'forfait.test.js', 'installation.test.js', 'panne.test.js', 'photos-multiples.test.js',
-    'resiliation-responsables.test.js', 'wifi.test.js',
+    'abonnement.test.js', 'admin-sim-bloquee.test.js', 'appel-android.test.js', 'declaration.test.js',
+    'deconnexion.test.js', 'forfait.test.js', 'horsligne.test.js', 'mise-en-route.test.js', 'panne.test.js',
+    'partage.test.js', 'renvoi.test.js', 'retour.test.js', 'sepa.test.js', 'touchers.test.js', 'wifi.test.js',
   ],
 ];
 
