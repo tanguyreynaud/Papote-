@@ -264,6 +264,46 @@ test('carte SIM : la tablette écrit simTest dans son code, rien d\'autre ; l\'o
   await assertFails(updateDoc(ref(tablette('tab7')), { simTest: 'ok' }));
 });
 
+// SMS et appel d'essai (Tanguy, 17/11) : la tablette ajoute sms et appel à son résultat, chacun bien formé.
+test('carte SIM : simTest accepte sms et appel bien formés, et rien d\'autre dedans', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'pairings/SIMA2345'), {
+      status: 'waiting', tabletUid: 'tab8', callsUid: 'tab8-appels', name: 'Tablette', serie: 'S8', createdAt: Timestamp.now(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
+      ordre: { id: 'o1', type: 'simTest', demandeLe: Timestamp.now(), simAttendue: '8933150000000001234',
+        appel: { numero: '+33612345678', secondes: 20, texte: 'Papote : test de la carte SIM de T-001' } },
+    });
+  });
+  const ecrire = (db, plus) => updateDoc(doc(db, 'pairings/SIMA2345'), { simTest: {
+    id: 'o1', le: serverTimestamp(), iccid: '8933150000000001234', mcc: '208', mnc: '01', operateur: 'Orange', etat: 'ok',
+    inscrite: true, itinerance: false, donnees: { ok: true, ms: 230 }, ...plus,
+  } });
+  const t8 = tablette('tab8');
+  await assertSucceeds(ecrire(t8, { sms: { ok: true, code: -1, ms: 1800 }, appel: { ok: true, secondes: 20 } }));
+  await assertSucceeds(ecrire(t8, { sms: { ok: false, code: -1, ms: 30000 }, appel: { ok: false, secondes: 2.5, raison: 'coupe' } }), 'durée réelle à virgule');
+  for (const raison of ['refuse', 'sans-permission', 'erreur', 'numero']) {
+    await assertSucceeds(ecrire(t8, { sms: { ok: false, code: 0, ms: 0 }, appel: { ok: false, secondes: 0, raison } }), raison);
+  }
+  await assertSucceeds(ecrire(t8, { sms: null, appel: null }));
+  await assertSucceeds(ecrire(t8, { appel: { ok: false, secondes: null, raison: null } }));
+  // Champs vérifiés un par un.
+  await assertFails(ecrire(t8, { sms: { ok: 'oui', code: -1, ms: 1 } }));
+  await assertFails(ecrire(t8, { sms: { ok: true, code: '-1', ms: 1 } }));
+  await assertFails(ecrire(t8, { sms: { ok: true, code: -1, ms: -5 } }));
+  await assertFails(ecrire(t8, { sms: { ok: true, code: -1, ms: 1, texte: 'x' } }), 'pas de champ en plus dans sms');
+  await assertFails(ecrire(t8, { sms: 'ok' }));
+  await assertFails(ecrire(t8, { appel: { ok: 1, secondes: 20 } }));
+  await assertFails(ecrire(t8, { appel: { ok: true, secondes: '20' } }));
+  await assertFails(ecrire(t8, { appel: { ok: true, secondes: 99999 } }));
+  await assertFails(ecrire(t8, { appel: { ok: false, secondes: 0, raison: 'autre' } }));
+  await assertFails(ecrire(t8, { appel: { ok: true, secondes: 20, numero: '+33612345678' } }), 'pas de champ en plus dans appel');
+  await assertFails(ecrire(t8, { appel: true }));
+  // Toujours la tablette seule.
+  await assertFails(ecrire(tablette('tab8-appels'), { sms: { ok: true, code: -1, ms: 1 }, appel: { ok: true, secondes: 20 } }));
+  await assertFails(ecrire(proche('julie'), { sms: { ok: true, code: -1, ms: 1 }, appel: { ok: true, secondes: 20 } }));
+});
+
+
 test('envois : autorisés pendant l\'installation et avec un abonnement actif, bloqués une fois résilié', async () => {
   await famille({ statut: 'installation', etape: 'photo' });
   await assertSucceeds(setDoc(doc(proche('julie'), `families/${FID}/posts/p1`), envoi('julie')));
@@ -426,6 +466,17 @@ test('installation par QR : jetons et clés de tablette jamais lus ni écrits pa
       await assertFails(setDoc(doc(db, chemin), { serie: 'S2' }));
     }
     await assertFails(getDocs(collection(db, 'installations')));
+  }
+});
+
+// Réglages de l'admin (gestion/reglages : numéro d'essai du test de la carte SIM, adresse d'expédition…) : jamais lus
+// ni écrits par une appli, même admin. L'admin passe par ses fonctions (gestionStock simNumero, gestionReglages).
+test('réglages de l\'admin (numéro d\'essai) : fermés à toutes les applis', async () => {
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'gestion/reglages'), { numeroEssai: '+33612345678' }));
+  for (const db of [admin(), proche('julie'), tablette('tab'), env.unauthenticatedContext().firestore()]) {
+    await assertFails(getDoc(doc(db, 'gestion/reglages')));
+    await assertFails(setDoc(doc(db, 'gestion/reglages'), { numeroEssai: '+33712345678' }, { merge: true }));
+    await assertFails(getDocs(collection(db, 'gestion')));
   }
 });
 

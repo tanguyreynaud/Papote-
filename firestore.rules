@@ -179,13 +179,15 @@ service cloud.firestore {
     //                        fid?, familyName?, claimedBy?, claimedName?, ordre? } (fid…, ordre : serveur seulement)
     //                        simTest? (résultat du test de la carte SIM : la tablette seulement)
     // Résultat du test de la carte SIM écrit par la tablette dans son code (sim-installation.js) :
-    // { id, le (heure du serveur), iccid, mcc, mnc, operateur, etat, inscrite, itinerance, donnees: { ok, ms } }.
+    // { id, le (heure du serveur), iccid, mcc, mnc, operateur, etat, inscrite, itinerance, donnees: { ok, ms },
+    //   sms?: { ok, code, ms }, appel?: { ok, secondes, raison? } } (SMS et appel d'essai quand l'ordre a un numéro,
+    //   Tanguy 17/11).
     function texteOuRien(v, n) {
       return v == null || (v is string && v.size() <= n);
     }
     function simTestValide(t) {
       return t is map
-        && t.keys().hasOnly(['id', 'le', 'iccid', 'mcc', 'mnc', 'operateur', 'etat', 'inscrite', 'itinerance', 'donnees'])
+        && t.keys().hasOnly(['id', 'le', 'iccid', 'mcc', 'mnc', 'operateur', 'etat', 'inscrite', 'itinerance', 'donnees', 'sms', 'appel'])
         && t.id is string && t.id.size() > 0 && t.id.size() <= 80
         && t.le == request.time
         && t.etat in ['ok', 'absente', 'pin', 'puk', 'verrouillee', 'etrangere', 'sans-reseau', 'donnees-ko']
@@ -198,7 +200,19 @@ service cloud.firestore {
         && (t.get('donnees', null) == null
           || (t.donnees is map && t.donnees.keys().hasOnly(['ok', 'ms'])
             && t.donnees.get('ok', false) is bool
-            && (t.donnees.get('ms', null) == null || t.donnees.ms is int)));
+            && (t.donnees.get('ms', null) == null || t.donnees.ms is int)))
+        && (t.get('sms', null) == null
+          || (t.sms is map && t.sms.keys().hasOnly(['ok', 'code', 'ms'])
+            && t.sms.get('ok', false) is bool
+            && (t.sms.get('code', null) == null || t.sms.code is int)
+            && (t.sms.get('ms', null) == null || (t.sms.ms is int && t.sms.ms >= 0 && t.sms.ms <= 600000))))
+        && (t.get('appel', null) == null
+          || (t.appel is map && t.appel.keys().hasOnly(['ok', 'secondes', 'raison'])
+            && t.appel.get('ok', false) is bool
+            && (t.appel.get('secondes', null) == null
+              || (t.appel.secondes is number && t.appel.secondes >= 0 && t.appel.secondes <= 3600))
+            && (t.appel.get('raison', null) == null
+              || t.appel.raison in ['coupe', 'refuse', 'sans-permission', 'erreur', 'numero'])));
     }
     match /pairings/{code} {
       // Lu par la tablette (ses deux comptes) et l'administrateur seulement : l'adresse e-mail de celui qui a

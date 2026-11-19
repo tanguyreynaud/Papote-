@@ -170,3 +170,60 @@ test('carte SIM : « Retirer le code PIN », le code de la tablette change avant
   assert.strictEqual(fiche.simTest.id, `${ordre.id}-apres-pin`);
   assert.strictEqual(fiche.simTest.ok, true);
 });
+
+// Numéro d'essai (Tanguy, 17/11) : la tablette envoie un SMS puis appelle ce portable pendant le test. Numéro fictif :
+// le dépôt est public.
+test('carte SIM : numéro d\'essai noté une fois, puis « SMS parti » et « Appel passé » avec leur état', async () => {
+  const { t, tablette } = await aLEtapeSim();
+  const p = t.page;
+  const nbNumero = () => banc.appels.filter((x) => x.nom === 'gestionStock' && x.data && x.data.action === 'simNumero').length;
+  try {
+    // Sans numéro : une ligne discrète pour en noter un, et le test se fait comme avant.
+    await p.getByRole('button', { name: 'Noter mon portable' }).waitFor();
+    assert.match(await p.locator('.pc-sim-numero').innerText(), /Pour recevoir un SMS et un appel de la tablette pendant le test/);
+    await p.getByRole('button', { name: 'Noter mon portable' }).click();
+    const champ = p.getByLabel('Portable pour le SMS et l\'appel d\'essai');
+    // Les deux boutons ont la même taille.
+    const tailles = await p.locator('.pc-sim-numero button').evaluateAll((b) => b.map((x) => { const r = x.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }));
+    assert.deepStrictEqual(tailles[0], tailles[1], 'Enregistrer et Annuler de même taille');
+    // Un fixe : refusé tout de suite, sans appel au serveur.
+    await champ.fill('01 23 45 67 89');
+    await p.getByRole('button', { name: 'Enregistrer' }).click();
+    await p.waitForFunction(() => /commence par 06 ou 07/.test(document.querySelector('.pc-sim-numero-aide')?.textContent || ''));
+    assert.strictEqual(nbNumero(), 0);
+    // Double appui : un seul enregistrement, et la ligne le montre.
+    await champ.fill('06 12 34 56 78');
+    await p.getByRole('button', { name: 'Enregistrer' }).dblclick();
+    await p.waitForFunction(() => /SMS et appel d'essai vers 06 12 34 56 78/.test(document.querySelector('.pc-sim-numero')?.textContent || ''));
+    assert.strictEqual(nbNumero(), 1, 'double appui : un seul appel');
+    assert.strictEqual((await s.lire('gestion/reglages')).numeroEssai, '+33612345678');
+
+    // « Tester la carte » : l'ordre porte l'appel, l'écran annonce le SMS et l'appel en cours.
+    await a.afficherCode(tablette);
+    const ordre = await tester(t, tablette);
+    assert.deepStrictEqual(ordre.appel, { numero: '+33612345678', secondes: 20, texte: `Papote : test de la carte SIM de ${tablette.ref}` });
+    assert.match(await p.locator('.pc-sim-info').innerText(), /SMS et appel vers votre portable/);
+    await attendreMessage(t, /appelle votre portable/);
+    assert.deepStrictEqual((await coches(t)).slice(4), ['· SMS parti : en cours…', '· Appel passé : en cours…']);
+
+    // La carte marche, le SMS part, mais le réseau refuse l'appel : message clair, « C'est fait » éteint.
+    await g.repondreSim(tablette, { sms: { ok: true, code: -1, ms: 1800 }, appel: { ok: false, secondes: 0, raison: 'refuse' } });
+    const refus = await attendreMessage(t, /n'a pas laissé passer l'appel/);
+    assert.doesNotMatch(refus, /erreur|échec|!/i, 'rien d\'anxiogène');
+    assert.deepStrictEqual((await coches(t)).slice(4), ['✓ ✓ SMS parti (1,8 s)', '· Appel passé : pas encore']);
+    assert.ok(await suivantEteint(t));
+
+    // Nouveau test : SMS parti et appel passé, les six coches, « C'est fait » s'allume.
+    await tester(t, tablette);
+    await g.repondreSim(tablette, { sms: { ok: true, code: -1, ms: 2100 }, appel: { ok: true, secondes: 20 } });
+    await attendreMessage(t, /SMS parti et appel passé/);
+    assert.deepStrictEqual(await coches(t), ['✓ ✓ Bonne carte (…4321)', '✓ ✓ Réseau français (Orange)', '✓ ✓ Inscrite au réseau',
+      '✓ ✓ Internet par la carte (230 ms)', '✓ ✓ SMS parti (2,1 s)', '✓ ✓ Appel passé (20 s)']);
+    assert.ok(!(await suivantEteint(t)));
+    const fiche = await s.lire(`stock/${tablette.fiche}`);
+    assert.deepStrictEqual([fiche.simTest.ok, fiche.simTest.avecAppel, fiche.simTest.appel.ok], [true, true, true]);
+  } finally {
+    // Numéro retiré : les autres scénarios testent sans SMS ni appel.
+    await s.appeler('gestionStock', { action: 'simNumero', numero: '' }, a.TANGUY);
+  }
+});
