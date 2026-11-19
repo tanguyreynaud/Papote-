@@ -123,6 +123,7 @@
     '.ps-aller{align-self:flex-start;display:inline-block;border:0;background:var(--ps-indigo);color:#fff;border-radius:999px;padding:.6rem 1rem;font:inherit;font-weight:700;text-decoration:none;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
     '.ps-aller:hover{background:var(--ps-indigo-fonce)}' +
     '.ps-panneau a.ps-aller:focus-visible{outline:3px solid #4338ca;outline-offset:2px}' +
+    '.ps-lien{border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer}' +
     '.ps-rappeler{align-self:flex-start;border:1.5px solid var(--ps-indigo);background:#fff;color:var(--ps-indigo-fonce);border-radius:999px;padding:.5rem .9rem;font:inherit;font-weight:700;cursor:pointer}' +
     '@media (max-width:600px){.ps-panneau{width:100vw;height:100vh;height:100dvh;left:0;right:0;bottom:0;border-radius:0;max-height:none}}';
 
@@ -211,7 +212,7 @@
     envoyer.type = 'submit';
     saisie.appendChild(zone);
     saisie.appendChild(envoyer);
-    var note = el('div', 'ps-note', 'Réponses données par une IA. Pour nous écrire : ' + EMAIL);
+    var note = el('div', 'ps-note', 'Réponses données par une IA. Si besoin, l\u2019équipe prend le relais.');
     panneau.appendChild(tete);
     panneau.appendChild(fil);
     panneau.appendChild(saisie);
@@ -467,6 +468,14 @@
     })(0);
 
     bouton.onclick = function () { ouvrir(true); };
+    // Les « Une question ? » des pages ouvrent le chat (plus de lien vers l'e-mail) : tout élément data-ouvrir-chat.
+    document.addEventListener('click', function (e) {
+      var cible = e.target && e.target.closest ? e.target.closest('[data-ouvrir-chat]') : null;
+      if (!cible) return;
+      e.preventDefault();
+      ouvrir(true);
+    });
+    window.papoteChat = { ouvrir: function () { ouvrir(true); } };
     fermer.onclick = function () { ouvrir(false); };
     panneau.addEventListener('keydown', function (e) { if (e.key === 'Escape') ouvrir(false); });
     saisie.onsubmit = function (e) { e.preventDefault(); poser(zone.value); };

@@ -128,6 +128,21 @@ for (const nom of NAVIGATEURS) {
       await contexte.close();
     });
 
+    test('site : un « Écrivez-nous dans le chat » de la page ouvre le chat, double toucher compris', async () => {
+      const contexte = await navigateur.newContext(nom === 'webkit' ? { ...devices['iPhone 13'] } : { viewport: { width: 1200, height: 900 } });
+      const p = await contexte.newPage();
+      await p.route('https://mapapote.fr/', (r) => r.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body><main><p>Une question ? <button type="button" class="ps-lien" data-ouvrir-chat>Écrivez-nous dans le chat</button></p></main><script src="/chat-support.js"></script></body></html>` }));
+      await p.route('https://mapapote.fr/chat-support.js', (r) => r.fulfill({ contentType: 'application/javascript', body: BULLE }));
+      await p.goto('https://mapapote.fr/');
+      await p.locator('.ps-bouton').waitFor();
+      assert.strictEqual(await p.locator('.ps-panneau.ps-ouvert').count(), 0);
+      await p.getByText('Écrivez-nous dans le chat').dblclick();
+      await p.locator('.ps-panneau.ps-ouvert').waitFor({ timeout: 1000 });
+      assert.strictEqual(p.url(), 'https://mapapote.fr/');
+      await contexte.close();
+    });
+
     test('site : jamais de jeton, même si une page l\'exposait', async () => {
       const { p, contexte, recues } = await ouvrir(navigateur, nom, { hote: 'mapapote.fr', crochets: '' });
       await p.locator('.ps-saisie textarea').fill('Où en est ma commande ABCD-2345 ?');

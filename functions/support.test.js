@@ -184,3 +184,29 @@ test('le guide dit que tout responsable gère l\'abonnement', () => {
   assert.ok(!/Seul le propriétaire de la famille|Elle seule règle la tablette/.test(guide));
   assert.ok(guide.includes('Tous les responsables de la famille voient ces boutons, qu\'ils paient ou non'));
 });
+
+test('contact : le chat demande pourquoi avant de passer la main, sauf pour un futur acheteur', () => {
+  const { CONSIGNES } = require('./support')._test;
+  assert.ok(CONSIGNES.includes('ne passe pas la main tout de suite. Demande d\'abord'));
+  assert.ok(CONSIGNES.includes('Passe la main seulement si elle insiste'));
+  assert.ok(CONSIGNES.includes('quelqu\'un qui veut acheter'));
+  assert.ok(CONSIGNES.includes('passe la main tout de suite, sans demander pourquoi'));
+  assert.ok(!CONSIGNES.includes('ne discute pas et ne repose pas de question'));
+});
+
+test('contact : ni le guide ni le site ne renvoient vers l\'e-mail (hors pages légales et envoi d\'un document)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const guide = fs.readFileSync(path.join(__dirname, 'support-connaissances.md'), 'utf8');
+  const lignes = guide.split('\n').filter((l) => l.includes('contact@mapapote.fr'));
+  assert.strictEqual(lignes.length, 2);
+  assert.ok(lignes[0].includes('justificatif d\'hospitalisation'));
+  assert.ok(lignes[1].includes('ne pas envoyer les gens vers contact@mapapote.fr'));
+  const vitrine = path.join(__dirname, '..', 'vitrine');
+  const legales = ['cgv.html', 'mentions.html', 'confidentialite.html', 'merci.html'];
+  for (const f of fs.readdirSync(vitrine).filter((n) => n.endsWith('.html') && !legales.includes(n))) {
+    const html = fs.readFileSync(path.join(vitrine, f), 'utf8');
+    assert.ok(!/mailto:|contact@mapapote\.fr/.test(html), f + ' renvoie encore vers l\'e-mail');
+    if (html.includes('data-ouvrir-chat')) assert.ok(html.includes('chat-support.js'), f + ' : bouton du chat sans la bulle');
+  }
+});

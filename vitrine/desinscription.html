@@ -69,13 +69,13 @@ main a:not([class]) { font-weight: 700; }
       <p><b id="fait-titre">C'est fait : vous ne recevrez plus les e&#8209;mails d'information de Papote.</b></p>
       <p id="fait-texte">Les e&#8209;mails de service (livraison, factures, paiements, SOS) continuent d'arriver.</p>
     </div>
-    <p>Vous changez d'avis ? Écrivez à <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a>.</p>
+    <p>Vous changez d'avis ? <button type="button" class="ps-lien" data-ouvrir-chat>Écrivez-nous dans le chat</button>.</p>
   </section>
 
   <section class="etape" id="inconnu" hidden>
     <div class="carte">
       <p><b>Ce lien de désinscription n'est pas valable.</b></p>
-      <p>Répondez simplement à notre e-mail, ou écrivez à <a href="mailto:contact@mapapote.fr">contact@mapapote.fr</a> : nous vous retirons de la liste.</p>
+      <p>Répondez simplement à notre e-mail, ou <button type="button" class="ps-lien" data-ouvrir-chat>écrivez-nous dans le chat</button> : nous vous retirons de la liste.</p>
     </div>
   </section>
 </main>
@@ -125,5 +125,6 @@ main a:not([class]) { font-weight: 700; }
     });
   })();
 </script>
+<script src="chat-support.js" defer></script>
 </body>
 </html>
