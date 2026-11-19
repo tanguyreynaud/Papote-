@@ -260,11 +260,12 @@ test('Raccrocher alors qu’Android n’a plus d’appel : l’écran se ferme q
 });
 
 test('écran d’appel sans nouvelle d’Android pendant 60 s : il se ferme si l’appel n’existe plus', async () => {
-  const b = await tablette({ appelGsm: { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' } });
+  const b = await tablette();
   try {
     await b.toucher('#view-home .call-btn');
     await choisir(b, 'Julie');
-    await b.avancer(6000);
+    await b.avancer(6000); // un vrai décroché : avant 4,5 s, ce serait sa messagerie
+    await b.etat({ appelGsm: { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' } });
     await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
     // Android dit toujours « en ligne » : l'écran reste, aussi longtemps que dure l'appel.
     await b.avancer(124000);
