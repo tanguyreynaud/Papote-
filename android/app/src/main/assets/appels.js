@@ -681,8 +681,12 @@ window.papoteWatchPresence = (onSeen) => {
   };
 };
 
+const PRESENCE_REESSAI_MS = 30 * 60000;
+let presenceEchec = 0;
+
 async function startPresence() {
   if (presence.stream || presence.starting || ringing || active) return;
+  if (presenceEchec && Date.now() - presenceEchec < PRESENCE_REESSAI_MS) return;
   if (![...presence.watchers].some((w) => !w.done)) return;
   presence.starting = true;
   try {
@@ -700,7 +704,14 @@ async function startPresence() {
     presence.video = video;
 
     const detector = await faceDetector();
-    if (!detector || presence.stream !== stream) return;
+    if (!detector) {
+      // Détecteur de visage pas chargé (site extérieur injoignable, mémoire) : la caméra ne reste pas
+      // allumée pour rien, et on ne retente pas avant 30 min (chaque essai retélécharge sur la carte SIM).
+      presenceEchec = Date.now();
+      if (presence.stream === stream) stopPresence();
+      return;
+    }
+    if (presence.stream !== stream) return;
     const look = makeLooker(video, detector);
     const tick = () => {
       if (presence.stream !== stream) return;
