@@ -2158,6 +2158,7 @@
     else startCall(null, '');
   }
 
+  var decrocheA = 0, DECROCHE_GARDE_MS = 1000; // voir « Raccrocher » ci-dessous
   // Écran d'appel : la personne (ou « la famille »), l'état, et le grand bouton rouge.
   function renderCall(state, title, sub, uid, name, faceUrl) {
     ensureCallScreen();
@@ -2173,6 +2174,9 @@
     if (state === 'ringing' || state === 'connected' || state === 'starting') {
       var hang = el2('button', 'call-hangup', 'Raccrocher');
       on(hang, 'click', function () {
+        // « Raccrocher » arrive sous le doigt, à la place de « Décrocher » ou de « Appeler Julie » : un 2e appui (doigt
+        // qui appuie deux fois) ne doit pas couper l'appel tout juste pris ou lancé (banc d'utilisateurs, Tanguy 19/11).
+        if (Date.now() - decrocheA < DECROCHE_GARDE_MS) return;
         // Pendant un SOS, « Raccrocher » arrête tout : l'appel en cours et les proches suivants (Tanguy, 19/11).
         if (sosEtat || (gsm && gsm.sos)) { sosRaccrocher(); return; }
         if (gsm) { gsmHangup(); return; }
@@ -2375,6 +2379,7 @@
     // Le combiné, comme sur « Appeler » : une Mamie qui ne lit pas reconnaît le bouton (banc utilisateurs, 19/11).
     yes.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg><span>Décrocher</span>';
     on(yes, 'click', function () {
+      decrocheA = Date.now();
       if (android() && android().phoneAnswer) { try { android().phoneAnswer(); } catch (e) { } }
       yes.disabled = true;
     });
@@ -2471,6 +2476,7 @@
   }
 
   function startCall(uid, name) {
+    decrocheA = Date.now(); // lancé par un appui : « Raccrocher » apparaît sous le doigt (ex. « Appeler Julie »)
     stopRadio();
     // Par téléphone (carte SIM) dès que le proche a donné son numéro ; sinon par internet, comme avant.
     var p = uid ? personOf(uid) : null;
