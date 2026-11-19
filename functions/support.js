@@ -37,7 +37,7 @@ const MAIL_SMTP = defineString('MAIL_SMTP', { default: 'smtp.gmail.com:465:' });
 const MAIL_EXPEDITEUR = defineString('MAIL_EXPEDITEUR', { default: '' });
 const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
 
-const MODELE = 'claude-haiku-5-5';
+const MODELE = 'claude-sonnet-5-5';
 const EMAIL_SUPPORT = 'contact@mapapote.fr';
 // 30 questions par appareil et par jour (remis à 30 par Tanguy le 2026-10-22, après la phase de test).
 const QUOTA_VISITEUR = 30;
