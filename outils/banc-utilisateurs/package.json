@@ -1,0 +1,10 @@
+{
+  "name": "papote-banc-utilisateurs",
+  "private": true,
+  "description": "Utilisateurs simulés par Claude qui essaient l'app famille et la tablette (fausses données, aucun accès à Firebase).",
+  "dependencies": {
+    "@anthropic-ai/sdk": "*",
+    "axe-core": "^4.10.3",
+    "playwright": "1.56.1"
+  }
+}
