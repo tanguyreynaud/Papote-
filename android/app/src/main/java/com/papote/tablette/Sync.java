@@ -1705,6 +1705,9 @@ final class Sync {
             JSONArray docs = firebase.list("families/" + fid + "/reminders");
             JSONArray out = new JSONArray();
             for (int i = 0; i < docs.length(); i++) {
+              // Un rappel mal formé (écrit par un autre outil que l'appli, ou abîmé) est laissé de côté : avant,
+              // il arrêtait la lecture de TOUS les rappels de la famille, qui restaient figés (audit du 19/11).
+              try {
                 JSONObject doc = docs.getJSONObject(i);
                 JSONObject f = doc.optJSONObject("fields");
                 if (f == null) continue;
@@ -1716,7 +1719,9 @@ final class Sync {
                         : daysValue.getJSONObject("arrayValue").optJSONArray("values");
                 if (values != null) {
                     for (int j = 0; j < values.length(); j++) {
-                        days.put(Integer.parseInt(values.getJSONObject(j).optString("integerValue", "0")));
+                        JSONObject v = values.optJSONObject(j);
+                        int jour = jourDeRappel(v == null ? null : v.optString("integerValue", ""));
+                        if (jour >= 0) days.put(jour);
                     }
                 }
                 out.put(new JSONObject()
@@ -1735,6 +1740,9 @@ final class Sync {
                         .put("enPauseJusquau", nz(Firebase.str(f, "enPauseJusquau")))
                         // Voix Google du titre (functions/voix.js), jouée en ligne ; sinon voix d'Android.
                         .put("voice", nz(voixUrl(f))));
+              } catch (Exception e) {
+                Log.w(TAG, "Rappel illisible, laissé de côté", e);
+              }
             }
             lastReminders = now;
             JSONObject payload = new JSONObject().put("reminders", out);
@@ -2707,6 +2715,16 @@ final class Sync {
      * Un proche de la liste « Appeler » et du SOS (appels, SMS) : pas une tablette, et un membre accepté
      * (status absent ou « active », comme appels.js et les fonctions) : jamais une demande en attente (« pending »).
      */
+    /** Jour de la semaine d'un rappel (0 dimanche … 6 samedi) lu dans la base, -1 si ce n'en est pas un. */
+    static int jourDeRappel(String valeur) {
+        try {
+            int j = Integer.parseInt(valeur == null ? "" : valeur.trim());
+            return j >= 0 && j <= 6 ? j : -1;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
     static boolean procheActif(String role, String status) {
         return !"tablette".equals(role) && (status == null || "active".equals(status));
     }
