@@ -28,6 +28,7 @@ Outils `node` : depuis le dossier du projet, `node <chemin>`.
 
 | Script | À quoi il sert | Commande |
 | --- | --- | --- |
+| **Vérifier avant de pousser** (chaque fil) | **Avant chaque push d'un fil : `outils/verifier-avant-pousser.sh`.** Ce que la CI va vérifier, en local et en quelques minutes : secrets (gitleaks, comme « Secrets »), tests unitaires de `functions/`, balayage accessibilité du site ou de l'app famille / admin (galerie de `main`), règles, scénarios touchés de l'app famille ; code 1 au moindre échec : on ne pousse pas. Dit aussi quand une autre branche rend « Secrets » rouge partout | `outils/verifier-avant-pousser.sh` (bash ; `--complet` comme la CI entière, `--tout` contre le tronc, `--secrets`) |
 | **Vérifier avant de publier** | Lance tous les tests sur les versions exactes qui vont partir (fonctions de `main`, règles et app famille de dlattc, tablette de cmnwxy, galerie des écrans) et s'arrête net au premier échec ; affiche les SHA à publier | `.\outils\verifier.bat` (ou `fonctions`, `site`, `tablette`) |
 | Installer une tablette | Installe Papote, le mode kiosque et les réglages ; note la tablette dans le stock | `.\installation\installer-tablette.bat` |
 | Diagnostic | Vérifie une tablette branchée et dit ce qui ne va pas | `.\installation\diagnostic.bat` |

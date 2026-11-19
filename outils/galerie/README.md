@@ -111,6 +111,11 @@ la tablette (android/ : scénarios de l'écran, APK de débogage, balayages). Le
 l'accessibilité (texte-petit, cible-petite) sont signalées sans bloquer : Tanguy tranche écran par écran.
 Rien ne se fusionne tant qu'un balayage est rouge.
 
+**Avant chaque push d'un fil : `outils/verifier-avant-pousser.sh`.** Il lance le balayage accessibilité de ce
+que le fil a touché (`--accessibilite vitrine` sur main ; `--accessibilite famille` et/ou `admin` sur la branche de
+l'app, avec cet outil pris sur main, comme la CI), plus les secrets et les tests unitaires : un défaut WCAG nouveau
+se voit en local au lieu d'une CI rouge.
+
 ## Espace Validation de l'admin
 
 Chaque galerie range aussi ses captures dans `validation/` (une fiche par partie, captures nommées par leur empreinte).
