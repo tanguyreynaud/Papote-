@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { chiffrer, dechiffrer, garderCopies, ENTETE } = require('./chiffrement');
+const { chiffrer, dechiffrer, garderCopies, ENTETE, chiffrerFichier, dechiffrerFichier } = require('./chiffrement');
 
 const PHRASE = 'cheval agrafe batterie correct';
 
@@ -39,4 +39,45 @@ test('rotation : garde les n dernières, mais jamais après une copie anormaleme
   ecrire('29', 1000);
   assert.deepStrictEqual(garderCopies(d, 2), ['papote-2026-11-08-03-00-00.json.enc', 'papote-2026-11-15-03-00-00.json.enc']);
   assert.ok(fs.existsSync(path.join(d, 'autre.txt')));
+});
+
+// Course vue en CI : mauvaise phrase pendant qu'une écriture du fichier en clair est encore en cours sur le disque.
+// destroy() la fait finir en ERR_STREAM_DESTROYED, que Node émet en « error » avant « close » : le message
+// « Cannot call write after a stream was destroyed » remplaçait « Phrase secrète incorrecte », et le fichier
+// à moitié écrit restait. Ici l'ordre est forcé, sans aucune attente : la lecture de la source ne se ferme
+// qu'une fois une écriture partie, et cette écriture ne se termine qu'après destroy().
+test('mauvaise phrase pendant une écriture en cours : toujours « Phrase secrète incorrecte », rien ne reste', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'papote-course-'));
+  const source = path.join(dossier, 'documents.jsonl');
+  fs.writeFileSync(source, Buffer.alloc(2000, 7));
+  await chiffrerFichier(source, `${source}.enc`, PHRASE);
+  const cible = path.join(dossier, 'clair.jsonl');
+  const { write, writev, close } = fs;
+  const destroy = fs.WriteStream.prototype.destroy;
+  let detruit = false;
+  const retenues = [];
+  let partie; const ecriturePartie = new Promise((ok) => { partie = ok; });
+  // Une écriture seule, ou plusieurs (mises en attente pendant l'ouverture du fichier) : terminées après destroy().
+  const retenir = (orig) => (...args) => {
+    const cb = args.pop();
+    orig(...args, (...r) => (detruit ? cb(...r) : retenues.push(() => cb(...r))));
+    partie();
+  };
+  fs.write = retenir(write);
+  fs.writev = retenir(writev);
+  fs.close = (fd, cb) => { ecriturePartie.then(() => close(fd, cb)); };
+  fs.WriteStream.prototype.destroy = function (...a) {
+    detruit = true;
+    const r = destroy.apply(this, a);
+    retenues.splice(0).forEach((f) => f());
+    return r;
+  };
+  try {
+    await assert.rejects(() => dechiffrerFichier(`${source}.enc`, cible, 'une autre phrase longue'), /Phrase secrète incorrecte/);
+  } finally {
+    Object.assign(fs, { write, writev, close });
+    fs.WriteStream.prototype.destroy = destroy;
+  }
+  assert.ok(!fs.existsSync(cible), 'aucun fichier à moitié écrit');
+  fs.rmSync(dossier, { recursive: true, force: true });
 });
