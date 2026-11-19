@@ -31,9 +31,15 @@ env:
   TZ: Europe/Paris
 
 jobs:
-  app-famille:
+  # Quelle app famille tester (le commit exact, le même pour toutes les tâches), avec quelle image de Playwright (la
+  # version du package.json de cette app), et en combien de morceaux (tests/app-famille/morceaux.js de cette app).
+  preparation:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.app.outputs.sha }}
+      playwright: ${{ steps.app.outputs.playwright }}
+      morceaux: ${{ steps.app.outputs.morceaux }}
     steps:
       - name: Branche de l'app famille
         id: admin
@@ -51,15 +57,55 @@ jobs:
           fi
           echo "App famille testée : $admin (fonctions : $BRANCHE ${GITHUB_SHA:0:7})" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "ref=$admin" >> "$GITHUB_OUTPUT"
-      - name: App famille (${{ steps.admin.outputs.ref }})
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ steps.admin.outputs.ref }}
+          sparse-checkout: tests/app-famille
+      - name: Commit, version de Playwright, morceaux
+        id: app
+        working-directory: tests/app-famille
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "playwright=$(node -p "require('./package.json').devDependencies.playwright")" >> "$GITHUB_OUTPUT"
+          # Chaque scénario dans exactement un morceau (sinon rouge ici, avant tout). Une app sans morceaux.js
+          # (branche d'avant le 19/11) : toute la suite d'un bloc (« morceau » 0 = npm test).
+          if [ -f morceaux.js ]; then
+            node morceaux.js verifier
+            echo "morceaux=$(node -p "JSON.stringify(Array.from({ length: Number(process.argv[1]) }, (_, i) => i + 1))" "$(node morceaux.js nombre)")" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Pas de tests/app-famille/morceaux.js sur cette branche : tous les scénarios dans une seule tâche."
+            echo 'morceaux=[0]' >> "$GITHUB_OUTPUT"
+          fi
+
+  # Tous les scénarios de l'app famille (Chromium), coupés en morceaux parallèles, chacun avec ses propres émulateurs :
+  # chaque scénario tourne exactement une fois. D'un bloc, ~30 min (run 44504191860) ; en 3 morceaux, ~10 min.
+  app-famille:
+    needs: preparation
+    name: app-famille (chromium, morceau ${{ matrix.morceau }}/${{ strategy.job-total }})
+    strategy:
+      fail-fast: false
+      matrix:
+        morceau: ${{ fromJSON(needs.preparation.outputs.morceaux) }}
+    runs-on: ubuntu-24.04
+    # ~10 à 12 min attendues par morceau : le double (une app sans morceaux.js, d'un bloc : ~30 min, coupée).
+    timeout-minutes: ${{ needs.preparation.outputs.morceaux == '[0]' && 45 || 25 }}
+    # Image officielle de Playwright, même version que le package.json de l'app testée : navigateurs et paquets
+    # système déjà dedans, plus d'apt pendant le run (3 à 4 min, jusqu'à 20 les mauvais jours).
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.preparation.outputs.playwright }}-noble
+      options: --ipc=host
+    steps:
+      - name: App famille (${{ needs.preparation.outputs.sha }})
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preparation.outputs.sha }}
           fetch-depth: 0
       - name: Fonctions de ce commit
         uses: actions/checkout@v4
         with:
           path: .main
+      # Conteneur : le dossier appartient au runner, git le refuserait sans ceci.
+      - run: git config --global --add safe.directory '*'
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -79,16 +125,21 @@ jobs:
         working-directory: .main/functions
       - run: npm ci
         working-directory: tests/app-famille
-      - run: npx playwright install --with-deps chromium
+      # Déjà dans l'image (rien n'est téléchargé) ; ne servirait que si la version du package changeait sans l'image.
+      - run: npx playwright install chromium
         working-directory: tests/app-famille
-      - run: npm test
+      - name: Scénarios du morceau ${{ matrix.morceau }}
         working-directory: tests/app-famille
         env:
-          PAPOTE_FONCTIONS: ${{ github.workspace }}/.main/functions
+          MORCEAU: ${{ matrix.morceau }}
+        # $GITHUB_WORKSPACE et pas ${{ github.workspace }} : dans le conteneur, le dossier n'est pas au même endroit.
+        run: |
+          export PAPOTE_FONCTIONS="$GITHUB_WORKSPACE/.main/functions"
+          if [ "$MORCEAU" = 0 ]; then npm test; else node morceaux.js lancer "$MORCEAU"; fi
       - name: Captures en cas d'échec
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: captures-app-famille
+          name: captures-app-famille-${{ matrix.morceau }}
           path: tests/app-famille/captures/
           if-no-files-found: ignore

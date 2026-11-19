@@ -30,7 +30,14 @@ jobs:
     # Ubuntu 24.04 fixé : ubuntu-latest est passé en 26.04 le 06/11 et Playwright 1.56.1 (outils/galerie)
     # n'y installe pas Chromium (« Playwright does not support chromium on ubuntu26.04-x64 »).
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Tâche la plus longue : ~10 min (gestes), sans apt. Limite au double.
+    timeout-minutes: 20
+    # Image officielle de Playwright 1.56.1 (même version que outils/galerie/package.json) : navigateurs et paquets
+    # système déjà dedans, plus d'apt pendant le run (l'apt des runners prenait 7 à 10 min par tâche le 19/11, run
+    # 44504191522, et jusqu'à 30 min le 18/11). À changer avec la version du package.
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -53,8 +60,8 @@ jobs:
           node-version: 22
       # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
       - run: npm install --no-audit --no-fund
-      # Un seul passage apt pour les deux navigateurs (18/11 : l'apt des runners a pris 10 + 20 min, job coupé avant tout test).
-      - run: npx playwright install --with-deps chromium ${{ contains(matrix.mode, '--iphone') && 'webkit' || '' }}
+      # Déjà dans l'image (rien n'est téléchargé) ; ne servirait que si la version du package changeait sans l'image.
+      - run: npx playwright install chromium ${{ contains(matrix.mode, '--iphone') && 'webkit' || '' }}
       - name: Balayage ${{ matrix.mode }}
         run: node galerie.js ${{ matrix.mode }} --vitrine=ici --emails=ici
       - name: Rapports
@@ -74,7 +81,14 @@ jobs:
   # Deux fois : Chromium (Chrome, Android) et WebKit (moteur de Safari, iPhone), Tanguy 17/11.
   commande-site:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # ~1 min de test, sans apt.
+    timeout-minutes: 10
+    # Image officielle de Playwright 1.56.1 (même version que outils/galerie/package.json) : navigateurs et paquets
+    # système déjà dedans, plus d'apt pendant le run (l'apt des runners prenait 7 à 10 min par tâche le 19/11, run
+    # 44504191522, et jusqu'à 30 min le 18/11). À changer avec la version du package.
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -88,7 +102,7 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - run: npx playwright install --with-deps ${{ matrix.navigateur }}
+      - run: npx playwright install ${{ matrix.navigateur }}
       - name: Parcours de commande sur téléphone (${{ matrix.navigateur }})
         run: node --test commande-site.test.js
         env:
