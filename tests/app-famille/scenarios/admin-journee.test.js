@@ -147,7 +147,7 @@ async function commandePrete() {
 
 // ---------- Le matin ----------
 
-test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi » en 11 étapes, mauvais numéro T-… refusé, colis déposé une seule fois', async () => {
+test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi » en 12 étapes, mauvais numéro T-… refusé, colis déposé une seule fois', async () => {
   const { tablette, id } = await commandePrete();
   const t = await ouvrirAdmin('ordinateur');
   const p = t.page;
@@ -161,7 +161,7 @@ test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi 
 
   // Chaque étape : « C'est fait » reste éteint tant que tout n'est pas rempli et coché.
   const vues = [];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 11; i++) {
     const titre = await titreEtape(t);
     if (!/Envoi ou main propre/.test(titre)) assert.ok(await p.locator('.pc-suivant').isDisabled(), `étape « ${titre} » : bouton éteint avant les gestes`);
     // Tanguy se trompe de tablette en lisant le numéro collé dessus.
@@ -169,7 +169,7 @@ test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi 
     assert.ok(await p.locator('.pc-suivant').isEnabled(), `étape « ${titre} » : bouton allumé après les gestes`);
     assert.strictEqual(await suivant(t), '', `étape « ${titre} »`);
   }
-  assert.deepStrictEqual(vues, ['Envoi ou main propre ?', 'Choisir la tablette', 'Activer la carte SIM', 'Installer la carte SIM', 'Blocages chez l\'opérateur', 'La tablette dans le carton',
+  assert.deepStrictEqual(vues, ['Envoi ou main propre ?', 'Choisir la tablette', 'Activer la carte SIM', 'Installer la carte SIM', 'Hors-forfait bloqué ?', 'Blocages chez l\'opérateur', 'La tablette dans le carton',
     'Enceinte ?', 'Fermer le colis', 'Le numéro au feutre', 'L\'étiquette']);
   assert.strictEqual(envois.length, 1, 'double appui sur « Créer l\'étiquette » : une seule étiquette payée');
   assert.strictEqual(nbAppels('gestionEtiquette'), 1);
@@ -203,6 +203,7 @@ test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi 
   assert.strictEqual(fiche.commande, id);
   const sim = await s.lire(`sims/${fiche.simId}`);
   assert.strictEqual(sim.statut, 'active');
+  assert.strictEqual(sim.horsForfaitBloque, true, 'case « Hors-forfait bloqué » cochée pendant la préparation');
   assert.strictEqual(sim.prix, 299);
   assert.strictEqual(fiche.simTest.ok, true, 'carte testée par la tablette avant le départ');
   assert.strictEqual(fiche.simTest.simAttendue, sim.iccid);
@@ -283,7 +284,7 @@ test('admin sur téléphone (390 px) : chaque étape de « Préparer l\'envoi »
   const p = t.page;
   await p.getByRole('button', { name: 'Préparer l\'envoi' }).first().click();
   await parcours(t).waitFor();
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < 12; i++) {
     const titre = await remplirEtape(t, { tablette });
     const m = await p.evaluate(() => {
       const b = document.querySelector('dialog.parcours .pc-suivant').getBoundingClientRect();

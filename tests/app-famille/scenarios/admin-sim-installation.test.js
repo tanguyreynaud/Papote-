@@ -37,7 +37,7 @@ async function aLEtapeSim() {
   const { abonnement: id } = await a.commanderEtPayer({ email: 'claire@exemple.fr', nom: 'Claire Dupont', carte: true });
   await s.appeler('gestionStock', { action: 'modifier', id: tablette.fiche, champs: { commande: id } }, a.TANGUY);
   await s.appeler('gestionSim', { action: 'ajouter', champs: { statut: 'active', operateur: 'Orange', iccid: ICCID, numero: '07 45 00 00 11', prix: 299, tablette: tablette.fiche,
-    blocages: { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true } } }, a.TANGUY);
+    horsForfaitBloque: true, blocages: { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true } } }, a.TANGUY);
   const faits = { mode: Date.now(), tablette: Date.now(), sim: Date.now() };
   await s.appeler('gestionParcours', { type: 'envoi', commande: id, preparation: { etape: 3, faits, tablette: tablette.fiche } }, a.TANGUY);
   const t = await ouvrirAdmin('ordinateur', `#commande/${id}`);
@@ -142,7 +142,7 @@ test('carte SIM : chaque état en mots simples, « C\'est fait » éteint tant q
   assert.ok(!(await suivantEteint(t)));
   await p.locator('.pc-suivant').click();
   await p.waitForFunction(() => document.querySelector('.pc-corps h3')?.textContent !== 'Installer la carte SIM');
-  // Blocages déjà notés sur la carte : l'étape suivante est le carton.
+  // Hors-forfait et blocages déjà notés sur la carte : l'étape suivante est le carton.
   assert.strictEqual(await p.locator('.pc-corps h3').innerText(), 'La tablette dans le carton');
   assert.strictEqual((await s.lire(`stock/${tablette.fiche}`)).simTest.ok, true);
 });

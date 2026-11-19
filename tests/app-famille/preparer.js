@@ -24,6 +24,14 @@ function fonctions() {
   if (lot) {
     try { run(`git fetch --quiet origin claude/lot-${lot[1]}-main`); branche = `claude/lot-${lot[1]}-main`; } catch (e) { /* pas de jumeau : main */ }
   }
+  // Pareil pour une branche de travail de l'admin qui a besoin d'un changement des fonctions (claude/X-admin) : testée
+  // contre sa jumelle claude/X-main ou claude/X si elle existe (19/11, case « Hors-forfait bloqué »), main sinon.
+  const travail = !lot && /^claude\/(.+)-admin$/.exec(process.env.GITHUB_REF_NAME || '');
+  if (travail) {
+    for (const jumelle of [`claude/${travail[1]}-main`, `claude/${travail[1]}`]) {
+      try { run(`git fetch --quiet origin ${jumelle}`); branche = jumelle; break; } catch (e) { /* pas cette jumelle */ }
+    }
+  }
   try {
     run(`git fetch --quiet origin ${branche}`);
   } catch (e) {

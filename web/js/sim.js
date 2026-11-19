@@ -13,6 +13,12 @@ export const BLOCAGES_SIM = [
 ];
 export const blocagesFaits = (l) => !!l && BLOCAGES_SIM.every(([k]) => l.blocages && l.blocages[k] === true);
 
+// Hors-forfait bloqué chez l'opérateur (Tanguy, 19/11) : aucun hors-forfait SIM, jamais. Case obligatoire sur chaque
+// ligne (sims/{id}.horsForfaitBloque, date et auteur notés par le serveur), non cochée sur les lignes d'avant : la
+// tablette ne part pas sans elle (le serveur refuse aussi : functions/statuts.js, phraseHorsForfait).
+export const CASE_HORS_FORFAIT = 'Hors-forfait bloqué chez l\'opérateur';
+export const horsForfaitBloque = (l) => !!(l && l.horsForfaitBloque === true);
+
 const DATA_MAX_MO = 15 * 1024;
 const toDate = (v) => (v && v.toDate ? v.toDate() : v ? new Date(v) : null);
 export const go = (mo) => (mo == null || mo < 0 ? null : mo >= 1024 ? `${(mo / 1024).toFixed(1)} Go` : `${Math.round(mo)} Mo`);

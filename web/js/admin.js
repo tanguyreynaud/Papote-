@@ -4,7 +4,7 @@
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
 import './retour.js';
 import './clavier.js';
-import { BLOCAGES_SIM, blocagesFaits } from './sim.js';
+import { BLOCAGES_SIM, blocagesFaits, CASE_HORS_FORFAIT, horsForfaitBloque } from './sim.js';
 import { demander, saisir, prevenir, menuPoints, patienter, annoncer, boutonCharge, ligneModifiable } from './dialogue.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
@@ -456,6 +456,23 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         // Vérifié encore une fois au moment du clic : un résultat de plus de 10 minutes ne compte plus.
         const r = await appeler('gestionStock', { action: 'simEtat', stock: e.tablette });
         if (!r.verdict || !r.verdict.ok) throw new Error((r.verdict && r.verdict.message) || 'Testez d\'abord la carte.');
+      },
+    },
+    {
+      // Hors-forfait bloqué chez l'opérateur (Tanguy, 19/11) : aucun hors-forfait SIM, jamais. Même case que la fiche
+      // de la carte SIM (sims/{id}.horsForfaitBloque) : cochée une fois, plus redemandée. Tant qu'elle ne l'est pas,
+      // « C'est fait » reste éteint ici, et le serveur refuse l'étiquette, « Colis déposé » et le départ du stock.
+      cle: 'hors-forfait',
+      titre: 'Hors-forfait bloqué ?',
+      texte: (e) => `La tablette ${nom(e) ? `${nom(e)} ` : ''}attend encore le blocage du hors-forfait sur sa ligne : activez-le dans l'espace client de l'opérateur, puis cochez la case.`,
+      // Cochée pendant CE parcours : l'étape reste dans la liste (sinon les étapes se décalent d'un cran).
+      saute: (e) => !internet || (horsForfaitBloque(simDe(e)) && !(e.faits && e.faits['hors-forfait'])),
+      cases: [CASE_HORS_FORFAIT],
+      async valider(e) {
+        const l = simDe(e);
+        if (!l) return;
+        if (!horsForfaitBloque(l)) await appeler('gestionSim', { action: 'modifier', id: l.id, champs: { horsForfaitBloque: true } });
+        l.horsForfaitBloque = true;
       },
     },
     {

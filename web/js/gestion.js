@@ -15,7 +15,7 @@ import { ouvrirParcours, fermerParcours } from './parcours.js';
 import {
   getFirestore, doc, collection, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, increment,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { simVue, texteBloquee, reseauMobile, reseauAVoir, reseauVuDe, alerteReseau, noterReseauVu, go as enGo, BLOCAGES_SIM, blocagesFaits } from './sim.js';
+import { simVue, texteBloquee, reseauMobile, reseauAVoir, reseauVuDe, alerteReseau, noterReseauVu, go as enGo, BLOCAGES_SIM, blocagesFaits, CASE_HORS_FORFAIT, horsForfaitBloque } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -2041,7 +2041,7 @@ function carteBlocages(l) {
   const afficher = () => {
     boutons.forEach((b) => b.setAttribute('aria-pressed', String(etat[b.dataset.blocage])));
     resume.textContent = blocagesFaits({ blocages: etat })
-      ? 'Tout est bloqué : la carte peut partir.'
+      ? (horsForfaitBloque(l) ? 'Tout est bloqué : la carte peut partir.' : 'Les quatre blocages sont notés. Reste le hors-forfait, plus haut.')
       : 'Il manque un blocage : pas d\'étiquette ni de « Colis déposé » pour cette carte.';
     resume.className = blocagesFaits({ blocages: etat }) ? 'small muted' : 'small error';
   };
@@ -2063,9 +2063,46 @@ function carteBlocages(l) {
   afficher();
   return h('div', { class: 'card' },
     h('h2', {}, 'Blocages chez l\'opérateur'),
+    caseHorsForfait(l),
     h('p', { class: 'muted small' }, 'Activez-les dans l\'espace client de la ligne (ou au service client), puis appuyez sur chacun ici. Seule protection qui tient si quelqu\'un sort de l\'appli de la tablette.'),
     h('div', { class: 'fins-forfait', role: 'group', 'aria-label': 'Blocages chez l\'opérateur' }, ...boutons),
     resume);
+}
+
+// « Hors-forfait bloqué chez l'opérateur » (Tanguy, 19/11) : case obligatoire, non cochée sur les lignes d'avant.
+// Tant qu'elle ne l'est pas, la tablette de la ligne ne part pas (« Préparer l'envoi » et le serveur). Cochée tout de
+// suite, une roue pendant l'envoi, un seul envoi même en touchant deux fois ; le serveur note la date et l'auteur.
+function caseHorsForfait(l) {
+  let envoi = false;
+  let coche = horsForfaitBloque(l);
+  const entree = h('input', { type: 'checkbox', checked: coche, 'data-hors-forfait': '' });
+  const roue = h('span', { class: 'roue-attente', 'aria-hidden': 'true', hidden: true });
+  const etiquette = h('label', { class: 'case-hors-forfait no-print' }, entree, h('span', {}, CASE_HORS_FORFAIT), roue);
+  const aide = h('p', { class: 'small', 'data-hors-forfait-aide': '' });
+  const afficher = () => {
+    entree.checked = coche;
+    aide.textContent = coche
+      ? `Noté${l.horsForfaitBloqueLe && horsForfaitBloque(l) ? ` le ${jour(l.horsForfaitBloqueLe)}` : ''}${l.horsForfaitBloquePar && horsForfaitBloque(l) ? ` par ${l.horsForfaitBloquePar}` : ''} : aucun hors-forfait possible sur cette ligne.`
+      : 'Tant que cette case n\'est pas cochée, la tablette de cette ligne ne part pas. Activez le blocage du hors-forfait dans l\'espace client de l\'opérateur, puis cochez-la.';
+    aide.className = coche ? 'small muted' : 'small';
+  };
+  // Deuxième toucher pendant l'envoi : ignoré (pas de deuxième écriture, la case ne bouge pas).
+  entree.addEventListener('click', (e) => { if (envoi) e.preventDefault(); });
+  entree.addEventListener('change', async () => {
+    if (envoi) return;
+    envoi = true;
+    coche = entree.checked;
+    afficher();
+    etiquette.classList.add('charge');
+    roue.hidden = false;
+    const ok = await modifierChampsSim(l.id, { horsForfaitBloque: coche }, coche ? 'Noté : hors-forfait bloqué chez l\'opérateur' : 'Noté : hors-forfait pas bloqué');
+    etiquette.classList.remove('charge');
+    roue.hidden = true;
+    if (!ok) { coche = !coche; afficher(); }
+    envoi = false;
+  });
+  afficher();
+  return h('div', { class: 'bloc-hors-forfait' }, etiquette, aide);
 }
 
 // Ce que fait l'opérateur au bout du forfait (Tanguy, 5/11) : débit réduit (Lyca, Bouygues) ou internet coupé

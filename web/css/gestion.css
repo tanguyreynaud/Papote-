@@ -736,6 +736,15 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .choix-fin-forfait[aria-pressed="true"] { background: #4f46e5; color: #fff; }
 .choix-fin-forfait:focus-visible { outline: 3px solid #4f46e5; outline-offset: 2px; }
 button.choix-fin-forfait.charge::after { border-color: rgba(255, 255, 255, .45); border-top-color: #fff; }
+/* « Hors-forfait bloqué chez l'opérateur » (fiche d'une carte SIM) : une case de la taille des boutons voisins. */
+.bloc-hors-forfait { margin: 4px 0 12px; }
+.case-hors-forfait { display: flex; align-items: center; gap: 12px; max-width: 360px; min-height: 44px; box-sizing: border-box; margin: 0 0 6px; padding: 8px 12px; border: 1.5px solid #4f46e5; border-radius: 12px; background: var(--surface); color: var(--accent); font-weight: 600; cursor: pointer; }
+.case-hors-forfait input { width: 24px; height: 24px; margin: 0; flex: none; accent-color: #4f46e5; cursor: pointer; }
+.case-hors-forfait:has(input:checked) { background: #eef0ff; }
+.case-hors-forfait:has(input:focus-visible) { outline: 3px solid #4f46e5; outline-offset: 2px; }
+.case-hors-forfait:active { transform: scale(.98); }
+.case-hors-forfait.charge { cursor: progress; }
+.case-hors-forfait .roue-attente { width: 18px; height: 18px; margin-left: auto; }
 
 /* Installation d'une tablette par QR code (Stock › Installer une tablette) */
 .avertissement-qr { margin: 0; padding: 12px 16px; border-radius: 12px; background: #fdecec; color: #8a1c1c; border: 2px solid var(--danger); font-size: 17px; font-weight: 700; }
