@@ -204,6 +204,25 @@ test('la tablette crée son code ; seul le serveur réserve et confirme', async 
   await assertFails(updateDoc(doc(proche('paul'), 'pairings/NEWC0DE2'), { status: 'reserved', claimedBy: 'paul', claimedName: 'Paul' }));
 });
 
+// 19/11 : la tablette donne son jeton de réveil à la création de son code (le serveur la prévient au lieu qu'elle
+// relise sans arrêt). Une chaîne seulement, jamais changée après, et lue par la tablette et l'admin seulement.
+test('jeton de réveil du jumelage : écrit par la tablette à la création, une chaîne, jamais modifié ensuite', async () => {
+  const db = tablette('tab7');
+  const code = {
+    status: 'waiting', tabletUid: 'tab7', callsUid: 'tab7-appels', name: 'Tablette', serie: 'SERIE7',
+    createdAt: serverTimestamp(), expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
+  };
+  await assertSucceeds(setDoc(doc(db, 'pairings/PUSH2345'), { ...code, push: 'jeton-fcm-de-tab7' }));
+  await assertFails(setDoc(doc(db, 'pairings/PUSH2346'), { ...code, push: 42 }));
+  await assertFails(setDoc(doc(db, 'pairings/PUSH2346'), { ...code, push: '' }));
+  await assertFails(setDoc(doc(db, 'pairings/PUSH2346'), { ...code, push: 'x'.repeat(4097) }));
+  await assertFails(setDoc(doc(db, 'pairings/PUSH2346'), { ...code, push: 'jeton', autre: 1 }));
+  await assertFails(updateDoc(doc(db, 'pairings/PUSH2345'), { push: 'un-autre-jeton' }));
+  await assertFails(updateDoc(doc(tablette('voleur'), 'pairings/PUSH2345'), { push: 'jeton-du-voleur' }));
+  await assertFails(getDoc(doc(proche('paul'), 'pairings/PUSH2345')));
+  await assertSucceeds(getDoc(doc(db, 'pairings/PUSH2345')));
+});
+
 // A29 (Tanguy 12/11) : « il ne doit y avoir aucune trace de l'ancien parcours », seul Papote relie une tablette.
 // Un responsable ne réclame plus une tablette pour sa famille, la tablette n'accepte plus de réclamation, et un proche
 // ne liste plus les réservations faites à son nom. La tablette garde « Recommencer » sur une réservation de Papote.

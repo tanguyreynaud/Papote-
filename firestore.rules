@@ -177,6 +177,7 @@ service cloud.firestore {
     // Jumelage d'une nouvelle tablette : elle affiche un code, le serveur la fait entrer dans la famille de sa commande.
     //   pairings/{code} -> { tabletUid, callsUid, name, createdAt, expiresAt, status,
     //                        fid?, familyName?, claimedBy?, claimedName?, ordre? } (fid…, ordre : serveur seulement)
+    //                        push? (jeton de réveil de la tablette, écrit par elle à la création)
     //                        simTest? (résultat du test de la carte SIM : la tablette seulement)
     // Résultat du test de la carte SIM écrit par la tablette dans son code (sim-installation.js) :
     // { id, le (heure du serveur), iccid, mcc, mnc, operateur, etat, inscrite, itinerance, donnees: { ok, ms } }.
@@ -210,7 +211,12 @@ service cloud.firestore {
           || isAdmin());
       allow list: if false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['tabletUid', 'callsUid', 'name', 'createdAt', 'expiresAt', 'status', 'serie'])
+        && request.resource.data.keys().hasOnly(['tabletUid', 'callsUid', 'name', 'createdAt', 'expiresAt', 'status', 'serie', 'push'])
+        // Jeton de réveil de la tablette (facultatif) : le serveur la prévient quand son code change, au lieu
+        // qu'elle le relise sans arrêt (functions/jumelage-push.js). Écrit à la création seulement.
+        && (!('push' in request.resource.data)
+            || (request.resource.data.push is string && request.resource.data.push.size() > 0
+                && request.resource.data.push.size() <= 4096))
         // Numéro de série de la tablette (facultatif), pour la reconnaître dans l'espace admin.
         && (!('serie' in request.resource.data)
             || (request.resource.data.serie is string && request.resource.data.serie.size() <= 64))
