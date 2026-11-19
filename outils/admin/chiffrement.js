@@ -120,9 +120,11 @@ async function dechiffrerFichier(source, cible, phrase) {
     if (sortie) await fermerFlux(sortie);
   } catch (e) {
     if (sortie) {
-      const ferme = sortie.closed ? null : require('node:events').once(sortie, 'close');
-      sortie.destroy();
-      await ferme;
+      // Une écriture peut être encore en cours sur le disque : destroy() la fait finir en ERR_STREAM_DESTROYED,
+      // que Node émet en « error » juste avant « close ». Attendu ici : on l'ignore, on attend la fermeture
+      // (pas events.once, qui rejetterait sur cet « error » et masquerait la vraie erreur), puis on efface.
+      sortie.on('error', () => {});
+      if (!sortie.closed) await new Promise((ok) => { sortie.once('close', ok); sortie.destroy(); });
       fs.rmSync(cible, { force: true });
     }
     throw e;
