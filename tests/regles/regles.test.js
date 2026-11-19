@@ -674,6 +674,21 @@ test('ordre d\'appel SOS : posé ou effacé par un responsable, jamais par un pr
   await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { sosOrdre: ['paul'], createdBy: 'paul' }));
 });
 
+test('durée d\'affichage sur la tablette (options.dureeAffichage) : 1 à 5 minutes entières, par un responsable', async () => {
+  await deuxFamilles();
+  const options = (duree) => ({ options: { lecture: true, sos: true, dureeAffichage: duree }, rev: 2 });
+  for (const m of [1, 3, 5]) await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}`), options(m)));
+  await assertSucceeds(updateDoc(doc(proche('paul'), `families/${FID}`), options(2)));
+  // Sans ce réglage (appli d'avant, tablette à 3 minutes) : toujours accepté.
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}`), { options: { lecture: false, sos: true } }));
+  // Hors bornes ou mal formé : refusé.
+  for (const m of [0, 6, 30, -1, 2.5, '3', true, null, [3]]) await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), options(m)));
+  // Léa (proche, pas responsable), Ève (autre famille), la tablette : refusé.
+  await assertFails(updateDoc(doc(proche('lea'), `families/${FID}`), options(3)));
+  await assertFails(updateDoc(doc(proche('eve'), `families/${FID}`), options(3)));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}`), options(3)));
+});
+
 test('responsables : désignés par un responsable, jamais au détriment du propriétaire ; un proche ne touche pas à la liste', async () => {
   await deuxFamilles();
   await assertSucceeds(updateDoc(doc(proche('paul'), `families/${FID}`), { admins: ['paul', 'lea'] }));

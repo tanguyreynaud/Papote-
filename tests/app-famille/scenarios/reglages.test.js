@@ -40,9 +40,15 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await julie.page.locator('#opt-lecture').setChecked(false);
   await julie.page.locator('#opt-radio').setChecked(true);
   await julie.page.selectOption('#opt-radio-station', { label: 'FIP' });
+  // Durée d'affichage d'un envoi ou d'un rappel pas encore vu : 3 minutes sans réglage, 1 à 5 au choix.
+  assert.strictEqual(await julie.page.inputValue('#opt-duree-affichage'), '3', '3 minutes sans réglage');
+  assert.deepStrictEqual(await julie.page.locator('#opt-duree-affichage option').allInnerTexts(), ['1 minute', '2 minutes', '3 minutes', '4 minutes', '5 minutes']);
+  await julie.page.selectOption('#opt-duree-affichage', '5');
   await enregistrer(julie, 'options-card');
   await g.toast(julie, 'Options envoyées à la tablette');
   const options = (await g.lire(`families/${fid}`)).options;
+  assert.strictEqual(options.dureeAffichage, 5, 'durée d\'affichage enregistrée pour la tablette');
+  assert.match(await julie.page.locator('#options-value').innerText(), /5 minutes/);
   assert.strictEqual(options.lecture, false);
   assert.strictEqual(options.sos, true);
   assert.deepStrictEqual([options.radio.active, options.radio.nom], [true, 'FIP']);

@@ -4612,7 +4612,9 @@ SETTINGS['alerte-pas-vue-card'] = {
   },
 };
 
-// Options de la tablette : families/{fid}.options = { lecture, sos, meteo, rappelsAccueil, radio { active, nom, url } }.
+// Options de la tablette : families/{fid}.options = { lecture, sos, meteo, rappelsAccueil, dureeAffichage, radio { active, nom, url } }.
+// dureeAffichage (Tanguy, 19/11) : minutes pendant lesquelles un envoi ou un rappel pas encore vu reste à l'écran,
+// caméra allumée ; 1 à 5, 3 sans réglage (mêmes bornes dans firestore.rules, Sync.java et tablette.js).
 const RADIOS = [
   { nom: 'France Inter', url: 'https://icecast.radiofrance.fr/franceinter-midfi.mp3' },
   { nom: 'franceinfo', url: 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3' },
@@ -4681,6 +4683,11 @@ const RADIOS = [
 }());
 
 const optionsActuelles = () => session.family.options || {};
+const DUREE_AFFICHAGE_DEFAUT = 3;
+function dureeAffichage(options) {
+  const m = Math.round(Number(options?.dureeAffichage));
+  return m >= 1 && m <= 5 ? m : DUREE_AFFICHAGE_DEFAUT;
+}
 // Ancienne option des messages vocaux (supprimés) : plus jamais réécrite.
 function sansVocal(options) {
   const { reponseVocale, ...reste } = options || {};
@@ -4693,6 +4700,7 @@ function renderOptions() {
     ['Lecture à voix haute', o.lecture !== false ? 'Activée' : 'Désactivée', o.lecture !== false],
     ['Météo sur l\'accueil', o.meteo !== false ? 'Affichée' : 'Enlevée', o.meteo !== false],
     ['Prochain rappel sur l\'accueil', o.rappelsAccueil !== false ? 'Affiché' : 'Enlevé', o.rappelsAccueil !== false],
+    ['Affichage d\'un envoi ou d\'un rappel', `${dureeAffichage(o)} minute${dureeAffichage(o) > 1 ? 's' : ''}`, true],
     ['SOS famille', o.sos ? 'Activé' : 'Désactivé', !!o.sos],
     ['Radio', o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée', !!o.radio?.active],
   ];
@@ -4735,6 +4743,7 @@ SETTINGS['options-card'] = {
     $('opt-sos').checked = !!o.sos;
     $('opt-meteo').checked = o.meteo !== false;
     $('opt-rappels-accueil').checked = o.rappelsAccueil !== false;
+    $('opt-duree-affichage').value = String(dureeAffichage(o));
     $('opt-radio').checked = !!o.radio?.active;
     const i = RADIOS.findIndex((r) => r.url === o.radio?.url);
     $('opt-radio-station').value = String(i >= 0 ? i : 0);
@@ -4749,6 +4758,7 @@ SETTINGS['options-card'] = {
       sos: $('opt-sos').checked,
       meteo: $('opt-meteo').checked,
       rappelsAccueil: $('opt-rappels-accueil').checked,
+      dureeAffichage: dureeAffichage({ dureeAffichage: $('opt-duree-affichage').value }),
       radio: { ...(o.radio || {}), active: $('opt-radio').checked, nom: r.nom, url: r.url },
     };
     await saveFamily({ options }, 'Options envoyées à la tablette');
