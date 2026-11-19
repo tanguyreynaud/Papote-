@@ -188,7 +188,7 @@ test('le guide dit que tout responsable gère l\'abonnement', () => {
 test('contact : le chat demande pourquoi avant de passer la main, sauf pour un futur acheteur', () => {
   const { CONSIGNES } = require('./support')._test;
   assert.ok(CONSIGNES.includes('ne passe pas la main tout de suite. Demande d\'abord'));
-  assert.ok(CONSIGNES.includes('Passe la main seulement si elle insiste'));
+  assert.ok(CONSIGNES.includes('elle insiste : ne redemande rien'));
   assert.ok(CONSIGNES.includes('quelqu\'un qui veut acheter'));
   assert.ok(CONSIGNES.includes('passe la main tout de suite, sans demander pourquoi'));
   assert.ok(!CONSIGNES.includes('ne discute pas et ne repose pas de question'));
@@ -209,4 +209,31 @@ test('contact : ni le guide ni le site ne renvoient vers l\'e-mail (hors pages l
     assert.ok(!/mailto:|contact@mapapote\.fr/.test(html), f + ' renvoie encore vers l\'e-mail');
     if (html.includes('data-ouvrir-chat')) assert.ok(html.includes('chat-support.js'), f + ' : bouton du chat sans la bulle');
   }
+});
+
+test('passage de main : une variante de la phrase écrite par l\'IA n\'est pas laissée en double', () => {
+  const { lireReponse, PHRASE_RAPPEL } = require('./support')._test;
+  const lu = lireReponse('Je ne vois pas la raison du refus. Laissez votre téléphone et votre e-mail ci-dessous, et quelqu\'un de l\'équipe vous recontactera.\n[CONTACT]', 'site', false, '');
+  assert.strictEqual(lu.contact, true);
+  assert.strictEqual(lu.reponse, 'Je ne vois pas la raison du refus.\n\n' + PHRASE_RAPPEL);
+  assert.ok(require('./support')._test.CONSIGNES.includes('Tu ne poses cette question qu\'une seule fois'));
+});
+
+test('passage de main : une promesse « je transmets » sans formulaire affiche le formulaire', () => {
+  const { lireReponse, PHRASE_RAPPEL } = require('./support')._test;
+  for (const t of ['Je transmets votre question à l\'équipe Papote pour qu\'elle vérifie ce mail.', 'Merci, l\u2019équipe Papote vous répondra sous 48 heures.', 'Merci, votre numéro est bien noté.']) {
+    const lu = lireReponse(t, 'site', false, '');
+    assert.strictEqual(lu.contact, true, t);
+    assert.ok(lu.reponse.endsWith(PHRASE_RAPPEL), t);
+  }
+  // Demande déjà envoyée : la même phrase est vraie, rien à réafficher.
+  assert.strictEqual(lireReponse('L\'équipe Papote vous répondra sous 48 heures.', 'site', false, 'envoyee').contact, false);
+  // Phrase générale sur le délai : pas un passage de main.
+  assert.strictEqual(lireReponse('Sans numéro enregistré, la tablette appelle par internet.', 'appli', false, '').contact, false);
+  assert.strictEqual(lireReponse('Papote n\'a pas de numéro : on passe par ce chat, et l\'équipe répond sous 48 h quand elle doit prendre le relais.', 'site', false, '').contact, false);
+});
+
+test('le guide garde les erreurs déjà commises à ne pas refaire', () => {
+  const guide = require('fs').readFileSync(require('path').join(__dirname, 'support-connaissances.md'), 'utf8');
+  for (const t of ['Qui appelle qui', 'pas la barre « Sonnerie »', 'ne jamais l\'envoyer vers « Commander »', 'Jamais pour une tablette en panne', 'TOUTES les tablettes Papote ont leur carte SIM']) assert.ok(guide.includes(t), t);
 });
