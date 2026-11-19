@@ -243,7 +243,7 @@ let navigateur;
 // Avant, elle s'ouvrait dans le WebKit des iPhone : quand elle appelait, les vérifications ICE du proche lui
 // arrivaient avant sa réponse (setRemoteDescription) et le WebKit de Playwright laissait alors parfois
 // `connectionState` à « connecting » pour toujours, ICE et DTLS pourtant connectés (getStats) : « Tablette : liaison
-// non établie » (audit/tests-instables-18-11.md, point 6). Un défaut d'un moteur que la vraie tablette n'a pas.
+// non établie » (audit/tests-instables-18-11.md, point 7). Un défaut d'un moteur que la vraie tablette n'a pas.
 let navigateurAndroid;
 const ARGS_CHROMIUM = ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'];
 const telephones = [];

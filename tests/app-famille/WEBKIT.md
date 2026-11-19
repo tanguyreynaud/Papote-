@@ -32,7 +32,7 @@ La tablette filme en 640 × 480 (comme sa caméra) dans les deux moteurs.
 La tablette simulée des appels (`tablette.js`) s'ouvre toujours dans Chromium, même sous WebKit : la vraie tablette
 est une tablette Android (WebView, donc Chromium). Dans le WebKit des iPhone, quand elle appelait, son `connectionState`
 restait parfois à « connecting » pour toujours alors qu'ICE et DTLS étaient connectés (vérifications du proche arrivées
-avant sa réponse) : un défaut de moteur que la vraie tablette n'a pas (`audit/tests-instables-18-11.md`, point 6).
+avant sa réponse) : un défaut de moteur que la vraie tablette n'a pas (`audit/tests-instables-18-11.md`, point 7).
 Le téléphone du proche, lui, reste un iPhone (WebKit) dans tous les essais d'appel.
 
 Messages de Safari tolérés (et seulement sous WebKit, voir `banc.js`) :
