@@ -17,20 +17,27 @@ function fonctions() {
   }
   const dossier = path.join(ici, '.fonctions');
   const marque = path.join(dossier, 'SHA');
-  try {
-    run('git fetch --quiet origin main');
-  } catch (e) {
-    console.warn('Pas de réseau pour lire main : fonctions déjà préparées gardées.');
+  // Un lot de l'admin (claude/lot-X-admin) se teste contre les fonctions de son lot jumeau (claude/lot-X-main) s'il
+  // existe : les deux partent ensemble au même « Publier » (19/11 : écran admin testé contre des fonctions sans sa partie).
+  let branche = 'main';
+  const lot = /^claude\/lot-(.+)-admin$/.exec(process.env.GITHUB_REF_NAME || '');
+  if (lot) {
+    try { run(`git fetch --quiet origin claude/lot-${lot[1]}-main`); branche = `claude/lot-${lot[1]}-main`; } catch (e) { /* pas de jumeau : main */ }
   }
-  const sha = run('git rev-parse origin/main');
+  try {
+    run(`git fetch --quiet origin ${branche}`);
+  } catch (e) {
+    console.warn(`Pas de réseau pour lire ${branche} : fonctions déjà préparées gardées.`);
+  }
+  const sha = run(branche === 'main' ? 'git rev-parse origin/main' : 'git rev-parse FETCH_HEAD');
   const deja = fs.existsSync(marque) && fs.readFileSync(marque, 'utf8').trim() === sha
     && fs.existsSync(path.join(dossier, 'functions', 'node_modules'))
     && fs.existsSync(path.join(dossier, 'vitrine'));
   if (deja) {
-    console.log(`Fonctions de main ${sha.slice(0, 7)} déjà prêtes.`);
+    console.log(`Fonctions de ${branche} ${sha.slice(0, 7)} déjà prêtes.`);
     return;
   }
-  console.log(`Fonctions de main ${sha.slice(0, 7)} : extraction et installation…`);
+  console.log(`Fonctions de ${branche} ${sha.slice(0, 7)} : extraction et installation…`);
   fs.rmSync(path.join(dossier, 'functions'), { recursive: true, force: true });
   fs.rmSync(path.join(dossier, 'vitrine'), { recursive: true, force: true });
   fs.mkdirSync(dossier, { recursive: true });
