@@ -16,6 +16,9 @@
 //             simNumero), l'ordre porte appel = { numero, secondes, texte } : la tablette envoie un SMS puis appelle ce
 //             portable ~20 s et raccroche seule. Son résultat ajoute sms = { ok, code, ms } et
 //             appel = { ok, secondes, raison? } ; le test n'est réussi qu'avec les deux. Sans numéro : test comme avant.
+//   répondeur (Tanguy, 19/11) : après son test, la tablette coupe le répondeur de sa ligne (##002#) et ajoute
+//             repondeur = { ok, essais, raison? } (écrit à part, quelques secondes plus tard). Affiché dans l'admin,
+//             sans bloquer l'envoi : la tablette réessaie seule chaque jour tant que ce n'est pas fait.
 //
 // Logique pure en haut (testée dans sim-installation.test.js), accès à la base dans brancher().
 
@@ -38,6 +41,9 @@ const SILENCE_APPEL_MS = 90_000;
 const APPEL_SECONDES = 20;
 const RAISONS_APPEL = ['coupe', 'refuse', 'sans-permission', 'erreur', 'numero'];
 const SUFFIXE_PIN = '-apres-pin';
+const RAISONS_REPONDEUR = ['refuse', 'indisponible', 'delai', 'sans-permission', 'sans-reseau', 'occupe', 'erreur'];
+// Après le résultat du test, la tablette met au plus ~40 s à couper le répondeur (2 essais de 15 s).
+const REPONDEUR_MS = 60_000;
 
 const OPERATEURS = { '01': 'Orange', '02': 'Orange', '10': 'SFR', '11': 'SFR', '13': 'SFR', '15': 'Free', '16': 'Free', '20': 'Bouygues', '21': 'Bouygues', '88': 'Bouygues' };
 
@@ -126,13 +132,31 @@ function resultatPropre(t) {
   const appel = t.appel && typeof t.appel === 'object'
     ? { ok: t.appel.ok === true, secondes: entier(t.appel.secondes, 0, 3600), raison: RAISONS_APPEL.includes(t.appel.raison) ? t.appel.raison : null }
     : null;
+  const repondeur = t.repondeur && typeof t.repondeur === 'object'
+    ? { ok: t.repondeur.ok === true, essais: entier(t.repondeur.essais, 0, 10), raison: RAISONS_REPONDEUR.includes(t.repondeur.raison) ? t.repondeur.raison : null }
+    : null;
   return {
     id: t.id.slice(0, 80), le: ms(t.le), etat: t.etat,
     iccid: texte(t.iccid, 32), mcc: texte(t.mcc, 3), mnc: texte(t.mnc, 3), operateur: texte(t.operateur, 60),
     inscrite: t.inscrite === true, itinerance: t.itinerance === true,
     donnees: { ok: d.ok === true, ms: Number.isFinite(d.ms) ? Math.round(d.ms) : null },
-    sms, appel,
+    sms, appel, repondeur,
   };
+}
+
+// Répondeur de la ligne de la tablette (information, ne bloque pas l'envoi). t : résultat de la tablette.
+// → { ok, attente, message }
+function etatRepondeur(t, maintenant) {
+  const r = t && t.repondeur;
+  if (r && r.ok === true) return { ok: true, attente: false, message: 'Répondeur de la ligne coupé : un appel sans réponse ne tombe jamais sur une messagerie.' };
+  if (!r) {
+    const le = ms(t && t.le);
+    if (le != null && maintenant - le < REPONDEUR_MS) return { ok: false, attente: true, message: 'La tablette coupe le répondeur de la ligne, quelques secondes…' };
+    return { ok: false, attente: false, message: 'La tablette n\'a pas dit si le répondeur est coupé : mettez à jour l\'appli Papote de la tablette. Elle le coupera ensuite toute seule.' };
+  }
+  if (r.raison === 'refuse') return { ok: false, attente: false, message: 'L\'opérateur a refusé de couper le répondeur. La tablette réessaiera chaque jour ; sinon, coupez-le depuis l\'espace client de l\'opérateur.' };
+  if (r.raison === 'sans-permission') return { ok: false, attente: false, message: 'La tablette n\'a pas l\'autorisation Téléphone : autorisez-la pour l\'appli Papote (Paramètres de la tablette, Applications). Elle coupera ensuite le répondeur toute seule.' };
+  return { ok: false, attente: false, message: 'Le répondeur n\'est pas encore coupé (réseau occupé). La tablette réessaiera toute seule chaque jour, rien à faire.' };
 }
 
 const nomOperateur = (t) => (t && (t.operateur || OPERATEURS[String(t.mnc || '').padStart(2, '0')])) || '';
@@ -214,6 +238,8 @@ function verdict({ ordre, test, simAttendue, maintenant }) {
   return {
     ok, attente: false, coches, ms: t.donnees && Number.isFinite(t.donnees.ms) ? t.donnees.ms : null,
     operateur: nomOperateur(t), lue: fin(t.iccid), etat: t.etat, message,
+    // Seulement quand la carte est inscrite au réseau français : la tablette ne coupe le répondeur qu'alors.
+    repondeur: t.inscrite === true && t.itinerance !== true && francais ? etatRepondeur(t, maintenant) : null,
     ...(avecAppel ? {
       sms: t.sms ? { ok: t.sms.ok === true, ms: Number.isFinite(t.sms.ms) ? t.sms.ms : null } : null,
       appel: t.appel ? { ok: t.appel.ok === true, secondes: Number.isFinite(t.appel.secondes) ? t.appel.secondes : null, raison: t.appel.raison || null } : null,
@@ -379,6 +405,6 @@ function brancher({ db, logger }) {
 
 module.exports = {
   brancher, verdict, memeCarte, pairingPourOrdre, ordreDejaParti, ordreAReporter, ordreReporte, resultatPropre, refusSimNonTestee,
-  idDeBase, repondA, numeroEssai, numeroLisible, appelPourOrdre, messageSmsAppel,
+  idDeBase, repondA, etatRepondeur, RAISONS_REPONDEUR, REPONDEUR_MS, numeroEssai, numeroLisible, appelPourOrdre, messageSmsAppel,
   TYPES, ETATS, FRAIS_MS, DOUBLON_MS, REPORT_MS, SUFFIXE_PIN, SILENCE_MS, SILENCE_APPEL_MS, APPEL_SECONDES, RAISONS_APPEL,
 };
