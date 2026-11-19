@@ -88,7 +88,7 @@ test('durée réglée par la famille : 1 minute, 5 minutes ; un réglage hors bo
   }
 });
 
-test('visage vu 10 secondes avant la fin : « vu », et l\'envoi reste encore 2 minutes (pas fermé à 3 min)', async () => {
+test('visage vu 10 secondes avant la fin : « vu », caméra éteinte, et l\'envoi reste encore 1 minute (pas fermé à 3 min)', async () => {
   const b = await ouvrirSansPresence();
   try {
     const a = envoi({ text: 'Bisous de Lyon' });
@@ -97,12 +97,67 @@ test('visage vu 10 secondes avant la fin : « vu », et l\'envoi reste encore 2 
     await visage(b);
     await b.avancer(1000);
     assert.deepStrictEqual((await b.appels('markSeen')).map((x) => x.args[0]), [a.id]);
-    await b.avancer(60000);
-    assert.ok(await b.visible('#overlay'), 'encore là à 3 min 51 : la fin de durée ne ferme plus un envoi vu');
+    assert.strictEqual(await camera(b), 0, 'visage vu : la caméra s\'éteint tout de suite');
+    await b.avancer(54000);
+    assert.ok(await b.visible('#overlay'), 'encore là à 3 min 45 : 55 s après le visage');
+    // La légende est lue à voix haute au visage (une dizaine de secondes ici) : 1 minute après la fin de la lecture.
+    await b.avancer(30000);
+    assert.ok(!(await b.visible('#overlay')), 'fermé 1 minute après le visage et la fin de la lecture');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('visage vu au début : l\'envoi reste jusqu\'à la fin de la durée réglée (3 min), pas 1 minute seulement', async () => {
+  const b = await ouvrirSansPresence();
+  try {
+    const a = envoi({ text: 'Bisous de Lyon' });
+    await b.android('onPosts', lot([a]));
+    await b.avancer(10000);
+    await visage(b);
+    await b.avancer(1000);
+    assert.strictEqual(await camera(b), 0, 'caméra éteinte dès le visage');
+    await b.avancer(162000);
+    assert.ok(await b.visible('#overlay'), 'encore là à 2 min 53');
+    await b.avancer(10000);
+    assert.ok(!(await b.visible('#overlay')), 'fermé à la fin des 3 minutes');
+    assert.deepStrictEqual((await b.appels('markSeen')).map((x) => x.args[0]), [a.id]);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('vue puis OK : fermé tout de suite', async () => {
+  const b = await ouvrirSansPresence();
+  try {
+    await b.android('onPosts', lot([envoi({ text: 'Bisous de Lyon' })]));
+    await b.avancer(10000);
+    await visage(b);
+    await b.avancer(5000);
+    await b.toucher('#overlay-close');
+    await b.avancer(500);
+    assert.ok(!(await b.visible('#overlay')), 'OK ferme à tout moment');
+    await b.avancer(4 * 60000);
+    assert.ok(!(await b.visible('#overlay')));
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('vidéo vue à la fin de la durée : jouée en entier, l\'écran se ferme 1 minute après la fin de la vidéo', async () => {
+  const b = await ouvrirSansPresence();
+  try {
+    const v = envoi({ type: 'video', image: null, video: 'https://appassets.androidplatform.net/photos/v.mp4', text: 'Le spectacle' });
+    await b.android('onPosts', lot([v]));
+    await b.avancer(170000);
+    await visage(b);
+    await b.avancer(10000);
+    assert.strictEqual((await b.appels('playVideo')).concat(await b.appels('playVideoAt')).length, 1, 'vidéo lancée au visage');
+    await b.avancer(4 * 60000);
+    assert.ok(await b.visible('#overlay'), 'vidéo de 4 minutes en cours : l\'écran reste, bien après les 3 minutes');
+    assert.deepStrictEqual(await b.appels('stopVideo'), [], 'vidéo pas coupée');
+    await b.android('onVoiceEnded'); // Android : la vidéo est finie
     await b.avancer(55000);
-    assert.ok(await b.visible('#overlay'), 'encore là 1 min 56 après le visage');
-    await b.avancer(6000);
-    assert.ok(!(await b.visible('#overlay')), 'fermé 2 minutes après le visage');
+    assert.ok(await b.visible('#overlay'), 'encore là 55 s après la fin de la vidéo');
+    await b.avancer(9000);
+    assert.ok(!(await b.visible('#overlay')), 'fermé 1 minute après la fin de la vidéo');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
@@ -237,7 +292,7 @@ test('rappel : chaque essai dure la durée réglée (1 minute)', async () => {
   } finally { await b.fermer(); }
 });
 
-test('rappel vu au deuxième essai : « vu » pour la famille, fermé 2 minutes après, pas de troisième essai', async () => {
+test('rappel vu au deuxième essai : « vu » pour la famille, fermé à la fin de la durée, pas de troisième essai', async () => {
   const b = await ouvrirSansPresence('2026-10-26T10:29:30');
   try {
     await b.android('onPosts', lot([]));
@@ -249,8 +304,11 @@ test('rappel vu au deuxième essai : « vu » pour la famille, fermé 2 minutes 
     const vus = await b.appels('seenReminder');
     assert.strictEqual(vus.length, 1);
     assert.strictEqual(vus[0].args[0], 'r1');
-    await b.avancer(125000);
-    assert.ok(!(await b.visible('#reminder-alert')), 'fermé 2 minutes après le visage');
+    assert.strictEqual(await camera(b), 0, 'caméra éteinte dès le visage');
+    await b.avancer(100000);
+    assert.ok(await b.visible('#reminder-alert'), 'encore là à 2 min 45 de l\'essai');
+    await b.avancer(55000);
+    assert.ok(!(await b.visible('#reminder-alert')), 'fermé à la fin des 3 minutes (10 h 48)');
     await b.avancer(60 * 60000);
     assert.ok(!(await b.visible('#reminder-alert')), 'pas de troisième essai');
     assert.strictEqual((await b.appels('alert')).length, 2);

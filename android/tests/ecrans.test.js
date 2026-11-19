@@ -37,7 +37,7 @@ test('file des envois : 5 au plus, du plus ancien au plus récent, OK passe au s
   } finally { await b.fermer(); }
 });
 
-test('visage vu : « vu », lecture dans la voix du proche, puis fermeture 2 minutes après', async () => {
+test('visage vu : « vu », lecture dans la voix du proche, puis fermeture à la fin des 3 minutes d\'affichage', async () => {
   const b = await ouvrir();
   try {
     const a = envoi({ text: 'Bisous de Lyon', voice: 'https://appassets.androidplatform.net/photos/a_voix.mp3', announce: 'https://appassets.androidplatform.net/photos/a_annonce.mp3' });
@@ -52,9 +52,10 @@ test('visage vu : « vu », lecture dans la voix du proche, puis fermeture 2 min
     const sons = (await b.appels('audio')).map((x) => x.args[0]);
     assert.deepStrictEqual(sons, [a.announce, a.voice], 'annonce « Julie vous écrit » puis le message');
     assert.deepStrictEqual(await b.appels('speak'), [], 'pas la voix de secours');
-    await b.avancer(114000);
-    assert.match(await b.texte('#overlay-text'), /Bisous de Lyon/, 'encore affiché avant 2 min');
-    await b.avancer(6000);
+    assert.strictEqual(await b.page.evaluate(() => window.__surveillances.size), 0, 'visage vu : caméra éteinte tout de suite');
+    await b.avancer(172000);
+    assert.match(await b.texte('#overlay-text'), /Bisous de Lyon/, 'encore affiché avant 3 min');
+    await b.avancer(8000);
     assert.match(await b.texte('#overlay-text'), /Et une autre/, 'fermé tout seul, au suivant');
     await sansErreur(b);
   } finally { await b.fermer(); }

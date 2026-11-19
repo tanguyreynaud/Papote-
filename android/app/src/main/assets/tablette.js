@@ -792,18 +792,20 @@
     if (!overlayPost && !inCall() && !asleep) nextOverlay();
   }
 
-  // ---------- Visage vu : « lu », lecture, puis fermeture au bout de 2 minutes ----------
+  // ---------- Visage vu : « lu », lecture, puis fermeture à la fin de la durée d'affichage ----------
   // La caméra (appels.js, window.papoteWatchPresence) regarde si quelqu'un est devant la tablette.
   // Dès que son visage est vu, l'envoi ou le rappel est marqué « lu » pour la famille (onSeen),
-  // une vidéo ou un vocal se lance, puis l'écran se ferme tout seul 2 minutes plus tard s'il n'a
-  // pas touché OK.
+  // une vidéo ou un vocal se lance, la caméra s'éteint, puis l'écran se ferme tout seul à la fin de la
+  // durée d'affichage (au moins 1 minute après le visage, voir APRES_VU_MS) s'il n'a pas touché OK.
   // Jamais vu : l'envoi ou le rappel reste affiché, caméra allumée, pendant la durée réglée par la
   // famille (options.dureeAffichage, 1 à 5 minutes, 3 sans réglage), puis il se ferme quand même
   // (pasVu) et la caméra s'éteint (Tanguy, 19/11 ; avant : affiché jusqu'à « OK », la caméra 3 minutes
   // puis 1 minute toutes les 5 minutes, sans fin, et il fallait regarder pile au bon moment).
   // Renvoie false quand la tablette ne sait pas regarder (pas de caméra côté page) : la durée compte quand même.
 
-  var SEEN_CLOSE_MS = 120000;
+  // Vue : il reste au moins 1 minute de plus, et 1 minute après la fin d'une vidéo ou d'une lecture à voix haute
+  // (Tanguy, 19/11 ; avant : toujours 2 minutes après le visage, même s'il restait du temps).
+  var APRES_VU_MS = 60000;
   var AFFICHAGE_MIN = 1, AFFICHAGE_MAX = 5, AFFICHAGE_DEFAUT = 3; // minutes (mêmes bornes dans Sync.java et l'app famille)
   var watchers = {};
 
@@ -813,26 +815,43 @@
     return m * 60000;
   }
 
-  function watchSeen(slot, onSeen, close, pasVu) {
+  // occupe() : une vidéo joue ou la tablette lit à voix haute (on ne ferme pas pendant, ni dans la minute qui suit).
+  function watchSeen(slot, onSeen, close, pasVu, occupe) {
     unwatchSeen(slot);
-    var w = { stop: null, timer: null, fin: null };
+    var w = { stop: null, timer: null, fin: null, finA: 0, vuA: 0, libreA: 0 };
     watchers[slot] = w;
+    var eteindre = function () {
+      try { if (typeof w.stop === 'function') w.stop(); } catch (e) { }
+      w.stop = null;
+    };
+    // Vue : fermeture à la fin de la durée d'affichage, jamais moins d'1 minute après le visage, ni moins
+    // d'1 minute après la fin d'une vidéo ou d'une lecture. Regardé toutes les 2 secondes.
+    var fermerQuandFini = function () {
+      if (watchers[slot] !== w) return;
+      var now = Date.now();
+      var pris = false;
+      try { pris = !!(occupe && occupe()); } catch (e) { }
+      if (pris) w.libreA = now + APRES_VU_MS;
+      if (pris || now < Math.max(w.finA, w.vuA + APRES_VU_MS, w.libreA)) { w.timer = setTimeout(fermerQuandFini, 2000); return; }
+      unwatchSeen(slot);
+      close();
+    };
     var vu = function () {
       if (watchers[slot] !== w || w.timer) return;
       clearTimeout(w.fin);
+      eteindre(); // visage vu : la caméra s'éteint tout de suite
       console.warn('Visage vu (' + slot + ')');
       // Elle est là : le carillon d'arrivée s'arrête.
       try { if (android() && android().carillonStop) android().carillonStop(); } catch (e) { }
+      w.vuA = Date.now();
       try { onSeen(); } catch (e) { console.warn('Visage vu : ' + e); }
-      w.timer = setTimeout(function () {
-        if (watchers[slot] !== w) return;
-        unwatchSeen(slot);
-        close();
-      }, SEEN_CLOSE_MS);
+      w.timer = setTimeout(fermerQuandFini, 2000);
     };
     // La durée d'affichage : repart de zéro à chaque toucher (elle est là, on ne ferme pas sous son doigt).
     w.attendre = function () {
-      if (watchers[slot] !== w || w.timer) return;
+      if (watchers[slot] !== w) return;
+      w.finA = Date.now() + dureeAffichageMs();
+      if (w.timer) return; // déjà vue : fermerQuandFini suit la nouvelle fin
       clearTimeout(w.fin);
       w.fin = setTimeout(function () {
         if (watchers[slot] !== w || w.timer) return;
@@ -941,8 +960,9 @@
       // Personne pendant la durée réglée : il se ferme sans être « vu » (la famille le voit « pas encore vu »).
       // Une photo est déjà dans le diaporama ; une vidéo y entre (comme un envoi sauté).
       if (!p.seen) { noterFerme(p.id); passes[p.id] = true; }
-      stopSpeaking();
       nextOverlay();
+    }, function () {
+      return (playing && playing.post === p) || speech !== 'idle';
     });
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
@@ -1594,7 +1614,7 @@
       if (alerting.early) { announced[alerting.r.id + '|' + alerting.key] = true; saveMarks(); }
       closeReminder();
       setTimeout(checkReminders, 500);
-    });
+    }, function () { return speech !== 'idle'; });
   }
 
   function closeReminder() {
