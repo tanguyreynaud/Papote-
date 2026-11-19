@@ -378,12 +378,18 @@ function ESPION_RTC() {
   window.RTCPeerConnection = Espion;
 }
 
+async function diagCourt(t, titre) {
+  const l = await t.page.evaluate(() => (window.__rtc || []).filter((x) => /ice=checking|setRemote answer|conn=|ice=connected/.test(x)).map((x) => x.replace(/^\d+ms pc\d /, '')).join(' > ')).catch((e) => String(e));
+  console.log(`# DIAG COURT ${titre} : ${l}`);
+}
+
 async function diagRtc(titre) {
   for (const t of telephones) {
     if (t.page.isClosed()) continue;
     const d = await Promise.race([t.page.evaluate(async () => {
       const out = [...(window.__rtc || [])];
       for (const pc of (window.__pcs || [])) {
+        out.push(`pc${pc.__id} transports JS : ${pc.getTransceivers().map((t) => `${t.mid}:${t.sender.transport ? `${t.sender.transport.state}/${t.sender.transport.iceTransport.state}` : 'aucun'}`).join(' ')}`);
         out.push(`pc${pc.__id} etat sig=${pc.signalingState} ice=${pc.iceConnectionState} conn=${pc.connectionState} gather=${pc.iceGatheringState} remoteDesc=${!!pc.remoteDescription}`);
         try { const st = await pc.getStats(); st.forEach((r) => { if (r.type === 'candidate-pair') out.push(`pc${pc.__id} paire ${r.state} nom=${r.nominated} ${(st.get(r.localCandidateId) || {}).address}:${(st.get(r.localCandidateId) || {}).port}/${(st.get(r.localCandidateId) || {}).candidateType} -> ${(st.get(r.remoteCandidateId) || {}).address}:${(st.get(r.remoteCandidateId) || {}).port}/${(st.get(r.remoteCandidateId) || {}).candidateType} req=${r.requestsSent} rep=${r.responsesReceived} reqRecues=${r.requestsReceived}`); if (r.type === 'transport') out.push(`pc${pc.__id} transport dtls=${r.dtlsState} ice=${r.iceState} role=${r.iceRole}`); }); } catch (e) { out.push('stats ' + e); }
       }
@@ -547,7 +553,7 @@ function brancher() {
 }
 
 module.exports = {
-  diagRtc,
+  diagRtc, diagCourt,
   s, acteurs, admin, brancher, telephone, tolerer, appels, pannes, sorties,
   get origine() { return origine; },
   get port() { return port; },

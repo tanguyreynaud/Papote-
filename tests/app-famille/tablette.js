@@ -133,7 +133,9 @@ async function appeler(tablette, { vers = null, nom = 'Mamie Emma', sos = 0 } = 
 async function prendreReponse(tablette, cid) {
   const appel = await attendre(async () => { const d = (await ref(tablette, cid).get()).data(); return d && d.answer && d; }, 'pas de réponse');
   await avecDelai(tablette.page.evaluate((a) => window.pc.setRemoteDescription({ type: a.type, sdp: a.sdp }), appel.answer), 'réponse du proche');
-  await attendre(() => tablette.page.evaluate(() => window.pc.connectionState === 'connected'), 'liaison non établie');
+  try {
+    await attendre(() => tablette.page.evaluate(() => window.pc.connectionState === 'connected'), 'liaison non établie');
+  } finally { await banc.diagCourt(tablette, 'prendreReponse'); }
   return appel.answer;
 }
 
