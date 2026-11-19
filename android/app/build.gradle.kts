@@ -14,8 +14,10 @@ val signingProps = Properties().apply {
 // Identifiants Firebase de la tablette (notifications push qui la réveillent : voir Push.java) :
 // app/google-services.json, téléchargé depuis la console Firebase (app Android com.papote.tablette)
 // et gardé hors du dépôt. Même lecture que telephone/ : les valeurs que Firebase lit au démarrage,
-// sans le plugin google-services. SANS le fichier, la tablette se construit quand même, sans push
-// (la page garde alors son écoute en direct).
+// sans le plugin google-services. SANS le fichier, la version d'essai (debug : tests automatiques, où
+// le fichier n'existe pas) se construit sans push ; la version installée sur les tablettes (release)
+// est REFUSÉE (voir plus bas) : sans push, la page garde 4 écoutes en direct, environ 100 Mo par mois
+// sur une carte SIM d'1 Go (Tanguy, 19/11 : « je préfère que ça ne passe pas »).
 @Suppress("UNCHECKED_CAST")
 val firebaseValues: Map<String, String> = run {
     val f = file("google-services.json")
@@ -36,6 +38,19 @@ val firebaseValues: Map<String, String> = run {
         "project_id" to projet["project_id"] as String,
         "google_api_key" to cles.first()["current_key"] as String,
     )
+}
+
+// Aucune version « release » sans le push : ni APK de mise à jour, ni APK d'installation.
+gradle.taskGraph.whenReady {
+    val release = allTasks.any { it.project == project && it.name.contains("Release") }
+    if (release && firebaseValues.isEmpty()) {
+        throw GradleException(
+            "Construction refusée : android/app/google-services.json est absent ou ne contient pas " +
+                "l'application com.papote.tablette. Sans ce fichier la tablette n'a pas de push et consomme " +
+                "environ 100 Mo de carte SIM par mois. Télécharger le fichier depuis la console Firebase " +
+                "(projet papote-famille, application Android com.papote.tablette) et le poser dans android/app/."
+        )
+    }
 }
 
 android {

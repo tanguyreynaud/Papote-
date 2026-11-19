@@ -163,6 +163,16 @@ function New-SourceAndroid($rev, $work, $versionCode, $versionName) {
 # Vérifie le JavaScript de la tablette, compile l'APK signé dans $work et renvoie son chemin.
 function Build-Apk($work) {
     Copy-Item "$root\android\local.properties", "$root\android\signing.properties" "$work\android\"
+    # Fichier du push (hors du dépôt, donc absent du code extrait) : sans lui la tablette garde 4 écoutes en
+    # direct, environ 100 Mo de carte SIM par mois. Pas de fichier, pas d'APK (Tanguy, 19/11).
+    $push = "$root\android\app\google-services.json"
+    if (-not (Test-Path $push)) {
+        throw "Publication arrêtée, rien n'a été changé : android\app\google-services.json est absent. Sans ce fichier la tablette n'a pas de push et consomme environ 100 Mo de carte SIM par mois."
+    }
+    if ((Get-Content -Raw $push) -notmatch 'com\.papote\.tablette') {
+        throw "Publication arrêtée, rien n'a été changé : android\app\google-services.json ne contient pas l'application com.papote.tablette."
+    }
+    Copy-Item $push "$work\android\app\"
     # Vérification du JavaScript de la tablette avant de compiler : une seule faute de frappe bloque tout l'écran.
     $assets = "$work\android\app\src\main\assets"
     foreach ($js in 'tablette.js', 'bienvenue.js') {

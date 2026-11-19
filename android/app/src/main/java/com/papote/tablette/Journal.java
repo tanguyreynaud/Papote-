@@ -16,12 +16,14 @@ import java.util.Locale;
 
 /**
  * Journal de la tablette (démarrages, écran allumé/éteint, veille, réseau, erreurs) :
- * les 300 dernières lignes, gardées sur la tablette et envoyées à la famille
+ * les 300 dernières lignes au moins (le fichier est raccourci quand il dépasse 96 Ko), gardées sur la tablette et envoyées à la famille
  * (families/{fid}/logs/{uid}) pour comprendre un problème à distance.
  */
 final class Journal {
     private static final String FILE = "journal.txt";
     private static final int MAX_LINES = 300;
+    /** Au-delà, le fichier est raccourci aux MAX_LINES dernières lignes. */
+    private static final int TAILLE_MAX = 96 * 1024;
     private static final Object LOCK = new Object();
 
     private Journal() { }
@@ -32,16 +34,28 @@ final class Journal {
         synchronized (LOCK) {
             try {
                 File f = new File(context.getFilesDir(), FILE);
-                List<String> lines = f.exists()
-                        ? new ArrayList<>(Arrays.asList(new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).split("\n")))
-                        : new ArrayList<>();
-                lines.add(line);
-                if (lines.size() > MAX_LINES) lines = lines.subList(lines.size() - MAX_LINES, lines.size());
-                FileOutputStream out = new FileOutputStream(f);
+                // La ligne est ajoutée au bout du fichier ; il n'est relu et raccourci aux 300 dernières
+                // lignes que lorsqu'il a trop grossi (avant : fichier entier relu et réécrit à chaque ligne).
+                byte[] octets = ((f.length() > 0 ? "\n" : "") + line).getBytes(StandardCharsets.UTF_8);
+                FileOutputStream out = new FileOutputStream(f, true);
                 try {
-                    out.write(String.join("\n", lines).getBytes(StandardCharsets.UTF_8));
+                    out.write(octets);
                 } finally {
                     out.close();
+                }
+                if (f.length() > TAILLE_MAX) {
+                    List<String> lines = new ArrayList<>(Arrays.asList(
+                            new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).split("\n")));
+                    if (lines.size() > MAX_LINES) lines = lines.subList(lines.size() - MAX_LINES, lines.size());
+                    byte[] garde = String.join("\n", lines).getBytes(StandardCharsets.UTF_8);
+                    // Lignes très longues : même 300 lignes dépassent, on garde la fin seulement.
+                    if (garde.length > TAILLE_MAX) garde = Arrays.copyOfRange(garde, garde.length - TAILLE_MAX / 2, garde.length);
+                    FileOutputStream tout = new FileOutputStream(f);
+                    try {
+                        tout.write(garde);
+                    } finally {
+                        tout.close();
+                    }
                 }
             } catch (Exception e) {
                 Log.w("PapoteJournal", "Écriture du journal", e);

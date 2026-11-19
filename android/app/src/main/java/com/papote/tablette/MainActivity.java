@@ -1628,13 +1628,20 @@ public class MainActivity extends Activity implements Sync.Listener {
      * Rallume l'écran le matin s'il s'est éteint dans la nuit (bouton, coupure), et rétablit
      * la luminosité si la page n'a pas pu le faire elle-même.
      */
+    private static final java.util.concurrent.ExecutorService smsFil =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "papote-sms");
+                t.setDaemon(true);
+                return t;
+            });
+
     private final Runnable daytimeWatch = new Runnable() {
         @SuppressWarnings("deprecation")
         @Override
         public void run() {
             handler.postDelayed(this, 60_000);
             final SmsAlert alert = smsAlert;
-            if (alert != null) new Thread(alert::check, "papote-sms").start();
+            if (alert != null) smsFil.execute(alert::check); // un seul fil réutilisé, pas un nouveau par minute
             if (kioskPaused()) return;
             // Mode kiosque perdu (écran de contrôle, mise à jour…) : sans lui, le bouton marche/arrêt
             // rouvre le menu « Éteindre / Redémarrer ». Remis tout de suite, de jour comme de nuit.
