@@ -2345,7 +2345,9 @@
     callScreen.appendChild(el2('h1', 'call-title', name || 'Un proche'));
     callScreen.appendChild(el2('p', 'call-sub', 'vous appelle'));
     var row = el2('div', 'call-buttons');
-    var yes = el2('button', 'call-hangup call-answer', 'Décrocher');
+    var yes = el2('button', 'call-hangup call-answer', '');
+    // Le combiné, comme sur « Appeler » : une Mamie qui ne lit pas reconnaît le bouton (banc utilisateurs, 19/11).
+    yes.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg><span>Décrocher</span>';
     on(yes, 'click', function () {
       if (android() && android().phoneAnswer) { try { android().phoneAnswer(); } catch (e) { } }
       yes.disabled = true;
@@ -2616,7 +2618,37 @@
     leverPausePourSos(false);
   }
 
+  // Après « Annuler » (banc utilisateurs du 19/11 : Mamie ne savait pas si la famille avait été prévenue) :
+  // « C'est annulé. Personne n'a été prévenu. » 3 secondes, puis l'accueil. Un toucher ferme tout de suite.
+  // Rien n'est encore parti pendant le décompte (ni SMS ni appel) : la phrase est vraie.
+  var sosAnnuleTimer = null;
+  function sosAnnuleMontrer() {
+    ensureCallScreen();
+    callScreen.innerHTML = '';
+    callScreen.className = 'call-out sos-annule';
+    callScreen.removeAttribute('hidden');
+    var zone = el2('div', 'sos-annule-zone', '');
+    zone.appendChild(el2('h1', 'call-title', 'C’est annulé'));
+    zone.appendChild(el2('p', 'call-sub', 'Personne n’a été prévenu.'));
+    callScreen.appendChild(zone);
+    var fini = false;
+    var fermer = function () {
+      if (fini) return;
+      fini = true;
+      clearTimeout(sosAnnuleTimer);
+      sosAnnuleTimer = null;
+      // Un autre écran (appel reçu, nouveau SOS) a pu prendre la place : on ne le ferme pas.
+      if (callScreen && /\bsos-annule\b/.test(callScreen.className)) closeCallScreen();
+      leverPausePourSos(false); // appui par erreur : la pause revient (si l'abonnement est en pause)
+    };
+    on(zone, 'click', fermer);
+    clearTimeout(sosAnnuleTimer);
+    sosAnnuleTimer = setTimeout(fermer, 3000);
+  }
+
   function showSosCountdown(reprise) {
+    clearTimeout(sosAnnuleTimer);
+    sosAnnuleTimer = null;
     // Tablette verrouillée : seulement le SOS de son propre écran (Tanguy, 05/11), jamais celui de dessous.
     if (perdue && !window.papoteSosEnCours) return;
     if (reprise !== true) {
@@ -2641,8 +2673,7 @@
     on(cancel, 'click', function () {
       clearInterval(sosTimer);
       sosFini();
-      closeCallScreen();
-      leverPausePourSos(false); // appui par erreur : la pause revient (si l'abonnement est en pause)
+      sosAnnuleMontrer();
     });
     callScreen.appendChild(cancel);
     var left = SOS_DELAY_S;
