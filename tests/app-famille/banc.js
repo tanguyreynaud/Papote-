@@ -346,6 +346,54 @@ function NOTER_TOASTS() {
   else brancher();
 }
 
+// DIAG : journal WebRTC de chaque page (window.__rtc).
+function ESPION_RTC() {
+  if (!window.RTCPeerConnection || window.__rtc) return;
+  window.__rtc = [];
+  const t0 = performance.now();
+  const note = (id, quoi) => window.__rtc.push(`${Math.round(performance.now() - t0)}ms pc${id} ${quoi}`);
+  const Vrai = window.RTCPeerConnection;
+  let n = 0;
+  window.__pcs = [];
+  class Espion extends Vrai {
+    constructor(cfg) {
+      super(cfg);
+      const id = ++n;
+      this.__id = id;
+      window.__pcs.push(this);
+      note(id, `new ${JSON.stringify(cfg && cfg.iceServers)}`);
+      this.addEventListener('icecandidate', (e) => note(id, `local ${e.candidate ? e.candidate.candidate : 'FIN'}`));
+      this.addEventListener('iceconnectionstatechange', () => note(id, `ice=${this.iceConnectionState}`));
+      this.addEventListener('connectionstatechange', () => note(id, `conn=${this.connectionState}`));
+      this.addEventListener('icegatheringstatechange', () => note(id, `gather=${this.iceGatheringState}`));
+      this.addEventListener('signalingstatechange', () => note(id, `sig=${this.signalingState}`));
+      this.addEventListener('negotiationneeded', () => note(id, 'negotiationneeded'));
+    }
+    async addIceCandidate(c, ...r) {
+      try { const x = await super.addIceCandidate(c, ...r); note(this.__id, `remote ok ${c && c.candidate}`); return x; } catch (e) { note(this.__id, `remote ERR ${e.name} ${c && c.candidate}`); throw e; }
+    }
+    async setRemoteDescription(d, ...r) { note(this.__id, `setRemote ${d && d.type}`); try { return await super.setRemoteDescription(d, ...r); } catch (e) { note(this.__id, `setRemote ERR ${e.name} ${e.message}`); throw e; } }
+    async setLocalDescription(d, ...r) { note(this.__id, `setLocal ${d && d.type}`); try { return await super.setLocalDescription(d, ...r); } catch (e) { note(this.__id, `setLocal ERR ${e.name} ${e.message}`); throw e; } }
+  }
+  window.RTCPeerConnection = Espion;
+}
+
+async function diagRtc(titre) {
+  for (const t of telephones) {
+    if (t.page.isClosed()) continue;
+    const d = await Promise.race([t.page.evaluate(async () => {
+      const out = [...(window.__rtc || [])];
+      for (const pc of (window.__pcs || [])) {
+        out.push(`pc${pc.__id} etat sig=${pc.signalingState} ice=${pc.iceConnectionState} conn=${pc.connectionState} gather=${pc.iceGatheringState} remoteDesc=${!!pc.remoteDescription}`);
+        try { const st = await pc.getStats(); st.forEach((r) => { if (r.type === 'candidate-pair') out.push(`pc${pc.__id} paire ${r.state} nom=${r.nominated} ${(st.get(r.localCandidateId) || {}).address}:${(st.get(r.localCandidateId) || {}).port}/${(st.get(r.localCandidateId) || {}).candidateType} -> ${(st.get(r.remoteCandidateId) || {}).address}:${(st.get(r.remoteCandidateId) || {}).port}/${(st.get(r.remoteCandidateId) || {}).candidateType} req=${r.requestsSent} rep=${r.responsesReceived} reqRecues=${r.requestsReceived}`); if (r.type === 'transport') out.push(`pc${pc.__id} transport dtls=${r.dtlsState} ice=${r.iceState} role=${r.iceRole}`); }); } catch (e) { out.push('stats ' + e); }
+      }
+      return out;
+    }), new Promise((ok) => setTimeout(() => ok(['(page muette)']), 5000))]).catch((e) => [String(e)]);
+    console.log(`# DIAG ${titre} --- ${t.nom} ---`);
+    for (const l of d) console.log(`# DIAG   ${String(l).slice(0, 400)}`);
+  }
+}
+
 /**
  * Un téléphone : un navigateur à part, comme le téléphone d'un proche.
  * options : { largeur, hauteur, hauteurEcran } (iPhone 13 par défaut) ; fuseau : fuseau horaire (heure de Paris par
@@ -391,6 +439,7 @@ async function telephone(nom, { largeur, hauteur, fuseau = 'Europe/Paris' } = {}
   // l'écran, et une CI chargée pouvait le laisser apparaître et disparaître entre deux regards de Playwright
   // (gestes.js toast, audit/tests-instables-18-11.md).
   await context.addInitScript(NOTER_TOASTS);
+  await context.addInitScript(ESPION_RTC);
   const page = await context.newPage();
   const t = {
     nom, context, page, erreurs: [], console: [],
@@ -498,6 +547,7 @@ function brancher() {
 }
 
 module.exports = {
+  diagRtc,
   s, acteurs, admin, brancher, telephone, tolerer, appels, pannes, sorties,
   get origine() { return origine; },
   get port() { return port; },

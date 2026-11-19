@@ -1,0 +1,44 @@
+# DIAGNOSTIC TEMPORAIRE (branche claude/appels-diag seulement) : appels de la tablette sous WebKit, en boucle, journal WebRTC.
+name: Appels diag
+on:
+  push:
+    branches: ['claude/appels-diag']
+jobs:
+  diag:
+    name: diag (${{ matrix.appareil }})
+    strategy:
+      fail-fast: false
+      matrix:
+        appareil: ['iPhone 15', 'iPhone SE (3rd gen)']
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
+    env:
+      TZ: Europe/Paris
+      PAPOTE_MOTEUR: webkit
+      PAPOTE_APPAREIL: ${{ matrix.appareil }}
+    defaults:
+      run:
+        working-directory: tests/app-famille
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git config --global --add safe.directory '*'
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npx playwright install webkit
+      - run: node preparer.js
+      - run: ip addr || cat /proc/net/if_inet6; cat /etc/hosts
+      - run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore,auth,storage --project demo-papote --config firebase.json \
+            'for i in 1 2 3 4 5 6 7 8; do echo "=== TOUR $i"; node --test --test-concurrency=1 --test-reporter=spec --test-name-pattern="Mamie appelle|Appel vidéo vers la tablette" scenarios/appels.test.js 2>&1 | grep -E "DIAG|✔|✖|Error|TOUR"; done; true'

@@ -21,7 +21,7 @@ async function attendre(fn, message, delai = 20_000) {
   for (;;) {
     const r = await avecDelai(fn(), message, Math.max(1_000, delai - (Date.now() - debut)));
     if (r) return r;
-    if (Date.now() - debut > delai) throw new Error(`Tablette : ${message}`);
+    if (Date.now() - debut > delai) { await banc.diagRtc(message); throw new Error(`Tablette : ${message}`); }
     await new Promise((ok) => setTimeout(ok, 150));
   }
 }
