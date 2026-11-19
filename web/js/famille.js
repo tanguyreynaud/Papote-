@@ -4924,18 +4924,25 @@ function syncVolumes() {
   $('volume-appel-val').textContent = `${$('volume-appel').value} %`;
 }
 
-// Écouter : la tablette sonne ou parle au niveau de la barre (même commande « son » qu'à l'installation),
-// puis reprend d'elle-même le niveau enregistré si on n'enregistre pas. Envoyée à chaque compte de la
-// tablette : seul celui des appels l'écoute.
+// Écouter : la tablette sonne ou parle au niveau de la barre (commande « son »), puis reprend d'elle-même
+// le niveau enregistré si on n'enregistre pas. Envoyée à chaque compte de la tablette : seul celui des
+// appels l'écoute. Seulement sur « Écouter » (Tanguy, 19/11) : glisser une barre ne fait plus rien sonner,
+// et la tablette coupe le son d'avant (un seul son à la fois). « appel » : une phrase au volume des appels ;
+// une tablette d'avant la dit au même niveau, comme « voix ».
+const ESSAIS = {
+  sonnerie: { barre: 'volume-sonnerie', mot: 'Écoutez la tablette : elle sonne.' },
+  voix: { barre: 'volume', mot: 'Écoutez la tablette : elle parle.' },
+  appel: { barre: 'volume-appel', mot: 'Écoutez la tablette : elle parle comme pendant un appel.' },
+};
+const ESSAI_MS = 3000; // le temps du son : un deuxième appui ne renvoie rien
 async function ecouterVolume(quoi) {
   if (!tabletMembers.length) { toast('Aucune tablette dans la famille pour le moment.'); return; }
-  const volume = Number($(quoi === 'sonnerie' ? 'volume-sonnerie' : 'volume').value);
+  const volume = Number($(ESSAIS[quoi].barre).value);
   const data = {
     type: 'son', quoi, volume, createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending',
   };
-  if (quoi === 'voix') data.parle = `Bonjour ${session.family.name}, c'est ${session.member.name}. Vous m'entendez bien ?`.slice(0, 200);
-  // Pas de récapitulatif sous les barres (Tanguy, 17/11 : la tablette fait entendre le son, c'est assez) ;
-  // un petit mot en bas seulement pour « Écouter » touché, ou si la tablette n'a pas pu être prévenue.
+  if (quoi !== 'sonnerie') data.parle = `Bonjour ${session.family.name}, c'est ${session.member.name}. Vous m'entendez bien ?`.slice(0, 200);
+  toast(ESSAIS[quoi].mot);
   try {
     await Promise.all(tabletMembers.map((t) => setDoc(doc(collection(db, 'families', session.fid, 'commands')), { ...data, target: t.id })));
   } catch (err) {
@@ -4946,10 +4953,15 @@ async function ecouterVolume(quoi) {
 $('volume-sonnerie').addEventListener('input', syncVolumes);
 $('volume').addEventListener('input', syncVolumes);
 $('volume-appel').addEventListener('input', syncVolumes);
-$('volume-sonnerie').addEventListener('change', () => ecouterVolume('sonnerie'));
-$('volume').addEventListener('change', () => ecouterVolume('voix'));
+// Un appui = une demande : le bouton passe tout de suite à « Écoute… » (plein indigo) le temps du son,
+// et les appuis suivants pendant ce temps ne renvoient rien.
 document.querySelectorAll('.volume-essai').forEach((b) => b.addEventListener('click', () => {
-  toast(b.dataset.essai === 'sonnerie' ? 'Écoutez la tablette : elle sonne.' : 'Écoutez la tablette : elle parle.');
+  if (b.classList.contains('en-cours')) return;
+  b.classList.add('en-cours');
+  b.setAttribute('aria-busy', 'true');
+  const libelle = b.querySelector('span');
+  libelle.textContent = 'Écoute…';
+  setTimeout(() => { b.classList.remove('en-cours'); b.removeAttribute('aria-busy'); libelle.textContent = 'Écouter'; }, ESSAI_MS);
   ecouterVolume(b.dataset.essai);
 }));
 SETTINGS['volume-card'] = {

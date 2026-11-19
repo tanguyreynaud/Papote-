@@ -129,10 +129,15 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
     }
   }
   await verifier(['#members li:has-text("Paul") .member-name', '#tface-camera', '#tface-gallery', '#remote-card [data-cmd="status"]']);
-  // Volumes : « Écouter » dit en bas que la tablette sonne ; plus de récapitulatif.
+  // Volumes : chaque « Écouter » (sonnerie, vidéos et messages, appels) dit en bas que la tablette joue ;
+  // plus de récapitulatif.
   await p.click('#volume-card .setting-modify');
   await verifier(['#volume-card .volume-essai[data-essai="voix"]']);
   await g.toast(julie, 'Écoutez la tablette : elle parle.');
+  await verifier(['#volume-card .volume-essai[data-essai="appel"]']);
+  await g.toast(julie, 'Écoutez la tablette : elle parle comme pendant un appel.');
+  await verifier(['#volume-card .volume-essai[data-essai="sonnerie"]']);
+  await g.toast(julie, 'Écoutez la tablette : elle sonne.');
   await p.click('#volume-card .setting-cancel');
   // Profil.
   await p.click('#view-settings .back');
