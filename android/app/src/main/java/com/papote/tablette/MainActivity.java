@@ -877,6 +877,9 @@ public class MainActivity extends Activity implements Sync.Listener {
                 case "jeton":
                     a.sync.poke();
                     break;
+                case "jumelage":
+                    a.sync.jumelageReveil(id);
+                    break;
                 case "version":
                     a.handler.removeCallbacks(a.updateCheck);
                     a.handler.postDelayed(a.updateCheck, 5_000 + (long) (Math.random() * 60_000));
