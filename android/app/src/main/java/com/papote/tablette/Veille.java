@@ -62,10 +62,10 @@ final class Veille {
 
     /** Vrai pendant les heures de veille (jamais si la veille est désactivée). */
     /** Avant cette date, l'horloge n'est pas à l'heure (date d'usine, démarrage sans réseau) : pas de veille. */
-    static final long HEURE_PLANCHER = 1790812800000L; // 1er octobre 2026, 0 h UTC
+    static final long HEURE_PLANCHER = Horloge.PLANCHER; // 1er octobre 2026, 0 h UTC ; et jamais si un serveur contredit l'horloge
 
     static boolean isNight(Context c) {
-        if (!active(c) || System.currentTimeMillis() < HEURE_PLANCHER) return false;
+        if (!active(c) || !Horloge.sure()) return false;
         java.util.Calendar now = java.util.Calendar.getInstance();
         int m = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE);
         return inRange(m, from(c), to(c));

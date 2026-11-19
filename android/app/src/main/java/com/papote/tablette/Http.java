@@ -76,6 +76,7 @@ final class Http {
                 }
             }
             int code = c.getResponseCode();
+            Horloge.noter(c.getHeaderField("Date")); // heure du serveur, sans requête de plus
             java.util.Map<String, String> headers = new java.util.HashMap<>();
             for (java.util.Map.Entry<String, java.util.List<String>> h : c.getHeaderFields().entrySet()) {
                 if (h.getKey() != null && h.getValue() != null && !h.getValue().isEmpty()) {

@@ -395,3 +395,45 @@ test('réveil par le serveur qui ne répond plus (contrôle quotidien raté) : l
     assert.ok(await b.visible('#call-ring'), 'un appel sonne de nouveau sans réveil');
   } finally { await b.fermer(); }
 });
+
+// Secours du push sous verrou (Tanguy, 19/11) : Android décide (SecoursPush.java, essayé sur 3 jours dans
+// SecoursPushTest) ; ici, la page obéit : écoutes ouvertes en « direct » seulement, fermées en « bride ».
+test('push en panne : écoute directe tant qu\'Android l\'autorise, puis secours bridé sans aucune écoute, relecture toutes les 5 min', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { ...FAMILLE, push: false, modeReseau: 'direct' });
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(3000);
+    assert.ok(await ecoutes(b) >= 3, 'push en panne, secours autorisé : écoutes en direct ouvertes');
+    // Les 24 h sont dépensées : Android passe en bridé, la page ferme tout dans la minute.
+    await b.etat({ modeReseau: 'bride' });
+    await b.avancer(76_000);
+    assert.strictEqual(await ecoutes(b), 0, 'secours bridé : plus aucune écoute ouverte');
+    // Un ordre arrive : rien tout de suite (pas d'écoute), lu à la relecture des 5 min.
+    await b.ecrire('families/F1/commands/o1', { type: 'son', quoi: 'sonnerie', volume: 70, target: MOI, state: 'pending', createdAt: { __serverTimestamp: true } });
+    await b.avancer(30_000);
+    assert.strictEqual((await b.lire('families/F1/commands/o1')).state, 'pending', 'pas d\'écoute : rien avant la relecture');
+    await b.avancer(5 * 60_000 + 30_000);
+    assert.strictEqual((await b.lire('families/F1/commands/o1')).state, 'done', 'relu dans les 5 min');
+    assert.strictEqual(await ecoutes(b), 0, 'toujours aucune écoute');
+    // Trois heures de plus en bridé : jamais une écoute rouverte.
+    for (let i = 0; i < 18; i++) {
+      await b.avancer(10 * 60_000);
+      assert.strictEqual(await ecoutes(b), 0, 'bridé : aucune écoute, même des heures après');
+    }
+    // Le push revient : toujours rien d'ouvert.
+    await b.etat({ push: true, modeReseau: 'push' });
+    await b.avancer(61_000);
+    assert.strictEqual(await ecoutes(b), 0, 'push revenu : pas d\'écoute');
+  } finally { await b.fermer(); }
+});
+
+test('push en panne au démarrage et secours déjà dépensé : aucune écoute ouverte, même après un rechargement', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { ...FAMILLE, push: false, modeReseau: 'bride' });
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(3000);
+    assert.strictEqual(await ecoutes(b), 0, 'bridé dès le démarrage : aucune écoute');
+    await b.avancer(20 * 60_000);
+    assert.strictEqual(await ecoutes(b), 0);
+  } finally { await b.fermer(); }
+});

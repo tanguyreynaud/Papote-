@@ -153,6 +153,8 @@ final class Gardien {
         GardeReseau.verifier(app, p != null && p.maintenance());
         // Répondeur de la carte SIM pas encore coupé : un essai par jour au plus (voir Repondeur).
         Repondeur.peutEtre(app, p != null && p.maintenance());
+        // Secours du push sous verrou : 24 h d'écoute directe au plus, comptées ici (voir SecoursPush).
+        SecoursPush.tic(app);
         long maintenant = SystemClock.uptimeMillis();
         Geste g = decider(maintenant, p == null || p.maintenance(), dernierTic, premierPlanDepuis != 0,
                 premierPlanDepuis, dernierPouls, dernierRechargement, rechargements, AppelGsm.enCours());

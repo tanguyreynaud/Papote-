@@ -73,6 +73,10 @@ function imitation(etat) {
     firestoreDatabase: () => 'eu', isCharging: () => window.__etat.secteur !== false,
     wifiStatus: () => JSON.stringify(window.__etat.reseau || { wifi: 'Box', internet: true, mobile: false, sim: false }),
     pushReady: () => !!window.__etat.push,
+    // Secours du push (SecoursPush.java) : etat.modeReseau = 'push' | 'direct' | 'bride' ; sans lui, comme l'ancien pont.
+    modeReseau: () => window.__etat.modeReseau || (window.__etat.push ? 'push' : 'direct'),
+    // Heure d'un serveur (Horloge.java) : etat.ecartHeure en ms (serveur − tablette) ; absent = aucun serveur n'a répondu.
+    ecartHeure: () => (window.__etat.ecartHeure === undefined ? '' : String(window.__etat.ecartHeure)),
     simBudget: () => JSON.stringify(window.__etat.forfait || { plafondMo: 1000, consoMo: 0, niveau: 0, sim: false, cycleDebut: '2026-10-01' }),
     logError: note('logError'), logAppel: note('logAppel'), wifiDone: note('wifiDone'),
     welcomeBack: note('welcomeBack'), welcomeSeen: note('welcomeSeen'),

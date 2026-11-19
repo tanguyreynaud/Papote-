@@ -100,8 +100,34 @@
   var HEURE_PLANCHER = Date.UTC(2026, 9, 1);
   var heureVue = 0;
   try { heureVue = +localStorage.getItem('papote.heureVue') || 0; } catch (e) { }
+  // L'heure d'un serveur, notée par Android à chaque échange déjà fait (Horloge.java, aucune requête de plus) :
+  // écart « serveur − tablette » en ms, ou null tant qu'aucun serveur n'a répondu depuis le démarrage.
+  // Relu au plus une fois par minute (heureSure est appelée chaque seconde).
+  var ecartHeure = null, ecartLu = 0;
+  function ecartServeur() {
+    var now = Date.now();
+    if (now - ecartLu < 60000 && now >= ecartLu) return ecartHeure;
+    ecartLu = now;
+    ecartHeure = null;
+    try {
+      var e = android() && android().ecartHeure ? android().ecartHeure() : '';
+      if (e !== '' && e !== null && e !== undefined && isFinite(+e)) ecartHeure = +e;
+    } catch (err) { }
+    return ecartHeure;
+  }
   function heureSure() {
     var now = Date.now();
+    var ecart = ecartServeur();
+    if (ecart !== null) {
+      // Un serveur contredit l'horloge de plus de 2 min : heure fausse, le temps qu'Android la remette.
+      if (Math.abs(ecart) > 120000) return false;
+      // Heure confirmée par un serveur : si la page avait retenu une heure plus tardive (horloge partie un
+      // moment dans le futur), ce souvenir est effacé ; sinon l'heure juste resterait refusée des années.
+      if (heureVue > now + 60000) {
+        heureVue = now;
+        try { localStorage.setItem('papote.heureVue', String(now)); } catch (e) { }
+      }
+    }
     if (now < HEURE_PLANCHER || now < heureVue - 3600000) return false;
     if (now - heureVue > 600000) {
       heureVue = now;
