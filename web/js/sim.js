@@ -63,6 +63,24 @@ export const simVue = (fid) => {
   return v && v.sim ? v : null;
 };
 
+// Réveil de la tablette (verrou n°4, Tanguy 19/11 ; tablette SecoursPush : sim.push, sim.pushDirectMin) : « push » le
+// serveur la réveille (normal), « direct » push en panne, la page écoute en direct (24 h au plus), « bride » les 24 h
+// sont dépensées, messages relevés toutes les 5 min. Tablettes d'avant (pas de sim.push) : null, rien affiché.
+// Depuis quand le push manque : la tablette n'envoie pas d'heure, mais pushDirectMin compte les minutes d'écoute
+// directe (en ligne, sans push) et ne revient à zéro qu'après 7 jours de push sain ; ≥ 24 h de ce compte, ou « bride »
+// (qui n'arrive qu'après ces 24 h), c'est l'alerte. Aucune écriture ni tâche serveur de plus.
+export const PUSH_ALERTE_MIN = 24 * 60;
+export function modePush(sim) {
+  const mode = sim && ['push', 'direct', 'bride'].includes(sim.push) ? sim.push : null;
+  if (!mode) return null;
+  const min = Number(sim.pushDirectMin) >= 0 ? Math.floor(Number(sim.pushDirectMin)) : 0;
+  const texte = mode === 'push' ? 'push'
+    : mode === 'direct' ? `écoute directe (${min} min)`
+      : 'bridé : messages relevés toutes les 5 min';
+  const alerte = mode === 'bride' || (mode === 'direct' && min >= PUSH_ALERTE_MIN);
+  return { mode, min, texte, alerte };
+}
+
 // Réseau mobile chez le client (tablette 2.99.105 et plus : sim.service, sim.simReseau, sim.antennes) : ce que la
 // tablette entend, et une alerte si la carte n'a pas de réseau ou un réseau faible (Poissy, 01/11 : SIM Lyca, seulement
 // des antennes Orange). Le réseau se lit sur l'antenne utilisée, pas sur le nom de la carte (Lyca, Sosh… sont sur le

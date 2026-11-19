@@ -15,7 +15,7 @@ import { ouvrirParcours, fermerParcours } from './parcours.js';
 import {
   getFirestore, doc, collection, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, increment,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { simVue, texteBloquee, reseauMobile, reseauAVoir, reseauVuDe, alerteReseau, noterReseauVu, go as enGo, BLOCAGES_SIM, blocagesFaits, CASE_HORS_FORFAIT, horsForfaitBloque } from './sim.js';
+import { simVue, texteBloquee, reseauMobile, reseauAVoir, reseauVuDe, alerteReseau, noterReseauVu, modePush, go as enGo, BLOCAGES_SIM, blocagesFaits, CASE_HORS_FORFAIT, horsForfaitBloque } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -771,6 +771,12 @@ function afficherAccueil() {
       const uid = vue && (vue.membreId || t.tabletUid);
       return alerte ? [1, `${nomT(t)}, réseau mobile : ${alerte.charAt(0).toLowerCase()}${alerte.slice(1)}`, versTablette(t), 'ko',
         uid ? { libelle: 'Vu', faire: () => marquerReseauVu(t.fid, uid, vue.reseau) } : null] : null;
+    }).filter(Boolean),
+    // Réveil par le serveur en panne depuis plus de 24 h, ou secours bridé (sim.js, modePush ; verrou n°4).
+    ...donnees.stock.filter((t) => t.etat === 'chez-client' && t.fid).map((t) => {
+      const vue = simVue(t.fid);
+      const p = modePush(vue && vue.sim);
+      return p && p.alerte ? [1, `${nomT(t)}, notifications : ${p.mode === 'bride' ? 'bridé, messages relevés toutes les 5 min' : p.texte} (push en panne depuis plus de 24 h)`, versTablette(t), 'ko'] : null;
     }).filter(Boolean),
     [simsARegarder, `${simsARegarder} carte${simsARegarder > 1 ? 's' : ''} SIM à regarder (promo, activation, carte bancaire)`, '#stock/sim', 'ko'],
     ...accessoires.map((a) => [1, a.manque ? `${a.nom} : il en manque ${a.manque} pour les envois` : `${a.nom} : stock bas (${a.quantite || 0})`, '#stock/accessoires', a.manque ? 'ko' : '']),
@@ -2657,6 +2663,14 @@ function blocReseau(r, { vu = null, fid = null, uid = null } = {}) {
       : r.bloquee ? null : h('p', { class: 'muted small' }, 'Aucune antenne listée (position coupée sur la tablette, ou pas encore relevé).'));
 }
 
+// Réveil de la tablette (sim.js, modePush) : une ligne lisible, en rouge quand il faut s'en occuper ; rien pour les
+// tablettes qui ne l'envoient pas encore.
+function lignePush(p) {
+  if (!p) return null;
+  return h('p', { class: p.alerte ? 'error push-mode' : 'small push-mode' }, `Notifications : ${p.texte}`,
+    p.alerte ? ' · push en panne depuis plus de 24 h' : null);
+}
+
 // Fiche de membre de la tablette, en direct : en ligne, batterie, carte SIM, version.
 function blocReleves(zone, t) {
   if (stopReleves) { stopReleves(); stopReleves = null; }
@@ -2680,6 +2694,7 @@ function blocReleves(zone, t) {
         stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
         sim && sim.bloquee ? stat('Carte SIM', texteBloquee(sim).replace('Carte SIM ', ''), null, 'warn') : stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM', mo),
         stat(m.appVersion || '—', 'Version de Papote')),
+      lignePush(modePush(sim)),
       blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid }),
       h('p', { class: 'muted small' }, 'Fiche de la tablette lue en direct : la page se met à jour toute seule quand elle donne de ses nouvelles.'),
     );
