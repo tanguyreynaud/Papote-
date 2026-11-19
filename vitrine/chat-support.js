@@ -89,6 +89,9 @@
     '.ps-tete strong{font:700 1.15rem/1.2 "Bricolage Grotesque","Segoe UI",system-ui,sans-serif}' +
     '.ps-tete button{border:0;background:none;color:var(--ps-gris);font-size:1.6rem;line-height:1;cursor:pointer;min-width:44px;min-height:44px;padding:.2rem .5rem;border-radius:8px}' +
     '.ps-fil{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.6rem}' +
+    // Un bouton (« Dans l'appli : … », overflow:hidden) se laissait écraser par le fil quand il déborde : moitié de
+    // bouton, texte coupé (iPhone, 19/11). Aucun élément du fil ne rétrécit.
+    '.ps-fil>*{flex-shrink:0}' +
     '.ps-msg{max-width:85%;padding:.7rem .9rem;border-radius:14px;font-size:1.05rem;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}' +
     '.ps-msg a{color:inherit}' +
     '.ps-ia{align-self:flex-start;background:var(--ps-carte);border:1px solid var(--ps-ligne)}' +
