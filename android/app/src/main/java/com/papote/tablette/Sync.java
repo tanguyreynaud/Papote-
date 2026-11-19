@@ -435,7 +435,7 @@ final class Sync {
             // prévient du retour d'internet (watchNetwork) ; un essai par minute reste en secours.
             boolean offline = "offline".equals(lastState);
             long delai = pairingActive() ? delaiJumelage(android.os.SystemClock.elapsedRealtime() - jumelageVifDepuis, jumelagePrevenu())
-                    : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : tourDuJour()) : POLL_MS;
+                    : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : tourDuJour()) : tourSansPage();
             // Code en attente : renouvelé à l'heure dite (15 min), même quand la relecture n'est qu'un secours.
             if (pairingActive() && prefs.getString("pairing", null) != null) {
                 long reste = prefs.getLong("pairingExpires", 0) - System.currentTimeMillis();
@@ -1189,9 +1189,21 @@ final class Sync {
     private final java.util.Map<String, Long> lastHeartbeat = new java.util.HashMap<>();
     private static final long HEARTBEAT_MS = 20 * 60_000;
 
+    /**
+     * Page des appels muette (pas chargée, en panne) : avec le push, le serveur réveille quand même la
+     * tablette, le tour normal suffit ; sans push, 5 min au lieu de 2 (2 min sans fin ≈ 130 Mo par mois
+     * sur la carte SIM, et personne ne le voyait).
+     */
+    private long tourSansPage() {
+        if (pairingActive()) return POLL_MS;
+        return Push.pret(context) ? PUSH_POLL_MS : SecoursPush.TOUR_BRIDE_MS;
+    }
+
     /** Écart entre deux tours (et deux signaux « en ligne ») le jour, page à l'écoute. */
     private long tourDuJour() {
-        return Push.pret(context) ? PUSH_POLL_MS : REALTIME_POLL_MS;
+        if (Push.pret(context)) return PUSH_POLL_MS;
+        // Push en panne : écoute directe de la page (24 h au plus), puis secours bridé à 5 min (SecoursPush).
+        return SecoursPush.bride(context) ? SecoursPush.TOUR_BRIDE_MS : REALTIME_POLL_MS;
     }
 
     /** Écart minimal entre deux signaux « en ligne » (batterie, carte SIM, version). */
@@ -2420,6 +2432,9 @@ final class Sync {
                         .put("dataCycleMo", new JSONObject().put("integerValue", String.valueOf(forfait.optLong("consoMo", -1))))
                         .put("plafondMo", new JSONObject().put("integerValue", String.valueOf(forfait.optLong("plafondMo", 0))))
                         .put("niveau", new JSONObject().put("integerValue", String.valueOf(forfait.optInt("niveau", 0))))
+                        // Mode du réveil pour l'admin : « push » (normal), « direct » (secours, 24 h au plus), « bride ».
+                        .put("push", Firebase.string(SecoursPush.mode(context)))
+                        .put("pushDirectMin", new JSONObject().put("integerValue", String.valueOf(SecoursPush.directMs(context) / 60_000)))
                         .put("cycleDebut", Firebase.string(forfait.optString("cycleDebut")))
                         // Heure de la tablette (réglée automatiquement) : un horodatage serveur ne peut pas
                         // viser un champ à l'intérieur de « sim » écrit dans la même requête.

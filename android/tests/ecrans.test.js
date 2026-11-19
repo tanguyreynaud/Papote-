@@ -937,3 +937,87 @@ test('accueil : la photo change en fondu, sans zoom', async () => {
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
+// ---------- Horloge : heure fausse, sauts, changement d'heure (Tanguy, 19/11) ----------
+const sauter = (b, iso) => b.page.clock.setSystemTime(new Date(iso));
+const ATTEND = /attend le réseau/;
+
+test('horloge partie 5 ans dans le futur puis revenue : l\'heure juste, confirmée par un serveur, est affichée de nouveau', async () => {
+  const b = await ouvrir('2026-11-20T10:00:00');
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(2000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '10:00');
+    await sauter(b, '2031-11-20T10:00:00+01:00');
+    await b.avancer(11 * 60_000); // la page retient cette heure comme « la dernière vue »
+    await sauter(b, '2026-11-20T10:15:00+01:00');
+    await b.etat({ ecartHeure: 0 }); // un serveur a répondu : l'heure de la tablette est juste
+    await b.avancer(62_000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '10:16', 'heure juste affichée');
+    assert.doesNotMatch(await b.texte('#date'), ATTEND);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('horloge contredite par un serveur (1 h de trop) : ni heure ni rappel, puis tout revient quand elle est remise', async () => {
+  const b = await ouvrir('2026-11-20T10:00:00');
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(2000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '10:00');
+    await b.etat({ ecartHeure: -3600_000 });
+    await b.avancer(62_000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '', 'heure fausse : pas affichée');
+    assert.match(await b.texte('#date'), ATTEND);
+    await b.etat({ ecartHeure: 800 });
+    await b.avancer(62_000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '10:02');
+    assert.doesNotMatch(await b.texte('#date'), ATTEND);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('redémarrage sans réseau en 1970 (batterie vidée) : ni heure ni veille, puis l\'heure revient seule avec le réseau', async () => {
+  const b = await ouvrir('1970-01-02T03:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: true } });
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(15_000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '');
+    assert.match(await b.texte('#date'), ATTEND);
+    assert.deepStrictEqual(await b.appels('setSleep'), [], '3 h du matin en 1970 : pas de veille sur une heure fausse');
+    // Le réseau revient : Android remet l'heure, un serveur la confirme.
+    await sauter(b, '2026-11-20T15:30:00+01:00');
+    await b.etat({ reseau: { wifi: '', internet: true, mobile: true, sim: true, via: 'mobile' }, ecartHeure: 0 });
+    await b.avancer(62_000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '15:31');
+    assert.doesNotMatch(await b.texte('#date'), ATTEND);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('passage à l\'heure d\'été (28 mars 2027) : 1 h 59 puis 3 h, l\'horloge suit sans s\'arrêter', async () => {
+  const b = await ouvrir('2027-03-28T01:58:00');
+  try {
+    await b.android('onPosts', lot([], { veille: { active: false, de: 23 * 60, a: 7 * 60 } }));
+    await b.avancer(2000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '1:58');
+    await b.avancer(3 * 60_000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '3:01');
+    assert.doesNotMatch(await b.texte('#date'), ATTEND);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('passage à l\'heure d\'hiver (31 octobre 2027) : 2 h 59 puis 2 h, l\'horloge recule d\'une heure sans être prise pour fausse', async () => {
+  const b = await ouvrir('2027-10-31T01:58:00'); // 2 h 58, heure d'été
+  try {
+    await b.android('onPosts', lot([], { veille: { active: false, de: 23 * 60, a: 7 * 60 } }));
+    await b.avancer(2000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '2:58');
+    await b.avancer(3 * 60_000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '2:01');
+    await b.avancer(30 * 60_000);
+    assert.strictEqual((await b.texte('#clock')).trim(), '2:31');
+    assert.doesNotMatch(await b.texte('#date'), ATTEND);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
