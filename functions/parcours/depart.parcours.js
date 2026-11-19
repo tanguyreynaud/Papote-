@@ -139,6 +139,38 @@ test('tablette revenue dont la ligne SIM a été suspendue : l\'envoi au client 
   assert.strictEqual((await commande(id2)).expedition, 'envoyee');
 });
 
+// Hors-forfait bloqué chez l'opérateur (Tanguy, 19/11) : case obligatoire sur chaque ligne, les lignes d'avant
+// démarrent non cochées. Le serveur refuse le départ (« Colis déposé », tablette passée « envoyée ») tant qu'elle
+// ne l'est pas ; cochée deux fois (double clic), la première date et le premier auteur restent.
+test('ligne SIM sans « Hors-forfait bloqué chez l\'opérateur » : la tablette ne part pas, la case cochée la débloque', async () => {
+  await s.db.doc('gestion/reglages').set({ expediteur: { nom: 'Papote', adresse: '1 rue de test', cp: '07000', ville: 'Privas' } }, { merge: true });
+  const t = await a.tablettePreparee();
+  const simId = await a.simSurTablette(t);
+  // Ligne d'avant le 19/11 : le champ n'existe pas.
+  await s.db.doc(`sims/${simId}`).update({ horsForfaitBloque: s.FieldValue.delete() });
+  const { abonnement: id } = await a.commanderEtPayer({ email: 'lea@exemple.fr', nom: 'Léa Durand' });
+  await assert.rejects(a.preparerEtEnvoyer(id, t, '87654321'),
+    /attend encore le blocage du hors-forfait sur sa ligne : activez-le dans l'espace client de l'opérateur, puis cochez « Hors-forfait bloqué chez l'opérateur »/);
+  await assert.rejects(modifier(t, { etat: 'envoyee', commande: id }), /blocage du hors-forfait/);
+  assert.strictEqual((await commande(id)).expedition, 'a-preparer', 'rien n\'est parti');
+  assert.strictEqual((await fiche(t)).etat !== 'envoyee', true, 'la tablette reste au stock');
+  // Une valeur autre que true ne compte pas.
+  await s.appeler('gestionSim', { action: 'modifier', id: simId, champs: { horsForfaitBloque: 'oui' } }, a.TANGUY);
+  assert.notStrictEqual((await s.lire(`sims/${simId}`)).horsForfaitBloque, true);
+  await assert.rejects(a.preparerEtEnvoyer(id, t, '87654321'), /hors-forfait/);
+  // Cochée : la date et l'auteur sont notés ; une deuxième fois (double clic) ne les change pas.
+  await s.appeler('gestionSim', { action: 'modifier', id: simId, champs: { horsForfaitBloque: true } }, a.TANGUY);
+  const cochee = await s.lire(`sims/${simId}`);
+  assert.strictEqual(cochee.horsForfaitBloque, true);
+  assert.strictEqual(cochee.horsForfaitBloquePar, a.TANGUY.email);
+  assert.ok(Number.isFinite(cochee.horsForfaitBloqueLe));
+  s.avancer(0.01);
+  await s.appeler('gestionSim', { action: 'modifier', id: simId, champs: { horsForfaitBloque: true } }, a.TANGUY);
+  assert.strictEqual((await s.lire(`sims/${simId}`)).horsForfaitBloqueLe, cochee.horsForfaitBloqueLe, 'même date au deuxième envoi');
+  await a.preparerEtEnvoyer(id, t, '87654321');
+  assert.strictEqual((await commande(id)).expedition, 'envoyee');
+});
+
 // Stripe débite, mais la réponse n'arrive jamais (coupure réseau, serveur arrêté).
 async function reponsePerdue(faire) {
   const vrai = s.stripe.api.paymentIntents.create;

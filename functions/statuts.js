@@ -73,6 +73,15 @@ const BLOCAGES_SIM = {
 };
 const blocagesManquants = (ligne) => Object.keys(BLOCAGES_SIM).filter((k) => !(ligne && ligne.blocages && ligne.blocages[k] === true));
 
+// Hors-forfait bloqué chez l'opérateur (Tanguy, 19/11) : aucun hors-forfait SIM, jamais. Case obligatoire sur
+// chaque ligne (sims/{id}.horsForfaitBloque, avec horsForfaitBloqueLe et horsForfaitBloquePar), notée par l'admin ;
+// les lignes d'avant démarrent non cochées. Sans elle, pas de départ (étiquette, « Colis déposé », remise en main
+// propre, remplacement, tablette passée « envoyée »).
+const CASE_HORS_FORFAIT = 'Hors-forfait bloqué chez l\'opérateur';
+const horsForfaitBloque = (ligne) => !!(ligne && ligne.horsForfaitBloque === true);
+const phraseHorsForfait = (nom) => `La tablette ${nom ? `${nom} ` : ''}attend encore le blocage du hors-forfait sur sa ligne : `
+  + `activez-le dans l'espace client de l'opérateur, puis cochez « ${CASE_HORS_FORFAIT} » sur sa carte SIM (Stock, Cartes SIM).`;
+
 function refusSimSansNumero(t, ligne) {
   const nom = `la tablette ${(t && t.ref) || ''}`.trim();
   if (!t || !t.simId) return `Reliez d'abord une carte SIM à ${nom} (Stock, Cartes SIM).`;
@@ -84,6 +93,7 @@ function refusSimSansNumero(t, ligne) {
   if (ligne.statut === 'suspendue' || ligne.statut === 'resiliee') {
     return `La ligne de la carte SIM de ${nom} est ${ligne.statut === 'suspendue' ? 'suspendue' : 'résiliée'} : ${ligne.statut === 'suspendue' ? 'réactivez-la' : 'mettez une autre carte'} avant l'envoi (Stock, Cartes SIM).`;
   }
+  if (!horsForfaitBloque(ligne)) return phraseHorsForfait(t && t.ref);
   const manquants = blocagesManquants(ligne);
   if (manquants.length) {
     return `Activez d'abord chez l'opérateur, puis cochez sur la carte SIM de ${nom} (Stock, Cartes SIM), le blocage : ${manquants.map((k) => BLOCAGES_SIM[k]).join(', ')}.`;
@@ -165,6 +175,7 @@ function refusSuppressionSim(ligne, tablette) {
 
 module.exports = {
   refusEnvoiSansSim, refusSimSansNumero, refusAutreTablette, BLOCAGES_SIM, blocagesManquants,
+  CASE_HORS_FORFAIT, horsForfaitBloque, phraseHorsForfait,
   refusEtiquette, refusEtiquetteEnDouble, remplacementAEnvoyer, refusEnvoi, refusReception, refusRetourMateriel, refusLienCommande,
   refusStatutSim, refusRecharge, refusSuppressionSim, SUITES_SIM, RESTITUTION_EN_COURS,
 };

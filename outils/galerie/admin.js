@@ -87,11 +87,13 @@ function gestionDonnees(o = {}) {
       horsCriteres: null, installation: { par: 'qr', le: il(1), criteres: [] }, notes: 'Tablette d’essai installée par QR : jamais pour un client.', creeLe: il(1) },
   ];
   const sims = [
-    { id: 'S1', operateur: 'Lyca', numero: '07 45 12 34 56', iccid: '8933150000000001', statut: 'active', prix: 499, go: 1, periode: 'jours', dureeForfait: 30, activation: il(25), prochaineRecharge: il(-5), tablette: 'T-001', depense: 'D-S1' },
-    { id: 'S2', operateur: 'Lyca', numero: '07 45 98 76 54', iccid: '8933150000000002', statut: 'active', prix: 499, go: 1, periode: 'jours', dureeForfait: 30, activation: il(28), prochaineRecharge: il(-2), tablette: 'T-004', depense: 'D-S2' },
+    { id: 'S1', operateur: 'Lyca', numero: '07 45 12 34 56', iccid: '8933150000000001', statut: 'active', prix: 499, go: 1, periode: 'jours', dureeForfait: 30, activation: il(25), prochaineRecharge: il(-5), tablette: 'T-001', depense: 'D-S1', horsForfaitBloque: true, horsForfaitBloqueLe: il(24), horsForfaitBloquePar: 'tanguy@exemple.fr' },
+    { id: 'S2', operateur: 'Lyca', numero: '07 45 98 76 54', iccid: '8933150000000002', statut: 'active', prix: 499, go: 1, periode: 'jours', dureeForfait: 30, activation: il(28), prochaineRecharge: il(-2), tablette: 'T-004', depense: 'D-S2', horsForfaitBloque: true, horsForfaitBloqueLe: il(24), horsForfaitBloquePar: 'tanguy@exemple.fr' },
     { id: 'S3', operateur: 'NRJ Mobile', numero: '06 98 76 54 32', iccid: '8933010000000003', statut: 'active', prix: 299, prixApres: 799, finPromo: il(-12), go: 2, renouvellementAuto: true, activation: il(30), tablette: 'T-005' },
+    // horsForfaitBloque : case « Hors-forfait bloqué chez l'opérateur » (19/11), cochée sur S1, S2 et S9 seulement,
+    // pour voir les deux états de la fiche.
     // finForfait 'bloque' : internet coupé au bout du forfait (Sosh 1 Go bloqué, 5/11) ; absent = débit réduit.
-    { id: 'S9', operateur: 'Sosh', numero: '06 31 41 59 26', iccid: '8933010000000009', statut: 'active', prix: 599, go: 1, renouvellementAuto: true, periode: 'mois', client: 'tanguy@exemple.fr', finForfait: 'bloque', activation: il(40), prochaineRecharge: il(-12) },
+    { id: 'S9', operateur: 'Sosh', numero: '06 31 41 59 26', iccid: '8933010000000009', statut: 'active', prix: 599, go: 1, renouvellementAuto: true, periode: 'mois', client: 'tanguy@exemple.fr', finForfait: 'bloque', activation: il(40), prochaineRecharge: il(-12), horsForfaitBloque: true, horsForfaitBloqueLe: il(24), horsForfaitBloquePar: 'tanguy@exemple.fr' },
     { id: 'S4', operateur: 'Lyca', numero: '07 51 23 45 67', iccid: '8933150000000004', statut: 'active', prix: 499, go: 1, periode: 'jours', dureeForfait: 30, activation: il(33), prochaineRecharge: il(1), tablette: 'T-006', depense: 'D-S4', cb: 'Visa …4242', cbExp: '2026-11' },
     { id: 'S5', operateur: 'Lyca', numero: '07 51 00 11 22', iccid: '8933150000000005', statut: 'suspendue', prix: 499, go: 1, tablette: 'T-007', depense: 'D-S4' },
     { id: 'S6', operateur: 'Cdiscount Mobile', iccid: '8933010000000006', statut: 'stock', prix: 199, go: 1, activerAvant: il(-20) },

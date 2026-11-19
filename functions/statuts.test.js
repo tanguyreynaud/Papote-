@@ -93,10 +93,14 @@ test('envoi : tablette reliée et carte SIM obligatoires pour l\'offre tout comp
   refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { iccid: '8933' } }), /numéro de ligne/);
   refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '  ' } }), /numéro de ligne/);
   const tous = { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true };
-  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17' } }),
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17', horsForfaitBloque: true } }),
     /blocage : appels vers les numéros surtaxés, SMS\+, achats sur facture \(Internet\+\), appels et SMS vers l'étranger/);
-  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17', blocages: { ...tous, smsPlus: false } } }), /blocage : SMS\+\.$/);
-  permis(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17', blocages: tous } }));
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17', horsForfaitBloque: true, blocages: { ...tous, smsPlus: false } } }), /blocage : SMS\+\.$/);
+  permis(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17', horsForfaitBloque: true, blocages: tous } }));
+  // Hors-forfait pas encore bloqué (Tanguy, 19/11) : refusé même avec les quatre blocages, ligne d'avant comprise.
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', ref: 'T-004', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17', blocages: tous } }),
+    /^La tablette T-004 attend encore le blocage du hors-forfait sur sa ligne : activez-le dans l'espace client de l'opérateur, puis cochez « Hors-forfait bloqué chez l'opérateur » sur sa carte SIM \(Stock, Cartes SIM\)\.$/);
+  refuse(s.refusEnvoiSansSim(c, [{ etat: 'preparee', simId: 'sim1' }], { sim1: { numero: '07 45 91 77 17', horsForfaitBloque: false, blocages: tous } }), /hors-forfait/);
   // Formule absente (commande récente) : la carte reste obligatoire.
   refuse(s.refusEnvoiSansSim({ expedition: 'a-preparer' }, [{ etat: 'preparee' }]), /carte SIM/);
   // Numéro de suivi corrigé après le départ, ancienne commande Wi-Fi : rien de plus demandé.
@@ -108,13 +112,17 @@ test('départ d\'une tablette (envoi, étiquette, remplacement) : carte SIM avec
   refuse(s.refusSimSansNumero({ ref: 'T-007' }, null), /Reliez d'abord une carte SIM à la tablette T-007/);
   refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, null), /numéro de ligne/);
   refuse(s.refusSimSansNumero({ simId: 'x' }, { iccid: '8933', numero: null }), /numéro de ligne/);
-  refuse(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612' }), /blocage/);
+  refuse(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612' }), /blocage du hors-forfait/);
+  refuse(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', horsForfaitBloque: true }), /blocage : /);
   const tous = { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true };
-  permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', blocages: tous }));
+  refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, { numero: '0608991612', blocages: tous }), /^La tablette T-007 attend encore le blocage du hors-forfait/);
+  // Seul true compte : une valeur glissée d'ailleurs (« oui », 1) ne débloque rien.
+  for (const v of ['oui', 1, null]) refuse(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', horsForfaitBloque: v, blocages: tous }), /hors-forfait/);
+  permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', horsForfaitBloque: true, blocages: tous }));
   // Ligne coupée en attendant le client suivant : l'envoi attend sa réactivation (audit du départ, 11/11).
   refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, { numero: '0608991612', statut: 'suspendue' }), /suspendue : réactivez-la/);
   refuse(s.refusSimSansNumero({ ref: 'T-007', simId: 'x' }, { numero: '0608991612', statut: 'resiliee' }), /résiliée : mettez une autre carte/);
-  for (const statut of ['active', 'stock']) permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', statut, blocages: tous }));
+  for (const statut of ['active', 'stock']) permis(s.refusSimSansNumero({ simId: 'x' }, { numero: '0608991612', statut, horsForfaitBloque: true, blocages: tous }));
 });
 
 test('étiquette en double (double clic, vieil onglet) : refusée tant que l\'ancienne n\'a pas servi ou n\'est pas vieille de 30 jours', () => {

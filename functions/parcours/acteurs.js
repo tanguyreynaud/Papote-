@@ -49,7 +49,7 @@ async function simSurTablette(tablette, { testee = true } = {}) {
   const iccid = `893320${String(numero).padStart(4, '0')}${randomBytes(4).readUInt32BE(0).toString().padStart(10, '0').slice(0, 9)}`;
   const { id } = await s.appeler('gestionSim', { action: 'ajouter', champs: {
     statut: 'active', operateur: 'Lyca', periode: 'jours', numero: `07 45 ${String(numero).padStart(2, '0')} 77 17`, prix: 499, tablette: tablette.fiche,
-    iccid, blocages: { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true },
+    iccid, horsForfaitBloque: true, blocages: { surtaxes: true, smsPlus: true, internetPlus: true, etranger: true },
   } }, TANGUY);
   if (testee) await simTestee(tablette, iccid);
   return id;

@@ -1521,6 +1521,8 @@ function champsSim(c) {
   if ('finForfait' in c) champs.finForfait = c.finForfait === 'bloque' ? 'bloque' : 'reduit';
   // Achat de la carte (dépense), vérifié par enregistrerSim.
   if ('depense' in c) champs.depense = texte(c.depense, 100) || null;
+  // Hors-forfait bloqué chez l'opérateur (statuts.CASE_HORS_FORFAIT) : vrai ou faux ; date et auteur par enregistrerSim.
+  if ('horsForfaitBloque' in c) champs.horsForfaitBloque = c.horsForfaitBloque === true;
   // Blocages activés chez l'opérateur (statuts.BLOCAGES_SIM) : vrai ou faux pour chacun, rien d'autre.
   if ('blocages' in c) {
     const b = c.blocages && typeof c.blocages === 'object' ? c.blocages : {};
@@ -1569,6 +1571,12 @@ async function enregistrerSim(id, c, qui) {
   if (!id && !champs.statut) champs.statut = 'stock';
   // Nouvelle carte : forfait mensuel sauf durée en jours donnée (les anciennes lignes sans « periode » restent en jours).
   if (!id && !champs.periode) champs.periode = champs.dureeForfait ? 'jours' : 'mois';
+  // Case « Hors-forfait bloqué » : quand et par qui elle a été cochée (ou décochée). Renvoyée telle quelle (double
+  // clic, onglet resté ouvert) : la première date et le premier auteur restent.
+  if ('horsForfaitBloque' in champs) {
+    if ((avant.horsForfaitBloque === true) === champs.horsForfaitBloque && id) delete champs.horsForfaitBloque;
+    else Object.assign(champs, { horsForfaitBloqueLe: Date.now(), horsForfaitBloquePar: qui || null });
+  }
   const ligne = { ...avant, ...champs };
   // Tablette : une seule ligne par tablette ; une ligne résiliée n'est plus sur aucune tablette.
   let tablette = 'tablette' in c ? texte(c.tablette, 100) : avant.tablette || null;
