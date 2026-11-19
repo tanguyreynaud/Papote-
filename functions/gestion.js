@@ -4276,6 +4276,10 @@ async function effacerFamille({ fid, snap, commandes, par }) {
   await Promise.all(jumelages.docs.map((d) => d.ref.delete()));
   // Codes de tablette de remplacement de cette famille (invites/, hors de la fiche).
   await codeRemplacement.effacer(fid);
+  // Code famille (et tout autre code relié) : lui aussi dans invites/, hors de la fiche. Sans cela il restait
+  // après l'effacement, avec le compte du responsable (audit sécurité, nuit du 19/11).
+  const codes = await db().collection('invites').where('fid', '==', fid).get();
+  await Promise.all(codes.docs.map((d) => d.ref.delete()));
   await Promise.all(commandes.map((d) => d.ref.update({ familleSupprimeeLe: Date.now() })));
   await db().collection('suppressions').add({
     fid, nom: snap.get('name') || null, membres: membres.size, le: Date.now(), par,

@@ -86,5 +86,7 @@ test('famille supprimée : ses codes de tablette et leur suivi partent avec elle
   await s.appeler('gestionSupprimerFamille', { fid: FID, nom: 'Mamie Rose' }, a.TANGUY);
   assert.ok(!await s.lire(`invites/${r.code}`));
   assert.ok(!await s.lire(`codesRemplacement/${FID}`));
+  // Le code famille aussi (invites/, hors de la fiche) : rien ne doit rester d'une famille effacée.
+  assert.ok(!await s.lire('invites/FAMI2345'), 'le code famille reste après la suppression');
   await assert.rejects(code('nouveau'), /introuvable/);
 });
