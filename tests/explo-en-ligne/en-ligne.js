@@ -4,7 +4,7 @@ const { chromium, webkit, devices } = require('playwright');
 const fs = require('fs'), path = require('path');
 const SORTIE = process.env.SORTIE || path.join(__dirname, 'sortie');
 fs.mkdirSync(SORTIE, { recursive: true });
-const SITE = 'https://mapapote.fr', APP = 'https://papote-famille.web.app';
+const SITE = 'https://mapapote.fr', APP = 'https://app.mapapote.fr';
 const journal = [];
 const note = (...a) => { const l = a.join(' '); console.log(l); journal.push(l); };
 const INTERDIT = [/tanguy/i, /reynaud/i, /0?6[ .]?76[ .]?77[ .]?11[ .]?70/, /\+33 ?6 ?76/];
