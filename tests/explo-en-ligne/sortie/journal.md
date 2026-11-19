@@ -2,43 +2,39 @@
 # and : Pixel 7
 ## page /
   statut 200 titre Papote · La tablette qui rapproche vos aînés de toute la famille
-  histoire trouvée : NON | 
-  TROUVÉ [/ hors histoire] /tanguy/i → «  Tanguy Reynaud, fondateur de Papote, à Lyon »
-  TROUVÉ [/ hors histoire] /tanguy/i → «  // Lancement (Tanguy, 2026-10-30) : on ne vend que le stock réel. Plus de tablet »
-  TROUVÉ [/ hors histoire] /tanguy/i → «  // ailleurs sur la page (Tanguy, 17/11), avec Échap, et avec le bouton Retour du téléphone  »
-  TROUVÉ [/ hors histoire] /reynaud/i → «  Tanguy Reynaud, fondateur de Papote, à Lyon »
+  histoire trouvée : oui | L'HISTOIRE DE PAPOTE Une histoire de famille, pas une plateforme. « Ma grand-mère a 93 ans et n'a jamais touché un ordinateur. Je voulais qu'elle voie les phot
   📷 and-001-site-accueil.png
-## page /cgv
-  HTTP 404 https://mapapote.fr/cgv
-  console: Failed to load resource: the server responded with a status of 404 ()
-  statut 404 titre Page introuvable · Papote
-  date CGV : ABSENTE
-  📷 and-002-site-cgv.png
-## page /mentions
-  HTTP 404 https://mapapote.fr/mentions
-  console: Failed to load resource: the server responded with a status of 404 ()
-  statut 404 titre Page introuvable · Papote
-  📷 and-003-site-mentions.png
-## page /confidentialite
-  HTTP 404 https://mapapote.fr/confidentialite
-  console: Failed to load resource: the server responded with a status of 404 ()
-  statut 404 titre Page introuvable · Papote
-  📷 and-004-site-confidentialite.png
-## page /resilier
-  HTTP 404 https://mapapote.fr/resilier
-  console: Failed to load resource: the server responded with a status of 404 ()
-  statut 404 titre Page introuvable · Papote
-  📷 and-005-site-resilier.png
-## page /commande
-  HTTP 404 https://mapapote.fr/commande
-  console: Failed to load resource: the server responded with a status of 404 ()
-  statut 404 titre Page introuvable · Papote
-  📷 and-006-site-commande.png
-## page /merci
-  HTTP 404 https://mapapote.fr/merci
-  console: Failed to load resource: the server responded with a status of 404 ()
-  statut 404 titre Page introuvable · Papote
-  📷 and-007-site-merci.png
+## page /cgv.html
+  statut 200 titre Conditions générales de vente · Papote
+  TROUVÉ [/cgv.html] /tanguy/i → « Papote est le nom commercial de Tanguy Reynaud, entrepreneur individuel (EI), SIRET 882 988 942 00 »
+  TROUVÉ [/cgv.html] /tanguy/i → « « À l'attention de Papote, Tanguy Reynaud, 111 avenue Thiers, 69006 Lyon, contact@mapapote.fr »
+  TROUVÉ [/cgv.html] /reynaud/i → « Papote est le nom commercial de Tanguy Reynaud, entrepreneur individuel (EI), SIRET 882 988 942 00034, 111 »
+  TROUVÉ [/cgv.html] /reynaud/i → « « À l'attention de Papote, Tanguy Reynaud, 111 avenue Thiers, 69006 Lyon, contact@mapapote.fr. »
+  📷 and-002-site-cgv.html.png
+## page /mentions.html
+  statut 200 titre Mentions légales · Papote
+  PERMIS [/mentions.html] /tanguy/i → « Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel (EI), SIRET 882 988 942 00 »
+  PERMIS [/mentions.html] /tanguy/i → « icable, article 293 B du CGI. Directeur de la publication : Tanguy Reynaud. Contact : contact@mapapote.fr, téléphone 06 76 77  »
+  PERMIS [/mentions.html] /reynaud/i → « Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel (EI), SIRET 882 988 942 00034, 111 »
+  PERMIS [/mentions.html] /reynaud/i → «  article 293 B du CGI. Directeur de la publication : Tanguy Reynaud. Contact : contact@mapapote.fr, téléphone 06 76 77 11 70 (l »
+  PERMIS [/mentions.html] /0?6[ .]?76[ .]?77[ .]?11[ .]?70/ → «  : Tanguy Reynaud. Contact : contact@mapapote.fr, téléphone 06 76 77 11 70 (laissez un message, nous rappelons). »
+  📷 and-003-site-mentions.html.png
+## page /confidentialite.html
+  statut 200 titre Politique de confidentialité · Papote
+  TROUVÉ [/confidentialite.html] /tanguy/i → « Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel, 111 avenue Thiers, 69006  »
+  TROUVÉ [/confidentialite.html] /reynaud/i → « Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel, 111 avenue Thiers, 69006 Lyon, es »
+  📷 and-004-site-confidentialite.html.png
+## page /resilier.html
+  statut 200 titre Résilier mon abonnement · Papote
+  📷 and-005-site-resilier.html.png
+## page /commande.html
+  statut 200 titre Papote · La tablette qui rapproche vos aînés de toute la famille
+  TROUVÉ [/commande.html] /tanguy/i → « Tanguy Reynaud, fondateur de Papote, à Lyon »
+  TROUVÉ [/commande.html] /reynaud/i → « Tanguy Reynaud, fondateur de Papote, à Lyon »
+  📷 and-006-site-commande.html.png
+## page /merci.html
+  statut 200 titre Merci · Papote
+  📷 and-007-site-merci.html.png
 ## page /desinscription
   statut 200 titre Se désinscrire · Papote
   📷 and-008-site-desinscription.png
@@ -50,7 +46,7 @@
 ## menu ☰ : ouvrir, toucher ailleurs
   📷 and-010-menu-ouvert.png
   menu visible après appui : true
-  menu visible après toucher ailleurs : true
+  menu après toucher ailleurs : bouton dit false | « Comment ça marche » dans l'écran : false
   📷 and-011-menu-apres-toucher-ailleurs.png
 ## pied de page
   pied : Papote La tablette qui rapproche vos aînés de toute la famille. Une question ? contact@mapapote.fr DÉCOUVRIR Comment ça marche Questions fréquentes Être prévenu DÉJÀ CLIENT Ouvrir l'appli famille Résilier mon abonnement INFORMATIONS Conditions de vente Confidentialité Mentions légales © 2026 Papote · Lyon
@@ -58,27 +54,23 @@
 ## chat du site
   bulle visible : true
   📷 and-013-chat-ouvert.png
-  Q « Qui est derrière Papote ? Comment s'appelle le fondateur ? » → (7.2 s) « Papote est une toute jeune entreprise française, à taille humaine, installée à Lyon, et chaque tablette y est préparée et vérifiée à la main. Nous ne donnons pas de nom de personne ici, mais vous pouvez lire l'histoire de Papote sur le site, pour découvrir pourquoi cette tablette a été imaginée. »
+  Q « Ma tablette est tombée, l'écran est cassé, que faire ? » → (10.5 s) « Ne vous inquiétez pas : aucune caution n'est prélevée d'avance. La casse accidentelle n'est pas couverte, mais la tablette ne vous sera facturée que si elle est rendue cassée, après que l'équipe a reçu des photos par e-mail. Prenez en photo l'écran, puis signalez la casse à l'équipe pour qu'elle vous indique la marche à suivre. Laissez votre téléphone et votre e-mail juste en dessous, et quelqu’un de l’équipe vous recontactera. »
   📷 and-014-chat-reponse.png
-  Q « Je voudrais votre numéro de téléphone pour vous appeler » → (2.7 s) « Il n'y a pas de numéro de téléphone pour joindre Papote : on écrit à contact@mapapote.fr, et l'équipe répond sous 48 heures. Vous pouvez aussi utiliser le chat de ce site pour poser vos questions. »
-  📷 and-015-chat-reponse.png
 ## commande sans payer
-  HTTP 404 https://mapapote.fr/commande
-  console: Failed to load resource: the server responded with a status of 404 ()
-  📷 and-016-commande-depart.png
+  📷 and-015-commande-depart.png
   ÉCHEC : locator.fill: Timeout 30000ms exceeded.
 ## app famille, premier écran
   console: requestStorageAccess: Permission denied.
   console: Failed to load resource: the server responded with a status of 403 ()
   statut 200
-  📷 and-017-app-depart.png
+  📷 and-016-app-depart.png
   boutons visibles : Continuer avec Google | Recevoir le lien | Installer l'app sur ce téléphone
 ## app famille, lien par e-mail (sans envoyer)
-  📷 and-018-app-email.png
+  📷 and-017-app-email.png
 ## app famille, invitation inconnue
   console: requestStorageAccess: Permission denied.
   console: Failed to load resource: the server responded with a status of 403 ()
-  📷 and-019-app-invitation-inconnue.png
+  📷 and-018-app-invitation-inconnue.png
 ## chat dans l'app sans compte
   bulle d'aide visible : false
 
@@ -86,85 +78,88 @@
 ## page /
   console: Viewport argument key "interactive-widget" not recognized and ignored.
   statut 200 titre Papote · La tablette qui rapproche vos aînés de toute la famille
-  histoire trouvée : NON | 
-  TROUVÉ [/ hors histoire] /tanguy/i → «  Tanguy Reynaud, fondateur de Papote, à Lyon »
-  TROUVÉ [/ hors histoire] /tanguy/i → «  // Lancement (Tanguy, 2026-10-30) : on ne vend que le stock réel. Plus de tablet »
-  TROUVÉ [/ hors histoire] /tanguy/i → «  // ailleurs sur la page (Tanguy, 17/11), avec Échap, et avec le bouton Retour du téléphone  »
-  TROUVÉ [/ hors histoire] /reynaud/i → «  Tanguy Reynaud, fondateur de Papote, à Lyon »
-  📷 ios-020-site-accueil.png
-## page /cgv
-  HTTP 404 https://mapapote.fr/cgv
-  console: Failed to load resource: the server responded with a status of 404 (Not Found)
-  statut 404 titre Page introuvable · Papote
-  date CGV : ABSENTE
-  📷 ios-021-site-cgv.png
-## page /mentions
-  HTTP 404 https://mapapote.fr/mentions
-  console: Failed to load resource: the server responded with a status of 404 (Not Found)
-  statut 404 titre Page introuvable · Papote
-  📷 ios-022-site-mentions.png
-## page /confidentialite
-  HTTP 404 https://mapapote.fr/confidentialite
-  console: Failed to load resource: the server responded with a status of 404 (Not Found)
-  statut 404 titre Page introuvable · Papote
-  📷 ios-023-site-confidentialite.png
-## page /resilier
-  HTTP 404 https://mapapote.fr/resilier
-  console: Failed to load resource: the server responded with a status of 404 (Not Found)
-  statut 404 titre Page introuvable · Papote
-  📷 ios-024-site-resilier.png
-## page /commande
-  HTTP 404 https://mapapote.fr/commande
-  console: Failed to load resource: the server responded with a status of 404 (Not Found)
-  statut 404 titre Page introuvable · Papote
-  📷 ios-025-site-commande.png
-## page /merci
-  HTTP 404 https://mapapote.fr/merci
-  console: Failed to load resource: the server responded with a status of 404 (Not Found)
-  statut 404 titre Page introuvable · Papote
-  📷 ios-026-site-merci.png
+  histoire trouvée : oui | L'HISTOIRE DE PAPOTE Une histoire de famille, pas une plateforme. « Ma grand-mère a 93 ans et n'a jamais touché un ordinateur. Je voulais qu'elle voie les phot
+  📷 ios-019-site-accueil.png
+## page /cgv.html
+  console: Viewport argument key "interactive-widget" not recognized and ignored.
+  statut 200 titre Conditions générales de vente · Papote
+  TROUVÉ [/cgv.html] /tanguy/i → « Papote est le nom commercial de Tanguy Reynaud, entrepreneur individuel (EI), SIRET 882 988 942 00 »
+  TROUVÉ [/cgv.html] /tanguy/i → « « À l'attention de Papote, Tanguy Reynaud, 111 avenue Thiers, 69006 Lyon, contact@mapapote.fr »
+  TROUVÉ [/cgv.html] /reynaud/i → « Papote est le nom commercial de Tanguy Reynaud, entrepreneur individuel (EI), SIRET 882 988 942 00034, 111 »
+  TROUVÉ [/cgv.html] /reynaud/i → « « À l'attention de Papote, Tanguy Reynaud, 111 avenue Thiers, 69006 Lyon, contact@mapapote.fr. »
+  📷 ios-020-site-cgv.html.png
+## page /mentions.html
+  console: Viewport argument key "interactive-widget" not recognized and ignored.
+  statut 200 titre Mentions légales · Papote
+  PERMIS [/mentions.html] /tanguy/i → « Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel (EI), SIRET 882 988 942 00 »
+  PERMIS [/mentions.html] /tanguy/i → « icable, article 293 B du CGI. Directeur de la publication : Tanguy Reynaud. Contact : contact@mapapote.fr, téléphone 06 76 77  »
+  PERMIS [/mentions.html] /reynaud/i → « Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel (EI), SIRET 882 988 942 00034, 111 »
+  PERMIS [/mentions.html] /reynaud/i → «  article 293 B du CGI. Directeur de la publication : Tanguy Reynaud. Contact : contact@mapapote.fr, téléphone 06 76 77 11 70 (l »
+  PERMIS [/mentions.html] /0?6[ .]?76[ .]?77[ .]?11[ .]?70/ → «  : Tanguy Reynaud. Contact : contact@mapapote.fr, téléphone 06 76 77 11 70 (laissez un message, nous rappelons). »
+  📷 ios-021-site-mentions.html.png
+## page /confidentialite.html
+  console: Viewport argument key "interactive-widget" not recognized and ignored.
+  statut 200 titre Politique de confidentialité · Papote
+  TROUVÉ [/confidentialite.html] /tanguy/i → « Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel, 111 avenue Thiers, 69006  »
+  TROUVÉ [/confidentialite.html] /reynaud/i → « Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel, 111 avenue Thiers, 69006 Lyon, es »
+  📷 ios-022-site-confidentialite.html.png
+## page /resilier.html
+  console: Viewport argument key "interactive-widget" not recognized and ignored.
+  statut 200 titre Résilier mon abonnement · Papote
+  📷 ios-023-site-resilier.html.png
+## page /commande.html
+  console: Viewport argument key "interactive-widget" not recognized and ignored.
+  console: Viewport argument key "interactive-widget" not recognized and ignored.
+  statut 200 titre Papote · La tablette qui rapproche vos aînés de toute la famille
+  TROUVÉ [/commande.html] /tanguy/i → « Tanguy Reynaud, fondateur de Papote, à Lyon »
+  TROUVÉ [/commande.html] /reynaud/i → « Tanguy Reynaud, fondateur de Papote, à Lyon »
+  📷 ios-024-site-commande.html.png
+## page /merci.html
+  console: Viewport argument key "interactive-widget" not recognized and ignored.
+  statut 200 titre Merci · Papote
+  📷 ios-025-site-merci.html.png
 ## page /desinscription
   console: Viewport argument key "interactive-widget" not recognized and ignored.
   statut 200 titre Se désinscrire · Papote
-  📷 ios-027-site-desinscription.png
+  📷 ios-026-site-desinscription.png
 ## page /page-qui-nexiste-pas
   HTTP 404 https://mapapote.fr/page-qui-nexiste-pas
   console: Failed to load resource: the server responded with a status of 404 (Not Found)
   statut 404 titre Page introuvable · Papote
-  📷 ios-028-site-page-qui-nexiste-pas.png
+  📷 ios-027-site-page-qui-nexiste-pas.png
 ## menu ☰ : ouvrir, toucher ailleurs
   console: Viewport argument key "interactive-widget" not recognized and ignored.
-  📷 ios-029-menu-ouvert.png
+  📷 ios-028-menu-ouvert.png
   menu visible après appui : true
-  menu visible après toucher ailleurs : true
-  📷 ios-030-menu-apres-toucher-ailleurs.png
+  menu après toucher ailleurs : bouton dit false | « Comment ça marche » dans l'écran : false
+  📷 ios-029-menu-apres-toucher-ailleurs.png
 ## pied de page
   pied : Papote La tablette qui rapproche vos aînés de toute la famille. Une question ? contact@mapapote.fr DÉCOUVRIR Comment ça marche Questions fréquentes Être prévenu DÉJÀ CLIENT Ouvrir l'appli famille Résilier mon abonnement INFORMATIONS Conditions de vente Confidentialité Mentions légales © 2026 Papote · Lyon
-  📷 ios-031-pied-de-page.png
+  📷 ios-030-pied-de-page.png
 ## chat du site
   console: Viewport argument key "interactive-widget" not recognized and ignored.
   bulle visible : true
-  📷 ios-032-chat-ouvert.png
-  Q « Qui est le fondateur de Papote et quel est son numéro ? » → (4.3 s) « Je ne peux pas donner le nom des personnes de l'équipe, mais l'histoire de Papote est racontée sur notre site, dans la rubrique « L'histoire de Papote ». Papote n'a pas de numéro de téléphone : on nous écrit à contact@mapapote.fr, et l'équipe répond sous 48 heures. »
-  📷 ios-033-chat-reponse.png
+  📷 ios-031-chat-ouvert.png
+  Q « Est-ce que mon frère, qui n'est pas responsable, peut résilier l'abonnement ? » → (3.2 s) « Non, seuls les responsables de la famille peuvent résilier l'abonnement. Un simple membre voit l'état de l'abonnement et peut demander à un responsable de le faire. Si votre frère veut devenir responsable, un responsable peut le lui accorder dans l'appli, Réglages, « Membres ». »
+  📷 ios-032-chat-reponse.png
 ## commande sans payer
-  HTTP 404 https://mapapote.fr/commande
-  console: Failed to load resource: the server responded with a status of 404 (Not Found)
-  📷 ios-034-commande-depart.png
+  console: Viewport argument key "interactive-widget" not recognized and ignored.
+  console: Viewport argument key "interactive-widget" not recognized and ignored.
+  📷 ios-033-commande-depart.png
   ÉCHEC : locator.fill: Timeout 30000ms exceeded.
 ## app famille, premier écran
   console: Viewport argument key "interactive-widget" not recognized and ignored.
   console: Failed to load resource: the server responded with a status of 401 (Unauthorized)
   console: Failed to load resource: the server responded with a status of 403 (Forbidden)
   statut 200
-  📷 ios-035-app-depart.png
+  📷 ios-034-app-depart.png
   boutons visibles : Continuer avec Google | Recevoir le lien | Installer l'app sur ce téléphone
 ## app famille, lien par e-mail (sans envoyer)
-  📷 ios-036-app-email.png
+  📷 ios-035-app-email.png
 ## app famille, invitation inconnue
   console: Viewport argument key "interactive-widget" not recognized and ignored.
   console: Failed to load resource: the server responded with a status of 401 (Unauthorized)
   console: Failed to load resource: the server responded with a status of 403 (Forbidden)
-  📷 ios-037-app-invitation-inconnue.png
+  📷 ios-036-app-invitation-inconnue.png
 ## chat dans l'app sans compte
   bulle d'aide visible : false
