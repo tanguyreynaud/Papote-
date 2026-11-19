@@ -76,8 +76,9 @@ jobs:
       # Tests sans navigateur ni émulateur : réseau mobile de l'admin (opérateur par fréquence, « Vu » sur l'alerte).
       - run: node --test ../reseau.test.mjs
       - run: npm ci
-      # Déjà dans l'image (rien n'est téléchargé) ; ne servirait que si la version du package changeait sans l'image.
-      - run: npx playwright install ${{ env.PAPOTE_MOTEUR }}
+      # Déjà dans l'image (rien n'est téléchargé). Sous WebKit, la tablette simulée reste dans Chromium, comme la
+      # WebView de la vraie tablette Android (banc.js) : les deux moteurs sont donc nécessaires.
+      - run: npx playwright install ${{ env.PAPOTE_MOTEUR == 'webkit' && 'webkit chromium' || 'chromium' }}
       # Aucun scénario oublié ni lancé deux fois, et autant de tâches que de morceaux.
       - name: Chaque scénario dans exactement un morceau
         env:

@@ -9,7 +9,7 @@ Toute la suite tourne trois fois en CI (`.github/workflows/app-famille.yml`, mat
   Safari sur Mac.
 
 En local : `PAPOTE_MOTEUR=webkit npm test`, ou `PAPOTE_MOTEUR=webkit PAPOTE_APPAREIL="iPhone SE (3rd gen)" npm test`
-(il faut `npx playwright install webkit`). `PAPOTE_JOURNAL=1` écrit la fin de la console de chaque téléphone dans le
+(il faut `npx playwright install webkit chromium` : la tablette y reste dans Chromium, voir plus bas). `PAPOTE_JOURNAL=1` écrit la fin de la console de chaque téléphone dans le
 compte rendu (la CI WebKit le fait).
 
 ## Ce qui change sous WebKit, sans rien sauter
@@ -28,6 +28,12 @@ compte rendu (la CI WebKit le fait).
 | Invitations de l'accueil : glissement des tuiles jugé au pas d'une image (≤ 40 px) et au nombre d'images (≥ 3) | Jugé à la vitesse (pas ramené à 1/60 s, ≤ 40 px) et à la durée (≥ 150 ms) : le WebKit de Playwright sans écran laisse parfois 230 ms entre deux images pendant que la carte suivante se met en place |
 
 La tablette filme en 640 × 480 (comme sa caméra) dans les deux moteurs.
+
+La tablette simulée des appels (`tablette.js`) s'ouvre toujours dans Chromium, même sous WebKit : la vraie tablette
+est une tablette Android (WebView, donc Chromium). Dans le WebKit des iPhone, quand elle appelait, son `connectionState`
+restait parfois à « connecting » pour toujours alors qu'ICE et DTLS étaient connectés (vérifications du proche arrivées
+avant sa réponse) : un défaut de moteur que la vraie tablette n'a pas (`audit/tests-instables-18-11.md`, point 7).
+Le téléphone du proche, lui, reste un iPhone (WebKit) dans tous les essais d'appel.
 
 Messages de Safari tolérés (et seulement sous WebKit, voir `banc.js`) :
 
