@@ -75,3 +75,36 @@ test('Hors ligne puis app fermée : les envois partent à la prochaine ouverture
   await g.toast(julie, 'Envois en attente partis');
   await verifierPartis(fid);
 });
+
+test('Sans réseau, mon message en attente se supprime (19/11) : il ne part pas au retour du réseau', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  banc.tolerer(julie, RESEAU);
+  await g.reseau(julie, true);
+  await g.ouvrirTuile(julie, 'messages');
+  for (const texte of ['À garder', 'À retirer']) {
+    await julie.page.fill('#message-text', texte);
+    await julie.page.click('#btn-message');
+    await g.toast(julie, 'Pas de réseau : l\'envoi partira tout seul');
+  }
+  const bulle = julie.page.locator('#messages li.bubble.mine.en-route', { hasText: 'À retirer' });
+  await bulle.locator('.bubble-foot', { hasText: 'En attente de réseau' }).waitFor();
+  // Double appui : une seule question.
+  await bulle.locator('.bubble-del').dblclick();
+  await julie.page.locator('.dialog-back:not(.closing) .dialog').first().waitFor();
+  assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing) .dialog').count(), 1, 'une seule question');
+  await g.repondre(julie, 'Supprimer');
+  await g.toast(julie, 'Message supprimé');
+  await bulle.waitFor({ state: 'detached' });
+  await julie.page.locator('#view-messages .outbox', { hasText: '1 envoi en attente de réseau' }).waitFor();
+
+  await g.reseau(julie, false);
+  await g.toast(julie, 'Envoi en attente parti');
+  const textes = await g.attendreBase(async () => {
+    const l = (await g.liste(`families/${fid}/posts`)).filter((p) => p.type === 'message').map((p) => p.text);
+    return l.includes('À garder') && l;
+  }, 'message gardé parti');
+  assert.deepStrictEqual(textes, ['À garder'], 'le message supprimé n\'est jamais parti');
+  // Une fois parti, mon message garde sa poubelle.
+  await julie.page.locator('#messages li.bubble.mine:not(.en-route)', { hasText: 'À garder' }).locator('.bubble-del').waitFor();
+});
