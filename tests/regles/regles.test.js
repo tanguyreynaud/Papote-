@@ -303,6 +303,35 @@ test('carte SIM : simTest accepte sms et appel bien formés, et rien d\'autre de
   await assertFails(ecrire(proche('julie'), { sms: { ok: true, code: -1, ms: 1 }, appel: { ok: true, secondes: 20 } }));
 });
 
+// Répondeur de la ligne coupé (##002#, Tanguy 19/11) : la tablette l'écrit à part, juste après son test, sur le seul
+// champ simTest.repondeur (avec simTest.le à l'heure du serveur), comme Sync.ecrireRepondeur.
+test('carte SIM : la tablette ajoute simTest.repondeur bien formé, et rien d\'autre dedans', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'pairings/SIMR2345'), {
+      status: 'waiting', tabletUid: 'tab9', callsUid: 'tab9-appels', name: 'Tablette', serie: 'S9', createdAt: Timestamp.now(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 10 * 60 * 1000),
+      ordre: { id: 'o1', type: 'simTest', demandeLe: Timestamp.now(), simAttendue: '8933150000000001234' },
+      simTest: { id: 'o1', le: Timestamp.now(), iccid: '8933150000000001234', mcc: '208', mnc: '01', operateur: 'Orange', etat: 'ok',
+        inscrite: true, itinerance: false, donnees: { ok: true, ms: 230 } },
+    });
+  });
+  const r = (db) => doc(db, 'pairings/SIMR2345');
+  const ecrire = (db, repondeur) => updateDoc(r(db), { 'simTest.repondeur': repondeur, 'simTest.le': serverTimestamp() });
+  const t9 = tablette('tab9');
+  await assertSucceeds(ecrire(t9, { ok: true, essais: 1 }));
+  for (const raison of ['refuse', 'indisponible', 'delai', 'sans-permission', 'sans-reseau', 'occupe', 'erreur']) {
+    await assertSucceeds(ecrire(t9, { ok: false, essais: 2, raison }), raison);
+  }
+  await assertFails(ecrire(t9, { ok: 'oui', essais: 1 }));
+  await assertFails(ecrire(t9, { ok: true, essais: 50 }));
+  await assertFails(ecrire(t9, { ok: false, essais: 1, raison: 'autre' }));
+  await assertFails(ecrire(t9, { ok: true, essais: 1, code: '##002#' }), 'pas de champ en plus');
+  await assertFails(ecrire(t9, true));
+  await assertFails(updateDoc(r(t9), { 'simTest.repondeur': { ok: true, essais: 1 } }), 'le doit être l\'heure du serveur');
+  await assertFails(ecrire(tablette('tab9-appels'), { ok: true, essais: 1 }));
+  await assertFails(ecrire(proche('julie'), { ok: true, essais: 1 }));
+});
+
 
 test('envois : autorisés pendant l\'installation et avec un abonnement actif, bloqués une fois résilié', async () => {
   await famille({ statut: 'installation', etape: 'photo' });

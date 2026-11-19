@@ -155,7 +155,7 @@ service cloud.firestore {
     }
     function simTestValide(t) {
       return t is map
-        && t.keys().hasOnly(['id', 'le', 'iccid', 'mcc', 'mnc', 'operateur', 'etat', 'inscrite', 'itinerance', 'donnees', 'sms', 'appel'])
+        && t.keys().hasOnly(['id', 'le', 'iccid', 'mcc', 'mnc', 'operateur', 'etat', 'inscrite', 'itinerance', 'donnees', 'sms', 'appel', 'repondeur'])
         && t.id is string && t.id.size() > 0 && t.id.size() <= 80
         && t.le == request.time
         && t.etat in ['ok', 'absente', 'pin', 'puk', 'verrouillee', 'etrangere', 'sans-reseau', 'donnees-ko']
@@ -180,7 +180,15 @@ service cloud.firestore {
             && (t.appel.get('secondes', null) == null
               || (t.appel.secondes is number && t.appel.secondes >= 0 && t.appel.secondes <= 3600))
             && (t.appel.get('raison', null) == null
-              || t.appel.raison in ['coupe', 'refuse', 'sans-permission', 'erreur', 'numero'])));
+              || t.appel.raison in ['coupe', 'refuse', 'sans-permission', 'erreur', 'numero'])))
+        // Répondeur de la ligne coupé par la tablette (##002#, 19/11), écrit à part juste après le test.
+        && (t.get('repondeur', null) == null
+          || (t.repondeur is map && t.repondeur.keys().hasOnly(['ok', 'essais', 'raison'])
+            && t.repondeur.get('ok', false) is bool
+            && (t.repondeur.get('essais', null) == null
+              || (t.repondeur.essais is int && t.repondeur.essais >= 0 && t.repondeur.essais <= 10))
+            && (t.repondeur.get('raison', null) == null
+              || t.repondeur.raison in ['refuse', 'indisponible', 'delai', 'sans-permission', 'sans-reseau', 'occupe', 'erreur'])));
     }
     match /pairings/{code} {
       // Lu par la tablette (ses deux comptes) et l'administrateur seulement : l'adresse e-mail de celui qui a
