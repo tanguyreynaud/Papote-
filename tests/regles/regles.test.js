@@ -528,6 +528,27 @@ test('réglages de l\'admin (numéro d\'essai) : fermés à toutes les applis', 
   }
 });
 
+// Case « Hors-forfait bloqué chez l'opérateur » (Tanguy, 19/11 : sims/{id}.horsForfaitBloque, avec horsForfaitBloqueLe et
+// horsForfaitBloquePar) : écrite seulement par le serveur (gestionSim, qui note la date et l'auteur), comme tout le
+// registre des cartes SIM. Personne ne la coche en écrivant directement dans la base, pas même un compte admin :
+// sinon une tablette pourrait partir avec une ligne cochée sans trace de qui l'a fait.
+test('cartes SIM : « Hors-forfait bloqué » jamais écrit ni lu en direct, même par l\'admin', async () => {
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'sims/s1'), { numero: '07 00 00 00 01', statut: 'active' }));
+  const coche = { horsForfaitBloque: true, horsForfaitBloqueLe: Date.now(), horsForfaitBloquePar: 'tanguy@exemple.fr' };
+  const adminDb = () => env.authenticatedContext('tanguy', { email: 'tanguy@exemple.fr', email_verified: true, admin: true, firebase: { sign_in_provider: 'google.com' } }).firestore();
+  for (const [qui, db] of [['admin', adminDb()], ['proche', proche('julie')], ['tablette', tablette('tab')]]) {
+    await assertFails(updateDoc(doc(db, 'sims/s1'), coche), `${qui} : pas de case cochée en direct`);
+    await assertFails(updateDoc(doc(db, 'sims/s1'), { horsForfaitBloque: true }), `${qui} : pas même le seul champ`);
+    await assertFails(setDoc(doc(db, 'sims/s2'), { numero: '07 00 00 00 02', ...coche }), `${qui} : pas de nouvelle ligne cochée`);
+    await assertFails(getDoc(doc(db, 'sims/s1')), `${qui} : le registre se lit par le serveur`);
+  }
+  // Rien n'a bougé.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const l = (await getDoc(doc(ctx.firestore(), 'sims/s1'))).data();
+    assert.strictEqual(l.horsForfaitBloque, undefined);
+  });
+});
+
 test('commandes et abonnement : jamais écrits par l\'appli', async () => {
   await famille();
   await assertFails(getDoc(doc(proche('julie'), 'commandes/sub_1')));
@@ -672,6 +693,21 @@ test('ordre d\'appel SOS : posé ou effacé par un responsable, jamais par un pr
   // Jamais avec un autre champ (le nom, les responsables) dans la même écriture.
   await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosOrdre: ['paul'], admins: ['paul', 'lea'] }));
   await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { sosOrdre: ['paul'], createdBy: 'paul' }));
+});
+
+test('durée d\'affichage sur la tablette (options.dureeAffichage) : 1 à 5 minutes entières, par un responsable', async () => {
+  await deuxFamilles();
+  const options = (duree) => ({ options: { lecture: true, sos: true, dureeAffichage: duree }, rev: 2 });
+  for (const m of [1, 3, 5]) await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}`), options(m)));
+  await assertSucceeds(updateDoc(doc(proche('paul'), `families/${FID}`), options(2)));
+  // Sans ce réglage (appli d'avant, tablette à 3 minutes) : toujours accepté.
+  await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}`), { options: { lecture: false, sos: true } }));
+  // Hors bornes ou mal formé : refusé.
+  for (const m of [0, 6, 30, -1, 2.5, '3', true, null, [3]]) await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), options(m)));
+  // Léa (proche, pas responsable), Ève (autre famille), la tablette : refusé.
+  await assertFails(updateDoc(doc(proche('lea'), `families/${FID}`), options(3)));
+  await assertFails(updateDoc(doc(proche('eve'), `families/${FID}`), options(3)));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}`), options(3)));
 });
 
 test('responsables : désignés par un responsable, jamais au détriment du propriétaire ; un proche ne touche pas à la liste', async () => {

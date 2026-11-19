@@ -24,7 +24,7 @@ const MORCEAUX = [
     'sos.test.js', 'tel-unique.test.js', 'webkit-liste.test.js',
   ],
   [
-    'accueil.test.js', 'admin-journee.test.js', 'agenda.test.js', 'alerte-pas-vue.test.js', 'appels.test.js',
+    'accueil.test.js', 'admin-hors-forfait.test.js', 'admin-journee.test.js', 'agenda.test.js', 'alerte-pas-vue.test.js', 'appels.test.js',
     'badges.test.js', 'chat-aller.test.js', 'clavier-bas.test.js', 'debordement.test.js', 'installation.test.js',
     'largeur.test.js', 'mauvais-jours.test.js', 'mes-informations.test.js', 'photos-multiples.test.js',
     'resiliation.test.js',

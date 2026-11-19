@@ -889,6 +889,39 @@ function bulleEnRoute(text, etat) {
   li.append(t, foot);
   return li;
 }
+// Mon message en attente de réseau (19/11 : sans réseau, on ne pouvait pas supprimer ses propres messages, alors que
+// la poubelle restait sur ceux des autres pour un responsable) : on peut le retirer avant qu'il ne parte.
+function poubelleEnAttente(bulle, id) {
+  const foot = bulle.li.querySelector('.bubble-foot');
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'bubble-del';
+  del.setAttribute('aria-label', 'Supprimer ce message');
+  del.append(icon('trash'));
+  del.addEventListener('click', async () => {
+    if (del.disabled) return;
+    del.disabled = true;
+    if (!await askConfirm('Supprimer ce message ? Il ne partira pas.')) { del.disabled = false; return; }
+    try {
+      const encore = await outbox('readonly', (store) => store.get(id));
+      if (encore) {
+        await outbox('readwrite', (store) => store.delete(id));
+        retirerBulleEnRoute(bulle);
+        renderOutbox();
+        toast('Message supprimé');
+      } else {
+        // Déjà parti entre-temps : il est dans la conversation, avec sa propre poubelle.
+        retirerBulleEnRoute(bulle);
+        toast('Ce message venait de partir : supprimez-le dans la conversation');
+      }
+    } catch (err) {
+      console.error(err);
+      del.disabled = false;
+      notice("La suppression a échoué. Réessayez.");
+    }
+  });
+  foot.prepend(del);
+}
 function montrerBullesEnRoute() {
   const list = $('messages');
   list.querySelectorAll('.en-route').forEach((e) => e.remove());
@@ -964,7 +997,8 @@ async function envoyerMessage(text) {
     }
     console.warn('Message mis en attente', err);
     bulle.li.querySelector('.bubble-foot').textContent = 'En attente de réseau';
-    await queue(item);
+    const id = await queue(item);
+    if (id != null) poubelleEnAttente(bulle, id);
   } finally {
     if (--messagesEnRoute === 0) $('btn-message').disabled = false;
   }
@@ -1661,14 +1695,16 @@ async function outbox(mode, fn) {
 }
 
 async function queue(item) {
+  let id = null;
   try {
-    await outbox('readwrite', (store) => store.add({ ...item, fid: session.fid }));
+    id = await outbox('readwrite', (store) => store.add({ ...item, fid: session.fid }));
     toast("Pas de réseau : l'envoi partira tout seul");
   } catch (err) {
     console.error(err);
     notice("L'envoi a échoué. Vérifiez la connexion et réessayez.");
   }
   renderOutbox();
+  return id;
 }
 
 async function renderOutbox() {
@@ -4628,7 +4664,9 @@ SETTINGS['alerte-pas-vue-card'] = {
   },
 };
 
-// Options de la tablette : families/{fid}.options = { lecture, sos, meteo, rappelsAccueil, radio { active, nom, url } }.
+// Options de la tablette : families/{fid}.options = { lecture, sos, meteo, rappelsAccueil, dureeAffichage, radio { active, nom, url } }.
+// dureeAffichage (Tanguy, 19/11) : minutes pendant lesquelles un envoi ou un rappel pas encore vu reste à l'écran,
+// caméra allumée ; 1 à 5, 3 sans réglage (mêmes bornes dans firestore.rules, Sync.java et tablette.js).
 const RADIOS = [
   { nom: 'France Inter', url: 'https://icecast.radiofrance.fr/franceinter-midfi.mp3' },
   { nom: 'franceinfo', url: 'https://icecast.radiofrance.fr/franceinfo-midfi.mp3' },
@@ -4697,6 +4735,11 @@ const RADIOS = [
 }());
 
 const optionsActuelles = () => session.family.options || {};
+const DUREE_AFFICHAGE_DEFAUT = 3;
+function dureeAffichage(options) {
+  const m = Math.round(Number(options?.dureeAffichage));
+  return m >= 1 && m <= 5 ? m : DUREE_AFFICHAGE_DEFAUT;
+}
 // Ancienne option des messages vocaux (supprimés) : plus jamais réécrite.
 function sansVocal(options) {
   const { reponseVocale, ...reste } = options || {};
@@ -4709,6 +4752,7 @@ function renderOptions() {
     ['Lecture à voix haute', o.lecture !== false ? 'Activée' : 'Désactivée', o.lecture !== false],
     ['Météo sur l\'accueil', o.meteo !== false ? 'Affichée' : 'Enlevée', o.meteo !== false],
     ['Prochain rappel sur l\'accueil', o.rappelsAccueil !== false ? 'Affiché' : 'Enlevé', o.rappelsAccueil !== false],
+    ['Affichage d\'un envoi ou d\'un rappel', `${dureeAffichage(o)} minute${dureeAffichage(o) > 1 ? 's' : ''}`, true],
     ['SOS famille', o.sos ? 'Activé' : 'Désactivé', !!o.sos],
     ['Radio', o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée', !!o.radio?.active],
   ];
@@ -4751,6 +4795,7 @@ SETTINGS['options-card'] = {
     $('opt-sos').checked = !!o.sos;
     $('opt-meteo').checked = o.meteo !== false;
     $('opt-rappels-accueil').checked = o.rappelsAccueil !== false;
+    $('opt-duree-affichage').value = String(dureeAffichage(o));
     $('opt-radio').checked = !!o.radio?.active;
     const i = RADIOS.findIndex((r) => r.url === o.radio?.url);
     $('opt-radio-station').value = String(i >= 0 ? i : 0);
@@ -4765,6 +4810,7 @@ SETTINGS['options-card'] = {
       sos: $('opt-sos').checked,
       meteo: $('opt-meteo').checked,
       rappelsAccueil: $('opt-rappels-accueil').checked,
+      dureeAffichage: dureeAffichage({ dureeAffichage: $('opt-duree-affichage').value }),
       radio: { ...(o.radio || {}), active: $('opt-radio').checked, nom: r.nom, url: r.url },
     };
     await saveFamily({ options }, 'Options envoyées à la tablette');

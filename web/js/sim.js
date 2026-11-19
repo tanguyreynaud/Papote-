@@ -13,6 +13,12 @@ export const BLOCAGES_SIM = [
 ];
 export const blocagesFaits = (l) => !!l && BLOCAGES_SIM.every(([k]) => l.blocages && l.blocages[k] === true);
 
+// Hors-forfait bloqué chez l'opérateur (Tanguy, 19/11) : aucun hors-forfait SIM, jamais. Case obligatoire sur chaque
+// ligne (sims/{id}.horsForfaitBloque, date et auteur notés par le serveur), non cochée sur les lignes d'avant : la
+// tablette ne part pas sans elle (le serveur refuse aussi : functions/statuts.js, phraseHorsForfait).
+export const CASE_HORS_FORFAIT = 'Hors-forfait bloqué chez l\'opérateur';
+export const horsForfaitBloque = (l) => !!(l && l.horsForfaitBloque === true);
+
 const DATA_MAX_MO = 15 * 1024;
 const toDate = (v) => (v && v.toDate ? v.toDate() : v ? new Date(v) : null);
 export const go = (mo) => (mo == null || mo < 0 ? null : mo >= 1024 ? `${(mo / 1024).toFixed(1)} Go` : `${Math.round(mo)} Mo`);
@@ -56,6 +62,24 @@ export const simVue = (fid) => {
   const v = fid && parFamille.get(fid);
   return v && v.sim ? v : null;
 };
+
+// Réveil de la tablette (verrou n°4, Tanguy 19/11 ; tablette SecoursPush : sim.push, sim.pushDirectMin) : « push » le
+// serveur la réveille (normal), « direct » push en panne, la page écoute en direct (24 h au plus), « bride » les 24 h
+// sont dépensées, messages relevés toutes les 5 min. Tablettes d'avant (pas de sim.push) : null, rien affiché.
+// Depuis quand le push manque : la tablette n'envoie pas d'heure, mais pushDirectMin compte les minutes d'écoute
+// directe (en ligne, sans push) et ne revient à zéro qu'après 7 jours de push sain ; ≥ 24 h de ce compte, ou « bride »
+// (qui n'arrive qu'après ces 24 h), c'est l'alerte. Aucune écriture ni tâche serveur de plus.
+export const PUSH_ALERTE_MIN = 24 * 60;
+export function modePush(sim) {
+  const mode = sim && ['push', 'direct', 'bride'].includes(sim.push) ? sim.push : null;
+  if (!mode) return null;
+  const min = Number(sim.pushDirectMin) >= 0 ? Math.floor(Number(sim.pushDirectMin)) : 0;
+  const texte = mode === 'push' ? 'push'
+    : mode === 'direct' ? `écoute directe (${min} min)`
+      : 'bridé : messages relevés toutes les 5 min';
+  const alerte = mode === 'bride' || (mode === 'direct' && min >= PUSH_ALERTE_MIN);
+  return { mode, min, texte, alerte };
+}
 
 // Réseau mobile chez le client (tablette 2.99.105 et plus : sim.service, sim.simReseau, sim.antennes) : ce que la
 // tablette entend, et une alerte si la carte n'a pas de réseau ou un réseau faible (Poissy, 01/11 : SIM Lyca, seulement

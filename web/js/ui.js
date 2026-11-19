@@ -27,8 +27,12 @@ function dialog(message, buttons, extra = null) {
     const row = document.createElement('div');
     row.className = extra?.stack ? 'dialog-buttons stack' : 'dialog-buttons';
     // Le toucher qui ouvre cette fenêtre (fenêtre ouverte pendant ce clic) : son double est ignoré.
-    const ouvreur = window.event?.type === 'click' && dernierToucher?.t === window.event.timeStamp ? dernierToucher : null;
-    const doublon = (e) => !!ouvreur && e.timeStamp - ouvreur.t < DOUBLE_MS && e.timeStamp > ouvreur.t
+    // Le 2e clic peut porter la même heure que le 1er (heure des évènements arrondie au dixième de milliseconde : double
+    // clic rapide, vu en CI le 19/11 sur la poubelle d'un message en attente, la fenêtre se refermait) : « au même
+    // instant ou après », et l'évènement qui a ouvert la fenêtre est reconnu à lui-même, pas à son heure.
+    const ouvreur = window.event?.type === 'click' && dernierToucher?.t === window.event.timeStamp
+      ? { ...dernierToucher, ev: window.event } : null;
+    const doublon = (e) => !!ouvreur && e !== ouvreur.ev && e.timeStamp - ouvreur.t < DOUBLE_MS && e.timeStamp >= ouvreur.t
       && Math.hypot(e.clientX - ouvreur.x, e.clientY - ouvreur.y) < DOUBLE_PX;
     const close = (value) => {
       if (back.classList.contains('closing')) return;

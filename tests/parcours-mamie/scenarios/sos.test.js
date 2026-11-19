@@ -66,6 +66,9 @@ test('SOS appuyé plusieurs fois (carte SIM) : un seul SMS en 10 min, même tabl
   // Android dit à la page où en est l'appel téléphone (AppelGsm.java) : Julie décroche, parle, raccroche.
   const julieDecrocheEtRaccroche = async (numero) => {
     const julie = { numero, uid, name: 'Julie', sortant: true };
+    // Règle du 19/11 : « en ligne » avant 4,5 s = messagerie directe, la tablette raccroche. Julie décroche après
+    // quelques sonneries, comme une vraie personne.
+    await mamie.page.clock.fastForward('00:06');
     await mamie.page.evaluate((x) => window.Papote.onGsm(x), { etat: 'enLigne', ...julie });
     await mamie.page.clock.fastForward('00:41');
     await mamie.page.evaluate((x) => window.Papote.onGsm(x), { etat: 'fin', cause: 'raccroche', ...julie });

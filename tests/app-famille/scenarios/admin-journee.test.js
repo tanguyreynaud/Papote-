@@ -147,7 +147,7 @@ async function commandePrete() {
 
 // ---------- Le matin ----------
 
-test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi » en 11 étapes, mauvais numéro T-… refusé, colis déposé une seule fois', async () => {
+test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi » en 12 étapes, mauvais numéro T-… refusé, colis déposé une seule fois', async () => {
   const { tablette, id } = await commandePrete();
   const t = await ouvrirAdmin('ordinateur');
   const p = t.page;
@@ -161,7 +161,7 @@ test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi 
 
   // Chaque étape : « C'est fait » reste éteint tant que tout n'est pas rempli et coché.
   const vues = [];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 11; i++) {
     const titre = await titreEtape(t);
     if (!/Envoi ou main propre/.test(titre)) assert.ok(await p.locator('.pc-suivant').isDisabled(), `étape « ${titre} » : bouton éteint avant les gestes`);
     // Tanguy se trompe de tablette en lisant le numéro collé dessus.
@@ -169,7 +169,7 @@ test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi 
     assert.ok(await p.locator('.pc-suivant').isEnabled(), `étape « ${titre} » : bouton allumé après les gestes`);
     assert.strictEqual(await suivant(t), '', `étape « ${titre} »`);
   }
-  assert.deepStrictEqual(vues, ['Envoi ou main propre ?', 'Choisir la tablette', 'Activer la carte SIM', 'Installer la carte SIM', 'Blocages chez l\'opérateur', 'La tablette dans le carton',
+  assert.deepStrictEqual(vues, ['Envoi ou main propre ?', 'Choisir la tablette', 'Activer la carte SIM', 'Installer la carte SIM', 'Hors-forfait bloqué ?', 'Blocages chez l\'opérateur', 'La tablette dans le carton',
     'Enceinte ?', 'Fermer le colis', 'Le numéro au feutre', 'L\'étiquette']);
   assert.strictEqual(envois.length, 1, 'double appui sur « Créer l\'étiquette » : une seule étiquette payée');
   assert.strictEqual(nbAppels('gestionEtiquette'), 1);
@@ -203,6 +203,7 @@ test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi 
   assert.strictEqual(fiche.commande, id);
   const sim = await s.lire(`sims/${fiche.simId}`);
   assert.strictEqual(sim.statut, 'active');
+  assert.strictEqual(sim.horsForfaitBloque, true, 'case « Hors-forfait bloqué » cochée pendant la préparation');
   assert.strictEqual(sim.prix, 299);
   assert.strictEqual(fiche.simTest.ok, true, 'carte testée par la tablette avant le départ');
   assert.strictEqual(fiche.simTest.simAttendue, sim.iccid);
@@ -283,7 +284,7 @@ test('admin sur téléphone (390 px) : chaque étape de « Préparer l\'envoi »
   const p = t.page;
   await p.getByRole('button', { name: 'Préparer l\'envoi' }).first().click();
   await parcours(t).waitFor();
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < 12; i++) {
     const titre = await remplirEtape(t, { tablette });
     const m = await p.evaluate(() => {
       const b = document.querySelector('dialog.parcours .pc-suivant').getBoundingClientRect();
@@ -297,4 +298,75 @@ test('admin sur téléphone (390 px) : chaque étape de « Préparer l\'envoi »
   await s.calme();
   assert.strictEqual((await s.lire(`commandes/${id}`)).expedition, 'envoyee');
   assert.strictEqual((await s.lire(`stock/${tablette.fiche}`)).etat, 'envoyee');
+});
+
+// ---------- Compta : relevé de factures@ et liste des dépenses (Tanguy, 19/11) ----------
+
+test('admin : « problème au dernier relevé de factures@ » ouvre Dépenses sur le détail ; dépenses, la plus récente en haut', async () => {
+  const maintenant = Date.now();
+  // Trois dépenses du mois en cours, écrites dans le désordre (la plus vieille au milieu).
+  const depenses = [['Dépense du milieu', 2], ['Dépense la plus vieille', 3], ['Dépense la plus récente', 1]];
+  for (const [libelle, minutes] of depenses) {
+    await s.db.collection('depenses').add({ libelle, fournisseur: 'Vendeur test', categorie: 'materiel', montant: 10, tva: 0,
+      date: s.Timestamp.fromMillis(maintenant - minutes * 60e3) });
+  }
+  await s.db.doc('gestion/courrier').set({ le: maintenant, rangees: [], ignorees: [], erreurs: ['Boîte factures@ : mot de passe refusé'] });
+  const t = await ouvrirAdmin('releve', { hauteur: 700 });
+  const p = t.page;
+  const ligne = p.locator('#a-faire a', { hasText: 'au dernier relevé de factures@mapapote.fr' });
+  await ligne.click();
+  // Effet immédiat : page Compta, onglet Dépenses, le détail du relevé (avec l'erreur) à l'écran.
+  await p.waitForFunction(() => location.hash === '#compta/depenses/releve');
+  const courrier = p.locator('#courrier');
+  await courrier.waitFor({ state: 'visible' });
+  assert.match(await courrier.innerText(), /mot de passe refusé/);
+  await p.waitForFunction(() => {
+    const r = document.getElementById('courrier').getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= window.innerHeight;
+  }, null, { timeout: 5_000 });
+  // Liste des dépenses : la plus récente d'abord.
+  const lignes = await p.locator('#t-achats tbody tr').allInnerTexts();
+  const ordre = ['Dépense la plus récente', 'Dépense du milieu', 'Dépense la plus vieille'].map((x) => lignes.findIndex((l) => l.includes(x)));
+  assert.ok(ordre.every((i) => i >= 0), `les trois dépenses sont listées : ${lignes.join(' | ')}`);
+  assert.deepStrictEqual([...ordre].sort((a, b) => a - b), ordre, `plus récente en haut : ${lignes.join(' | ')}`);
+});
+
+test('admin : « Relever maintenant » sous le détail de factures@ : « Relevé en cours… », double appui = un seul relevé, détail mis à jour ; panne dite dans la page', async () => {
+  // Boîte factures@ du relevé : un port fermé de cette machine (rien ne part en ligne), la connexion est refusée
+  // tout de suite et le vrai relevé (gestionCourrierMaintenant) écrit son erreur dans gestion/courrier.
+  const avant = process.env.FACTURES_IMAP;
+  process.env.FACTURES_IMAP = '127.0.0.1:1:factures-test@exemple.fr';
+  try {
+    await s.db.doc('gestion/courrier').set({ le: Date.now() - 3600e3, rangees: [], ignorees: [], erreurs: [] });
+    const t = await ouvrirAdmin('relever', { hash: '#compta/depenses' });
+    const p = t.page;
+    const bouton = p.locator('#btn-courrier');
+    const etat = p.locator('#courrier-etat');
+    await bouton.waitFor({ state: 'visible' });
+    assert.strictEqual(await bouton.innerText(), 'Relever maintenant');
+    const hauteur = (await bouton.boundingBox()).height;
+    // Réponse retenue un instant : l'attente doit se voir.
+    await p.route('**/gestionCourrierMaintenant', async (r) => { await new Promise((ok) => setTimeout(ok, 800)); await r.continue(); });
+    await bouton.dblclick();
+    await etat.filter({ hasText: 'Relevé en cours…' }).waitFor();
+    assert.ok(await bouton.isDisabled(), 'bouton éteint pendant le relevé');
+    assert.ok(Math.abs((await bouton.boundingBox()).height - hauteur) < 1, 'même hauteur pendant le relevé');
+    await etat.filter({ hasText: /Relevé fait, 1 problème/ }).waitFor({ timeout: 20_000 });
+    assert.strictEqual(g.nbAppels('gestionCourrierMaintenant'), 1, 'double appui : un seul relevé');
+    assert.ok(!(await bouton.isDisabled()), 'bouton rallumé');
+    assert.match(await p.locator('#courrier').innerText(), /factures-test@exemple\.fr/, 'le détail montre le nouveau relevé');
+    await p.unroute('**/gestionCourrierMaintenant');
+
+    // Serveur en panne : un mot clair dans la page, le bouton revient.
+    banc.pannes.set('gestionCourrierMaintenant', { status: 'UNAVAILABLE' });
+    await bouton.click();
+    await etat.filter({ hasText: 'Relevé impossible' }).waitFor();
+    assert.match(await etat.getAttribute('class'), /error/);
+    assert.ok(!(await bouton.isDisabled()));
+    assert.strictEqual(g.nbAppels('gestionCourrierMaintenant'), 2);
+    banc.tolerer(t, /status of 503 .*gestionCourrierMaintenant/); // la panne jouée ci-dessus, voulue
+  } finally {
+    if (avant === undefined) delete process.env.FACTURES_IMAP;
+    else process.env.FACTURES_IMAP = avant;
+  }
 });
