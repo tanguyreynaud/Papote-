@@ -1304,7 +1304,7 @@ async function start() {
   }
   startAgain = false;
   closeStaleCalls();
-  modePush = pushPret();
+  modePush = modeReseau() !== 'direct';
   if (modePush) console.info('Appels : réveil par le serveur, pas d\'écoute ouverte');
   watchCalls();
   watchVersion();
@@ -1313,7 +1313,7 @@ async function start() {
   setTimeout(faceDetector, 20_000);
   watchFamily();
   watchCommands();
-  setTimeout(surveillerPush, 15_000);
+  surveillanceTimer = setTimeout(surveillerPush, 15_000);
 }
 
 // ---------- Test du son à l'installation ----------
@@ -1359,19 +1359,40 @@ function watchCommands() {
 // services Google absents, jeton pas encore écrit), l'écoute en direct reste, comme avant ; dès que
 // le jeton est écrit (quelques secondes après le démarrage), les écoutes sont fermées.
 let modePush = false;
+let surveillanceTimer = null;
 function pushPret() {
   try { return !!(android() && android().pushReady && android().pushReady()); } catch (e) { return false; }
+}
+// Push en panne : Android décide du secours (SecoursPush.java), pas la page.
+//   'direct'  écoutes en direct rouvertes, pour ne manquer aucun appel : 24 h AU PLUS, comptées et gardées par Android ;
+//   'bride'   les 24 h sont dépensées : écoutes fermées, appels et ordres relus toutes les 5 min (les envois
+//             suivent le tour de Sync, 5 min aussi). Sans ce verrou, un push en panne coûtait ≈ 100 Mo par mois
+//             de carte SIM sans que personne le sache (Tanguy, 19/11).
+// Ancienne app Android sans modeReseau : comme avant (push, sinon écoute directe).
+const RELECTURE_BRIDE_MS = 5 * 60_000;
+let derniereRelectureBride = 0;
+function modeReseau() {
+  try {
+    const a = android();
+    const m = a && a.modeReseau ? a.modeReseau() : '';
+    if (m === 'push' || m === 'direct' || m === 'bride') return m;
+  } catch (e) { /* ancien pont */ }
+  return pushPret() ? 'push' : 'direct';
 }
 // Dans les deux sens, vérifié chaque minute (appel local, sans réseau) : l'app Android ne dit « prêt »
 // qu'après un ping du serveur, et retire sa confiance si le contrôle quotidien échoue.
 function surveillerPush() {
   if (!fid) return;
-  const pret = pushPret();
+  // modePush : « écoutes fermées » (push qui marche, ou secours bridé).
+  const mode = modeReseau();
+  const pret = mode !== 'direct';
   if (pret && !modePush) {
     modePush = true;
     [stopCalls, stopFamily, stopCommands, stopVersion].forEach((stop) => { if (stop) stop(); });
     stopCalls = stopFamily = stopCommands = stopVersion = null;
-    console.info('Appels : réveil par le serveur, écoutes fermées');
+    console.info(mode === 'bride' ? 'Appels : push en panne depuis trop longtemps, secours bridé, écoutes fermées'
+      : 'Appels : réveil par le serveur, écoutes fermées');
+    derniereRelectureBride = Date.now();
     lireAppels();
     lireOrdres();
   } else if (!pret && modePush) {
@@ -1381,8 +1402,13 @@ function surveillerPush() {
     watchVersion();
     watchFamily();
     watchCommands();
+  } else if (mode === 'bride' && Date.now() - derniereRelectureBride >= RELECTURE_BRIDE_MS) {
+    derniereRelectureBride = Date.now();
+    lireAppels();
+    lireOrdres();
   }
-  setTimeout(surveillerPush, 60_000);
+  clearTimeout(surveillanceTimer);
+  surveillanceTimer = setTimeout(surveillerPush, 60_000);
 }
 // Réveil reçu par l'app Android (Papote.onPush dans tablette.js) : { type: 'appel' | 'ordre' | 'famille' }.
 window.papoteReveil = (type) => {

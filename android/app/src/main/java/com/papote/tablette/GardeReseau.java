@@ -119,6 +119,9 @@ final class GardeReseau {
                 return;
             }
             long depuis = prefs.getLong("reseauHorsDepuis", 0);
+            // Début de panne noté avec une horloge fausse (1970 au démarrage sans réseau, saut d'heure) : la
+            // durée serait de plusieurs années ou négative. On repart de maintenant, sans redémarrer pour ça.
+            if (depuis != 0 && (depuis > mur || (mur >= Horloge.PLANCHER && depuis < Horloge.PLANCHER))) depuis = 0;
             if (depuis == 0) {
                 prefs.edit().putLong("reseauHorsDepuis", mur).apply();
                 Journal.log(app, "Réseau mobile hors service");

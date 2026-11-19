@@ -120,6 +120,23 @@ public class Push extends FirebaseMessagingService {
         MainActivity.surPush("jeton", null);
     }
 
+    /**
+     * Push en panne depuis des heures : le jeton est jeté et redemandé à Google (un jeton devenu invalide
+     * ne se répare pas seul). Le nouveau arrive par onNewToken ou getToken, puis Sync l'écrit et redemande un ping.
+     */
+    static void renouvelerJeton(Context c) {
+        if (!disponible(c)) return;
+        try {
+            Journal.log(c, "Push en panne : nouveau jeton demandé à Google");
+            FirebaseMessaging fm = FirebaseMessaging.getInstance();
+            fm.deleteToken().addOnCompleteListener((fait) ->
+                    fm.getToken().addOnSuccessListener((jeton) -> memoriser(c, jeton))
+                            .addOnFailureListener((e) -> Log.w(TAG, "Push : nouveau jeton", e)));
+        } catch (Exception e) {
+            Log.w(TAG, "Push : nouveau jeton", e);
+        }
+    }
+
     /** Jeton de réveil connu (null sans services Google ou tant que Google ne l'a pas donné). */
     static String jeton(Context c) {
         if (!disponible(c)) return null;
@@ -137,7 +154,7 @@ public class Push extends FirebaseMessagingService {
 
     static final long PING_ATTENTE_MS = 2 * 60_000;
     static final long PING_CHAQUE_MS = 24 * 3600_000;
-    static final long PING_RELANCE_MS = 30 * 60_000;
+    static final long PING_RELANCE_MS = 15 * 60_000; // retour au push tenté toutes les 15 min (Tanguy, 19/11)
 
     /** demande : heure prise AVANT l'écriture (le ping du serveur peut arriver avant la fin de l'écriture). */
     static void jetonEcrit(Context c, String jeton, long demande) {
@@ -149,6 +166,7 @@ public class Push extends FirebaseMessagingService {
         SharedPreferences p = prefs(c);
         if (p.getString("pushJetonEcrit", null) == null) return false;
         long depuis = System.currentTimeMillis() - p.getLong("pushPingDemande", 0);
+        if (depuis < 0) return true; // horloge revenue en arrière depuis la demande : on redemande
         // Pas de ping reçu pour la dernière demande (serveur pas encore à jour, coupure) : on redemande
         // toutes les 30 min, au lieu d'attendre le lendemain en gardant l'écoute en direct (28/10).
         boolean sansReponse = p.getLong("pushPingRecu", 0) < p.getLong("pushPingDemande", 0);
@@ -170,7 +188,8 @@ public class Push extends FirebaseMessagingService {
         long demande = p.getLong("pushPingDemande", 0);
         long recu = p.getLong("pushPingRecu", 0);
         if (recu >= demande) return recu > 0;
-        boolean enRoute = System.currentTimeMillis() - demande < PING_ATTENTE_MS;
+        long attente = System.currentTimeMillis() - demande;
+        boolean enRoute = attente >= 0 && attente < PING_ATTENTE_MS;
         if (!enRoute && !p.getBoolean("pushEchecNote", false)) {
             p.edit().putBoolean("pushEchecNote", true).apply();
             Journal.log(c, "Push : aucun ping reçu en 2 min, la page garde son écoute en direct");

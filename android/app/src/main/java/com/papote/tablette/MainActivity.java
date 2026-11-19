@@ -707,6 +707,19 @@ public class MainActivity extends Activity implements Sync.Listener {
             return Push.pret(MainActivity.this);
         }
 
+        /** « push », « direct » (écoutes ouvertes, 24 h au plus) ou « bride » (écoutes fermées) : voir SecoursPush. */
+        @JavascriptInterface
+        public String modeReseau() {
+            return SecoursPush.mode(MainActivity.this);
+        }
+
+        /** Écart « heure du serveur − heure de la tablette » en ms ; vide tant qu'aucun serveur n'a répondu (Horloge). */
+        @JavascriptInterface
+        public String ecartHeure() {
+            Long e = Horloge.ecart();
+            return e == null ? "" : String.valueOf(e);
+        }
+
         @JavascriptInterface
         public String simBudget() {
             return Forfait.etat(MainActivity.this).toString();
