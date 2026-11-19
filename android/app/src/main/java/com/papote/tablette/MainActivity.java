@@ -782,7 +782,7 @@ public class MainActivity extends Activity implements Sync.Listener {
             }
         }
 
-        /** Non, 20 s sans réponse, ou un appel arrive : la fenêtre de la page s'est fermée. */
+        /** Non, 1 min sans réponse, ou un appel arrive : la fenêtre de la page s'est fermée. */
         @JavascriptInterface
         public void redemarrageNon(String pourquoi) {
             String p = pourquoi == null ? "Non" : pourquoi.length() > 60 ? pourquoi.substring(0, 60) : pourquoi;
@@ -1183,7 +1183,7 @@ public class MainActivity extends Activity implements Sync.Listener {
                 FrameLayout.LayoutParams.MATCH_PARENT));
     };
 
-    /** 20 s sans réponse : tout se ferme (la page ferme aussi la sienne d'elle-même). */
+    /** 1 min sans réponse : tout se ferme (la page ferme aussi la sienne d'elle-même). */
     private final Runnable redemarrageSansReponse = () -> {
         if (redemarrageDemandeA == 0) return;
         callPage("fermerRedemarrage", new JSONObject());

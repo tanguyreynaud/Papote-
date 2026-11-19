@@ -16,7 +16,7 @@ import android.widget.TextView;
 /**
  * Redémarrage à la main (décision de Tanguy, 18/11) : le bouton volume bas tenu 10 s ouvre la fenêtre
  * « Redémarrer la tablette ? » Oui / Non. Oui : la tablette redémarre (jamais d'extinction). Non, ou
- * 20 s sans réponse : la fenêtre se ferme. Rien pendant un appel (visio ou téléphone) ni un SOS. Le
+ * 1 minute sans réponse (Tanguy, 19/11) : la fenêtre se ferme, comme Non. Rien pendant un appel (visio ou téléphone) ni un SOS. Le
  * volume ne bouge jamais pendant l'appui (MainActivity.dispatchKeyEvent avale déjà les touches).
  *
  * La fenêtre est d'abord celle de la page (tablette.js, style Papote, essayée par android/tests) ; si la
@@ -28,7 +28,7 @@ final class Redemarrage {
     /** Durée de l'appui sur volume bas. */
     static final long APPUI_MS = 10_000;
     /** Sans réponse, la fenêtre se ferme. */
-    static final long REPONSE_MS = 20_000;
+    static final long REPONSE_MS = 60_000;
     /** La page doit dire qu'elle affiche la fenêtre dans ce délai, sinon la fenêtre de secours s'ouvre. */
     static final long ACCUSE_MS = 2_000;
     /** Laisse le temps à la ligne du journal de partir avant le redémarrage. */
