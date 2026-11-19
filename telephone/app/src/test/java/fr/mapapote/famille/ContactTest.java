@@ -53,6 +53,17 @@ public class ContactTest {
         return Robolectric.buildActivity(Contact.class, i).create().start().resume();
     }
 
+    /**
+     * L'écran « Créer un contact » ouvert par l'activité (null s'il n'y en a pas). Robolectric note un
+     * startActivityForResult dans deux listes : il est retiré des deux, pour que getNextStartedActivity ne
+     * montre ensuite que ce qui a été ouvert après.
+     */
+    private static ShadowActivity.IntentForResult ecranOuvert(Activity a) {
+        ShadowActivity.IntentForResult r = shadowOf(a).getNextStartedActivityForResult();
+        if (r != null) assertTrue(r.intent.filterEquals(shadowOf(a).getNextStartedActivity()));
+        return r;
+    }
+
     @Test
     public void aucuneAutorisationSurLesContacts() throws Exception {
         PackageInfo info = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), PackageManager.GET_PERMISSIONS);
@@ -63,7 +74,7 @@ public class ContactTest {
     @Test
     public void ouvreCreerUnContactRempli() {
         Contact a = ouvrir(lien(cle, "Mamie Emma (Papote)", "+33612345678")).get();
-        ShadowActivity.IntentForResult creer = shadowOf(a).getNextStartedActivityForResult();
+        ShadowActivity.IntentForResult creer = ecranOuvert(a);
         assertEquals(Intent.ACTION_INSERT, creer.intent.getAction());
         assertEquals(ContactsContract.Contacts.CONTENT_URI, creer.intent.getData());
         assertEquals("Mamie Emma (Papote)", creer.intent.getStringExtra(ContactsContract.Intents.Insert.NAME));
@@ -72,22 +83,23 @@ public class ContactTest {
                 creer.intent.getIntExtra(ContactsContract.Intents.Insert.PHONE_TYPE, -1));
         assertTrue(creer.intent.getBooleanExtra("finishActivityOnSaveCompleted", false));
         assertFalse("attend la réponse de l'écran des contacts", a.isFinishing());
-        assertNull("un seul écran", shadowOf(a).getNextStartedActivityForResult());
+        assertNull("un seul écran", ecranOuvert(a));
+        assertNull("rien d'autre", shadowOf(a).getNextStartedActivity());
     }
 
     @Test
     public void doubleAppuiUnSeulEcran() {
         ActivityController<Contact> c = ouvrir(lien(cle, "Mamie Emma (Papote)", "+33612345678"));
-        assertTrue(shadowOf(c.get()).getNextStartedActivityForResult() != null);
+        assertTrue(ecranOuvert(c.get()) != null);
         c.newIntent(lien(cle, "Mamie Emma (Papote)", "+33612345678"));
-        assertNull(shadowOf(c.get()).getNextStartedActivityForResult());
+        assertNull(ecranOuvert(c.get()));
         assertNull(shadowOf(c.get()).getNextStartedActivity());
     }
 
     @Test
     public void enregistreRouvreLAppFamilleAvecLeNumero() {
         Contact a = ouvrir(lien(cle, "Mamie Emma (Papote)", "+33612345678")).get();
-        ShadowActivity.IntentForResult creer = shadowOf(a).getNextStartedActivityForResult();
+        ShadowActivity.IntentForResult creer = ecranOuvert(a);
         shadowOf(a).receiveResult(creer.intent, Activity.RESULT_OK, new Intent());
         Intent suite = shadowOf(a).getNextStartedActivity();
         assertEquals(Ouverture.class.getName(), suite.getComponent().getClassName());
@@ -99,7 +111,7 @@ public class ContactTest {
     @Test
     public void annuleNeRouvreRien() {
         Contact a = ouvrir(lien(cle, "Mamie Emma (Papote)", "+33712345678")).get();
-        ShadowActivity.IntentForResult creer = shadowOf(a).getNextStartedActivityForResult();
+        ShadowActivity.IntentForResult creer = ecranOuvert(a);
         shadowOf(a).receiveResult(creer.intent, Activity.RESULT_CANCELED, null);
         assertNull(shadowOf(a).getNextStartedActivity());
         assertTrue(a.isFinishing());
@@ -118,7 +130,7 @@ public class ContactTest {
         };
         for (Intent i : mauvais) {
             Contact a = ouvrir(i).get();
-            assertNull(i.getDataString(), shadowOf(a).getNextStartedActivityForResult());
+            assertNull(i.getDataString(), ecranOuvert(a));
             assertNull(i.getDataString(), shadowOf(a).getNextStartedActivity());
             assertTrue(i.getDataString(), a.isFinishing());
         }
