@@ -789,3 +789,4 @@ button.choix-fin-forfait.charge::after { border-color: rgba(255, 255, 255, .45);
 .pc-sim-numero-aide { margin: 0; color: var(--muted); }
 /* Répondeur de la ligne pas encore coupé (19/11) : une phrase discrète sous le verdict, rien d'alarmant. */
 .pc-sim-repondeur { margin: 0; }
+.releve { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 8px 0 0; }

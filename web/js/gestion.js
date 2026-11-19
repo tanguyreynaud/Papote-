@@ -279,6 +279,9 @@ document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) =
   });
 });
 
+// Adresses qui ouvrent une page sur un bloc précis (id de l'élément) plutôt qu'en haut.
+const ANCRES = { 'compta/depenses/releve': 'courrier' };
+
 function afficherPage() {
   const ancienne = ANCIENNES[location.hash.slice(1).split('/')[0]];
   if (ancienne) history.replaceState(null, '', `#${ancienne}`);
@@ -296,9 +299,12 @@ function afficherPage() {
   document.title = `Papote · ${titre}`;
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
-  window.scrollTo(0, 0);
+  // Adresse avec une ancre (ANCRES) : la page s'ouvre sur ce bloc ; sinon en haut.
+  const ancre = ANCRES[location.hash.slice(1)];
+  const placer = () => (ancre ? $(ancre).scrollIntoView({ block: 'center' }) : window.scrollTo(0, 0));
+  placer();
   // Téléphone : le menu ☰ se replie juste après et la page restait un peu descendue (titre sous la barre).
-  requestAnimationFrame(() => window.scrollTo(0, 0));
+  requestAnimationFrame(placer);
   // Clients déjà lus : affichés tout de suite, relus en fond s'ils datent de plus d'une minute.
   if ((page === 'clients' || page === 'client') && connecte && (!clients || Date.now() - clientsLus > 60_000)) chargerClients();
   afficherFiche();
@@ -784,7 +790,9 @@ function afficherAccueil() {
     [sansFacture, `${pluriel(sansFacture, 'tablette')} reçue${sansFacture > 1 ? 's' : ''} sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr`, '#stock', 'ko'],
     ...aVerifierMail.map((d) => [1, `Facture ${d.fournisseur || ''} à vérifier : ${[d.libelle, euros(d.montant)].filter(Boolean).join(', ')}, reçue par e-mail`.replace('  ', ' '),
       `#depense/${encodeURIComponent(d.id)}`, '']),
-    [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail en bas de page)`, '#accueil', 'ko'],
+    // Le détail est sous la liste des dépenses (Compta > Dépenses, #courrier) : le lien y ouvre et y descend
+    // (ANCRES, afficherPage). Avant, il pointait sur #accueil et un clic ne faisait rien (Tanguy, 19/11).
+    [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr : détail sous la liste des dépenses`, '#compta/depenses/releve', 'ko'],
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
     // Contrôle des factures de vente à la clôture (Tanguy, 10/11) : une ligne par point, du mois le plus récent.
@@ -3368,7 +3376,8 @@ choixFichier.addEventListener('change', async () => {
 });
 
 function afficherCompta() {
-  const deps = depensesPeriode();
+  // La plus récente en haut (Tanguy, 19/11). Les exports (registre des achats) restent dans l'ordre des dates.
+  const deps = depensesPeriode().sort((a, b) => (b.date || 0) - (a.date || 0));
   remplirTable($('t-achats'), [
     { titre: 'Date' }, { titre: 'Fournisseur' }, { titre: 'Libellé' }, { titre: 'Catégorie' }, { titre: 'TTC', n: 1 },
     { titre: 'dont TVA', n: 1 }, { titre: 'Justificatifs' }, { titre: '' },
@@ -4496,6 +4505,35 @@ function afficherCourrier() {
       ...c.precedent.erreurs.map((x) => h('span', { class: 'error' }, h('br'), x))] : []),
   );
 }
+
+// « Relever maintenant » (remis le 19/11, Tanguy) : relève factures@ tout de suite (gestionCourrierMaintenant), puis
+// relit les données pour mettre à jour le détail ci-dessus et « À faire ». Un seul relevé à la fois (double appui).
+let releveEnCours = false;
+$('btn-courrier').addEventListener('click', async () => {
+  if (releveEnCours) return;
+  releveEnCours = true;
+  const b = $('btn-courrier');
+  const etat = $('courrier-etat');
+  b.disabled = true;
+  boutonCharge(b, true);
+  etat.className = 'small muted';
+  etat.textContent = 'Relevé en cours…';
+  try {
+    const r = await appeler('gestionCourrierMaintenant');
+    donnees = await lireDonnees(true);
+    afficherTout();
+    const n = (r && r.erreurs && r.erreurs.length) || 0;
+    etat.className = n ? 'small error' : 'small muted';
+    etat.textContent = n ? `Relevé fait, ${pluriel(n, 'problème')} : détail ci-dessus.` : 'Relevé fait.';
+  } catch (e) {
+    etat.className = 'small error';
+    etat.textContent = `Relevé impossible : ${messageErreur(e)}`;
+  } finally {
+    releveEnCours = false;
+    boutonCharge(b, false);
+    b.disabled = false;
+  }
+});
 
 // ---------- Livres comptables archivés (clôture du mois) ----------
 
