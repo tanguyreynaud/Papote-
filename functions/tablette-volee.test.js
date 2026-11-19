@@ -143,7 +143,7 @@ test('révocation : les codes de jumelage confirmés de cette tablette sont annu
   const r = await revoquer(deps(db, fauxAuth()), { serie: 'BV123456' });
   assert.strictEqual(r.ok, true);
   assert.strictEqual(r.codes, 1);
-  assert.deepStrictEqual(docs['pairings/QRST6789'], { status: 'cancelled', fid: 'f1', tabletUid: 'tab', callsUid: 'app', revoqueLe: 1000 });
+  assert.deepStrictEqual(docs['pairings/QRST6789'], { status: 'closed', fid: 'f1', tabletUid: 'tab', callsUid: 'app', closedAt: new Date(1000) });
   assert.strictEqual(docs['pairings/VIEUX234'].status, 'waiting');
   assert.strictEqual(docs['pairings/AUTRE567'].status, 'confirmed');
   // Le code est annulé avant la suppression des fiches : la tablette ne peut pas rentrer entre les deux.
@@ -166,4 +166,36 @@ test('révocation d\'une tablette de remplacement : le code de remplacement qu\'
   assert.strictEqual(docs['invites/TABL2345'], undefined);
   assert.ok(docs['invites/ABCD2345']);
   assert.ok(docs['invites/TABL9999']);
+});
+
+const { fermerCodes, tabletteSortie } = require('./tablette-volee');
+
+test('fiche membre d\'une tablette supprimée (remplacement, retour, famille supprimée) : ses codes sont fermés', async () => {
+  const docs = {
+    'pairings/QRST6789': { status: 'confirmed', fid: 'f1', tabletUid: 'tab', callsUid: 'app' },
+    'pairings/AUTRE567': { status: 'confirmed', fid: 'f2', tabletUid: 'autre', callsUid: 'autre-appels' },
+    'invites/TABL2345': { kind: 'tablette', fid: 'f1', usedBy: 'tab' },
+    'invites/ABCD2345': { fid: 'f1', createdBy: 'marie' },
+  };
+  const db = fausseBase(docs);
+  // Le compte des appels sort : le code qui le ferait rentrer est annulé une seule fois, même vu par ses deux champs.
+  assert.strictEqual(await fermerCodes(db, 'app', 2000), 1);
+  assert.deepStrictEqual(docs['pairings/QRST6789'], { status: 'closed', fid: 'f1', tabletUid: 'tab', callsUid: 'app', closedAt: new Date(2000) });
+  // Le compte principal sort ensuite : code de jumelage déjà annulé, code de remplacement effacé.
+  assert.strictEqual(await fermerCodes(db, 'tab', 3000), 1);
+  assert.strictEqual(docs['invites/TABL2345'], undefined);
+  assert.deepStrictEqual(docs['pairings/QRST6789'].closedAt, new Date(2000));
+  // Rien d'autre n'est touché ; un uid vide ne lit rien.
+  assert.strictEqual(docs['pairings/AUTRE567'].status, 'confirmed');
+  assert.ok(docs['invites/ABCD2345']);
+  assert.strictEqual(await fermerCodes(db, '', 1), 0);
+  assert.strictEqual(await fermerCodes(db, undefined, 1), 0);
+});
+
+test('sortie d\'une tablette : seulement la suppression d\'une fiche de rôle « tablette »', () => {
+  assert.strictEqual(tabletteSortie({ role: 'tablette', name: 'Tablette' }, null), true);
+  assert.strictEqual(tabletteSortie({ role: 'famille' }, null), false); // un proche qui part
+  assert.strictEqual(tabletteSortie({ role: 'tablette' }, { role: 'tablette', lastOnline: 1 }), false); // battement
+  assert.strictEqual(tabletteSortie(null, { role: 'tablette' }), false); // entrée
+  assert.strictEqual(tabletteSortie(null, null), false);
 });

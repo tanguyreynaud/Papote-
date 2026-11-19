@@ -64,24 +64,9 @@ async function revoquer(deps, params) {
     });
     fait.ordre = ref.path;
   }
-  // Codes de jumelage de cette tablette encore « confirmés » : annulés, avant de supprimer ses fiches. Sinon, pendant les 24 h qui suivent son
-  // jumelage, son compte (pas encore désactivé tant que l'ordre n'est pas exécuté) recrée sa fiche membre avec ce
-  // code et relit les photos (firestore.rules, members create ; audit du 19/11, prouvé sur l'émulateur).
-  if (fiche.tabletUid) {
-    const codes = await db.collection('pairings').where('tabletUid', '==', fiche.tabletUid).get();
-    for (const c of codes.docs) {
-      if (c.get('status') !== 'confirmed') continue;
-      await c.ref.update({ status: 'cancelled', revoqueLe: deps.maintenant() });
-      fait.codes += 1;
-    }
-    // Même porte pour une tablette de remplacement : le compte qui a pris un code de remplacement repasse avec
-    // lui jusqu'à son échéance (7 jours ; firestore.rules, codeTabletteOk). Le code pris est effacé.
-    const remplacements = await db.collection('invites').where('usedBy', '==', fiche.tabletUid).get();
-    for (const c of remplacements.docs) {
-      if (c.get('kind') !== 'tablette') continue;
-      await c.ref.delete();
-      fait.codes += 1;
-    }
+  // Codes de cette tablette fermés avant de supprimer ses fiches (fermerCodes, plus bas).
+  for (const uid of [fiche.tabletUid, fiche.callsUid].filter(Boolean)) {
+    fait.codes += await fermerCodes(db, uid, deps.maintenant());
   }
   for (const chemin of plan.membres) {
     await db.doc(chemin).delete();
@@ -112,6 +97,40 @@ async function revoquer(deps, params) {
     : null };
 }
 
+// Codes par lesquels le compte `uid` d'une tablette (affichage ou appels) pourrait rentrer seul dans sa famille :
+//   - ses codes de jumelage encore « confirmés » : pendant les 24 h qui suivent le jumelage, les règles laissent le
+//     compte recréer sa fiche membre avec (firestore.rules, members create ; prouvé sur l'émulateur le 19/11) ;
+//   - le code de remplacement qu'il a pris : il repasse avec jusqu'à son échéance (7 jours, codeTabletteOk).
+// Les premiers sont clos (status 'closed', closedAt, comme gestion.js fermerJumelages), le second effacé. Renvoie le nombre de codes fermés.
+// Appelé à la révocation (tablette volée) et dès qu'une fiche membre de tablette est supprimée, par n'importe quel
+// chemin (remplacement, retour, famille supprimée, tablette qui quitte sa famille) : index.js, compterProches.
+async function fermerCodes(db, uid, maintenant) {
+  if (typeof uid !== 'string' || !uid) return 0;
+  let n = 0;
+  const vus = new Set();
+  for (const champ of ['tabletUid', 'callsUid']) {
+    const codes = await db.collection('pairings').where(champ, '==', uid).get();
+    for (const c of codes.docs) {
+      if (c.get('status') !== 'confirmed' || vus.has(c.ref.path)) continue;
+      vus.add(c.ref.path);
+      await c.ref.update({ status: 'closed', closedAt: new Date(maintenant) });
+      n += 1;
+    }
+  }
+  const remplacements = await db.collection('invites').where('usedBy', '==', uid).get();
+  for (const c of remplacements.docs) {
+    if (c.get('kind') !== 'tablette') continue;
+    await c.ref.delete();
+    n += 1;
+  }
+  return n;
+}
+
+// La fiche membre d'une tablette vient-elle d'être supprimée ? (pure) avant, apres : données de la fiche, ou null.
+function tabletteSortie(avant, apres) {
+  return !!(avant && avant.role === 'tablette' && !apres);
+}
+
 // Déclencheur sur families/{fid}/commands/{id} : l'ordre de révocation est exécuté (ou refusé) → compte désactivé.
 // Renvoie l'uid à désactiver, ou null (pure).
 function apresOrdre(avant, apres) {
@@ -120,4 +139,4 @@ function apresOrdre(avant, apres) {
   return ['done', 'failed'].includes(apres.state) ? apres.target : null;
 }
 
-module.exports = { verifierParams, planRevocation, revoquer, apresOrdre };
+module.exports = { verifierParams, planRevocation, revoquer, apresOrdre, fermerCodes, tabletteSortie };
