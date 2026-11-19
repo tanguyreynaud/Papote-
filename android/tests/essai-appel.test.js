@@ -103,6 +103,7 @@ test('A49 : Mamie rappelle Julie par téléphone et Julie décroche : la carte s
     await b.toucher('#view-home .call-btn');
     await b.page.evaluate(() => [...document.querySelectorAll('.call-person')].find((e) => e.textContent.includes('Julie')).click());
     await b.android('onGsm', { etat: 'appel', sortant: true, ...JULIE });
+    await b.avancer(6000); // un vrai décroché (avant 4,5 s, c'est sa messagerie : la carte resterait)
     await b.android('onGsm', { etat: 'enLigne', sortant: true, ...JULIE });
     await b.android('onGsm', { etat: 'fin', cause: 'raccroche', sortant: true, ...JULIE });
     await b.avancer(5000);

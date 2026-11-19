@@ -219,6 +219,7 @@ test('A47-2 : deuxième SOS 2 min après le premier (et après une relance) : pa
     await b.avancer(5500);
     assert.strictEqual((await b.appels('sendSms')).length, 1);
     // Paul répond pour de vrai : SOS fini.
+    await b.avancer(6000);
     await b.android('onGsm', { etat: 'enLigne', ...PAUL });
     await b.avancer(60000);
     await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...PAUL });
@@ -231,6 +232,7 @@ test('A47-2 : deuxième SOS 2 min après le premier (et après une relance) : pa
     assert.deepStrictEqual(await appelsTel(b), ['0700000000'], 'Paul rappelé quand même');
     assert.match(await ecran(b), /reçu votre SOS par SMS/, 'la famille a bien le SMS d’il y a 2 min');
     // Relance de Papote : l'heure du dernier SMS est gardée.
+    await b.avancer(6000);
     await b.android('onGsm', { etat: 'enLigne', ...PAUL });
     await b.avancer(45000);
     await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...PAUL });

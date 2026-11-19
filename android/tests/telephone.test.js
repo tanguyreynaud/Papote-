@@ -41,6 +41,7 @@ test('Mamie appelle Julie par téléphone : ça sonne, en ligne, puis « Appel t
     await b.android('onGsm', { etat: 'appel', sortant: true, numero: '0612345678', uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /Ça sonne/);
     assert.match(await b.texte('.call-out'), /Chez Julie/);
+    await b.avancer(6000); // Julie décroche après quelques sonneries (avant 4,5 s, ce serait sa messagerie)
     await b.android('onGsm', { etat: 'enLigne', sortant: true, numero: '0612345678', uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
     assert.ok(await b.visible('.call-hangup'), 'bouton Raccrocher');
@@ -57,16 +58,17 @@ test('Mamie appelle Julie par téléphone : ça sonne, en ligne, puis « Appel t
   } finally { await b.fermer(); }
 });
 
-test('Julie ne répond pas : la tablette raccroche au bout de 45 s, puis la liste des personnes', async () => {
+test('Julie ne répond pas : la tablette raccroche au bout de 18 s (avant sa messagerie), puis la liste des personnes', async () => {
   const b = await tablette();
   try {
     await b.toucher('#view-home .call-btn');
     await choisir(b, 'Julie');
     await b.android('onGsm', { etat: 'appel', sortant: true, uid: 'julie', name: 'Julie' });
-    await b.avancer(44000);
+    await b.avancer(17000);
     assert.strictEqual((await b.appels('phoneHangup')).length, 0);
     await b.avancer(2000);
-    assert.strictEqual((await b.appels('phoneHangup')).length, 1, 'raccroché à 45 s');
+    assert.strictEqual((await b.appels('phoneHangup')).length, 1, 'raccroché à 18 s');
+    assert.match((await b.appels('logAppel'))[0].args[0], /Appel : Julie sans réponse après 18 s/);
     await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /Julie n’a pas pu répondre/);
     await b.avancer(4500);
@@ -198,6 +200,7 @@ test('SOS par téléphone : un SMS à tous, Paul (responsable) appelé d’abord
     await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', numero: '0700000000', uid: 'paul', name: 'Paul' });
     assert.match(await b.texte('.call-out .call-title'), /SOS : on appelle Julie/);
     assert.strictEqual((await b.appels('phoneCall')).length, 2, 'pas d’appel sauté');
+    await b.avancer(6000);
     await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
     await b.avancer(41000); // une vraie conversation (≥ 40 s) : une messagerie ne compte pas comme une réponse
@@ -243,6 +246,7 @@ test('Raccrocher alors qu’Android n’a plus d’appel : l’écran se ferme q
   try {
     await b.toucher('#view-home .call-btn');
     await choisir(b, 'Julie');
+    await b.avancer(6000);
     await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
     await b.toucher('.call-hangup');
@@ -256,17 +260,19 @@ test('Raccrocher alors qu’Android n’a plus d’appel : l’écran se ferme q
 });
 
 test('écran d’appel sans nouvelle d’Android pendant 60 s : il se ferme si l’appel n’existe plus', async () => {
-  const b = await tablette({ appelGsm: { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' } });
+  const b = await tablette();
   try {
     await b.toucher('#view-home .call-btn');
     await choisir(b, 'Julie');
+    await b.avancer(6000); // un vrai décroché : avant 4,5 s, ce serait sa messagerie
+    await b.etat({ appelGsm: { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' } });
     await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
     // Android dit toujours « en ligne » : l'écran reste, aussi longtemps que dure l'appel.
-    await b.avancer(130000);
+    await b.avancer(124000);
     assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
     // Android n'a plus d'appel (phoneState vide) sans l'avoir dit : au contrôle suivant, l'écran se ferme.
     await b.page.evaluate(() => { window.__etat.appelGsm = {}; });
-    await b.avancer(52000); // contrôle suivant à 180 s
+    await b.avancer(58000); // contrôle suivant à 186 s
     assert.match(await b.texte('.call-out'), /Appel terminé/);
     await b.avancer(4500);
     assert.ok(!(await b.visible('.call-out')), 'retour à l’accueil');

@@ -292,6 +292,7 @@ final class Sync {
             if (lastRemindersJson == null && c.optJSONObject("reminders") != null) lastRemindersJson = c.getJSONObject("reminders").toString();
             if (lastFamilyJson == null && c.optJSONObject("family") != null) lastFamilyJson = c.getJSONObject("family").toString();
             if (lastFamilyJson != null && sosOrdre == null) sosOrdre = new JSONObject(lastFamilyJson).optJSONArray("sosOrdre");
+            if (lastFamilyJson != null && reglagesAppel == null) reglagesAppel = new JSONObject(lastFamilyJson).optJSONObject("reglagesAppel");
             restaurerPhotosGardees();
         } catch (Exception e) {
             Log.w(TAG, "Copie sur la tablette illisible", e);
@@ -632,7 +633,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "volumeAppel", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim", "sosOrdre");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "volumeAppel", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim", "sosOrdre", "reglagesAppel");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -680,7 +681,13 @@ final class Sync {
                         }
                     }
                 } catch (Exception ignored) { ordre = null; }
-                if (!String.valueOf(ordre).equals(String.valueOf(sosOrdre))) { sosOrdre = ordre; republierSosOrdre(); }
+                // Délais des appels de Mamie réglés à distance (families/{fid}.reglagesAppel), même chemin.
+                JSONObject reglages = ReglagesAppel.lire(ff);
+                if (!String.valueOf(ordre).equals(String.valueOf(sosOrdre)) || !String.valueOf(reglages).equals(String.valueOf(reglagesAppel))) {
+                    sosOrdre = ordre;
+                    reglagesAppel = reglages;
+                    republierSosOrdre();
+                }
                 if (Meteo.applyFamily(context, http, ff) || !meteoReported) {
                     lastWeather = 0; // nouvelle ville : la météo est relue tout de suite
                     reportMeteo(fid);
@@ -1740,6 +1747,8 @@ final class Sync {
     private final java.util.Set<String> admins = new java.util.HashSet<>();
     /** Ordre d'appel du SOS (families/{fid}.sosOrdre), null : ordre par défaut. */
     private JSONArray sosOrdre = null;
+    /** Délais des appels (families/{fid}.reglagesAppel, voir ReglagesAppel), null : valeurs de la page. */
+    private JSONObject reglagesAppel = null;
 
     /** La page reçoit le nouvel ordre du SOS sans attendre la relecture des proches. */
     private void republierSosOrdre() {
@@ -1747,6 +1756,7 @@ final class Sync {
         try {
             JSONObject p = new JSONObject(lastFamilyJson);
             p.put("sosOrdre", sosOrdre == null ? JSONObject.NULL : sosOrdre);
+            p.put("reglagesAppel", reglagesAppel == null ? JSONObject.NULL : reglagesAppel);
             lastFamilyJson = p.toString();
             listener.onFamily(p);
             saveCache();
@@ -1856,7 +1866,8 @@ final class Sync {
             oublierPhotosDisparues(people, birthdays);
             people = trierProches(fid, people);
             JSONObject payload = new JSONObject().put("faces", faces).put("birthdays", birthdays).put("people", people)
-                    .put("sosOrdre", sosOrdre == null ? JSONObject.NULL : sosOrdre);
+                    .put("sosOrdre", sosOrdre == null ? JSONObject.NULL : sosOrdre)
+                    .put("reglagesAppel", reglagesAppel == null ? JSONObject.NULL : reglagesAppel);
             String json = payload.toString();
             if (json.equals(lastFamilyJson)) return;
             lastFamilyJson = json;
