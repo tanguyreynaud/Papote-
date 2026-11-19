@@ -42,8 +42,8 @@ public class RedemarrageTest {
     }
 
     @Test
-    public void appuiDeDixSecondesEtVingtSecondesPourRepondre() {
+    public void appuiDeDixSecondesEtUneMinutePourRepondre() {
         assertEquals(10_000, Redemarrage.APPUI_MS);
-        assertEquals(20_000, Redemarrage.REPONSE_MS);
+        assertEquals(60_000, Redemarrage.REPONSE_MS);
     }
 }
