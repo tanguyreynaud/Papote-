@@ -12,6 +12,14 @@
 // Anti-doublon : interne/cleIa { alerteLe, dernierRefusLe, statut, source } ; un nouvel e-mail seulement si le
 // précédent date de plus de 24 h. La clé elle-même n'est jamais lue ici, ni journalisée, ni enregistrée (pas même
 // le message d'erreur d'Anthropic : seulement le code HTTP et le type d'erreur).
+//
+// Crédit Anthropic épuisé (19/11) : même alerte, même rythme (au plus une par 24 h), document interne/creditIa,
+// texte « crédit Anthropic épuisé ». Anthropic répond 400 invalid_request_error « Your credit balance is too low… »
+// (ou 402 billing_error) : sans cette alerte, la lecture des factures disait seulement « ne répond pas ».
+//
+// causeErreurIA(erreur) : cause courte et lisible d'un échec d'appel (« erreur 400 invalid_request_error : … »,
+// « délai dépassé »), pour la montrer à l'admin. Jamais la clé ni le contenu envoyé : le code HTTP, le type
+// d'erreur et le début (150 caractères) du message d'Anthropic, toute chaîne ressemblant à une clé masquée.
 
 const { defineSecret, defineString } = require('firebase-functions/params');
 const { logger } = require('firebase-functions/v2');
@@ -23,12 +31,18 @@ const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
 
 const EMAIL_PAPOTE = 'contact@mapapote.fr';
 const DOCUMENT = 'interne/cleIa';
+const DOCUMENT_CREDIT = 'interne/creditIa';
 const DELAI = 24 * 3600_000;
 const TYPES_REFUS = ['authentication_error', 'permission_error'];
 
 const TITRE = 'La clé IA (Anthropic) est refusée';
 const TEXTE = 'La clé IA (Anthropic) est refusée : chat du site, IA de l\'admin et lecture des factures sont en panne. '
   + 'Créer une nouvelle clé et lancer outils\\support\\installer-support.bat, puis republier les fonctions.';
+
+const TITRE_CREDIT = 'Crédit Anthropic épuisé';
+const TEXTE_CREDIT = 'Crédit Anthropic épuisé : Anthropic refuse les appels faute de crédit ; le chat du site, l\'IA de l\'admin '
+  + 'et la lecture des factures sont en panne. Recharger le crédit (ou vérifier le crédit promotionnel) dans la console '
+  + 'Anthropic, rubrique Billing ; rien à republier.';
 
 const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : typeof v === 'number' ? v : null);
 
@@ -47,6 +61,53 @@ function refusDeCle(e) {
   return statut === 401 || statut === 403 || TYPES_REFUS.includes(typeErreur(e));
 }
 
+// Message d'Anthropic (corps { error: { message } }), sinon null.
+function messageErreur(e) {
+  const corps = e && e.error;
+  const m = corps && ((corps.error && corps.error.message) || (corps.type !== 'error' && corps.message));
+  return typeof m === 'string' ? m : null;
+}
+
+// Vrai quand Anthropic refuse faute de crédit : 402 billing_error, ou 400 « credit balance is too low ».
+function creditEpuise(e) {
+  if (!e || typeof e !== 'object') return false;
+  if (Number(e.status) === 402 || typeErreur(e) === 'billing_error') return true;
+  return Number(e.status) === 400 && /credit balance/i.test(messageErreur(e) || '');
+}
+
+// Erreur qui se reproduira à l'identique avec le même document : 400 (paramètre ou document refusé) ou 413
+// (trop gros), mais pas le crédit épuisé (il suffit de recharger).
+function erreurDefinitive(e) {
+  if (!e || typeof e !== 'object' || creditEpuise(e)) return false;
+  const statut = Number(e.status);
+  return statut === 400 || statut === 413;
+}
+
+// Début d'un message d'erreur : une ligne, 150 caractères, toute chaîne ressemblant à une clé masquée.
+function court(texte) {
+  const t = String(texte).replace(/sk-ant-[A-Za-z0-9_-]*/g, '[clé masquée]').replace(/\s+/g, ' ').trim();
+  return t.length > 150 ? `${t.slice(0, 150)}…` : t;
+}
+
+const nomErreur = (e) => (e && e.constructor && e.constructor.name) || '';
+
+// Cause courte d'un échec d'appel à Anthropic, sans parenthèses (l'appelant les ajoute).
+function causeErreurIA(e) {
+  if (!e) return 'erreur inconnue';
+  const statut = Number(e.status) || null;
+  if (!statut) {
+    const texte = String(e.message || e.code || '');
+    if (nomErreur(e) === 'APIConnectionTimeoutError' || /timed? ?out|timeout|ETIMEDOUT|ESOCKETTIMEDOUT/i.test(texte)) return 'délai dépassé';
+    if (nomErreur(e) === 'APIConnectionError' || /ECONN|ENOTFOUND|EAI_AGAIN|socket|connection/i.test(texte)) return 'connexion impossible';
+    // Erreur levée par le SDK lui-même avant l'envoi (paramètre refusé…) : son message ne contient pas le document.
+    if (nomErreur(e) === 'AnthropicError' && e.message) return `erreur du SDK Anthropic : ${court(e.message)}`;
+    return 'erreur inattendue';
+  }
+  const type = typeErreur(e);
+  const message = court(messageErreur(e) || '');
+  return `erreur ${statut}${type ? ` ${type}` : ''}${message ? ` : ${message}` : ''}`;
+}
+
 // E-mail à Papote, comme prevenirPapote d'index.js. La fonction appelante doit déclarer MAIL_MOT_DE_PASSE.
 async function prevenirParDefaut(titre, detail) {
   const mail = require('./mail');
@@ -58,14 +119,17 @@ async function prevenirParDefaut(titre, detail) {
 
 // erreur : l'erreur levée par le SDK Anthropic. options : { source (« chat du site »…), db (base ou fonction qui la
 // rend), prevenir(titre, detail), maintenant }. Rend 'alerte' (e-mail parti), 'deja' (alerte de moins de 24 h),
-// ou null (pas un refus de clé, ou alerte impossible).
+// ou null (ni refus de clé ni crédit épuisé, ou alerte impossible).
 async function signalerCleIA(erreur, { source = null, db = null, prevenir = prevenirParDefaut, maintenant = Date.now() } = {}) {
-  if (!refusDeCle(erreur)) return null;
+  const motif = refusDeCle(erreur) ? { document: DOCUMENT, titre: TITRE, texte: TEXTE, nom: 'Clé IA (Anthropic) refusée', constat: 'Refus constaté' }
+    : creditEpuise(erreur) ? { document: DOCUMENT_CREDIT, titre: TITRE_CREDIT, texte: TEXTE_CREDIT, nom: 'Crédit Anthropic épuisé', constat: 'Constaté' }
+      : null;
+  if (!motif) return null;
   const statut = Number(erreur.status) || null;
   const type = typeErreur(erreur);
   try {
     const base = typeof db === 'function' ? db() : db || require('./base').db();
-    const ref = base.doc(DOCUMENT);
+    const ref = base.doc(motif.document);
     const refus = { dernierRefusLe: Timestamp.fromMillis(maintenant), statut, type, source };
     const avant = await base.runTransaction(async (t) => {
       const snap = await t.get(ref);
@@ -79,19 +143,22 @@ async function signalerCleIA(erreur, { source = null, db = null, prevenir = prev
       return { deja: false, alerteLe: d.alerteLe || null };
     });
     if (avant.deja) return 'deja';
-    logger.error(`Clé IA (Anthropic) refusée (${statut || type}${source ? `, ${source}` : ''}) : alerte envoyée à Papote`);
+    logger.error(`${motif.nom} (${statut || type}${source ? `, ${source}` : ''}) : alerte envoyée à Papote`);
     try {
-      await prevenir(TITRE, `${TEXTE} (Refus constaté${source ? ` sur ${source}` : ''} : erreur ${statut || type}.)`);
+      await prevenir(motif.titre, `${motif.texte} (${motif.constat}${source ? ` sur ${source}` : ''} : erreur ${statut || type}.)`);
     } catch (e) {
       // E-mail non parti : l'alerte pourra repartir au prochain refus, sans attendre 24 h.
-      await base.doc(DOCUMENT).set({ alerteLe: avant.alerteLe }, { merge: true }).catch(() => null);
+      await base.doc(motif.document).set({ alerteLe: avant.alerteLe }, { merge: true }).catch(() => null);
       throw e;
     }
     return 'alerte';
   } catch (e) {
-    logger.error('Alerte « clé IA refusée » non envoyée', e && e.message);
+    logger.error(`Alerte « ${motif.nom} » non envoyée`, e && e.message);
     return null;
   }
 }
 
-module.exports = { signalerCleIA, refusDeCle, DOCUMENT, DELAI, TEXTE, TITRE };
+module.exports = {
+  signalerCleIA, refusDeCle, creditEpuise, erreurDefinitive, causeErreurIA,
+  DOCUMENT, DOCUMENT_CREDIT, DELAI, TEXTE, TITRE, TEXTE_CREDIT, TITRE_CREDIT,
+};
