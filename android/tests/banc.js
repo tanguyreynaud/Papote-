@@ -16,6 +16,21 @@ const TYPES = {
   '.png': 'image/png', '.ttf': 'font/ttf', '.mp3': 'audio/mpeg', '.jpg': 'image/jpeg',
 };
 
+// Fichier du vrai SDK Firebase demandé par la page (/firebasejs/12.19.0/firebase-app-check.js), lu dans le
+// paquet npm « firebase » de la même version : npm install --no-save firebase@<version> (voir LISEZMOI.md).
+function vraiFirebase(chemin) {
+  const [, version, fichier] = /\/firebasejs\/([^/]+)\/([^/]+)$/.exec(chemin);
+  let dossier;
+  try {
+    dossier = path.dirname(require.resolve('firebase/package.json'));
+  } catch (e) {
+    throw new Error(`Paquet « firebase » absent : npm install --no-save firebase@${version}`);
+  }
+  const installee = require('firebase/package.json').version;
+  if (installee !== version) throw new Error(`Paquet « firebase » ${installee}, la page charge ${version} : npm install --no-save firebase@${version}`);
+  return fs.readFileSync(path.join(dossier, fichier));
+}
+
 // Imitation de l'app Android, posée avant le chargement de la page.
 function imitation(etat) {
   window.__etat = etat;
@@ -34,7 +49,27 @@ function imitation(etat) {
     meteoSearch: () => '[]', meteoChoose: note('meteoChoose'), meteoSkip: note('meteoSkip'),
     wifiScan: () => '[]', wifiConnect: () => true,
     speak: note('speak'), speakGuide: note('speakGuide'), stopSpeaking: note('stopSpeaking'),
-    checkUpdate: note('checkUpdate'), hasAppCheckKey: () => false, appCheckToken: () => '',
+    checkUpdate: note('checkUpdate'),
+    // App Check (etat.appCheck = { ageMin, renouvelle, muet }) : jeton gardé par « Android », vieux de ageMin minutes
+    // sur 60 ; appCheckRenouveler en donne un neuf 800 ms plus tard (renouvelle), prévient sans jeton neuf (serveur
+    // injoignable), ou ne répond jamais (muet). Sans etat.appCheck : tablette sans clé, comme avant.
+    hasAppCheckKey: () => !!window.__etat.appCheck,
+    appCheckToken: () => {
+      const a = window.__etat.appCheck;
+      if (!a) return '';
+      window.__appels.push({ nom: 'appCheckToken', args: [] });
+      if (a.jeton === undefined) a.jeton = a.ageMin === null ? null : window.__jetonAppCheck(a.ageMin);
+      return a.jeton && a.jeton.expireTimeMillis > Date.now() ? JSON.stringify(a.jeton) : '';
+    },
+    appCheckRenouveler: () => {
+      const a = window.__etat.appCheck;
+      window.__appels.push({ nom: 'appCheckRenouveler', args: [] });
+      if (a.muet) return;
+      setTimeout(() => {
+        if (a.renouvelle) a.jeton = window.__jetonAppCheck(0);
+        window.Papote.onAppCheck();
+      }, 800);
+    },
     firestoreDatabase: () => 'eu', isCharging: () => window.__etat.secteur !== false,
     wifiStatus: () => JSON.stringify(window.__etat.reseau || { wifi: 'Box', internet: true, mobile: false, sim: false }),
     pushReady: () => !!window.__etat.push,
@@ -56,6 +91,12 @@ function imitation(etat) {
     redemarrageAffiche: note('redemarrageAffiche'), redemarrageNon: note('redemarrageNon'),
     redemarrer: (...args) => { window.__appels.push({ nom: 'redemarrer', args }); return !window.__etat.redemarrageKo; },
     sosEnCours: (o) => { window.__sosEnCours = o; },
+  };
+  // Jeton App Check comme celui du serveur : un JWT d'une heure, émis il y a ageMin minutes (iat dans le jeton).
+  window.__jetonAppCheck = (ageMin) => {
+    const b64 = (o) => btoa(JSON.stringify(o)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const iat = Math.floor(Date.now() / 1000) - ageMin * 60;
+    return { token: `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({ iat, exp: iat + 3600 })}.signature`, expireTimeMillis: (iat + 3600) * 1000 };
   };
   // Caméra : window.__visage() fait « voir » un visage à toutes les surveillances en cours.
   window.__surveillances = new Set();
@@ -86,6 +127,11 @@ async function ouvrir(heure = '2026-10-26T10:00:00', etat = {}) {
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     // Firebase imité (etat.firebase) : appels.js tourne sur une base en mémoire (faux-firebase.js).
+    // etat.appCheck : le VRAI firebase-app et firebase-app-check (paquet npm « firebase », même version que la
+    // page), pour rejouer son renouvellement de jeton tel qu'il tourne sur la tablette ; le reste reste imité.
+    if (etat.appCheck && url.hostname === 'www.gstatic.com' && /\/firebase-app(-check)?\.js$/.test(url.pathname)) {
+      return route.fulfill({ body: vraiFirebase(url.pathname), contentType: 'text/javascript' });
+    }
     if (etat.firebase && url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) {
       return route.fulfill({ body: FAUX_FIREBASE, contentType: 'text/javascript' });
     }

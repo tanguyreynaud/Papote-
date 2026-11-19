@@ -669,10 +669,20 @@ public class MainActivity extends Activity implements Sync.Listener {
             return AppCheck.hasKey(getApplicationContext());
         }
 
+        /** Jeton gardé, sans appel réseau : la page n'attend jamais le serveur ici (elle se figeait, 19/11). */
         @JavascriptInterface
         public String appCheckToken() {
-            JSONObject t = AppCheck.current(getApplicationContext());
+            JSONObject t = AppCheck.enCache();
             return t == null ? "" : t.toString();
+        }
+
+        /**
+         * La page veut un jeton neuf (Firebase le renouvelle dès la moitié de sa durée) : cherché sur un fil à
+         * part, puis Papote.onAppCheck prévient la page, qui relit appCheckToken.
+         */
+        @JavascriptInterface
+        public void appCheckRenouveler() {
+            AppCheck.renouveler(getApplicationContext(), () -> callPage("onAppCheck", new JSONObject()));
         }
 
         @JavascriptInterface
