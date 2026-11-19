@@ -74,12 +74,19 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await g.attendreVue(julie, 'view-profile');
   assert.ok((await effet(julie, '#face-img, #face-empty')).fichier, 'ma photo : choix d\'une photo');
 
-  // Photos : « Non lu » dit que Mamie ne l'a pas encore vue.
+  // Photos : « Envoyé ✓ » (pas encore vue) dit que Mamie ne l'a pas encore vue.
   await g.retourAccueil(julie);
   await g.ouvrirTuile(julie, 'photos');
+  assert.equal((await p.locator('#photos .read-badge.unread').first().textContent()).trim(), 'Envoyé ✓');
   await p.locator('#photos .read-badge').first().click();
   await g.toast(julie, 'Mamie Emma ne l\'a pas encore vue.');
   await p.click('#view-photos .back');
+  await g.attendreVue(julie, 'view-home');
+
+  // Roue dentée en haut de l'accueil : elle ouvre les Réglages (Tanguy, 19/11) ; double appui, une seule page.
+  await p.locator('#btn-gear').dblclick();
+  await g.attendreVue(julie, 'view-settings');
+  await p.click('#view-settings .back');
   await g.attendreVue(julie, 'view-home');
 
   // Agenda : la ligne d'un anniversaire ouvre sa modification ; double appui : une seule fenêtre, et le retour la ferme.

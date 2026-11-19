@@ -407,6 +407,8 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 });
 
 $('btn-invite').addEventListener('click', () => openPage('invite'));
+// Roue dentée en haut de l'accueil, à gauche de la cloche : les Réglages sans descendre jusqu'à la tuile (Tanguy, 19/11).
+$('btn-gear').addEventListener('click', () => openPage('settings'));
 
 document.querySelectorAll('.tile[data-page]').forEach((tile) => {
   tile.addEventListener('click', () => openPage(tile.dataset.page));
@@ -658,8 +660,8 @@ function galleryItem(post, what, onOpen) {
   meta.append(info);
   const badge = document.createElement('span');
   badge.className = `read-badge ${post.seenAt ? 'read' : 'unread'}`;
-  badge.textContent = post.seenAt ? 'Lu' : 'Non lu';
-  // « Lu » / « Non lu » touché : il dit quand (audit des touchers, 17/11 : il ne faisait rien).
+  badge.textContent = post.seenAt ? 'Lu' : 'Envoyé ✓'; // « Envoyé ✓ » puis « Lu » (Tanguy, 19/11 : « Non lu » ne disait pas que c'était bien parti)
+  // « Lu » / « Envoyé ✓ » touché : il dit quand (audit des touchers, 17/11 : il ne faisait rien).
   badge.setAttribute('role', 'button');
   badge.tabIndex = 0;
   badge.addEventListener('click', () => toast(post.seenAt

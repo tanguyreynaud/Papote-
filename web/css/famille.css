@@ -1087,6 +1087,9 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .bell-btn { position: absolute; right: 108px; top: 4px; width: 40px; height: 40px; border-radius: 50%; background: var(--surface); color: var(--accent); box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center; }
 .bell-btn svg { width: 22px; height: 22px; }
 .bell-btn .nav-badge { right: -8px; top: -6px; }
+/* La roue dentée des Réglages, à gauche de la cloche (même rond, même écart). */
+.gear-btn { right: 156px; }
+.gear-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .aide-card { width: 100%; text-align: left; }
 
 /* Appel à l'horizontale même quand le téléphone ne tourne pas l'écran */
@@ -1702,3 +1705,10 @@ a { text-decoration: none; }
   .intro .sleep-hours select { margin: 2px 0; }
 }
 .intro .intro-step.suite { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
+/* Très petit téléphone (320 px) : la roue, la cloche et « Inviter » se serrent un peu pour laisser « Papote » entier. */
+@media (max-width: 359px) {
+  .home-head .brand { font-size: 26px; }
+  .invite-btn { padding: 8px 10px; }
+  .bell-btn { right: 98px; }
+  .gear-btn { right: 144px; }
+}
