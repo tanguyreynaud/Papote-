@@ -694,9 +694,9 @@ service cloud.firestore {
         allow create: if isFamilyAdmin(fid)
           && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'state', 'quoi', 'volume', 'parle'])
           && request.resource.data.type in ['wifi', 'restart', 'status', 'wifiScan', 'son']
-          // Test du son à l'installation : la tablette sonne ou parle à ce volume.
+          // Test du son (« Écouter » des Volumes) : la tablette sonne, parle (voix), ou parle au volume des appels (appel).
           && (request.resource.data.type != 'son'
-            || (request.resource.data.quoi in ['sonnerie', 'voix']
+            || (request.resource.data.quoi in ['sonnerie', 'voix', 'appel']
               && request.resource.data.volume is int && request.resource.data.volume >= 10 && request.resource.data.volume <= 100
               && (!('parle' in request.resource.data) || (request.resource.data.parle is string && request.resource.data.parle.size() <= 200))))
           && request.resource.data.target is string
