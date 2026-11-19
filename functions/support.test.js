@@ -226,6 +226,7 @@ test('passage de main : une promesse « je transmets » sans formulaire affiche 
     assert.strictEqual(lu.contact, true, t);
     assert.ok(lu.reponse.endsWith(PHRASE_RAPPEL), t);
   }
+  assert.strictEqual(lireReponse('Vous n\'avez rien à écrire. L\'équipe Papote va vous recontacter.', 'site', false, '').contact, true);
   // Demande déjà envoyée : la même phrase est vraie, rien à réafficher.
   assert.strictEqual(lireReponse('L\'équipe Papote vous répondra sous 48 heures.', 'site', false, 'envoyee').contact, false);
   // Phrase générale sur le délai : pas un passage de main.
