@@ -29,9 +29,16 @@ async function sansReponse(mamie, cid) {
 
 test('SOS : Julie et Paul sonnent ; retour d\'Android ne coupe pas la sonnerie ; double appui sur « Répondre » = une réponse, jamais d\'appel caché ; Notifications le racontent', async () => {
   const julie = await banc.telephone('Julie');
+  // Julie a l'app Android (Ouverture.java ajoute ?quitter=1 ; Chrome donne son referrer) : c'est son bouton
+  // retour qu'on essaie pendant la sonnerie. Dans un simple onglet, l'entrée d'avant l'accueil est un autre
+  // document (ici le lien de connexion) : « retour » quittait la page, la sonnerie ne revenait qu'avec la page
+  // rechargée, à temps ou non selon le moteur (iPhone 15, 18/11).
+  await g.ouvrirParApp(julie, '?quitter=1&cle=c1e5ecrete');
   const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const paul = await banc.telephone('Paul');
   const uidPaul = await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
+  // Un premier toucher sur l'accueil pose l'étape « sortie » de l'app sous l'accueil (famille.js).
+  await julie.page.click('#view-home .brand');
   const mamie = await tablette.ouvrir(fid, tab);
 
   const cid = await tablette.appeler(mamie, { sos: 1 });
@@ -39,10 +46,14 @@ test('SOS : Julie et Paul sonnent ; retour d\'Android ne coupe pas la sonnerie ;
     await t.page.locator('#incoming').waitFor({ state: 'visible' });
     assert.strictEqual(await t.page.locator('#incoming-name').innerText(), 'Mamie Emma');
   }
-  // Retour d'Android pendant la sonnerie : rien ne se ferme, ça sonne toujours.
+  // Retour d'Android pendant la sonnerie : rien ne se ferme, ça sonne toujours, la page ne part pas, pas de
+  // « Voulez-vous quitter Papote ? » ; l'app remonte d'elle-même au-dessus de l'étape « sortie ».
+  await julie.page.evaluate(() => { window.__avantRetour = true; });
   await julie.page.goBack();
-  await julie.page.waitForTimeout(400);
+  await julie.page.waitForFunction(() => !history.state?.sortie);
+  assert.strictEqual(await julie.page.evaluate(() => window.__avantRetour === true), true, 'retour ne quitte pas la page');
   assert.strictEqual(await julie.page.locator('#incoming').isVisible(), true, 'la sonnerie reste à l\'écran');
+  assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing) .dialog').count(), 0, 'pas de question pendant la sonnerie');
 
   // Paul répond d'un double appui : une seule réponse. Le 2e appui tombe sur « Raccrocher » (à la place de
   // « Répondre »), qui ne répond pas pendant 4 s : l'appel reste pris, écran ouvert (décision Tanguy 4/11).
