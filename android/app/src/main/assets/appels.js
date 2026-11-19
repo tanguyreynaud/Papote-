@@ -20,21 +20,72 @@ const app = initializeApp({
   messagingSenderId: '807031084851',
   appId: '1:807031084851:web:b8048e2952cb1e893b1046',
 });
-const APP_CHECK_MARGE_MS = 5 * 60_000;
 // App Check : la tablette prouve qu'elle est une vraie tablette Papote (jeton fourni par l'app
 // Android, PapoteAndroid.appCheckToken). Seulement si la tablette a reçu sa clé à l'installation ;
 // sans clé, rien ne change. (Pas de « await » au premier niveau : les WebView d'avant 89 refusent tout le fichier.)
+//
+// Firebase renouvelle un jeton à « émission + moitié de sa durée + 5 min » (au plus tard 5 min avant sa fin),
+// l'émission étant lue DANS le jeton (iat). Passé ce moment, lui rendre le même jeton le fait redemander
+// aussitôt, sans aucune pause : l'app Android gardait le sien jusqu'à 5 min de la fin, donc de la 35e à la
+// 55e minute de chaque heure la page tournait en boucle (≈ 4 000 demandes par seconde, 1,4 cœur sur T-003,
+// profil du 19/11 ; rejoué avec le vrai firebase-app-check 12.19.0). Règle : ne JAMAIS rendre un jeton que
+// Firebase redemanderait tout de suite. Un jeton plus assez frais : Android en cherche un neuf sur un fil à part
+// (appCheckRenouveler, la page ne se fige pas) ; s'il n'y arrive pas, on refuse, et Firebase attend avant de
+// redemander (30 s, puis de plus en plus, 16 min au plus) en gardant l'ancien tant qu'il est valable.
+const APP_CHECK_MARGE_MS = 5 * 60_000;
+const APP_CHECK_ATTENTE_MS = 45_000; // Android répond toujours avant (15 s de connexion + 20 s de lecture au pire)
+
+// Heure d'émission (ms) écrite dans le jeton, comme la lit Firebase ; sans elle, « maintenant ».
+function appCheckEmission(token, maintenant) {
+  try {
+    const milieu = String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const iat = JSON.parse(atob(milieu)).iat;
+    if (typeof iat === 'number' && iat > 0 && iat * 1000 < maintenant) return iat * 1000;
+  } catch (e) { /* pas un jeton lisible : compté comme émis maintenant, comme le fait Firebase */ }
+  return maintenant;
+}
+// Vrai si Firebase gardera ce jeton un moment (même calcul que lui) ; faux : il le redemanderait aussitôt.
+function appCheckFrais(t, maintenant = Date.now()) {
+  if (!t || !t.token || typeof t.expireTimeMillis !== 'number') return false;
+  const emis = appCheckEmission(t.token, maintenant);
+  const aRenouveler = Math.min(emis + (t.expireTimeMillis - emis) / 2 + APP_CHECK_MARGE_MS, t.expireTimeMillis - APP_CHECK_MARGE_MS);
+  return maintenant < aRenouveler;
+}
+function appCheckLire() {
+  try { return JSON.parse(window.PapoteAndroid.appCheckToken() || 'null'); } catch (e) { return null; }
+}
+// Demande à Android un jeton neuf ; se termine quand il prévient (Papote.onAppCheck → papoteAppCheckPret),
+// réussi ou non. Une seule demande à la fois.
+let appCheckDemande = null;
+function appCheckRenouveler() {
+  const a = window.PapoteAndroid;
+  if (!a || !a.appCheckRenouveler) return Promise.resolve(); // app Android d'avant : pas de renouvellement à la demande
+  if (!appCheckDemande) {
+    appCheckDemande = new Promise((resolve) => {
+      const garde = setTimeout(() => fin(), APP_CHECK_ATTENTE_MS);
+      function fin() {
+        clearTimeout(garde);
+        if (window.papoteAppCheckPret === fin) window.papoteAppCheckPret = null;
+        resolve();
+      }
+      window.papoteAppCheckPret = fin;
+      try { a.appCheckRenouveler(); } catch (e) { fin(); }
+    }).then(() => { appCheckDemande = null; });
+  }
+  return appCheckDemande;
+}
+window.papoteAppCheckFrais = appCheckFrais; // pour les essais
 try {
   if (window.PapoteAndroid && window.PapoteAndroid.hasAppCheckKey && window.PapoteAndroid.hasAppCheckKey()) {
     initializeAppCheck(app, {
       provider: new CustomProvider({
         getToken: async () => {
-          const t = JSON.parse(window.PapoteAndroid.appCheckToken() || 'null');
-          if (!t || !t.token) throw new Error('pas de jeton App Check');
-          // Jeton presque expiré (l'app Android le garde quand le renouvellement a raté) : on le refuse, pour
-          // que Firebase attende avant de redemander. Rendu tel quel, il le redemandait en boucle sans pause :
-          // 1,4 cœur pendant des dizaines de minutes sur T-003 (profil du 19/11).
-          if (!(t.expireTimeMillis - Date.now() > APP_CHECK_MARGE_MS)) throw new Error('jeton App Check presque expiré');
+          let t = appCheckLire();
+          if (!appCheckFrais(t)) {
+            await appCheckRenouveler();
+            t = appCheckLire();
+          }
+          if (!appCheckFrais(t)) throw new Error('pas de jeton App Check frais');
           return { token: t.token, expireTimeMillis: t.expireTimeMillis };
         },
       }),
