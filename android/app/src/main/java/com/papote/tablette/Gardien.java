@@ -151,6 +151,8 @@ final class Gardien {
         Page p = page;
         // Carte SIM restée hors service (une fois par minute) : voir GardeReseau.
         GardeReseau.verifier(app, p != null && p.maintenance());
+        // Répondeur de la carte SIM pas encore coupé : un essai par jour au plus (voir Repondeur).
+        Repondeur.peutEtre(app, p != null && p.maintenance());
         long maintenant = SystemClock.uptimeMillis();
         Geste g = decider(maintenant, p == null || p.maintenance(), dernierTic, premierPlanDepuis != 0,
                 premierPlanDepuis, dernierPouls, dernierRechargement, rechargements, AppelGsm.enCours());
