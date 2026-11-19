@@ -7,7 +7,8 @@
 //   1. ordre « verrouiller » (ou « usine » si effacer) visant le compte de la tablette, AVANT de la sortir de la famille :
 //      la tablette lit ses ordres par target == son uid, même hors famille (firestore.rules, match /commands) ;
 //      l'ordre porte `revoquer: true` : quand la tablette répond, apresOrdre() désactive son compte.
-//   2. fiches membre (tablette + appels) supprimées : plus de lecture des photos, messages, e-mails et téléphones.
+//   2. fiches membre (tablette + appels) supprimées : plus de lecture des photos, messages, e-mails et téléphones ;
+//      ses codes de jumelage confirmés sont annulés (sinon elle rentre seule dans la famille pendant 24 h).
 //   3. compte des appels désactivé tout de suite (il ne sert qu'à la visio) ; jetons des deux comptes révoqués.
 //      Révoquer seul ne suffit pas : la tablette garde son mot de passe (Firebase.java token()) et se reconnecte.
 //   4. clés App Check de ce n° de série supprimées (plus de jeton App Check).
@@ -53,7 +54,7 @@ async function revoquer(deps, params) {
   if (!doc) return { ok: false, erreur: `Aucune tablette du stock avec le n° de série ${p.serie}.` };
   const fiche = doc.data();
   const plan = planRevocation(fiche, p);
-  const fait = { ordre: null, membres: 0, desactives: [], revoques: [], cles: 0, erreurs: [] };
+  const fait = { ordre: null, membres: 0, codes: 0, desactives: [], revoques: [], cles: 0, erreurs: [] };
 
   if (plan.ordre) {
     const ref = db.collection(`families/${plan.fid}/commands`).doc();
@@ -62,6 +63,25 @@ async function revoquer(deps, params) {
       createdAt: deps.horodatage(), revoquer: true,
     });
     fait.ordre = ref.path;
+  }
+  // Codes de jumelage de cette tablette encore « confirmés » : annulés, avant de supprimer ses fiches. Sinon, pendant les 24 h qui suivent son
+  // jumelage, son compte (pas encore désactivé tant que l'ordre n'est pas exécuté) recrée sa fiche membre avec ce
+  // code et relit les photos (firestore.rules, members create ; audit du 19/11, prouvé sur l'émulateur).
+  if (fiche.tabletUid) {
+    const codes = await db.collection('pairings').where('tabletUid', '==', fiche.tabletUid).get();
+    for (const c of codes.docs) {
+      if (c.get('status') !== 'confirmed') continue;
+      await c.ref.update({ status: 'cancelled', revoqueLe: deps.maintenant() });
+      fait.codes += 1;
+    }
+    // Même porte pour une tablette de remplacement : le compte qui a pris un code de remplacement repasse avec
+    // lui jusqu'à son échéance (7 jours ; firestore.rules, codeTabletteOk). Le code pris est effacé.
+    const remplacements = await db.collection('invites').where('usedBy', '==', fiche.tabletUid).get();
+    for (const c of remplacements.docs) {
+      if (c.get('kind') !== 'tablette') continue;
+      await c.ref.delete();
+      fait.codes += 1;
+    }
   }
   for (const chemin of plan.membres) {
     await db.doc(chemin).delete();

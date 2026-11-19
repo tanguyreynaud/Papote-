@@ -129,3 +129,41 @@ test('après l\'ordre : désactiver le compte une seule fois, seulement pour un 
   assert.strictEqual(apresOrdre({ state: 'done' }, { state: 'done', revoquer: true, target: 'tab' }), null);
   assert.strictEqual(apresOrdre({ state: 'pending' }, { state: 'done', target: 'tab' }), null);
 });
+
+// Audit du 19/11 (prouvé sur l'émulateur des règles) : pendant les 24 h qui suivent son jumelage, le compte d'une
+// tablette révoquée recréait sa fiche membre avec son code encore « confirmé » et relisait les photos.
+test('révocation : les codes de jumelage confirmés de cette tablette sont annulés, pas ceux des autres', async () => {
+  const docs = {
+    ...parc(),
+    'pairings/QRST6789': { status: 'confirmed', fid: 'f1', tabletUid: 'tab', callsUid: 'app' },
+    'pairings/VIEUX234': { status: 'waiting', tabletUid: 'tab' },
+    'pairings/AUTRE567': { status: 'confirmed', fid: 'f2', tabletUid: 'autre-tablette' },
+  };
+  const db = fausseBase(docs);
+  const r = await revoquer(deps(db, fauxAuth()), { serie: 'BV123456' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.codes, 1);
+  assert.deepStrictEqual(docs['pairings/QRST6789'], { status: 'cancelled', fid: 'f1', tabletUid: 'tab', callsUid: 'app', revoqueLe: 1000 });
+  assert.strictEqual(docs['pairings/VIEUX234'].status, 'waiting');
+  assert.strictEqual(docs['pairings/AUTRE567'].status, 'confirmed');
+  // Le code est annulé avant la suppression des fiches : la tablette ne peut pas rentrer entre les deux.
+  const iMembre = db.ecrits.findIndex(([op, c]) => op === 'delete' && c === 'families/f1/members/tab');
+  const iCode = db.ecrits.findIndex(([op, c]) => op === 'update' && c === 'pairings/QRST6789');
+  assert.ok(iCode >= 0 && iCode < iMembre);
+});
+
+test('révocation d\'une tablette de remplacement : le code de remplacement qu\'elle a pris est effacé, le code famille reste', async () => {
+  const docs = {
+    ...parc(),
+    'invites/TABL2345': { kind: 'tablette', fid: 'f1', usedBy: 'tab', callsUid: 'app' },
+    'invites/ABCD2345': { fid: 'f1', createdBy: 'marie' },
+    'invites/TABL9999': { kind: 'tablette', fid: 'f2', usedBy: 'autre-tablette' },
+  };
+  const db = fausseBase(docs);
+  const r = await revoquer(deps(db, fauxAuth()), { serie: 'BV123456' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.codes, 1);
+  assert.strictEqual(docs['invites/TABL2345'], undefined);
+  assert.ok(docs['invites/ABCD2345']);
+  assert.ok(docs['invites/TABL9999']);
+});
