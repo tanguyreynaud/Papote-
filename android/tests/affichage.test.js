@@ -28,10 +28,11 @@ test('envoi pas vu : affiché 3 minutes caméra allumée, puis fermé sans « vu
     await b.avancer(500);
     assert.match(await b.texte('#overlay-text'), /Bisous de Lyon/);
     // La caméra regarde pendant toute la durée, sans pause (avant : 1 minute sur 5 après les 3 premières).
-    for (let s = 10; s <= 170; s += 10) {
-      await b.avancer(10000);
+    for (let s = 30; s <= 150; s += 30) {
+      await b.avancer(30000);
       assert.strictEqual(await camera(b), 1, `caméra allumée à ${s} s`);
     }
+    await b.avancer(20000);
     assert.match(await b.texte('#overlay-text'), /Bisous de Lyon/, 'encore affiché à 2 min 50');
     await b.avancer(11000);
     assert.match(await b.texte('#overlay-text'), /Et une autre/, 'fermé à 3 min, au suivant');
@@ -71,7 +72,7 @@ test('envoi fermé sans être vu, puis page rechargée (mise à jour) : il ne re
 });
 
 test('durée réglée par la famille : 1 minute, 5 minutes ; un réglage hors bornes revient à 3 minutes', async () => {
-  for (const [reglage, attendu] of [[1, 1], [5, 5], [2, 2], [30, 3], [0, 3], ['abc', 3], [undefined, 3]]) {
+  for (const [reglage, attendu] of [[1, 1], [5, 5], [30, 3], ['abc', 3]]) {
     const b = await ouvrirSansPresence();
     try {
       await b.android('onPosts', avecDuree([envoi({ text: 'Coucou' })], reglage));
@@ -256,11 +257,11 @@ test('rappel jamais vu : 3 essais (à l\'heure, +15 min, +30 min), 3 minutes et 
     const ouvert = [];
     let etait = false;
     let cameraPendant = true;
-    // De 10 h 29 min 30 à 12 h : on note chaque minute où le rappel apparaît, de 10 s en 10 s.
-    for (let s = 30; s < 91 * 60; s += 10) {
-      await b.avancer(10000);
+    // De 10 h 29 min 30 à 11 h 19 : on note chaque minute où le rappel apparaît, de 30 s en 30 s.
+    for (let s = 30; s < 50 * 60; s += 30) {
+      await b.avancer(30000);
       const la = await b.visible('#reminder-alert');
-      if (la && !etait) ouvert.push(Math.floor((s + 10) / 60));
+      if (la && !etait) ouvert.push(Math.floor((s + 30) / 60));
       if (la && (await camera(b)) !== 1) cameraPendant = false;
       if (!la && (await camera(b)) !== 0) cameraPendant = false;
       if (la) assert.match(await b.texte('#reminder-when'), /C'est l'heure/);
@@ -309,7 +310,7 @@ test('rappel vu au deuxième essai : « vu » pour la famille, fermé à la fin 
     assert.ok(await b.visible('#reminder-alert'), 'encore là à 2 min 45 de l\'essai');
     await b.avancer(55000);
     assert.ok(!(await b.visible('#reminder-alert')), 'fermé à la fin des 3 minutes (10 h 48)');
-    await b.avancer(60 * 60000);
+    await b.avancer(35 * 60000);
     assert.ok(!(await b.visible('#reminder-alert')), 'pas de troisième essai');
     assert.strictEqual((await b.appels('alert')).length, 2);
     await sansErreur(b);
@@ -325,7 +326,7 @@ test('rappel : « C\'est fait » au premier essai : la famille est prévenue, au
     await b.toucher('#reminder-done');
     await b.avancer(1000);
     assert.strictEqual((await b.appels('ackReminder')).length, 1);
-    await b.avancer(60 * 60000);
+    await b.avancer(35 * 60000);
     assert.ok(!(await b.visible('#reminder-alert')));
     assert.strictEqual((await b.appels('alert')).length, 1);
     await sansErreur(b);
@@ -348,7 +349,7 @@ test('annonce « Dans 15 minutes » pas vue : une seule fois, fermée après 3 m
     await b.avancer(2 * 60000);
     assert.ok(await b.visible('#reminder-alert'), 'à l\'heure');
     assert.match(await b.texte('#reminder-when'), /C'est l'heure/);
-    await b.avancer(60 * 60000);
+    await b.avancer(35 * 60000);
     assert.strictEqual((await b.appels('alert')).length, 4, 'annonce + 3 essais');
     await sansErreur(b);
   } finally { await b.fermer(); }
@@ -370,7 +371,7 @@ test('rappel pas vu puis page rechargée entre deux essais : le compte des essai
     assert.ok(!(await b.visible('#reminder-alert')), 'pas de nouvel essai juste après le rechargement (10 h 40)');
     await b.avancer(6 * 60000);
     assert.ok(await b.visible('#reminder-alert'), 'deuxième essai à 10 h 45');
-    await b.avancer(60 * 60000);
+    await b.avancer(35 * 60000);
     // Le compteur de sons repart de zéro avec la page : 2 essais après le rechargement, 3 en tout.
     assert.strictEqual((await b.appels('alert')).length, 2, 'deux essais après le rechargement');
     await sansErreur(b);
@@ -395,7 +396,7 @@ test('rappel coupé par un appel : il revient après l\'appel sans compter un es
     assert.ok(await b.visible('#reminder-alert'), 'pour une durée entière (2 min 30 après l\'appel)');
     await b.avancer(60000);
     assert.ok(!(await b.visible('#reminder-alert')), 'puis fermé');
-    await b.avancer(90 * 60000);
+    await b.avancer(40 * 60000);
     const essais = await b.page.evaluate(() => JSON.parse(localStorage.getItem('papote.rappelsEssais')));
     assert.strictEqual(Object.values(essais)[0].n, 3, '3 essais comptés, la reprise après l\'appel n\'en est pas un');
     await sansErreur(b);

@@ -15,7 +15,9 @@ jobs:
   scenarios:
     runs-on: ubuntu-24.04
     # 176 scénarios ≈ 27 à 31 min sur le runner (19/11) : 30 min coupait la fin de la suite (annulée, pas rouge).
-    timeout-minutes: 45
+    # 19/11 au soir : ~200 scénarios (durée d'affichage, SOS et appel entrant) ≈ 38 min, plus jusqu'à 7 min pour
+    # installer Chromium : 45 min coupait encore (run 126 annulé à 45 min, sans échec).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
