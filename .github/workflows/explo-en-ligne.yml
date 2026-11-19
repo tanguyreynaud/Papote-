@@ -1,0 +1,38 @@
+# Testeur « vrai proche » 19/11 : site et app famille EN LIGNE (sans paiement, sans compte), Chrome et iPhone.
+# Captures remises sur cette branche. Ne fait jamais échouer la CI.
+name: Explo en ligne
+on:
+  push:
+    branches: ['claude/project-thread-rts5iy']
+    paths: ['tests/explo-en-ligne/*.js', '.github/workflows/explo-en-ligne.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  en-ligne:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SORTIE: ${{ github.workspace }}/tests/explo-en-ligne/sortie
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+        working-directory: tests/explo-en-ligne
+      - run: npx playwright install --with-deps chromium webkit
+        working-directory: tests/explo-en-ligne
+      - name: Parcours
+        continue-on-error: true
+        working-directory: tests/explo-en-ligne
+        run: timeout 1200 node en-ligne.js || true
+      - name: Captures remises sur la branche
+        if: always()
+        run: |
+          git config user.name "papote-explo"
+          git config user.email "explo@users.noreply.github.com"
+          git add -f tests/explo-en-ligne/sortie
+          git commit -m "Captures en ligne du testeur vrai proche" || exit 0
+          git pull --rebase origin ${{ github.ref_name }} || true
+          git push origin HEAD:${{ github.ref_name }} || true
