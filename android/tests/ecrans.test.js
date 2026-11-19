@@ -724,7 +724,7 @@ test('carillon d\'un nouvel envoi : pas par-dessus une fenêtre ouverte, normal 
     assert.strictEqual(await fenetre(), false, 'retour à l\'accueil');
     // Rappel à l'heure : fenêtre ouverte.
     await b.android('onReminders', { reminders: [{ id: 'r1', title: 'Cachet', kind: 'medicament', time: '10:20', repeat: 'daily', date: '', days: [], lastAck: '', avanceMin: 0, finLe: '', enPauseJusquau: '', voice: '' }] });
-    await b.avancer(15 * 60000);
+    await b.avancer(11 * 60000); // 10 h 21 : le rappel de 10 h 20 est affiché (il se ferme seul au bout de 3 minutes)
     assert.ok(await b.visible('#reminder-alert'));
     assert.strictEqual(await fenetre(), true, 'rappel');
     await b.toucher('#reminder-done');

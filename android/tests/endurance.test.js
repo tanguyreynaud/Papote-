@@ -107,8 +107,8 @@ test('le jour, au repos : l\'heure et la date ne sont réécrites qu\'au changem
   } finally { await b.fermer(); }
 });
 
-test('envoi affiché, Mamie absente 3 h : la caméra ne reste pas allumée, mais la voit dès son retour', async () => {
-  const b = await ouvrir('2026-10-26T10:00:00');
+test('envoi affiché, Mamie absente 3 h : la caméra ne regarde que pendant la durée d\'affichage, puis l\'envoi se ferme', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { cameraEnvoisSeule: true });
   try {
     await b.android('onPosts', lot([envoi({ text: 'Coucou' })]));
     await b.avancer(5000);
@@ -119,15 +119,11 @@ test('envoi affiché, Mamie absente 3 h : la caméra ne reste pas allumée, mais
       if (await b.page.evaluate(() => window.__surveillances.size > 0)) allumee++;
     }
     console.log(`caméra allumée ${allumee} min sur 180`);
-    assert.ok(allumee <= 180 * 0.3, `caméra allumée ${allumee} min sur 180 pour un envoi pas encore vu`);
-    // Mamie revient : elle est vue au plus 5 minutes après.
-    let vue = false;
-    for (let min = 0; min < 5 && !vue; min++) {
-      await b.page.evaluate(() => window.__visage());
-      vue = (await b.appels('markSeen')).length > 0;
-      if (!vue) await b.avancer(60000);
-    }
-    assert.ok(vue, 'Mamie de retour : l\'envoi est vu');
+    // 3 minutes (durée d'affichage sans réglage), puis plus rien (avant le 19/11 : 3 minutes puis 1 minute
+    // sur 5 sans fin, soit ~38 minutes sur 180).
+    assert.ok(allumee >= 2 && allumee <= 3, `caméra allumée ${allumee} min sur 180 pour un envoi pas vu`);
+    assert.ok(!(await b.visible('#overlay')), 'envoi fermé');
+    assert.deepStrictEqual(await b.appels('markSeen'), [], 'pas « vu »');
   } finally { await b.fermer(); }
 });
 
