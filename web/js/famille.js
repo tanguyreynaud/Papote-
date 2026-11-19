@@ -1612,7 +1612,7 @@ $('form-post').addEventListener('submit', async (e) => {
     // Dit quoi et à qui, et reste 5 s : en 2,5 s, une personne qui lit lentement ou voit mal le ratait et croyait
     // que rien n'était parti (banc utilisateurs du 19/11).
     const qui = session?.family?.name || 'la tablette';
-    toast(kind === 'video' ? `Vidéo envoyée à ${qui}` : (items[0]?.photos?.length || 0) > 1 ? `Photos envoyées à ${qui}` : `Photo envoyée à ${qui}`, 5000);
+    toast(kind === 'video' ? `Vidéo envoyée à ${qui}` : (items[0]?.photos?.length || 0) > 1 ? `Photos envoyées à ${qui}` : `Photo envoyée à ${qui}`, 4000);
     pruneOld(kind);
   } catch (err) {
     setBusy('');
@@ -3266,14 +3266,14 @@ async function envoyerInvitation(email) {
   try {
     await inviterParEmail(session.fid, email);
     $('invite-email').value = '';
-    toast(`Invitation envoyée à ${email}`, 5000);
+    toast(`Invitation envoyée à ${email}`, 4000);
   } catch (err) {
     console.warn('E-mail d\'invitation non envoyé', err);
     const code = err.code || '';
     if (code.endsWith('invalid-argument')) { notice("Cette adresse e-mail ne semble pas correcte."); return; }
     if (code.endsWith('resource-exhausted')) { notice("Trop d'invitations aujourd'hui. Réessayez demain."); return; }
     $('invite-email').value = '';
-    toast(`Invitation prête : ${email} peut se connecter à Papote`, 5000);
+    toast(`Invitation prête : ${email} peut se connecter à Papote`, 4000);
     if (navigator.share) {
       navigator.share({
         title: 'Papote',
