@@ -36,7 +36,7 @@ async function tour(moteur, appareil, mot) {
   note(`\n# ${mot} : ${appareil}`);
 
   // Pages du site : texte complet, recherche du prénom et du 06
-  for (const [p, autorise] of [['/', false], ['/cgv', false], ['/mentions', true], ['/confidentialite', false], ['/resilier', false], ['/commande', false], ['/merci', false], ['/desinscription', false], ['/page-qui-nexiste-pas', false]]) {
+  for (const [p, autorise] of [['/', false], ['/cgv.html', false], ['/mentions.html', true], ['/confidentialite.html', false], ['/resilier.html', false], ['/commande.html', false], ['/merci.html', false], ['/desinscription', false], ['/page-qui-nexiste-pas', false]]) {
     await etape('page ' + p, async () => {
       const r = await page.goto(SITE + p, { waitUntil: 'networkidle', timeout: 45000 });
       note('  statut', r && r.status(), 'titre', await page.title());
@@ -44,9 +44,9 @@ async function tour(moteur, appareil, mot) {
       let t;
       if (p === '/') {
         // L'histoire de Papote est le seul endroit permis : on la vérifie à part
-        const hist = await page.evaluate(() => { const h = [...document.querySelectorAll('h2,h3')].find(x => /histoire de Papote/i.test(x.textContent)); const s = h && (h.closest('section') || h.parentElement); return s ? s.innerText : ''; });
+        const hist = await page.evaluate(() => { const h = [...document.querySelectorAll('h2,h3,.eyebrow')].find(x => /histoire de Papote/i.test(x.textContent)); const s = h && (h.closest('section') || h.parentElement); return s ? s.innerText : ''; });
         note('  histoire trouvée :', hist ? 'oui' : 'NON', '|', hist.slice(0, 160).replace(/\s+/g, ' '));
-        t = await page.evaluate(h => { const c = document.body.cloneNode(true); [...c.querySelectorAll('h2,h3')].filter(x => /histoire de Papote/i.test(x.textContent)).forEach(x => (x.closest('section') || x.parentElement).remove()); return c.innerText; });
+        t = await page.evaluate(h => { const c = document.body.cloneNode(true); c.querySelectorAll('script,style,noscript').forEach(x => x.remove()); [...c.querySelectorAll('h2,h3,.eyebrow')].filter(x => /histoire de Papote/i.test(x.textContent)).forEach(x => (x.closest('section') || x.parentElement).remove()); return c.innerText; });
         for (const r2 of INTERDIT) { const m = t.match(new RegExp('.{0,60}' + r2.source + '.{0,60}', 'gi')) || []; for (const x of m) note(`  TROUVÉ [/ hors histoire] ${r2} → « ${x.replace(/\s+/g, ' ')} »`); }
       } else t = await verifierTexte(page, p, autorise);
       if (p === '/cgv') note('  date CGV :', (t.match(/En vigueur[^\n.]*/) || ['ABSENTE'])[0]);
@@ -61,7 +61,7 @@ async function tour(moteur, appareil, mot) {
     await b.tap(); await page.waitForTimeout(400); await cap(page, mot, 'menu-ouvert');
     note('  menu visible après appui :', await page.locator('#menu').isVisible());
     await page.touchscreen.tap(20, 700); await page.waitForTimeout(400);
-    note('  menu visible après toucher ailleurs :', await page.locator('#menu').isVisible());
+    note('  menu après toucher ailleurs : bouton dit', await b.getAttribute('aria-expanded'), '| « Comment ça marche » dans l\'écran :', await page.getByText('Comment ça marche').first().evaluate(e => { const r = e.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && getComputedStyle(e).visibility !== 'hidden'; }).catch(() => '?'));
     await cap(page, mot, 'menu-apres-toucher-ailleurs');
   });
 
@@ -73,7 +73,7 @@ async function tour(moteur, appareil, mot) {
   });
 
   // Chat du site : qui est derrière, numéro de téléphone
-  const questions = mot === 'and' ? ['Qui est derrière Papote ? Comment s\'appelle le fondateur ?', 'Je voudrais votre numéro de téléphone pour vous appeler'] : ['Qui est le fondateur de Papote et quel est son numéro ?'];
+  const questions = mot === 'and' ? ['Ma tablette est tombée, l\'écran est cassé, que faire ?'] : ['Est-ce que mon frère, qui n\'est pas responsable, peut résilier l\'abonnement ?'];
   await etape('chat du site', async () => {
     await page.goto(SITE + '/', { waitUntil: 'networkidle' });
     const bulle = page.locator('.ps-bouton');
@@ -96,7 +96,7 @@ async function tour(moteur, appareil, mot) {
 
   // Commande jusqu'à « Payer » sans appuyer
   await etape('commande sans payer', async () => {
-    await page.goto(SITE + '/commande', { waitUntil: 'networkidle' });
+    await page.goto(SITE + '/commande.html', { waitUntil: 'networkidle' });
     await cap(page, mot, 'commande-depart');
     const adr = page.locator('#adresse');
     await adr.fill('');
