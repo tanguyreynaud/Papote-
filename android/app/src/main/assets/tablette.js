@@ -2039,6 +2039,8 @@
 
   function closeCallScreen() {
     stopRingback();
+    // Écran du décompte fermé (Annuler, garde-fou…) : le SOS n'est plus « en décompte ».
+    if (sosEtat && sosEtat.phase === 'decompte') { clearInterval(sosTimer); sosFini(); }
     if (callScreen) { callScreen.setAttribute('hidden', ''); callScreen.innerHTML = ''; }
     outCall = null;
     // SOS lancé depuis l'écran verrouillé : il revient.
@@ -2361,6 +2363,9 @@
     var e = etat.etat;
     if (!e) return;
     if (e === 'sonne') {
+      // Décompte du SOS en cours (Tanguy, 19/11) : le proche qui appelle est décroché par Mamie, le SOS est
+      // annulé proprement (il ne part pas) et l'appel s'affiche normalement.
+      if (!gsm && sosDecompteEnCours()) sosAnnulerParAppel(etat.name || '', 'par téléphone');
       // Déjà en visio par internet : pas de deuxième appel par-dessus, le proche entend « occupé ».
       if (!gsm && ((($('call-view') && isShown('call-view')) || ($('call-ring') && isShown('call-ring'))))) { gsmHangup(); return; }
       if (!gsm) gsm = { uid: etat.uid || null, name: etat.name || '', sortant: false, enLigne: false, timer: null, who: etat.name || 'Un proche' };
@@ -2597,6 +2602,20 @@
     try { return !!(android() && android().wifiStatus && JSON.parse(android().wifiStatus()).sim); } catch (e) { return false; }
   }
 
+  // Le décompte de 5 s du SOS est à l'écran (rien d'autre ne l'a remplacé).
+  function sosDecompteEnCours() {
+    return !!(callScreen && /\bsos-countdown\b/.test(callScreen.className) && !callScreen.hasAttribute('hidden'));
+  }
+
+  // Un proche appelle (carte SIM ou internet) pendant le décompte (choix de Tanguy, 19/11) : le SOS est
+  // annulé comme par « Annuler » (rien gardé pour une reprise, aucun proche appelé ni SMS), puis l'appel
+  // du proche s'affiche normalement ; à sa fin, l'accueil.
+  function sosAnnulerParAppel(name, par) {
+    noterAppel('SOS annulé pendant le décompte : appel entrant de ' + (name || 'un proche') + ' ' + par);
+    closeCallScreen(); // efface aussi le « décompte » gardé (voir closeCallScreen)
+    leverPausePourSos(false);
+  }
+
   function showSosCountdown(reprise) {
     // Tablette verrouillée : seulement le SOS de son propre écran (Tanguy, 05/11), jamais celui de dessous.
     if (perdue && !window.papoteSosEnCours) return;
@@ -2631,10 +2650,17 @@
     show();
     clearInterval(sosTimer);
     sosTimer = setInterval(function () {
+      if (!sosDecompteEnCours()) {
+        // Le décompte a quitté l'écran sans passer par Annuler (garde-fou, autre écran) : rien ne reste
+        // noté « décompte », sinon une relance de la page rouvrirait un SOS que personne n'a vu partir.
+        clearInterval(sosTimer);
+        if (sosEtat && sosEtat.phase === 'decompte') sosFini();
+        return;
+      }
       left--;
       if (left > 0) { show(); return; }
       clearInterval(sosTimer);
-      if (/sos-countdown/.test(callScreen.className) && !callScreen.hasAttribute('hidden')) startSos(1);
+      startSos(1);
     }, 1000);
   }
 
@@ -3604,6 +3630,8 @@
     // Appels par la carte SIM (AppelGsm.java) ; gsmEnCours : appels.js refuse une visio pendant ce temps.
     onGsm: onGsm,
     gsmEnCours: function () { return !!gsm; },
+    // Une visio sonne pendant le décompte du SOS (appels.js) : le SOS est annulé, la visio s'affiche (Tanguy 19/11).
+    sosAnnuleParVisio: function (name) { if (sosDecompteEnCours()) sosAnnulerParAppel(name || '', 'par internet'); },
     closeOverlayForCall: closeOverlayForCall,
     essaiAppel: essaiAppel,
     appelAbouti: appelAbouti,
