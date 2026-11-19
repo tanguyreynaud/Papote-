@@ -320,7 +320,7 @@ body .ps-bouton { bottom: 6.5rem; }
         .catch(function () {
           if (ici !== tapeLe) return;
           suggestions.hidden = true;
-          dire(false, 'Les adresses ne s\'affichent pas pour l\'instant.', 'Réessayez dans un instant, ou écrivez-nous à contact@mapapote.fr.');
+          dire(false, 'Les adresses ne s\'affichent pas pour l\'instant.', 'Réessayez dans un instant, ou posez votre question dans le chat, en bas de l'écran.');
         });
     }, 250);
   });
@@ -391,7 +391,7 @@ body .ps-bouton { bottom: 6.5rem; }
       })
       .catch(function () {
         verification.hidden = true;
-        dire(false, 'La vérification de la 4G ne répond pas pour l\'instant.', 'Réessayez dans un instant, ou écrivez-nous à contact@mapapote.fr.', function () { choisirAdresse(derniereAdresse); });
+        dire(false, 'La vérification de la 4G ne répond pas pour l\'instant.', 'Réessayez dans un instant, ou posez votre question dans le chat, en bas de l'écran.', function () { choisirAdresse(derniereAdresse); });
       });
   }
   // reessayer : une fonction à relancer, montrée comme un bouton « Réessayer » (Tanguy, 2/11 : un bouton, jamais « rechargez la page »).
@@ -416,7 +416,7 @@ body .ps-bouton { bottom: 6.5rem; }
         'La tablette s\'y connectera toute seule, sans box ni réglage. Si elle capte mal dans la maison, vous avez 30 jours pour la renvoyer.');
     } else {
       dire(false, 'Désolé, notre carte SIM ne capte pas assez bien à cette adresse pour l\'instant.',
-        'Dans la maison, la tablette risquerait de rester sans internet : nous préférons ne pas vous la livrer. Une question ? contact@mapapote.fr');
+        'Dans la maison, la tablette risquerait de rester sans internet : nous préférons ne pas vous la livrer. Une question ? Le chat, en bas de l'écran, vous répond tout de suite.');
     }
   }
   var q = new URLSearchParams(location.search);
@@ -824,8 +824,8 @@ body .ps-bouton { bottom: 6.5rem; }
   // place de la commande. Avant, le message « trop de paiements » était aussitôt recouvert par le verdict de la 4G,
   // et les autres refus ne disaient rien : la page revenait remplie, en boucle (audit du 11/11).
   var MOTIFS = {
-    trop: ['Plusieurs paiements ont été ouverts sans aboutir depuis cette connexion.', 'Par sécurité, attendez une heure avant de réessayer. Une question ? contact@mapapote.fr'],
-    erreur: ['Le paiement n\'a pas pu s\'ouvrir.', 'Votre commande est toujours remplie : touchez « Payer » pour réessayer. Si cela continue, écrivez-nous à contact@mapapote.fr.'],
+    trop: ['Plusieurs paiements ont été ouverts sans aboutir depuis cette connexion.', 'Par sécurité, attendez une heure avant de réessayer. Une question ? Le chat, en bas de l'écran, vous répond tout de suite.'],
+    erreur: ['Le paiement n\'a pas pu s\'ouvrir.', 'Votre commande est toujours remplie : touchez « Payer » pour réessayer. Si cela continue, posez votre question dans le chat, en bas de l'écran.'],
     '4g': ['Nous n\'avons pas pu vérifier la 4G chez votre proche.', 'Indiquez à nouveau sa ville, à l\'étape 1. Le reste de votre commande est gardé.'],
     relais: ['Le point relais n\'a pas été retenu.', 'Choisissez-le à nouveau, à l\'étape 2. Le reste de votre commande est gardé.']
   };
