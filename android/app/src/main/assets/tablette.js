@@ -2135,6 +2135,8 @@
     if (state === 'ringing' || state === 'connected' || state === 'starting') {
       var hang = el2('button', 'call-hangup', 'Raccrocher');
       on(hang, 'click', function () {
+        // Pendant un SOS, « Raccrocher » arrête tout : l'appel en cours et les proches suivants (Tanguy, 19/11).
+        if (sosEtat || (gsm && gsm.sos)) { sosRaccrocher(); return; }
         if (gsm) { gsmHangup(); return; }
         if (outCall && outCall.hangup) { try { outCall.hangup(); } catch (e) { } }
         closeCallScreen();
@@ -2148,8 +2150,7 @@
   // la visio ne part plus que depuis l'app du proche. Un proche sans numéro est encore appelé par internet.
   // Android (AppelGsm.java) nous dit l'état de l'appel : Papote.onGsm({etat, sortant, numero, uid, name, cause}).
   // Un proche appelle : ça sonne (photo, « vous appelle »), Mamie décroche avec le gros bouton, jamais
-  // tout seul. Pas de réponse au bout de 45 s : on raccroche, comme pour la visio.
-  var GSM_RING_MS = 45000;
+  // tout seul. Mamie appelle sans réponse : on raccroche au bout de 18 s (armerSansReponse).
   var gsm = null;          // { uid, name, tel, sortant, enLigne, timer, onEnd }
   var reveilAppel = false;
 
@@ -2234,12 +2235,47 @@
   var SOS_LIGNE_ESSAIS = 12, SOS_LIGNE_MS = 500;
   var SOS_REPONDU_MS = 40000;
 
+  // Mamie appelle (appel ordinaire ou SOS) : deux règles mesurées sur T-003 (carte Sosh, 13/11 et 19/11)
+  // et choisies par Tanguy le 19/11, pour qu'elle ne reste jamais à parler à une messagerie.
+  // Android ne dit pas quand ça commence à sonner chez le proche : tout est compté depuis le départ de l'appel.
+  //  - Sans réponse au bout de 18 s : on raccroche (SOS : proche suivant). La messagerie du proche prend
+  //    l'appel au plus tôt à 20,2 s (mesuré 20,2 à 23,5 s) ; s'il allait répondre, il rappelle.
+  //  - « En ligne » en moins de 4,5 s : c'est la messagerie d'un téléphone éteint ou sans réseau (mesuré
+  //    2,0 à 3,7 s ; le décroché le plus rapide possible, 4,66 s) : on raccroche (SOS : proche suivant).
+  // Réglables à distance (families/{fid}.reglagesAppel, en secondes, lu par Sync.java), bornés ici aussi.
+  // NON couvert : un appel refusé part en messagerie en 4 à 8 s, comme un vrai décroché.
+  var APPEL_SANS_REPONSE_DEFAUT_MS = 18000, APPEL_MESSAGERIE_DEFAUT_MS = 4500;
+  var appelSansReponseMs = APPEL_SANS_REPONSE_DEFAUT_MS, appelMessagerieMs = APPEL_MESSAGERIE_DEFAUT_MS;
+  function setReglagesAppel(r) {
+    var sr = r && typeof r.sansReponseMs === 'number' && isFinite(r.sansReponseMs) ? r.sansReponseMs : APPEL_SANS_REPONSE_DEFAUT_MS;
+    var me = r && typeof r.messagerieMs === 'number' && isFinite(r.messagerieMs) ? r.messagerieMs : APPEL_MESSAGERIE_DEFAUT_MS;
+    appelSansReponseMs = Math.max(10000, Math.min(45000, sr));
+    appelMessagerieMs = Math.max(0, Math.min(8000, me)); // 0 : règle de la messagerie directe coupée
+  }
+  function noterAppel(texte) {
+    try { if (android() && android().logAppel) android().logAppel(texte); } catch (e) { }
+  }
+  // Sans réponse : la page raccroche.
+  function armerSansReponse() {
+    clearTimeout(gsm.timer);
+    var appel = gsm;
+    var reste = appelSansReponseMs - (Date.now() - gsm.depart);
+    gsm.timer = setTimeout(function () {
+      if (gsm === appel && gsm.sortant && !gsm.enLigne) {
+        gsm.sansReponse = true;
+        noterAppel((gsm.sos ? 'SOS : ' : 'Appel : ') + gsm.who + ' sans réponse après ' + Math.round(appelSansReponseMs / 1000) + ' s, raccroché' + (gsm.sos ? ', proche suivant' : ''));
+        raccrochage = 0;
+        gsmHangup();
+      }
+    }, Math.max(0, reste));
+  }
+
   // Mamie appelle un proche par téléphone. onEnd(repondu) : pour le SOS, qui enchaîne les proches.
   function startGsmCall(uid, name, tel, onEnd, essai) {
     stopRadio();
     var who = name || 'votre proche';
     gsmClear();
-    gsm = { uid: uid, name: name, tel: tel, sortant: true, enLigne: false, timer: null, onEnd: onEnd || null, who: who, sos: !!onEnd };
+    gsm = { uid: uid, name: name, tel: tel, sortant: true, enLigne: false, timer: null, onEnd: onEnd || null, who: who, sos: !!onEnd, depart: Date.now() };
     if (gsm.sos) renderSos('starting', 'SOS : on appelle ' + who + '…', uid, name);
     else renderCall('starting', 'Appel vers ' + who + '…', '', uid, name);
     var parti = false;
@@ -2253,9 +2289,9 @@
       gsmFinish('L’appel n’a pas pu partir', 'Réessayez dans un moment.', true, false);
       return;
     }
-    gsm.timer = setTimeout(function () {
-      if (gsm && gsm.sortant && !gsm.enLigne) { gsm.sansReponse = true; gsmHangup(); }
-    }, GSM_RING_MS);
+    gsm.depart = Date.now(); // l'appel est parti : les deux délais se comptent d'ici
+    if (gsm.sos) sosNoter({ depart: gsm.depart });
+    armerSansReponse();
     gsmSurveiller();
   }
 
@@ -2339,6 +2375,17 @@
       else renderCall('ringing', 'Ça sonne…', 'Chez ' + gsm.who, gsm.uid, gsm.name);
       gsmSurveiller();
     } else if (e === 'enLigne') {
+      if (gsm.messagerie) return; // déjà reconnue comme messagerie directe : on attend la fin de l'appel
+      if (gsm.sortant && !gsm.enLigne && gsm.depart && appelMessagerieMs > 0 && Date.now() - gsm.depart < appelMessagerieMs) {
+        // Décroché avant même d'avoir pu sonner : messagerie d'un téléphone éteint ou sans réseau.
+        clearTimeout(gsm.timer);
+        gsm.messagerie = true;
+        noterAppel((gsm.sos ? 'SOS : ' : 'Appel : ') + gsm.who + ' « en ligne » en ' + ((Date.now() - gsm.depart) / 1000).toFixed(1) + ' s, messagerie directe, raccroché' + (gsm.sos ? ', proche suivant' : ''));
+        raccrochage = 0;
+        gsmHangup();
+        gsmSurveiller();
+        return;
+      }
       clearTimeout(gsm.timer);
       if (!gsm.enLigne) {
         gsm.enLigneDepuis = Date.now();
@@ -2582,6 +2629,30 @@
   }
 
   // SOS repris après une relance : appels.js n'est peut-être pas encore connecté à Firebase ; quelques essais.
+  // « Raccrocher » pendant un SOS (Tanguy, 19/11) : l'appel en cours est raccroché et plus aucun proche
+  // n'est appelé, ni par la carte SIM ni par internet ; rien n'est gardé pour une reprise. Les proches ont
+  // déjà reçu le SMS du SOS : ils peuvent rappeler.
+  var sosArreterInternet = null;
+  function sosRaccrocher() {
+    var appel = gsm;
+    if (appel && appel.arrete) return; // double appui : un seul arrêt
+    if (sosArreterInternet) { try { sosArreterInternet(); } catch (e) { } sosArreterInternet = null; }
+    sosFini();
+    noterAppel('SOS : arrêté par « Raccrocher », plus aucun proche appelé');
+    if (appel) {
+      appel.arrete = true;
+      appel.onEnd = function () {
+        renderCall('ended', 'Appel terminé', '');
+        setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 4000);
+      };
+      raccrochage = 0;
+      gsmHangup();
+      return;
+    }
+    if (outCall && outCall.hangup) { try { outCall.hangup(); } catch (e) { } }
+    closeCallScreen();
+  }
+
   function sosRelancer(attempt) {
     if (!sosEtat || !sosEtat.reprise || (sosEtat.relances || 0) >= 8) return false;
     sosNoter({ relances: (sosEtat.relances || 0) + 1 });
@@ -2609,6 +2680,7 @@
     var appel = null;
     var abandonTimer = null, veille = null;
     function arreter() { clearTimeout(abandonTimer); clearInterval(veille); }
+    sosArreterInternet = function () { finished = true; arreter(); };
     function finish(title, sub, ms) {
       if (finished) return;
       finished = true;
@@ -2697,7 +2769,7 @@
   }
 
   // SOS par la carte SIM : un SMS à tous les numéros de la famille, puis un vrai appel au responsable,
-  // puis aux autres un à un (45 s chacun) jusqu'à ce que quelqu'un décroche. Personne : l'appel par
+  // puis aux autres un à un (18 s sans réponse chacun) jusqu'à ce que quelqu'un décroche. Personne : l'appel par
   // internet d'avant (2e essai), qui fait prévenir toute la famille par le serveur.
   function startSosTelephone() {
     var gens = phonePeople();
@@ -2742,7 +2814,7 @@
         setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 8000);
         return;
       }
-      sosNoter({ phase: 'tel', index: n, enLigneDepuis: 0 });
+      sosNoter({ phase: 'tel', index: n, enLigneDepuis: 0, depart: 0 });
       var p = liste[n++];
       startGsmCall(p.uid, p.name, p.tel, suivant);
     };
@@ -2765,16 +2837,18 @@
     sosSmsParti = !!e.sms;
     stopRadio();
     var who = p.name || etat.name || 'votre proche';
-    gsm = { uid: p.uid || etat.uid || null, name: p.name || etat.name || '', tel: p.tel || etat.numero || '', sortant: true, enLigne: false, timer: null, onEnd: sosChaine(liste, idx + 1), who: who, sos: true };
+    // depart : gardé avec le SOS ; inconnu (0), la règle de la messagerie directe ne s'applique pas à cet appel.
+    gsm = { uid: p.uid || etat.uid || null, name: p.name || etat.name || '', tel: p.tel || etat.numero || '', sortant: true, enLigne: false, timer: null, onEnd: sosChaine(liste, idx + 1), who: who, sos: true, depart: e.depart || 0 };
     if (etat.etat === 'enLigne') {
       gsm.enLigne = true;
       gsm.enLigneDepuis = e.enLigneDepuis || Date.now();
       if (!e.enLigneDepuis) sosNoter({ enLigneDepuis: gsm.enLigneDepuis });
     } else {
       renderSos('starting', 'SOS : on appelle ' + who + '…', gsm.uid, gsm.name);
-      gsm.timer = setTimeout(function () {
-        if (gsm && gsm.sortant && !gsm.enLigne) { gsm.sansReponse = true; gsmHangup(); }
-      }, GSM_RING_MS);
+      var connu = gsm.depart;
+      if (!connu) gsm.depart = Date.now(); // départ inconnu : le délai sans réponse repart d'ici
+      armerSansReponse();
+      gsm.depart = connu;
     }
     sosNoter({ index: idx });
     onGsm(etat);
@@ -3380,6 +3454,7 @@
     bootPret('proches');
     faces = payload.faces || {};
     sosOrdre = Array.isArray(payload.sosOrdre) ? payload.sosOrdre : null;
+    setReglagesAppel(payload.reglagesAppel);
     setPeople(payload.people);
     prochesLus = true;
     showSosButton(); // SOS caché tant que la famille n'a aucun proche, montré dès le premier

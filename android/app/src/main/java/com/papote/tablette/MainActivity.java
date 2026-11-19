@@ -722,6 +722,12 @@ public class MainActivity extends Activity implements Sync.Listener {
             Journal.log(MainActivity.this, "Erreur page : " + message);
         }
 
+        /** Appel raccroché par la page (sans réponse, messagerie directe) : noté pour régler les délais à distance. */
+        @JavascriptInterface
+        public void logAppel(String message) {
+            Journal.log(MainActivity.this, String.valueOf(message));
+        }
+
 
         @JavascriptInterface
         public void wifiDone() {
