@@ -298,3 +298,34 @@ test('admin sur téléphone (390 px) : chaque étape de « Préparer l\'envoi »
   assert.strictEqual((await s.lire(`commandes/${id}`)).expedition, 'envoyee');
   assert.strictEqual((await s.lire(`stock/${tablette.fiche}`)).etat, 'envoyee');
 });
+
+// ---------- Compta : relevé de factures@ et liste des dépenses (Tanguy, 19/11) ----------
+
+test('admin : « problème au dernier relevé de factures@ » ouvre Dépenses sur le détail ; dépenses, la plus récente en haut', async () => {
+  const maintenant = Date.now();
+  // Trois dépenses du mois en cours, écrites dans le désordre (la plus vieille au milieu).
+  const depenses = [['Dépense du milieu', 2], ['Dépense la plus vieille', 3], ['Dépense la plus récente', 1]];
+  for (const [libelle, minutes] of depenses) {
+    await s.db.collection('depenses').add({ libelle, fournisseur: 'Vendeur test', categorie: 'materiel', montant: 10, tva: 0,
+      date: s.Timestamp.fromMillis(maintenant - minutes * 60e3) });
+  }
+  await s.db.doc('gestion/courrier').set({ le: maintenant, rangees: [], ignorees: [], erreurs: ['Boîte factures@ : mot de passe refusé'] });
+  const t = await ouvrirAdmin('releve', { hauteur: 700 });
+  const p = t.page;
+  const ligne = p.locator('#a-faire a', { hasText: 'au dernier relevé de factures@mapapote.fr' });
+  await ligne.click();
+  // Effet immédiat : page Compta, onglet Dépenses, le détail du relevé (avec l'erreur) à l'écran.
+  await p.waitForFunction(() => location.hash === '#compta/depenses/releve');
+  const courrier = p.locator('#courrier');
+  await courrier.waitFor({ state: 'visible' });
+  assert.match(await courrier.innerText(), /mot de passe refusé/);
+  await p.waitForFunction(() => {
+    const r = document.getElementById('courrier').getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= window.innerHeight;
+  }, null, { timeout: 5_000 });
+  // Liste des dépenses : la plus récente d'abord.
+  const lignes = await p.locator('#t-achats tbody tr').allInnerTexts();
+  const ordre = ['Dépense la plus récente', 'Dépense du milieu', 'Dépense la plus vieille'].map((x) => lignes.findIndex((l) => l.includes(x)));
+  assert.ok(ordre.every((i) => i >= 0), `les trois dépenses sont listées : ${lignes.join(' | ')}`);
+  assert.deepStrictEqual([...ordre].sort((a, b) => a - b), ordre, `plus récente en haut : ${lignes.join(' | ')}`);
+});
