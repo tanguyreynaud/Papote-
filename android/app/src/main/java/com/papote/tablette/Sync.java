@@ -431,7 +431,7 @@ final class Sync {
             // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code. Hors ligne, Android
             // prévient du retour d'internet (watchNetwork) ; un essai par minute reste en secours.
             boolean offline = "offline".equals(lastState);
-            long delai = pairingActive() ? 4_000
+            long delai = pairingActive() ? delaiJumelage(android.os.SystemClock.elapsedRealtime() - jumelageVifDepuis)
                     : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : tourDuJour()) : POLL_MS;
             // Jamais au-delà de l'échéance du signal « en ligne » (batterie à jour toutes les 30 min).
             handler.postDelayed(this, Math.min(delai, avantSignal()));
@@ -2693,6 +2693,26 @@ final class Sync {
     private static final long PAIRING_MS = 15 * 60_000;
     private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+    /** Tablette pas encore reliée : tour rapide pendant ce temps après la dernière activité, lent ensuite. */
+    static final long JUMELAGE_VIF_MS = 10 * 60_000;
+    static final long JUMELAGE_TOUR_VIF_MS = 4_000;
+    static final long JUMELAGE_TOUR_LENT_MS = 15_000;
+    /** Dernière activité de l'installation (démarrage, écran touché, ordre reçu), horloge depuis l'allumage. */
+    private volatile long jumelageVifDepuis = android.os.SystemClock.elapsedRealtime();
+
+    /**
+     * Écart entre deux lectures du jumelage. Une tablette oubliée allumée en stock relisait le serveur toutes
+     * les 4 s sans fin (données de la carte SIM et lectures pour rien, 19/11) : 4 s pendant les 10 minutes qui
+     * suivent une activité, 15 s ensuite.
+     */
+    static long delaiJumelage(long depuisActiviteMs) {
+        return depuisActiviteMs >= 0 && depuisActiviteMs < JUMELAGE_VIF_MS ? JUMELAGE_TOUR_VIF_MS : JUMELAGE_TOUR_LENT_MS;
+    }
+
+    private void jumelageVif() {
+        jumelageVifDepuis = android.os.SystemClock.elapsedRealtime();
+    }
+
     boolean pairingActive() {
         return prefs.getString("fid", null) == null && prefs.getString("code", null) == null;
     }
@@ -2700,6 +2720,7 @@ final class Sync {
     void wifiDone() {
         handler.post(() -> {
             prefs.edit().putBoolean("wifiDone", true).apply();
+            jumelageVif();
             poke();
         });
     }
@@ -2879,6 +2900,7 @@ final class Sync {
             if (toStart) prefs.edit().remove("wifiDone").remove("bienvenueVue").apply();
             else if (prefs.getBoolean("wifiDone", false)) prefs.edit().remove("wifiDone").apply();
             else prefs.edit().remove("bienvenueVue").apply();
+            jumelageVif();
             poke();
         });
     }
@@ -2887,13 +2909,14 @@ final class Sync {
     void welcomeSeen() {
         handler.post(() -> {
             prefs.edit().putBoolean("bienvenueVue", true).apply();
+            jumelageVif();
             poke();
         });
     }
 
     // ---------- « Installer la carte SIM » (admin, préparation de l'envoi, 13/11) ----------
     // Le serveur pose pairings/{code}.ordre = {id, type: simTest | simPin} ; la tablette, qui relit son
-    // pairing toutes les 4 s, l'exécute une fois par id et répond dans pairings/{code}.simTest.
+    // pairing toutes les 4 s (15 s après 10 min sans activité), l'exécute une fois par id et répond dans pairings/{code}.simTest.
 
     private void ordreSim(String code, JSONObject f) {
         try {
@@ -2912,6 +2935,7 @@ final class Sync {
             }
             if (id == null || id.isEmpty() || id.equals(prefs.getString("simOrdreFait", ""))) return;
             prefs.edit().putString("simOrdreFait", id).apply();
+            jumelageVif(); // quelqu'un prépare la tablette depuis l'admin : réponses rapides
             Journal.log(context, "Installer la carte SIM : ordre " + type + " (" + id + ")");
             if ("simPin".equals(type)) {
                 prefs.edit().putString("simPinOrdre", id).putString("simPinCode", code)
