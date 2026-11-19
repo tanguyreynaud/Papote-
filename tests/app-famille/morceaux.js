@@ -30,7 +30,7 @@ const MORCEAUX = [
     'resiliation.test.js',
   ],
   [
-    'abonnement.test.js', 'admin-sim-bloquee.test.js', 'appel-android.test.js', 'declaration.test.js',
+    'abonnement.test.js', 'admin-sim-bloquee.test.js', 'appel-android.test.js', 'declaration.test.js', 'liens-invitation.test.js',
     'deconnexion.test.js', 'forfait.test.js', 'horsligne.test.js', 'mise-en-route.test.js', 'panne.test.js',
     'partage.test.js', 'renvoi.test.js', 'retour.test.js', 'sepa.test.js', 'touchers.test.js', 'wifi.test.js',
   ],
