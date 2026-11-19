@@ -826,6 +826,8 @@ function traiterAppels(snap) {
     if (current) fresh.filter((d) => d.id !== current).forEach((d) => refuseCall(d.id));
     if (!ringing && !active && fresh.length) {
       const latest = fresh[fresh.length - 1];
+      // Décompte du SOS à l'écran (tablette.js) : le SOS est annulé, l'appel du proche sonne normalement (Tanguy, 19/11).
+      try { if (window.Papote && window.Papote.sosAnnuleParVisio) window.Papote.sosAnnuleParVisio(latest.data().callerName || ''); } catch (e) { /* rien */ }
       showRing(latest.id, latest.data({ serverTimestamps: 'estimate' }));
     }
 }
