@@ -12,6 +12,10 @@
 //             tablette enchaîne un test d'id `${id}-apres-pin`.
 //   envoi     « Colis déposé », « Tablette remise » et l'étiquette d'envoi sont refusés tant que la carte de la
 //             tablette n'a pas un test réussi (refusSimNonTestee).
+//   SMS+appel (Tanguy, 17/11) : si un numéro d'essai est noté (gestion/reglages.numeroEssai, action admin
+//             simNumero), l'ordre porte appel = { numero, secondes, texte } : la tablette envoie un SMS puis appelle ce
+//             portable ~20 s et raccroche seule. Son résultat ajoute sms = { ok, code, ms } et
+//             appel = { ok, secondes, raison? } ; le test n'est réussi qu'avec les deux. Sans numéro : test comme avant.
 //
 // Logique pure en haut (testée dans sim-installation.test.js), accès à la base dans brancher().
 
@@ -29,6 +33,10 @@ const DOUBLON_MS = 15_000;
 const REPORT_MS = 30 * 60_000;
 // Sans réponse au bout de ce temps : l'écran le dit, sans alarmer.
 const SILENCE_MS = 45_000;
+// Avec SMS et appel, la tablette met ~30 s (SMS au plus) + la durée de l'appel + 5 s.
+const SILENCE_APPEL_MS = 90_000;
+const APPEL_SECONDES = 20;
+const RAISONS_APPEL = ['coupe', 'refuse', 'sans-permission', 'erreur', 'numero'];
 const SUFFIXE_PIN = '-apres-pin';
 
 const OPERATEURS = { '01': 'Orange', '02': 'Orange', '10': 'SFR', '11': 'SFR', '13': 'SFR', '15': 'Free', '16': 'Free', '20': 'Bouygues', '21': 'Bouygues', '88': 'Bouygues' };
@@ -53,6 +61,24 @@ function memeCarte(attendue, lue) {
   if (a.slice(-13) === b.slice(-13)) return true;
   const [court, long] = a.length < b.length ? [a, b] : [b, a];
   return long.length - court.length === 1 && court.length >= 18 && long.startsWith(court);
+}
+
+// Numéro d'essai : un portable français (06 ou 07), rendu en +336… / +337…. null sinon.
+function numeroEssai(v) {
+  if (typeof v !== 'string' || v.length > 40) return null;
+  let n = v.replace(/[\s.\-()]/g, '');
+  if (n.startsWith('0033')) n = `+33${n.slice(4)}`;
+  if (/^0[67]\d{8}$/.test(n)) n = `+33${n.slice(1)}`;
+  return /^\+33[67]\d{8}$/.test(n) ? n : null;
+}
+// +33612345678 → 06 12 34 56 78 (écran de l'admin).
+const numeroLisible = (n) => (n ? `0${n.slice(3)}`.replace(/(\d{2})(?=\d)/g, '$1 ') : '');
+
+// Ce qui part dans l'ordre quand un numéro d'essai est noté (sinon rien : test sans SMS ni appel).
+function appelPourOrdre(numero, ref) {
+  const n = numeroEssai(numero);
+  if (!n) return null;
+  return { numero: n, secondes: APPEL_SECONDES, texte: `Papote : test de la carte SIM de ${ref || 'la tablette'}`.slice(0, 160) };
 }
 
 const idDeBase = (id) => String(id || '').replace(new RegExp(`${SUFFIXE_PIN}$`), '');
@@ -84,7 +110,7 @@ function ordreAReporter(simOrdre, code, maintenant) {
 // suit (id « -apres-pin ») : la tablette exécute un ordre une seule fois par id, et son test d'après le PIN échoue
 // s'il vise l'ancien code (fil tablette, 13/11). Si le PIN n'était pas encore retiré, le test le dit (« pin »).
 function ordreReporte(o) {
-  const base = { demandeLe: Timestamp.fromMillis(ms(o.demandeLe) || 0), simAttendue: o.simAttendue };
+  const base = { demandeLe: Timestamp.fromMillis(ms(o.demandeLe) || 0), simAttendue: o.simAttendue, ...(o.appel ? { appel: o.appel } : {}) };
   if (o.type === 'simPin') return { id: `${idDeBase(o.id)}${SUFFIXE_PIN}`, type: 'simTest', ...base };
   return { id: o.id, type: o.type, ...base };
 }
@@ -94,11 +120,18 @@ function resultatPropre(t) {
   if (!t || typeof t !== 'object' || typeof t.id !== 'string' || !ETATS.includes(t.etat)) return null;
   const texte = (v, n) => (v == null ? null : String(v).slice(0, n));
   const d = t.donnees && typeof t.donnees === 'object' ? t.donnees : {};
+  const entier = (v, min, max) => (Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : null);
+  const sms = t.sms && typeof t.sms === 'object'
+    ? { ok: t.sms.ok === true, code: entier(t.sms.code, -1e6, 1e6), ms: entier(t.sms.ms, 0, 600_000) } : null;
+  const appel = t.appel && typeof t.appel === 'object'
+    ? { ok: t.appel.ok === true, secondes: entier(t.appel.secondes, 0, 3600), raison: RAISONS_APPEL.includes(t.appel.raison) ? t.appel.raison : null }
+    : null;
   return {
     id: t.id.slice(0, 80), le: ms(t.le), etat: t.etat,
     iccid: texte(t.iccid, 32), mcc: texte(t.mcc, 3), mnc: texte(t.mnc, 3), operateur: texte(t.operateur, 60),
     inscrite: t.inscrite === true, itinerance: t.itinerance === true,
     donnees: { ok: d.ok === true, ms: Number.isFinite(d.ms) ? Math.round(d.ms) : null },
+    sms, appel,
   };
 }
 
@@ -114,11 +147,34 @@ const MESSAGES = {
   'donnees-ko': 'La carte a le réseau, mais pas internet. Vérifiez que la ligne est activée avec internet, puis testez à nouveau.',
 };
 
+// SMS et appel d'essai : ce qui n'a pas marché, et quoi faire.
+function messageSmsAppel(t) {
+  const sms = t.sms || null;
+  const appel = t.appel || null;
+  if (!sms && !appel) return 'La tablette n\'a pas fait l\'essai de SMS et d\'appel : mettez à jour l\'appli Papote de la tablette, puis testez à nouveau.';
+  if (appel && appel.raison === 'numero') return 'Le numéro d\'essai n\'est pas un portable français (06 ou 07) : corrigez-le plus bas, puis testez à nouveau.';
+  if (appel && appel.raison === 'sans-permission') return 'La tablette n\'a pas encore l\'autorisation d\'envoyer des SMS et de passer des appels : autorisez Téléphone et SMS pour l\'appli Papote (Paramètres de la tablette, Applications), puis testez à nouveau.';
+  if (!sms || sms.ok !== true) {
+    return sms && (sms.code === -1 || sms.code === -999)
+      ? 'Le SMS d\'essai n\'est pas parti dans les 30 secondes. Une ligne tout juste activée met parfois quelques minutes : attendez un peu, puis testez à nouveau.'
+      : 'Le SMS d\'essai n\'est pas parti. Vérifiez que la ligne permet les SMS (et qu\'il reste du crédit), puis testez à nouveau.';
+  }
+  if (!appel || appel.ok !== true) {
+    const r = appel && appel.raison;
+    if (r === 'refuse') return 'Le réseau n\'a pas laissé passer l\'appel d\'essai (portable occupé, ou appels pas encore ouverts sur la ligne). Vérifiez que votre portable est libre, attendez un peu, puis testez à nouveau.';
+    if (r === 'coupe') return `L'appel d'essai s'est arrêté trop tôt${appel && appel.secondes != null ? ` (au bout de ${appel.secondes} s)` : ''}. Attendez un peu, puis testez à nouveau.`;
+    return 'La tablette n\'a pas pu passer l\'appel d\'essai : redémarrez-la, puis testez à nouveau.';
+  }
+  return '';
+}
+
 // Verdict pour l'écran de l'admin et pour l'envoi. ordre : stock.simOrdre ; test : le dernier résultat (stock.simTest,
 // ou le résultat brut) ; simAttendue : ICCID de la carte choisie.
-// → { ok, attente, coches: { carte, reseau, inscrite, internet }, ms, operateur, lue, message }
+// → { ok, attente, coches: { carte, reseau, inscrite, internet, sms?, appel? }, ms, operateur, lue, message, sms?, appel? }
+// sms et appel seulement quand l'ordre avait un numéro d'essai (ordre.appel).
 function verdict({ ordre, test, simAttendue, maintenant }) {
-  const vide = { carte: false, reseau: false, inscrite: false, internet: false };
+  const avecAppel = !!(ordre && ordre.appel);
+  const vide = { carte: false, reseau: false, inscrite: false, internet: false, ...(avecAppel ? { sms: false, appel: false } : {}) };
   if (!ordre || !ordre.id) {
     return { ok: false, attente: false, coches: vide, message: 'Touchez « Tester la carte » quand la carte est dans la tablette et la tablette redémarrée.' };
   }
@@ -126,9 +182,11 @@ function verdict({ ordre, test, simAttendue, maintenant }) {
     const depuis = maintenant - (ms(ordre.demandeLe) || maintenant);
     return {
       ok: false, attente: true, coches: vide, depuis,
-      message: depuis > SILENCE_MS
+      message: depuis > (avecAppel ? SILENCE_APPEL_MS : SILENCE_MS)
         ? 'La tablette n\'a pas encore répondu. Vérifiez qu\'elle est allumée, sur l\'écran Bienvenue, avec le wifi.'
-        : 'La tablette teste la carte, quelques secondes…',
+        : avecAppel
+          ? 'La tablette teste la carte, puis envoie un SMS et appelle votre portable (environ une minute)…'
+          : 'La tablette teste la carte, quelques secondes…',
     };
   }
   const t = test;
@@ -139,19 +197,27 @@ function verdict({ ordre, test, simAttendue, maintenant }) {
     reseau: francais && t.itinerance !== true,
     inscrite: t.inscrite === true,
     internet: !!(t.donnees && t.donnees.ok === true),
+    ...(avecAppel ? { sms: !!(t.sms && t.sms.ok === true), appel: !!(t.appel && t.appel.ok === true) } : {}),
   };
   const le = ms(t.le);
   const recent = le != null && maintenant - le < FRAIS_MS;
-  const ok = t.etat === 'ok' && carte && recent && t.itinerance !== true && coches.internet;
+  const smsAppel = avecAppel ? messageSmsAppel(t) : '';
+  const ok = t.etat === 'ok' && carte && recent && t.itinerance !== true && coches.internet && !smsAppel;
   let message = 'La carte marche : vous pouvez passer à la suite.';
+  if (ok && avecAppel) message = 'La carte marche : SMS parti et appel passé. Vous pouvez passer à la suite.';
   if (t.etat !== 'ok') message = MESSAGES[t.etat] || 'La tablette n\'a pas pu tester la carte : testez à nouveau.';
   else if (!carte) message = `Ce n'est pas la carte choisie : la tablette lit une carte qui finit par …${fin(t.iccid) || '?'}, la carte choisie finit par …${fin(simAttendue) || '?'}. Mettez la bonne carte, redémarrez la tablette, puis testez à nouveau.`;
   else if (t.itinerance === true) message = 'La carte est en itinérance : elle ne doit pas partir comme ça. Prenez une carte d\'un opérateur français.';
   else if (!coches.internet) message = MESSAGES['donnees-ko'];
+  else if (smsAppel) message = smsAppel;
   else if (!recent) message = 'Ce test date de plus de 10 minutes : testez à nouveau.';
   return {
     ok, attente: false, coches, ms: t.donnees && Number.isFinite(t.donnees.ms) ? t.donnees.ms : null,
     operateur: nomOperateur(t), lue: fin(t.iccid), etat: t.etat, message,
+    ...(avecAppel ? {
+      sms: t.sms ? { ok: t.sms.ok === true, ms: Number.isFinite(t.sms.ms) ? t.sms.ms : null } : null,
+      appel: t.appel ? { ok: t.appel.ok === true, secondes: Number.isFinite(t.appel.secondes) ? t.appel.secondes : null, raison: t.appel.raison || null } : null,
+    } : {}),
   };
 }
 
@@ -166,6 +232,10 @@ function refusSimNonTestee(t, ligne) {
   }
   if (ligne && ligne.iccid && !memeCarte(ligne.iccid, r.simAttendue)) {
     return `La carte SIM de ${nom} a changé depuis son test : testez la nouvelle carte (Préparer l'envoi, étape « Installer la carte SIM »).`;
+  }
+  // Test fait avec un numéro d'essai : le SMS et l'appel doivent être passés aussi.
+  if (r.avecAppel === true && !(r.sms && r.sms.ok === true && r.appel && r.appel.ok === true)) {
+    return `Le SMS ou l'appel d'essai de ${nom} n'est pas passé : testez à nouveau la carte (Préparer l'envoi, étape « Installer la carte SIM »).`;
   }
   return '';
 }
@@ -191,6 +261,20 @@ function brancher({ db, logger }) {
     return { fiche, t, ligne };
   }
 
+  // Numéro d'essai du SMS et de l'appel (gestion/reglages : fermé aux applis, lu et changé par les actions admin).
+  async function lireNumero() {
+    return numeroEssai((await base().doc('gestion/reglages').get()).get('numeroEssai') || '');
+  }
+
+  // Action admin « simNumero » : { numero } (vide : plus de SMS ni d'appel pendant le test).
+  async function noterNumero({ numero }) {
+    const brut = typeof numero === 'string' ? numero.trim() : '';
+    const n = brut ? numeroEssai(brut) : '';
+    if (n === null) throw new HttpsError('invalid-argument', 'Notez un portable français, qui commence par 06 ou 07.');
+    await base().doc('gestion/reglages').set({ numeroEssai: n }, { merge: true });
+    return { ok: true, numero: numeroLisible(n) };
+  }
+
   // Action admin « simOrdre » : { stock, type }.
   async function ordonner({ stock, type }, qui) {
     if (!TYPES.includes(type)) throw new HttpsError('invalid-argument', 'Ordre inconnu.');
@@ -214,26 +298,27 @@ function brancher({ db, logger }) {
       throw new HttpsError('failed-precondition', `${nom} n'affiche pas encore son code : allumez-la, branchez le wifi et attendez l'écran Bienvenue, puis touchez à nouveau.`);
     }
     const id = randomBytes(9).toString('base64url');
-    const ordre = { id, type, demandeLe: Timestamp.fromMillis(maintenant), simAttendue: chiffres(ligne.iccid) };
+    const appel = appelPourOrdre(await lireNumero(), t.ref);
+    const ordre = { id, type, demandeLe: Timestamp.fromMillis(maintenant), simAttendue: chiffres(ligne.iccid), ...(appel ? { appel } : {}) };
     await base().doc(`pairings/${choisi.code}`).update({ ordre });
     await fiche.ref.update({
-      simOrdre: { id, type, demandeLe: maintenant, simAttendue: ordre.simAttendue, sim: t.simId, code: choisi.code, codes: [choisi.code], par: qui || null },
+      simOrdre: { id, type, demandeLe: maintenant, simAttendue: ordre.simAttendue, sim: t.simId, code: choisi.code, codes: [choisi.code], par: qui || null, ...(appel ? { appel } : {}) },
     });
-    logger.info(`Carte SIM : ordre ${type} ${id} envoyé à ${nom} (code ${choisi.code}).`);
-    return { ok: true, id, code: choisi.code, ref: t.ref || null };
+    logger.info(`Carte SIM : ordre ${type} ${id} envoyé à ${nom} (code ${choisi.code})${appel ? ', avec SMS et appel d\'essai' : ''}.`);
+    return { ok: true, id, code: choisi.code, ref: t.ref || null, appel: !!appel };
   }
 
   // Action admin « simEtat » : { stock } → l'ordre en cours et le verdict, relus toutes les 3 s par l'écran.
   async function etat({ stock }) {
-    const { t, ligne } = await ficheEtCarte(stock);
+    const [{ t, ligne }, numero] = await Promise.all([ficheEtCarte(stock), lireNumero()]);
     const o = t.simOrdre || null;
     const v = verdict({ ordre: o, test: t.simTest, simAttendue: (ligne && ligne.iccid) || (o && o.simAttendue), maintenant: Date.now() });
     // La carte a changé depuis l'ordre : le résultat ne vaut plus.
     if (o && ligne && ligne.iccid && !memeCarte(ligne.iccid, o.simAttendue)) Object.assign(v, { ok: false, message: 'La carte choisie a changé : testez à nouveau.' });
     return {
       ok: true, ref: t.ref || null, attendue: fin(ligne && ligne.iccid),
-      ordre: o ? { id: o.id, type: o.type, demandeLe: ms(o.demandeLe), code: o.code } : null,
-      verdict: v,
+      ordre: o ? { id: o.id, type: o.type, demandeLe: ms(o.demandeLe), code: o.code, appel: !!o.appel } : null,
+      verdict: v, numero: numeroLisible(numero),
     };
   }
 
@@ -282,17 +367,18 @@ function brancher({ db, logger }) {
       if (!o || !repondA(o, r)) return false;
       const v = verdict({ ordre: o, test: r, simAttendue: o.simAttendue, maintenant: Date.now() });
       tx.update(fiche.ref, {
-        simTest: { ...r, simAttendue: o.simAttendue, ordre: o.id, type: o.type, code, ok: v.ok, copieLe: Date.now() },
+        simTest: { ...r, simAttendue: o.simAttendue, ordre: o.id, type: o.type, code, ok: v.ok, avecAppel: !!o.appel, copieLe: Date.now() },
         'simOrdre.repondu': true,
       });
       return true;
     });
   }
 
-  return { ordonner, etat, reporter, copier };
+  return { ordonner, etat, reporter, copier, noterNumero };
 }
 
 module.exports = {
   brancher, verdict, memeCarte, pairingPourOrdre, ordreDejaParti, ordreAReporter, ordreReporte, resultatPropre, refusSimNonTestee,
-  idDeBase, repondA, TYPES, ETATS, FRAIS_MS, DOUBLON_MS, REPORT_MS, SUFFIXE_PIN,
+  idDeBase, repondA, numeroEssai, numeroLisible, appelPourOrdre, messageSmsAppel,
+  TYPES, ETATS, FRAIS_MS, DOUBLON_MS, REPORT_MS, SUFFIXE_PIN, SILENCE_MS, SILENCE_APPEL_MS, APPEL_SECONDES, RAISONS_APPEL,
 };

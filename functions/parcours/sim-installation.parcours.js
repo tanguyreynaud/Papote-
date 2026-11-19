@@ -114,3 +114,55 @@ test('carte SIM : code renouvelé avant la réponse (ordre reporté), retrait du
   assert.match(mauvaise.verdict.message, /Ce n'est pas la carte choisie/);
   assert.strictEqual((await s.lire(`stock/${t.fiche}`)).simTest.ordre, r2.id);
 });
+
+// Numéro d'essai noté (Tanguy, 17/11) : la tablette envoie un SMS puis appelle ce portable pendant le test. Numéro
+// fictif : le dépôt est public.
+test('carte SIM avec numéro d\'essai : l\'ordre porte l\'appel, SMS et appel exigés pour l\'envoi, reportés avec l\'ordre', async () => {
+  const numero = (n) => s.appeler('gestionStock', { action: 'simNumero', numero: n }, a.TANGUY);
+  await assert.rejects(numero('01 23 45 67 89'), /portable français, qui commence par 06 ou 07/);
+  assert.deepStrictEqual(await numero('06 12 34 56 78'), { ok: true, numero: '06 12 34 56 78' });
+  assert.strictEqual((await s.lire('gestion/reglages')).numeroEssai, '+33612345678');
+  try {
+    const { t, id } = await tabletteAvecCarte();
+    await a.afficherCode(t);
+    const r = await ordre(t);
+    assert.strictEqual(r.appel, true);
+    const o = (await s.lire(`pairings/${t.code}`)).ordre;
+    assert.deepStrictEqual(o.appel, { numero: '+33612345678', secondes: 20, texte: `Papote : test de la carte SIM de ${t.ref}` });
+    let e = await etat(t);
+    assert.strictEqual(e.numero, '06 12 34 56 78');
+    assert.match(e.verdict.message, /appelle votre portable/);
+    // 60 s sans réponse : encore normal avec l'appel (90 s).
+    s.avancer(60 / 86400);
+    assert.match((await etat(t)).verdict.message, /appelle votre portable/);
+
+    // Carte qui marche mais appel refusé par le réseau : pas d'envoi.
+    await a.repondreOrdreSim(t, { appel: { ok: false, secondes: 0, raison: 'refuse' } });
+    e = await etat(t);
+    assert.strictEqual(e.verdict.ok, false);
+    assert.deepStrictEqual(e.verdict.coches, { carte: true, reseau: true, inscrite: true, internet: true, sms: true, appel: false });
+    assert.match(e.verdict.message, /n'a pas laissé passer l'appel/);
+    const fiche = await s.lire(`stock/${t.fiche}`);
+    assert.deepStrictEqual([fiche.simTest.ok, fiche.simTest.avecAppel, fiche.simTest.appel.raison], [false, true, 'refuse']);
+    await assert.rejects(s.appeler('tabletteEnvoyee', { commande: id, mainPropre: true }, a.TANGUY), /Testez d'abord la carte SIM/);
+
+    // « Retirer le code PIN », code renouvelé : le test « -apres-pin » reporté garde l'appel ; SMS et appel passés.
+    const pin = await ordre(t, 'simPin');
+    assert.ok((await s.lire(`pairings/${t.code}`)).ordre.appel);
+    s.avancer(15 / 1440);
+    const second = await a.afficherCode(t);
+    const reporte = (await s.lire(`pairings/${second}`)).ordre;
+    assert.strictEqual(reporte.id, `${pin.id}-apres-pin`);
+    assert.strictEqual(reporte.appel.numero, '+33612345678');
+    await a.repondreOrdreSim(t, {}, { code: second, id: `${pin.id}-apres-pin` });
+    e = await etat(t);
+    assert.strictEqual(e.verdict.ok, true, e.verdict.message);
+    assert.match(e.verdict.message, /SMS parti et appel passé/);
+    assert.deepStrictEqual((await s.lire(`stock/${t.fiche}`)).simTest.sms, { ok: true, code: -1, ms: 1800 });
+    await s.appeler('tabletteEnvoyee', { commande: id, mainPropre: true }, a.TANGUY);
+  } finally {
+    // Numéro retiré : les autres parcours testent sans SMS ni appel.
+    assert.deepStrictEqual(await numero(''), { ok: true, numero: '' });
+  }
+  assert.strictEqual((await s.lire('gestion/reglages')).numeroEssai, '');
+});
