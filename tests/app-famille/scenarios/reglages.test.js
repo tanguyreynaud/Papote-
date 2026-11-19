@@ -48,29 +48,52 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   assert.deepStrictEqual([options.radio.active, options.radio.nom], [true, 'FIP']);
   assert.match(await julie.page.locator('#options-value').innerText(), /FIP/);
 
-  // Volumes : sonnerie, vidéos et messages lus. Chaque barre lâchée fait sonner ou parler la tablette, sans
+  // Volumes : sonnerie, vidéos et messages lus, appels. Glisser une barre ne fait rien sonner : la tablette ne
+  // joue un son que sur « Écouter », une seule demande même au double appui (Tanguy, 19/11). Pas de
   // récapitulatif « La tablette sonne à 70 % » au-dessus d'Enregistrer (Tanguy, 17/11 : inutile).
+  const essaisSon = async () => (await g.liste(`families/${fid}/commands`)).filter((d) => d.type === 'son');
   await modifier(julie, 'volume-card');
+  assert.strictEqual(await julie.page.inputValue('#volume-appel'), '100', 'appels au plus fort par défaut');
   await julie.page.locator('#volume-sonnerie').fill('70');
   await julie.page.locator('#volume').fill('50');
-  const essais = await g.attendreBase(async () => {
-    const c = (await g.liste(`families/${fid}/commands`)).filter((d) => d.type === 'son');
-    return c.length >= 2 && c;
-  }, 'essais du son');
-  assert.ok(essais.some((c) => c.quoi === 'sonnerie' && c.volume === 70));
-  assert.ok(essais.some((c) => c.quoi === 'voix' && c.volume === 50));
-  assert.strictEqual(await julie.page.locator('#volume-card').getByText(/La tablette (sonne|parle) à/).count(), 0, 'plus de récapitulatif');
-  // « Écouter » touché : un petit mot en bas, et la tablette sonne.
-  await julie.page.click('#volume-card .volume-essai[data-essai="sonnerie"]');
-  await g.toast(julie, 'Écoutez la tablette : elle sonne.');
-  await g.attendreBase(async () => (await g.liste(`families/${fid}/commands`)).filter((d) => d.type === 'son').length >= 3, '3e essai du son');
-  assert.strictEqual(await julie.page.inputValue('#volume-appel'), '100', 'appels au plus fort par défaut');
   await julie.page.locator('#volume-appel').fill('80');
+  for (const barre of ['#volume-sonnerie', '#volume', '#volume-appel']) {
+    await julie.page.locator(barre).focus();
+    await julie.page.keyboard.press('ArrowLeft');
+    await julie.page.keyboard.press('ArrowRight');
+  }
+  await julie.page.locator('#volume-sonnerie-val', { hasText: '70 %' }).waitFor();
+  await julie.page.waitForTimeout(1500);
+  assert.strictEqual((await essaisSon()).length, 0, 'aucun son demandé en changeant un réglage');
+  assert.strictEqual(await julie.page.locator('#volume-card').getByText(/La tablette (sonne|parle) à/).count(), 0, 'plus de récapitulatif');
+  // Chaque « Écouter », touché deux fois de suite : une seule demande, et le bouton change tout de suite.
+  const tablettes = (await g.liste(`families/${fid}/members`)).filter((m) => m.role === 'tablette').length;
+  assert.ok(tablettes >= 1, 'une tablette dans la famille');
+  const attendus = { sonnerie: [70, 'elle sonne.'], voix: [50, 'elle parle.'], appel: [80, 'elle parle comme pendant un appel.'] };
+  let total = 0;
+  for (const [quoi, [volume, mot]] of Object.entries(attendus)) {
+    const bouton = `#volume-card .volume-essai[data-essai="${quoi}"]`;
+    assert.strictEqual(await julie.page.locator(bouton).innerText(), 'Écouter');
+    await g.doubleAppui(julie, bouton);
+    await julie.page.locator(`#volume-card .volume-essai.en-cours[data-essai="${quoi}"]`, { hasText: 'Écoute…' }).waitFor();
+    await g.toast(julie, `Écoutez la tablette : ${mot}`);
+    total += tablettes;
+    const c = await g.attendreBase(async () => { const l = await essaisSon(); return l.length >= total && l; }, `essai ${quoi}`);
+    await julie.page.waitForTimeout(800);
+    const deCeType = (await essaisSon()).filter((d) => d.quoi === quoi);
+    assert.strictEqual(deCeType.length, tablettes, `double appui sur « Écouter » (${quoi}) : une seule demande`);
+    assert.ok(deCeType.every((d) => d.volume === volume), `${quoi} au niveau de la barre`);
+    if (quoi !== 'sonnerie') assert.match(deCeType[0].parle, /Vous m'entendez bien \?/);
+    assert.ok(c.length >= total);
+  }
+  // Le son fini, le bouton redevient « Écouter ».
+  await julie.page.locator('#volume-card .volume-essai[data-essai="appel"]:not(.en-cours)', { hasText: 'Écouter' }).waitFor();
   await enregistrer(julie, 'volume-card');
   await g.toast(julie, 'Volumes envoyés');
   const fam = await g.lire(`families/${fid}`);
   assert.deepStrictEqual([fam.volume, fam.volumeSonnerie, fam.volumeAppel], [50, 70, 80]);
   await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 % · Vidéos et messages 50 % · Appels 80 %' }).waitFor();
+  assert.strictEqual((await essaisSon()).length, total, 'Enregistrer ne fait rien sonner');
 
   // Nuit : le coucher se choisit le soir (19 h à 23 h 30), le réveil le matin (5 h à 10 h), par demi-heure
   // (Tanguy, 17/11) ; puis de 22 h à 6 h 30.

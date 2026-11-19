@@ -703,6 +703,18 @@ test('ordres à la tablette : un responsable de CETTE famille ; la tablette ne r
   await assertFails(deleteDoc(doc(proche('lea'), `families/${FID}/commands/w1`)));
 });
 
+test('« Écouter » des Volumes : sonnerie, voix ou appel, de 10 à 100, par un responsable', async () => {
+  await deuxFamilles();
+  const son = (quoi, extra = {}) => ordre('paul', { type: 'son', quoi, volume: 80, ...extra });
+  await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/commands/s1`), son('sonnerie')));
+  await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/commands/s2`), son('voix', { parle: 'Vous m\'entendez bien ?' })));
+  await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/commands/s3`), son('appel', { parle: 'Vous m\'entendez bien ?' })));
+  await assertFails(setDoc(doc(proche('paul'), `families/${FID}/commands/s4`), son('musique')));
+  await assertFails(setDoc(doc(proche('paul'), `families/${FID}/commands/s5`), son('appel', { volume: 5 })));
+  await assertFails(setDoc(doc(proche('paul'), `families/${FID}/commands/s6`), son('appel', { parle: 'x'.repeat(201) })));
+  await assertFails(setDoc(doc(proche('lea'), `families/${FID}/commands/s7`), { ...son('appel'), createdBy: 'lea' }));
+});
+
 test('wifi depuis l\'appli (A36) : mot de passe jamais dans l\'ordre, à part, lisible de la seule tablette, expiré', async () => {
   await deuxFamilles();
   const heure = (h) => Timestamp.fromMillis(Date.now() + h * 3_600_000);

@@ -565,7 +565,7 @@
           <div class="setting-head"><h2>Volumes</h2><button type="button" class="link setting-modify">Modifier</button></div>
           <p id="volume-text" class="setting-value"></p>
           <form id="form-volume" class="setting-edit" hidden>
-            <p class="muted small">Glissez une barre : la tablette joue le son tout de suite.</p>
+            <p class="muted small">Touchez « Écouter » pour entendre le son sur la tablette.</p>
             <div class="setup-son-ligne">
               <div class="setup-son-tete">
                 <strong>Sonnerie</strong>
@@ -596,6 +596,7 @@
               <p class="muted small volume-aide">La voix du proche, en visio et au téléphone. Elle change au prochain appel.</p>
               <div class="setup-son-ctrl">
                 <input id="volume-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
+                <button type="button" class="setup-essai volume-essai" data-essai="appel" aria-label="Écouter la voix d'un appel"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
               </div>
             </div>
             <div class="setting-actions">

@@ -1417,6 +1417,9 @@ body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: n
 .setup-essai svg { width: 22px; height: 22px; stroke: none; fill: var(--accent); }
 .setup-essai:active { background: var(--accent); color: var(--accent-text); }
 .setup-essai:active svg { fill: var(--accent-text); }
+/* « Écouter » touché : plein indigo le temps du son (un deuxième appui ne renvoie rien). */
+.setup-essai.en-cours { background: var(--accent); color: var(--accent-text); }
+.setup-essai.en-cours svg { fill: var(--accent-text); }
 .volume-aide { margin: -4px 0 2px; }
 
 /* Aucun lien souligné, dans l'appli comme dans l'admin (demande de Tanguy, 22/10). */
