@@ -9,7 +9,10 @@ name: Balayages site et e-mails
 # Une seule fois par changement : au push (les résultats s'affichent aussi sur la PR). Avant, push + pull_request
 # faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
+  # Tanguy 19/11 : la file GitHub n'a que 20 places. Au push, seulement main et les lots ; une branche de travail se
+  # vérifie avec outils/verifier-avant-pousser.sh, et au besoin à la main (Run workflow sur sa branche).
   push:
+    branches: [main, 'claude/lot-*']
     paths: ['vitrine/**', 'functions/mail.js', 'functions/mail/**', 'outils/galerie/**', '.github/workflows/balayages.yml']
   workflow_dispatch:
 
