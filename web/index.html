@@ -1141,20 +1141,30 @@
       const ecran = document.getElementById('hors-ligne');
       const bandeau = document.getElementById('hors-ligne-bandeau');
       let minuterie = 0;
+      let revoir = 0;
+      let confirmer = 0;
       // Les en-têtes des pages restent sous le bandeau : il ne doit pas cacher le bouton Retour.
+      // Bandeau affiché : on revérifie la connexion toutes les 5 s, pour qu'il ne reste jamais collé
+      // quand l'événement « online » n'arrive pas (téléphone en veille, Chrome qui a gelé la page, Wi-Fi ↔ 4G).
       function montrerBandeau(oui) {
         bandeau.hidden = !oui;
         document.documentElement.style.setProperty('--bandeau', oui ? `${bandeau.offsetHeight}px` : '0px');
+        clearInterval(revoir);
+        if (oui) revoir = setInterval(revoirBandeau, 5000);
       }
-      // navigator.onLine se trompe parfois (Wi-Fi sans internet) : on demande un petit fichier.
+      // navigator.onLine se trompe dans les deux sens (Wi-Fi sans internet ; Chrome Android qui le laisse à false
+      // après un changement de réseau : bandeau resté affiché sur un téléphone connecté, 19/11) : seul un vrai petit fichier fait foi.
       async function connecte() {
-        if (!navigator.onLine) return false;
         const stop = new AbortController();
         const delai = setTimeout(() => stop.abort(), 6000);
         try {
           const rep = await fetch(`manifest.webmanifest?verif=${Date.now()}`, { cache: 'no-store', signal: stop.signal });
           return rep.ok;
         } catch (e) { return false; } finally { clearTimeout(delai); }
+      }
+      async function revoirBandeau() {
+        if (bandeau.hidden) return;
+        if (await connecte()) montrerBandeau(false);
       }
       // Si l'app ne démarre pas alors que le réseau répond, on ne relance pas en boucle :
       // trois essais automatiques, ensuite seulement avec le bouton.
@@ -1167,6 +1177,7 @@
       }
       function ouvrir() {
         if (!ecran.hidden) return;
+        clearTimeout(confirmer);
         montrerBandeau(false);
         ecran.hidden = false;
         clearInterval(minuterie);
@@ -1174,11 +1185,23 @@
       }
       window.papoteHorsLigne = ouvrir;
       document.getElementById('hors-ligne-reessayer').addEventListener('click', verifier);
-      addEventListener('online', () => { if (!ecran.hidden) verifier(true); else montrerBandeau(false); });
-      addEventListener('offline', () => { if (ecran.hidden) montrerBandeau(true); });
+      addEventListener('online', () => { clearTimeout(confirmer); if (!ecran.hidden) verifier(true); else montrerBandeau(false); });
+      // Un « offline » seul ne suffit pas (il arrive aussi pendant un simple passage Wi-Fi ↔ 4G) :
+      // le bandeau n'apparaît que si, 3 s plus tard, internet ne répond vraiment pas.
+      addEventListener('offline', () => {
+        if (!ecran.hidden) return;
+        clearTimeout(confirmer);
+        confirmer = setTimeout(async () => {
+          if (ecran.hidden && bandeau.hidden && !(await connecte())) montrerBandeau(true);
+        }, 3000);
+      });
+      // Retour sur l'app (écran rallumé, autre appli quittée) : on revérifie tout de suite.
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) revoirBandeau(); });
+      addEventListener('pageshow', revoirBandeau);
+      addEventListener('focus', revoirBandeau);
       // Enregistré ici et pas dans famille.js : même si les scripts n'arrivent pas, la copie de l'app se fait.
       if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-      if (!navigator.onLine) ouvrir();
+      if (!navigator.onLine) connecte().then((ok) => { if (!ok) ouvrir(); });
       // Toujours sur l'écran de chargement après 8 s : souvent un réseau qui ne répond pas.
       setTimeout(async () => {
         if (document.getElementById('loading').hidden) { try { sessionStorage.removeItem('papote.reessais'); } catch (e) { /* rien */ } return; }
