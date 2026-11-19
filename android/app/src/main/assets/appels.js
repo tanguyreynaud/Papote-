@@ -1253,23 +1253,25 @@ async function start() {
 }
 
 // ---------- Test du son à l'installation ----------
-// Le téléphone du proche écrit families/{fid}/commands/{id} { type: 'son', quoi: 'sonnerie' | 'voix',
-// volume, parle?, target: ce compte, state: 'pending' } : la tablette joue tout de suite (Android,
-// testSon), puis écrit state 'done'. Une commande de plus de 2 minutes est seulement marquée faite.
+// Le téléphone du proche écrit families/{fid}/commands/{id} { type: 'son', quoi: 'sonnerie' | 'voix' | 'appel',
+// volume, parle?, target: ce compte, state: 'pending' } seulement quand on touche « Écouter » : la tablette
+// joue tout de suite (Android, testSon, qui coupe l'essai d'avant : un seul son à la fois), puis écrit
+// state 'done'. Une commande de plus de 2 minutes est seulement marquée faite. Changer un volume ne joue rien.
 let stopCommands = null;
 const ordresVus = new Set();
+// Plusieurs essais lus d'un coup (tablette réveillée, réseau revenu) : seul le dernier demandé joue,
+// les autres sont seulement marqués faits (un seul son à la fois).
+const quand = (d) => (d.createdAt && d.createdAt.toMillis ? d.createdAt.toMillis() : Date.now());
 function traiterOrdres(docs) {
-    docs.forEach((d0) => {
-      if (ordresVus.has(d0.id)) return;
-      ordresVus.add(d0.id);
-      const c = { doc: d0 };
-      const d = c.doc.data();
-      const recent = !d.createdAt || !d.createdAt.toMillis || Date.now() - d.createdAt.toMillis() < 120_000;
-      if (d.type === 'son' && recent && !ringing && !active && android() && android().testSon) {
-        android().testSon(d.quoi === 'sonnerie' ? 'sonnerie' : 'voix', Number(d.volume) || 80, typeof d.parle === 'string' ? d.parle : '');
-      }
-      updateDoc(c.doc.ref, { state: 'done' }).catch((e) => console.warn('Test du son : état', e && e.code));
-    });
+    const nouveaux = docs.filter((d0) => !ordresVus.has(d0.id));
+    nouveaux.forEach((d0) => ordresVus.add(d0.id));
+    const essais = nouveaux.map((d0) => d0.data()).filter((d) => d.type === 'son' && Date.now() - quand(d) < 120_000);
+    const dernier = essais.reduce((a, d) => (!a || quand(d) >= quand(a) ? d : a), null);
+    if (dernier && !ringing && !active && android() && android().testSon) {
+      const d = dernier;
+      android().testSon(d.quoi === 'sonnerie' || d.quoi === 'appel' ? d.quoi : 'voix', Number(d.volume) || 80, typeof d.parle === 'string' ? d.parle : '');
+    }
+    nouveaux.forEach((d0) => updateDoc(d0.ref, { state: 'done' }).catch((e) => console.warn('Test du son : état', e && e.code)));
 }
 const ordresEnAttente = () => query(collection(db, 'families', fid, 'commands'), where('target', '==', auth.currentUser.uid), where('state', '==', 'pending'));
 function lireOrdres() {

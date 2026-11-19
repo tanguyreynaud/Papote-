@@ -340,6 +340,34 @@ test('réveil par le serveur : un push « ordre » joue le test du son demandé'
   } finally { await b.fermer(); }
 });
 
+// Tanguy (19/11) : « Écouter » du volume des appels joue une phrase au volume des appels ; jamais deux sons à la fois.
+test('« Écouter » des appels : la tablette dit une phrase au volume des appels', async () => {
+  const b = await tablette();
+  try {
+    await b.ecrire('families/F1/commands/a1', { type: 'son', quoi: 'appel', volume: 80, parle: 'Bonjour Mamie', target: MOI, state: 'pending', createdAt: { __serverTimestamp: true } });
+    await b.avancer(500);
+    assert.deepStrictEqual((await b.appels('testSon')).map((a) => a.args), [['appel', 80, 'Bonjour Mamie']]);
+    assert.strictEqual((await b.lire('families/F1/commands/a1')).state, 'done');
+  } finally { await b.fermer(); }
+});
+
+test('plusieurs « Écouter » lus d\'un coup au réveil : seul le dernier joue, tous marqués faits', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { ...FAMILLE, push: true });
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(3000);
+    const essais = [['p1', 'sonnerie', 70], ['p2', 'voix', 50], ['p3', 'appel', 90]];
+    for (const [id, quoi, volume] of essais) {
+      await b.ecrire(`families/F1/commands/${id}`, { type: 'son', quoi, volume, target: MOI, state: 'pending', createdAt: { __serverTimestamp: true } });
+      await b.avancer(1000);
+    }
+    await b.page.evaluate(() => window.Papote.onPush({ type: 'ordre', id: 'p3' }));
+    await b.avancer(500);
+    assert.deepStrictEqual((await b.appels('testSon')).map((a) => a.args.slice(0, 2)), [['appel', 90]], 'un seul son');
+    for (const [id] of essais) assert.strictEqual((await b.lire(`families/F1/commands/${id}`)).state, 'done');
+  } finally { await b.fermer(); }
+});
+
 test('jeton push écrit après le démarrage : les écoutes se ferment toutes seules', async () => {
   const b = await tablette();
   try {
