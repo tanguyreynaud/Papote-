@@ -43,7 +43,7 @@ public class Ouverture extends LauncherActivity {
      * https://app.mapapote.fr/?natif=… ouvert par l'app) avant d'ajouter les siens : un lien ne doit
      * pas pouvoir donner à la page le jeton d'un autre téléphone.
      */
-    private static final List<String> PARAMS_APP = Arrays.asList("natif", "notifs", "cle");
+    private static final List<String> PARAMS_APP = Arrays.asList("natif", "notifs", "cle", "contacts", "contactFait");
     /** Sans réseau, le jeton peut ne jamais arriver : on ouvre quand même l'app. */
     private static final long ATTENTE_JETON_MS = 4000;
 
@@ -186,6 +186,11 @@ public class Ouverture extends LauncherActivity {
         url.appendQueryParameter("quitter", "1");
         // Clé de ce téléphone : la page la remet dans ses liens papote://appel et papote://quitter (Lien).
         url.appendQueryParameter("cle", Lien.cle(this));
+        // L'app sait ouvrir « Créer un contact » d'Android (Contact, papote://contact) ; rouverte par Contact après
+        // « Enregistrer » : le numéro enregistré, que la page note sur le compte (« Déjà dans vos contacts »).
+        url.appendQueryParameter("contacts", "1");
+        String fait = getIntent().getStringExtra(Contact.EXTRA_FAIT);
+        if (fait != null && fait.matches("0[67][0-9]{8}")) url.appendQueryParameter("contactFait", fait);
         // Android 11+ met en pause une app pas ouverte depuis quelques mois : elle ne recevrait
         // plus les appels. Tant que ce n'est pas réglé, l'app famille affiche une carte qui mène
         // au bon réglage (ReglagePause).

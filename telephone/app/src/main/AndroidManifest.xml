@@ -136,6 +136,22 @@
             </intent-filter>
         </activity>
 
+        <!-- « Enregistrer dans mes contacts » dans l'app famille : « Créer un contact » d'Android, rempli.
+             Aucune autorisation sur les contacts (Contact.java). -->
+        <activity
+            android:name=".Contact"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="papote" android:host="contact" />
+            </intent-filter>
+        </activity>
+
         <!-- « Voulez-vous quitter Papote ? » puis « Quitter » dans l'app famille : ferme l'app -->
         <activity
             android:name=".Quitter"

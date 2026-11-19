@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Papote</string>
+    <string name="contact_impossible">Ajoutez ce numéro dans vos contacts : %1$s</string>
     <string name="url_app">https://app.mapapote.fr/</string>
     <!-- Lien de confiance avec app.mapapote.fr (le site publie /.well-known/assetlinks.json) :
          sans lui, Chrome afficherait une barre d'adresse en haut de l'app. -->
