@@ -26,28 +26,30 @@ jobs:
   app-famille:
     # Deux navigateurs : Chromium (Chrome d'Android) et WebKit (Safari d'iPhone, tailles iPhone 15 et iPhone SE). Ce qui ne peut pas
     # tourner sous WebKit est listé, avec sa raison, dans tests/app-famille/WEBKIT.md.
-    name: app-famille (${{ matrix.moteur }}${{ matrix.appareil && format(', {0}', matrix.appareil) || '' }})
+    # Chaque navigateur passe tous les scénarios, coupés en 3 morceaux parallèles (tests/app-famille/morceaux.js) : chaque
+    # scénario tourne exactement une fois par navigateur, chaque morceau avec ses propres émulateurs. D'un bloc, la suite
+    # prenait 26 à 30 min par navigateur (jusqu'à 50 en WebKit) ; en morceaux, ~10 min (Tanguy, 19/11 : CI sous 30 min).
+    name: app-famille (${{ matrix.appareil && format('webkit, {0}', matrix.appareil) || 'chromium' }}, morceau ${{ matrix.morceau }}/3)
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - moteur: chromium
-          - moteur: webkit
-            appareil: iPhone 15
-          - moteur: webkit
-            appareil: iPhone SE (3rd gen)
+        # Appareil vide = Chromium ; sinon WebKit avec cet iPhone.
+        appareil: ['', 'iPhone 15', 'iPhone SE (3rd gen)']
+        # Doit aller de 1 au nombre de morceaux de morceaux.js (vérifié ci-dessous, sinon la tâche est rouge).
+        morceau: [1, 2, 3]
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    # ~10 à 12 min attendues par morceau (installation comprise) : le double, pas plus.
+    timeout-minutes: 25
     # Image officielle de Playwright 1.63.0 (même version que le package.json) : navigateurs et paquets système
     # déjà dedans. L'apt des runners (110 ko/s le 18/11) prenait jusqu'à 21 min et faisait couper des jobs.
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble
       options: --ipc=host
     env:
-      PAPOTE_MOTEUR: ${{ matrix.moteur }}
+      PAPOTE_MOTEUR: ${{ matrix.appareil && 'webkit' || 'chromium' }}
       PAPOTE_APPAREIL: ${{ matrix.appareil }}
       # La fin de la console de chaque téléphone dans le compte rendu de WebKit (pour comprendre un échec sans les captures).
-      PAPOTE_JOURNAL: ${{ matrix.moteur == 'webkit' && '1' || '' }}
+      PAPOTE_JOURNAL: ${{ matrix.appareil && '1' || '' }}
     defaults:
       run:
         working-directory: tests/app-famille
@@ -74,12 +76,25 @@ jobs:
       # Tests sans navigateur ni émulateur : réseau mobile de l'admin (opérateur par fréquence, « Vu » sur l'alerte).
       - run: node --test ../reseau.test.mjs
       - run: npm ci
-      - run: npx playwright install ${{ matrix.moteur }}
-      - run: npm test
+      # Déjà dans l'image (rien n'est téléchargé) ; ne servirait que si la version du package changeait sans l'image.
+      - run: npx playwright install ${{ env.PAPOTE_MOTEUR }}
+      # Aucun scénario oublié ni lancé deux fois, et autant de tâches que de morceaux.
+      - name: Chaque scénario dans exactement un morceau
+        env:
+          MORCEAUX_CI: 3
+        run: |
+          node morceaux.js verifier
+          n=$(node morceaux.js nombre)
+          if [ "$n" != "$MORCEAUX_CI" ]; then
+            echo "::error::morceaux.js a $n morceaux, la matrice de app-famille.yml en lance $MORCEAUX_CI : les mettre d'accord."
+            exit 1
+          fi
+      - name: Scénarios du morceau ${{ matrix.morceau }}/3
+        run: node morceaux.js lancer ${{ matrix.morceau }}
       - name: Captures en cas d'échec
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: captures-app-famille-${{ matrix.moteur }}${{ matrix.appareil && format('-{0}', matrix.appareil) || '' }}
+          name: captures-app-famille-${{ env.PAPOTE_MOTEUR }}${{ matrix.appareil && format('-{0}', matrix.appareil) || '' }}-${{ matrix.morceau }}
           path: tests/app-famille/captures/
           if-no-files-found: ignore

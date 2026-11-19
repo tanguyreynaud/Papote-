@@ -32,7 +32,8 @@ jobs:
     runs-on: ubuntu-24.04
     # Les gestes de l'app famille (172 écrans × 6 variantes) prenaient environ 50 min dans une seule tâche, et
     # faisaient toute la durée de la CI : ils sont coupés en 3 tâches parallèles de 2 variantes chacune (~17 min).
-    timeout-minutes: 90
+    # Tâche la plus longue : ~17 min (gestes, 2 variantes). Limite au double environ.
+    timeout-minutes: 35
     # Image officielle de Playwright 1.56.1 (même version que le package.json) : navigateurs et paquets système
     # déjà dedans. L'apt des runners (110 ko/s le 18/11) prenait jusqu'à 21 min et faisait couper des jobs.
     container:
@@ -45,7 +46,10 @@ jobs:
           - '--double famille admin'
           - '--appui famille admin'
           - '--boutons famille admin'
-          - '--identifiants admin famille'
+          # Identifiants : l'admin et l'app famille dans deux tâches parallèles (~10 et ~13 min) au lieu d'une de 23 min
+          # (19/11) ; chacune passe une fois, comme avant (« --identifiants admin famille » = admin puis famille).
+          - '--identifiants admin'
+          - '--identifiants famille'
           - '--accessibilite famille admin'
           - 'famille admin'
           # App et admin dans WebKit (moteur de Safari) en iPhone SE et iPhone 15 : simulé, pas un vrai iPhone.

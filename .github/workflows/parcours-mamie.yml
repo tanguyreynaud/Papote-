@@ -25,7 +25,8 @@ env:
 jobs:
   parcours-mamie:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # ~10 min attendues (19/11) : le double.
+    timeout-minutes: 20
     # Image officielle de Playwright 1.63.0 (même version que le package.json) : navigateurs et paquets système
     # déjà dedans. L'apt des runners (110 ko/s le 18/11) prenait jusqu'à 21 min et faisait couper des jobs.
     container:

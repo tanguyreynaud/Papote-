@@ -258,6 +258,10 @@ if [ "$SECRETS_SEULS" = 0 ]; then
       npm_pret tests/regles
       etape "Règles Firestore et Storage (tests/regles)" bash -c 'cd tests/regles && npm test'
     fi
+    # La CI coupe les scénarios en morceaux parallèles : un scénario ajouté mais rangé dans aucun morceau la rend rouge.
+    if touche '^tests/app-famille/(scenarios/|morceaux\.js)'; then
+      etape "App famille : chaque scénario dans exactement un morceau (morceaux.js)" node tests/app-famille/morceaux.js verifier
+    fi
     SCENARIOS=$(echo "$FICHIERS" | grep -E '^tests/app-famille/scenarios/[^/]+\.test\.js$' | sed 's#^tests/app-famille/##' | while read -r f; do [ -f "tests/app-famille/$f" ] && echo "$f"; done | tr '\n' ' ')
     if [ "$COMPLET" = 1 ] && touche '^(web/|firestore\.rules|storage-eu\.rules|tests/app-famille/)'; then
       npm_pret tests/app-famille
