@@ -1639,7 +1639,15 @@
   function markShown(b) {
     var key = 'bday-' + dayKey() + '-' + b.id;
     bdayShown[key] = true;
-    try { window.localStorage.setItem(key, '1'); } catch (e) { /* tant pis */ }
+    try {
+      // Les marques des jours passés sont effacées : sinon une de plus par anniversaire, à vie.
+      var prefixe = 'bday-' + dayKey() + '-';
+      for (var i = window.localStorage.length - 1; i >= 0; i--) {
+        var k = window.localStorage.key(i);
+        if (k && k.indexOf('bday-') === 0 && k.indexOf(prefixe) !== 0) window.localStorage.removeItem(k);
+      }
+      window.localStorage.setItem(key, '1');
+    } catch (e) { /* tant pis */ }
   }
 
   function renderBirthdayBanner() {
@@ -2025,6 +2033,8 @@
   function stopRingback() {
     clearInterval(ringbackTimer);
     ringbackTimer = null;
+    // Le moteur de son s'endort entre deux appels (startRingback le réveille) : sinon il tourne à vide.
+    try { if (ringbackCtx && ringbackCtx.suspend) ringbackCtx.suspend(); } catch (e) { }
   }
 
   function closeCallScreen() {
@@ -3031,6 +3041,19 @@
       lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1;
       src.connect(gain); gain.connect(lim); lim.connect(voixCtx.destination);
       a.papoteRenfort = true;
+      // Une voix (lecteur créé pour une seule lecture) : ses branchements sont défaits à la fin, sinon
+      // ils s'empilent en mémoire jusqu'au rechargement du dimanche. Pas les vidéos : leur lecteur ressert.
+      if (!a.tagName || a.tagName === 'AUDIO') {
+        var debrancher = function () {
+          a.removeEventListener('ended', debrancher);
+          a.removeEventListener('error', debrancher);
+          a.removeEventListener('pause', debrancher);
+          try { src.disconnect(); gain.disconnect(); lim.disconnect(); } catch (e) { }
+        };
+        a.addEventListener('ended', debrancher);
+        a.addEventListener('error', debrancher);
+        a.addEventListener('pause', debrancher); // coupée par une autre voix : jamais reprise
+      }
     } catch (e) { /* sans Web Audio : volume normal */ }
     return a;
   }
