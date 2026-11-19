@@ -17,7 +17,9 @@ const { db: base } = require('./base');
 
 // Appli web Firebase de Papote (même identifiant que l'app famille et appels.js).
 const APP_ID = '1:807031084851:web:b8048e2952cb1e893b1046';
-const DUREE_MS = 60 * 60_000;
+// Jeton App Check de la tablette : 12 h (Firebase accepte 30 min à 7 jours). La tablette le renouvelle à la moitié de
+// sa vie + 5 min : 3 à 4 demandes par jour au lieu de 40 avec 1 h (Tanguy 19/11 : tout minimiser, coût Firebase).
+const DUREE_MS = 12 * 60 * 60_000;
 const JOUR_MS = 86_400_000;
 
 const empreinte = (cle) => crypto.createHash('sha256').update(cle).digest('hex');
