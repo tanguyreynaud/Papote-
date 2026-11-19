@@ -1,5 +1,6 @@
 // La tablette pendant un appel : une vraie liaison WebRTC (caméra et micro simulés par Chromium),
-// dans une page à part. La signalisation suit le protocole de web/js/appel.js et de la tablette :
+// dans une page à part, toujours dans Chromium comme la WebView de la vraie tablette Android (même quand les
+// téléphones sont des iPhone, sous WebKit : voir banc.js, navigateurAndroid). La signalisation suit le protocole de web/js/appel.js et de la tablette :
 // families/{fid}/calls/{cid} (offer, answer, state) et ses sous-collections callerCandidates /
 // calleeCandidates, écrite ici avec les droits du serveur, comme le fait l'appli Android.
 
@@ -28,7 +29,7 @@ async function attendre(fn, message, delai = 20_000) {
 
 /** Une tablette prête à téléphoner : { page, fid, tab }. */
 async function ouvrir(fid, tab) {
-  const t = await banc.telephone('Tablette (appels)');
+  const t = await banc.telephone('Tablette (appels)', { android: true });
   await t.page.goto(`${banc.origine}/__vide.html`);
   return { ...t, fid, tab };
 }
@@ -89,7 +90,7 @@ async function decrocher(tablette, cid) {
   const answer = await avecDelai(tablette.page.evaluate(async ({ offer, preparer }) => {
     // eslint-disable-next-line no-eval
     await (0, eval)(`(${preparer})`)();
-    // Image 4:3 comme la caméra de la tablette (la fausse caméra de WebKit n'a pas la même forme que celle de Chromium).
+    // Image 4:3 comme la caméra de la tablette.
     const flux = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
     flux.getTracks().forEach((t) => window.pc.addTrack(t, flux));
     await window.pc.setRemoteDescription(offer);

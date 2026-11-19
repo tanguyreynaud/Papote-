@@ -74,7 +74,8 @@ jobs:
       # Tests sans navigateur ni émulateur : réseau mobile de l'admin (opérateur par fréquence, « Vu » sur l'alerte).
       - run: node --test ../reseau.test.mjs
       - run: npm ci
-      - run: npx playwright install ${{ matrix.moteur }}
+      # Sous WebKit, la tablette simulée reste dans Chromium, comme la WebView de la vraie tablette Android (banc.js).
+      - run: npx playwright install ${{ matrix.moteur == 'webkit' && 'webkit chromium' || 'chromium' }}
       - run: npm test
       - name: Captures en cas d'échec
         if: failure()

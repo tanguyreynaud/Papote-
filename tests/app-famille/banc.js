@@ -238,6 +238,14 @@ function demarrerServeur() {
 // ---------- Navigateur ----------
 
 let navigateur;
+// La tablette de Mamie est une tablette Android : son app tourne dans une WebView, donc dans Chromium, quel que soit
+// le téléphone du proche. Sous WebKit, la tablette simulée (tablette.js) s'ouvre donc dans un Chromium à part.
+// Avant, elle s'ouvrait dans le WebKit des iPhone : quand elle appelait, les vérifications ICE du proche lui
+// arrivaient avant sa réponse (setRemoteDescription) et le WebKit de Playwright laissait alors parfois
+// `connectionState` à « connecting » pour toujours, ICE et DTLS pourtant connectés (getStats) : « Tablette : liaison
+// non établie » (audit/tests-instables-18-11.md, point 6). Un défaut d'un moteur que la vraie tablette n'a pas.
+let navigateurAndroid;
+const ARGS_CHROMIUM = ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'];
 const telephones = [];
 // Requêtes vers internet coupées (ni Google, ni météo, ni radio) : gardées pour information.
 const sorties = new Set();
@@ -350,10 +358,13 @@ function NOTER_TOASTS() {
  * Un téléphone : un navigateur à part, comme le téléphone d'un proche.
  * options : { largeur, hauteur, hauteurEcran } (iPhone 13 par défaut) ; fuseau : fuseau horaire (heure de Paris par
  * défaut), pour qu'il soit une autre heure sur cet appareil sans toucher à l'horloge (comptes, serveur).
+ * android : un appareil Android (la tablette), ouvert dans Chromium même quand les téléphones sont des iPhone.
  */
-async function telephone(nom, { largeur, hauteur, fuseau = 'Europe/Paris' } = {}) {
+async function telephone(nom, { largeur, hauteur, fuseau = 'Europe/Paris', android = false } = {}) {
+  const webkit = WEBKIT && !android;
+  if (WEBKIT && android && !navigateurAndroid) navigateurAndroid = await playwright.chromium.launch({ args: ARGS_CHROMIUM });
   let reglages;
-  if (!WEBKIT) {
+  if (!webkit) {
     reglages = {
       viewport: { width: largeur || 390, height: hauteur || 844 },
       userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36',
@@ -370,17 +381,17 @@ async function telephone(nom, { largeur, hauteur, fuseau = 'Europe/Paris' } = {}
     const { defaultBrowserType, ...iphone } = playwright.devices[APPAREIL];
     reglages = { ...iphone, viewport: largeur ? { width: largeur, height: hauteur } : iphone.viewport };
   }
-  const context = await navigateur.newContext({
+  const context = await (webkit || !WEBKIT ? navigateur : navigateurAndroid).newContext({
     ...reglages,
     locale: 'fr-FR',
     timezoneId: fuseau,
     serviceWorkers: 'block',
   });
   // Caméra et micro permis, comme Chromium avec --use-fake-ui-for-media-stream (le proche a dit « Autoriser »).
-  if (WEBKIT) await context.grantPermissions(['camera', 'microphone']);
+  if (webkit) await context.grantPermissions(['camera', 'microphone']);
   // Safari d'iPhone n'a pas le plein écran d'un élément (seulement celui d'une vidéo, webkitEnterFullscreen), que le
   // WebKit de Playwright (Linux) a : on l'enlève, pour que l'app prenne le chemin d'un iPhone.
-  if (WEBKIT && reglages.isMobile) {
+  if (webkit && reglages.isMobile) {
     await context.addInitScript(() => {
       for (const nom of ['requestFullscreen', 'webkitRequestFullscreen', 'webkitRequestFullScreen']) delete Element.prototype[nom];
       Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => false, configurable: true });
@@ -447,12 +458,12 @@ function brancher() {
     navigateur = WEBKIT
       // WebKit de Playwright : caméra et micro simulés d'office (MockCaptureDevices), autorisés sans question.
       ? await playwright.webkit.launch()
-      : await playwright.chromium.launch({
-        args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
-      });
+      : await playwright.chromium.launch({ args: ARGS_CHROMIUM });
   });
   test.after(async () => {
     await navigateur?.close();
+    await navigateurAndroid?.close();
+    navigateurAndroid = null;
     await new Promise((r) => serveur.close(r));
     await s.arreter();
   });
