@@ -1,6 +1,6 @@
 // Redémarrer la tablette à la main (Tanguy, 18/11) : volume bas tenu 10 s, Android (MainActivity,
 // Redemarrage.java) appelle Papote.demanderRedemarrage ; fenêtre « Redémarrer la tablette ? » Oui / Non.
-// Oui : redémarrage (un seul, même au double toucher). Non ou 20 s sans réponse : fermeture, notée au
+// Oui : redémarrage (un seul, même au double toucher). Non ou 1 minute sans réponse : fermeture, notée au
 // journal par Android. Jamais pendant un appel ni un SOS.
 // Lancement : node --test android/tests/
 const test = require('node:test');
@@ -39,7 +39,7 @@ test('Redémarrer : la fenêtre s\'ouvre, Oui redémarre une seule fois même au
     assert.strictEqual((await b.appels('redemarrer')).length, 1, 'un seul redémarrage');
     assert.match(await b.texte('#redemarrer-titre'), /La tablette redémarre/);
     assert.ok(await b.page.evaluate(() => document.getElementById('redemarrer-non').disabled), 'Non coupé après Oui');
-    await b.avancer(30000);
+    await b.avancer(90000);
     assert.ok(await b.visible('#redemarrer'), 'reste affichée jusqu\'à l\'extinction');
     assert.deepStrictEqual(await noms(b, 'redemarrageNon'), [], 'pas de « Non » noté après Oui');
   } finally { await b.fermer(); }
@@ -56,14 +56,14 @@ test('Redémarrer : Non ferme la fenêtre sans redémarrer, et Android le note',
   } finally { await b.fermer(); }
 });
 
-test('Redémarrer : 20 s sans réponse, la fenêtre se ferme toute seule', async () => {
+test('Redémarrer : 1 minute sans réponse, la fenêtre se ferme toute seule (comme Non)', async () => {
   const b = await tablette();
   try {
     await b.android('demanderRedemarrage', {});
-    await b.avancer(19000);
-    assert.ok(await b.visible('#redemarrer'), 'encore là à 19 s');
+    await b.avancer(59000);
+    assert.ok(await b.visible('#redemarrer'), 'encore là à 59 s');
     await b.avancer(1500);
-    assert.ok(!(await b.visible('#redemarrer')), 'fermée après 20 s');
+    assert.ok(!(await b.visible('#redemarrer')), 'fermée après 1 minute');
     assert.deepStrictEqual(await noms(b, 'redemarrageNon'), ['sans réponse']);
     assert.strictEqual((await b.appels('redemarrer')).length, 0);
   } finally { await b.fermer(); }

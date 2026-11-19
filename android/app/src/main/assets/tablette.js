@@ -3127,9 +3127,9 @@
 
   // ---------- Redémarrer la tablette (volume bas tenu 10 s, Tanguy 18/11) ----------
   // Android (MainActivity, Redemarrage.java) appelle Papote.demanderRedemarrage après 10 s d'appui sur
-  // volume bas. Oui : la tablette redémarre (jamais d'extinction). Non, ou 20 s sans réponse : la fenêtre
+  // volume bas. Oui : la tablette redémarre (jamais d'extinction). Non, ou 1 minute sans réponse (Tanguy, 19/11) : la fenêtre
   // se ferme. Jamais pendant un appel ni un SOS. Si la page ne répond pas, Android dessine la même fenêtre.
-  var REDEMARRER_MS = 20000;
+  var REDEMARRER_MS = 60000;
   var sosDit = null; // dernier état du SOS dit à Android (null : rien dit depuis le chargement)
   var redemarrerEl = null, redemarrerTimer = null, redemarrerLance = false;
   var REDEMARRER_TITRE = 'Redémarrer la tablette ?';
