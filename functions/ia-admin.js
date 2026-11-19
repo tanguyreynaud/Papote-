@@ -24,7 +24,7 @@ const path = require('path');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 // Pour l'e-mail « clé IA refusée » à Papote (cle-ia.js).
 const MAIL_MOT_DE_PASSE = defineSecret('MAIL_MOT_DE_PASSE');
-const MODELE = 'claude-haiku-5-5';
+const MODELE = 'claude-sonnet-5-5';
 const QUOTA_JOUR = 40; // questions par jour, tous admins confondus
 const MAX_QUESTION = 500;
 const MAX_TOKENS = 700; // trois à cinq étapes courtes

@@ -102,7 +102,7 @@ test('répond avec le guide et l’état du parc, et n’écrit que le compteur 
   assert.deepStrictEqual(r, { ok: true, reponse: '1. Ouvrez la tablette. [Ouvrir](#tablette/T-001)' });
   assert.deepStrictEqual(base.ecrits, ['iaAdminQuota/2026-10-26']);
   const corps = f.appels[0];
-  assert.strictEqual(corps.model, 'claude-haiku-5-5');
+  assert.strictEqual(corps.model, 'claude-sonnet-5-5');
   assert.ok(corps.max_tokens <= 1000);
   // Le guide est fixe et mis en cache ; l'état du parc vient après.
   assert.strictEqual(corps.system[1].text, GUIDE);
