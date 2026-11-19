@@ -26,6 +26,11 @@ jobs:
   parcours-mamie:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    # Image officielle de Playwright 1.63.0 (même version que le package.json) : navigateurs et paquets système
+    # déjà dedans. L'apt des runners (110 ko/s le 18/11) prenait jusqu'à 21 min et faisait couper des jobs.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
     defaults:
       run:
         working-directory: tests/parcours-mamie
@@ -33,6 +38,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # Conteneur : le dossier appartient au runner, git (preparer.js, git archive) le refuserait sans ceci.
+      - run: git config --global --add safe.directory '*'
+        working-directory: .
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -44,13 +52,22 @@ jobs:
           java-version: 21
           cache: maven
           cache-dependency-path: tests/parcours-mamie/tablette-jvm/pom.xml
+      # Maven (tablette-jvm) : là d'office sur les runners, pas dans l'image de Playwright.
+      - name: Maven
+        working-directory: .
+        run: |
+          curl -sSfL --retry 3 https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz | tar -xz -C /opt
+          echo /opt/apache-maven-3.9.9/bin >> "$GITHUB_PATH"
+          # Dans le conteneur, Java prend /root comme dossier personnel et Node $HOME (/github/home) : preparer.js
+          # cherche les bibliothèques dans $HOME/.m2 (os.homedir()), Maven doit donc les y ranger.
+          echo "MAVEN_ARGS=-Dmaven.repo.local=$HOME/.m2/repository" >> "$GITHUB_ENV"
       - uses: actions/cache@v4
         with:
           path: ~/.cache/firebase/emulators
           key: emulateurs-firebase-14
       - run: npm ci
         working-directory: tests/app-famille
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install chromium
         working-directory: tests/app-famille
       - run: npm test
       - name: Captures en cas d'échec

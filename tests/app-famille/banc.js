@@ -251,7 +251,10 @@ const TOLERE = [
   // Fermeture du canal d'écriture Firestore (TYPE=terminate) quand le banc ferme la page ou l'émulateur
   // pendant un envoi : simple ménage du SDK, refusé (400) par l'émulateur. Vu 1 fois sur 4 dans mauvais-jours (12/11).
   // (le motif est essayé sur « message (adresse) »)
-  /status of 400 \(Bad Request\) \(http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/Write\/channel\?[^)]*TYPE=terminate/,
+  // Même ménage pour le canal d'écoute (Listen, TYPE=terminate) quand l'app change de famille ou se déconnecte et
+  // arrête ses écoutes : l'émulateur a parfois déjà fermé la session et répond 400. Vu 1 fois dans « Deux familles »
+  // (Chromium, 18/11) : rien de l'app, seulement l'adieu du SDK à une session finie (audit/tests-instables-18-11.md).
+  /status of 400 \(Bad Request\) \(http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/(Write|Listen)\/channel\?[^)]*TYPE=terminate/,
   // Les mêmes, avec les mots de Safari (WebKit) : réseau coupé exprès, requête coupée par le banc.
   ...(WEBKIT ? [
     /Failed to load resource: (The Internet connection appears to be offline|The network connection was lost|Could not connect to the server|A server with the specified hostname could not be found|cancelled)\.?/i,
@@ -328,6 +331,21 @@ async function routerInternet(context) {
   });
 }
 
+// Note dans window.__toastsVus chaque texte du petit message (#toast) au moment où il est affiché : { texte, a }.
+function NOTER_TOASTS() {
+  if (window.top !== window || window.__toastsVus) return;
+  window.__toastsVus = [];
+  const brancher = () => {
+    const el = document.getElementById('toast');
+    if (!el) return;
+    const noter = () => { if (!el.hidden && el.textContent) window.__toastsVus.push({ texte: el.textContent, a: Date.now() }); };
+    new MutationObserver(noter).observe(el, { attributes: true, attributeFilter: ['hidden'], childList: true, characterData: true, subtree: true });
+    noter();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', brancher, { once: true });
+  else brancher();
+}
+
 /**
  * Un téléphone : un navigateur à part, comme le téléphone d'un proche.
  * options : { largeur, hauteur, hauteurEcran } (iPhone 13 par défaut) ; fuseau : fuseau horaire (heure de Paris par
@@ -369,6 +387,10 @@ async function telephone(nom, { largeur, hauteur, fuseau = 'Europe/Paris' } = {}
     });
   }
   await routerInternet(context);
+  // Chaque petit message (#toast) affiché est noté dans la page (window.__toastsVus) : il ne reste que 2,5 s à
+  // l'écran, et une CI chargée pouvait le laisser apparaître et disparaître entre deux regards de Playwright
+  // (gestes.js toast, audit/tests-instables-18-11.md).
+  await context.addInitScript(NOTER_TOASTS);
   const page = await context.newPage();
   const t = {
     nom, context, page, erreurs: [], console: [],

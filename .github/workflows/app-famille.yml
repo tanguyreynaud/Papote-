@@ -38,6 +38,11 @@ jobs:
             appareil: iPhone SE (3rd gen)
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    # Image officielle de Playwright 1.63.0 (même version que le package.json) : navigateurs et paquets système
+    # déjà dedans. L'apt des runners (110 ko/s le 18/11) prenait jusqu'à 21 min et faisait couper des jobs.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
     env:
       PAPOTE_MOTEUR: ${{ matrix.moteur }}
       PAPOTE_APPAREIL: ${{ matrix.appareil }}
@@ -50,6 +55,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # Conteneur : le dossier appartient au runner, git (preparer.js, git archive) le refuserait sans ceci.
+      - run: git config --global --add safe.directory '*'
+        working-directory: .
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -66,7 +74,7 @@ jobs:
       # Tests sans navigateur ni émulateur : réseau mobile de l'admin (opérateur par fréquence, « Vu » sur l'alerte).
       - run: node --test ../reseau.test.mjs
       - run: npm ci
-      - run: npx playwright install --with-deps ${{ matrix.moteur }}
+      - run: npx playwright install ${{ matrix.moteur }}
       - run: npm test
       - name: Captures en cas d'échec
         if: failure()

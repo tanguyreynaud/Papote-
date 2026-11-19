@@ -33,6 +33,11 @@ jobs:
     # Les gestes de l'app famille (172 écrans × 6 variantes) prenaient environ 50 min dans une seule tâche, et
     # faisaient toute la durée de la CI : ils sont coupés en 3 tâches parallèles de 2 variantes chacune (~17 min).
     timeout-minutes: 90
+    # Image officielle de Playwright 1.56.1 (même version que le package.json) : navigateurs et paquets système
+    # déjà dedans. L'apt des runners (110 ko/s le 18/11) prenait jusqu'à 21 min et faisait couper des jobs.
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -72,9 +77,8 @@ jobs:
           node-version: 22
       # Pas de package-lock.json dans outils/ (.gitignore) : npm install, pas npm ci.
       - run: npm install --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
-      - if: contains(matrix.mode, '--iphone')
-        run: npx playwright install --with-deps webkit
+      # Déjà dans l'image (rien n'est téléchargé) ; ne servirait que si la version du package changeait sans l'image.
+      - run: npx playwright install chromium ${{ contains(matrix.mode, '--iphone') && 'webkit' || '' }}
       - name: Balayage ${{ matrix.mode }} ${{ matrix.variantes }}
         env:
           GESTES_VARIANTES: ${{ matrix.variantes }}

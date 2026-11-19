@@ -4,6 +4,17 @@ L'app famille (`web/`) est ouverte dans un vrai navigateur (Chromium sans écran
 `WEBKIT.md`) et utilisée comme un proche le ferait : inscription, installation de la tablette, photos, messages, appels…
 Tout tourne sur l'ordinateur, sur les émulateurs Firebase : rien n'est envoyé en ligne, rien n'est payant.
 
+## Avant chaque push d'un fil
+
+**`outils/verifier-avant-pousser.sh`** (depuis la racine du dépôt, en bash) : secrets (gitleaks, comme la CI
+« Secrets »), balayage accessibilité de l'app famille et/ou de l'admin selon les fichiers de `web/` touchés (galerie
+de main, comme `balayages.yml`), tests des règles si elles bougent, et les scénarios d'ici qui ont changé.
+`--complet` lance en plus tous les scénarios (une dizaine de minutes). Code 1 au moindre échec : on ne pousse pas.
+
+Un toast (petit message en bas, 2,5 s) s'attend avec `g.toast(t, 'texte')`, jamais avec
+`locator('#toast').waitFor()` : chaque toast affiché est noté par la page (`banc.js`, `NOTER_TOASTS`), il ne peut
+donc pas être raté entre deux regards de Playwright (voir l'audit `tests-instables-18-11.md`).
+
 ## Lancer
 
 ```

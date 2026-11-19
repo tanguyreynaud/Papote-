@@ -348,7 +348,7 @@ test('Réglages > Ce téléphone : chaque toucher sur Notifications et Arrière-
   // (au doigt sur le texte de la ligne : Playwright refuse de cliquer une ligne dont l'interrupteur est grisé)
   const ligne = await julie.page.locator('#phone-push-text').boundingBox();
   await julie.page.touchscreen.tap(ligne.x + 20, ligne.y + ligne.height / 2);
-  await julie.page.locator('#toast').filter({ hasText: await julie.page.locator('#phone-push-text').innerText() }).waitFor({ state: 'visible' });
+  await g.toast(julie, await julie.page.locator('#phone-push-text').innerText());
   assert.strictEqual(await julie.page.locator('#phone-pause').isVisible(), false, 'pas d\'arrière-plan hors de l\'app Android');
 
   // App Android, notifications permises et pas de pause : les deux allumés ; les toucher le dit, sans rien éteindre.
