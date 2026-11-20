@@ -154,12 +154,11 @@ test('Double appui sur « Décrocher » : le « Raccrocher » apparu sous le doi
   } finally { await b.fermer(); }
 });
 
-test('« Pas maintenant » refuse l’appel ; un appel non décroché se termine par « Julie a appelé »', async () => {
+test('un appel non décroché se termine par « Julie a appelé »', async () => {
   const b = await tablette();
   try {
     await b.android('onGsm', { etat: 'sonne', sortant: false, uid: 'julie', name: 'Julie' });
-    await b.toucher('.call-decline');
-    assert.strictEqual((await b.appels('phoneHangup')).length, 1);
+    assert.strictEqual(await b.page.locator('.call-decline').count(), 0, 'plus de « Pas maintenant »');
     await b.android('onGsm', { etat: 'fin', sortant: false, cause: 'refuse', uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /Julie a appelé/);
     await b.avancer(4500);

@@ -2015,7 +2015,6 @@ html body.night .home-left .radio-btn.playing { background: #c9c3f2; color: #312
 html .call-out .call-buttons { grid-column: 1; grid-row: 6; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 3vmin; margin: 0 0 6vmin; }
 html .call-out .call-buttons .call-hangup { margin: 0; }
 html .call-out .call-hangup.call-answer { background: #166534; box-shadow: 0 1vmin 2.5vmin rgba(22, 101, 52, .35); }
-html .call-out .call-decline { border: 0; background: transparent; color: #5b5794; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 5.5vmin; font-weight: 700; padding: 2vmin 4vmin; }
 
 /* Redémarrage sans aucun réseau (04/11) : une carte calme à la place de l'heure, de la météo et des
    boutons, qui ne peuvent rien faire sans réseau. Les photos restent à droite. */

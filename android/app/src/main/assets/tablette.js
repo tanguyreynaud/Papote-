@@ -2233,11 +2233,9 @@
 
   var raccrochage = 0;
   function gsmHangup() {
-    // Double touche sur « Pas maintenant » : un seul raccrochage (le 2e disait à tort « plus d'appel »).
+    // Double touche sur « Raccrocher » : un seul raccrochage (le 2e disait à tort « plus d'appel »).
     if (Date.now() - raccrochage < 1500) return;
     raccrochage = Date.now();
-    // « Pas maintenant » : Mamie a vu qui appelait, pas de carte « a essayé de vous appeler ».
-    if (gsm && !gsm.sortant && !gsm.enLigne) gsm.refuse = true;
     var ok = false;
     if (android() && android().phoneHangup) { try { ok = android().phoneHangup() !== false; } catch (e) { ok = false; } }
     if (ok) return;
@@ -2384,10 +2382,9 @@
       if (android() && android().phoneAnswer) { try { android().phoneAnswer(); } catch (e) { } }
       yes.disabled = true;
     });
-    var no = el2('button', 'call-decline', 'Pas maintenant');
-    on(no, 'click', gsmHangup);
+    // Plus de « Pas maintenant » (Tanguy, 20/11) : un seul bouton, Mamie ne refuse pas l'appel par erreur.
+    // Un appel qu'elle ne prend pas finit en carte « … a essayé de vous appeler ».
     row.appendChild(yes);
-    row.appendChild(no);
     callScreen.appendChild(row);
     if (android() && android().ring) android().ring(true);
   }
@@ -2454,7 +2451,7 @@
       if (repondu) {
         gsmFinish('Appel terminé', '', false, true);
       } else if (!gsm.sortant) {
-        if (!gsm.refuse) essaiAppel(gsm.uid, gsm.name || etat.name);
+        essaiAppel(gsm.uid, gsm.name || etat.name);
         gsmFinish(who + ' a appelé', '', false, false);
       } else if (etat.cause === 'occupe') {
         gsmFinish(who + ' est déjà en ligne', 'Réessayez dans un moment.', true, false);
