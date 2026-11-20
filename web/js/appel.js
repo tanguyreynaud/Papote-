@@ -312,7 +312,11 @@ export async function startCall(fid, caller, ui) {
   // Deux proches qui appellent au même instant passent tous deux la vérification d'avant la caméra (audit du 19/11) :
   // l'appel écrit le premier garde la tablette, l'autre s'efface et entend « déjà en communication » au lieu de sonner
   // dans le vide puis de lire « n'a pas répondu ». Même instant au serveur : le plus petit identifiant l'emporte.
-  const autrePremier = await premierAutreAppel(fid, callRef.id).catch(() => false);
+  // 3 s au plus : un réseau lent (ou une lecture qui ne revient pas) ne doit jamais empêcher l'appel de sonner.
+  const autrePremier = await Promise.race([
+    premierAutreAppel(fid, callRef.id).catch(() => false),
+    new Promise((r) => setTimeout(() => r(false), 3_000)),
+  ]);
   if (autrePremier) {
     pc.close();
     sent.stop();
