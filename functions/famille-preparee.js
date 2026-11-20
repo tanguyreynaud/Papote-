@@ -142,7 +142,8 @@ function brancher({ db, logger, villeAvecCoordonnees = installation.villeAvecCoo
       const email = c.email ? String(c.email).toLowerCase() : null;
       tx.set(famille, {
         name: NOM_D_ATTENTE, nomAChoisir: true, code: invite, createdBy: null, createdAt: FieldValue.serverTimestamp(),
-        proprietaireEmail: email, options: installation.OPTIONS_PAR_DEFAUT, volumeSonnerie: 100, rev: 1,
+        proprietaireEmail: email, options: installation.OPTIONS_PAR_DEFAUT, volumeSonnerie: 100,
+        luminosite: installation.LUMINOSITE_PAR_DEFAUT, rev: 1,
         // Remplacé tout de suite par l'abonnement de la commande (appliquer, juste après).
         abonnement: { statut: 'installation', majLe: FieldValue.serverTimestamp() },
         ...(ville ? { meteoVille: ville } : {}),
