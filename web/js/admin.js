@@ -215,8 +215,11 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       prevenir(`Commande enregistrée, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
     }
   };
-  return [
-    {
+  // Groupes montrés dans la liste des étapes (style du 20/11) : les noms se lisent en entier, rangés par moment.
+  const GROUPES = { mode: 'Tablette et carte SIM', tablette: 'Tablette et carte SIM', sim: 'Tablette et carte SIM', 'sim-installer': 'Tablette et carte SIM',
+    'hors-forfait': 'Tablette et carte SIM', blocages: 'Tablette et carte SIM', carton: 'Le colis', 'enceinte-choix': 'Le colis', fermer: 'Le colis',
+    feutre: 'Le colis', etiquette: 'L\'envoi', depot: 'L\'envoi', remise: 'L\'envoi' };
+  return [    {
       cle: 'mode',
       titre: 'Envoi ou main propre ?',
       texte: 'Comment la tablette arrive-t-elle chez la famille ?',
@@ -672,7 +675,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         await sortirDuStock(e);
       },
     },
-  ];
+  ].map((e) => ({ ...e, groupe: GROUPES[e.cle] }));
 }
 
 // Bouton « Préparer l'envoi » de la page d'une commande (gestion.js).

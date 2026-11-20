@@ -31,7 +31,7 @@ function fenetre() {
     el('div', { class: 'pc-corps' }),
     el('p', { class: 'pc-erreur error', hidden: true }),
     el('div', { class: 'pc-pied' },
-      el('button', { type: 'button', class: 'link pc-retour' }, '← Étape précédente'),
+      el('button', { type: 'button', class: 'secondary pc-retour' }, '‹ Précédente'),
       el('button', { type: 'button', class: 'primary pc-suivant' }, 'C\'est fait')));
   dialogue.querySelector('.fermer').addEventListener('click', () => dialogue.close());
   document.body.append(dialogue);
@@ -58,14 +58,21 @@ export function ouvrirParcours({ titre, etapes, etat, sauver, fin }) {
     const liste = visibles();
     const e = liste[i];
     erreur.hidden = true;
-    d.querySelector('.pc-etapes').replaceChildren(...liste.map((x, n) => el('li', {
-      class: n < i ? 'fait' : n === i ? 'actuelle' : '',
-      title: x.titre,
-    }, el('span', {}, n < i ? '✓' : String(n + 1)), el('em', {}, x.titre))));
+    // Liste des étapes, noms en entier, rangées par groupe (« Tablette et carte SIM », « Le colis »…) quand il y en a.
+    d.querySelector('.pc-etapes').replaceChildren(...liste.flatMap((x, n) => [
+      x.groupe && (n === 0 || liste[n - 1].groupe !== x.groupe) ? el('li', { class: 'pc-groupe', 'aria-hidden': 'true' }, x.groupe) : null,
+      el('li', { class: n < i ? 'fait' : n === i ? 'actuelle' : '', 'aria-current': n === i ? 'step' : null },
+        el('span', {}, n < i ? '✓' : String(n + 1)), el('em', {}, x.titre)),
+    ]).filter(Boolean));
+    d.classList.remove('etapes-ouvertes');
     const cases = ((typeof e.cases === 'function' ? e.cases(etat) : e.cases) || []).map((texte) => el('label', { class: 'pc-case' },
       el('input', { type: 'checkbox', checked: !!etat.faits[e.cle], onchange: majBouton }), el('span', {}, texte)));
     corps.replaceChildren(...[
-      el('p', { class: 'pc-numero muted small' }, `Étape ${i + 1} sur ${liste.length}`),
+      el('div', { class: 'pc-ou' },
+        el('p', { class: 'pc-numero muted small' }, `Étape ${i + 1} sur ${liste.length}${e.groupe ? ` · ${e.groupe}` : ''}`),
+        // Téléphone : la liste des étapes est repliée, ce lien la montre.
+        el('button', { type: 'button', class: 'link pc-voir', onclick: () => d.classList.toggle('etapes-ouvertes') }, 'Voir les étapes')),
+      el('div', { class: 'pc-barre', 'aria-hidden': 'true' }, liste.map((x, n) => el('i', { class: n < i ? 'fait' : n === i ? 'actuelle' : '' }))),
       el('h3', {}, e.titre),
       e.texte ? el('p', { class: 'pc-texte' }, typeof e.texte === 'function' ? e.texte(etat) : e.texte) : null,
       e.apres ? null : el('div', { class: 'pc-contenu' }),

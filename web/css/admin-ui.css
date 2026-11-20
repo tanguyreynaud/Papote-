@@ -515,3 +515,65 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 .admin-body .contenu .alerte-couverture .boutons-couverture > button { flex: none; min-height: 30px; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 700; background: #fff; border: 1px solid var(--line); color: var(--text); }
 .admin-body .contenu-tete .recherche { flex: none; width: 260px; max-width: 100%; }
 @media (max-width: 860px) { .admin-body .contenu-tete .recherche { width: 100%; } }
+
+/* ---------- Fenêtres ---------- */
+.admin-body .fenetre, .admin-body dialog.dialogue-papote { border-radius: 16px; box-shadow: 0 24px 70px rgba(36, 33, 47, .3); }
+.admin-body .fenetre-tete h2 { font: 700 17px var(--display); }
+.admin-body .fenetre .fermer { border: 0; background: none; border-radius: 10px; font-size: 16px; }
+
+/* ---------- Parcours pas à pas (envoi, réception) : la liste des étapes à gauche, l'étape en cours à droite ---------- */
+.admin-body .parcours { width: min(880px, calc(100vw - 24px)); height: min(600px, calc(100vh - 32px)); padding: 0; overflow: hidden; }
+.admin-body .parcours[open] { display: grid; grid-template-columns: 250px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.admin-body .parcours .fenetre-tete { grid-column: 1 / -1; margin: 0; padding: 12px 16px 12px 20px; border-bottom: 1px solid var(--line); }
+.admin-body .parcours .pc-etapes { grid-column: 1; grid-row: 2 / 5; display: block; margin: 0; padding: 14px 10px; background: #fbf8f2; border-right: 1px solid var(--line); overflow-y: auto; }
+.admin-body .parcours .pc-etapes li { flex: none; display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 14px; text-align: left; color: var(--muted); }
+.admin-body .parcours .pc-etapes li.pc-groupe { padding: 12px 8px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.admin-body .parcours .pc-etapes li.pc-groupe:first-child { padding-top: 0; }
+.admin-body .parcours .pc-etapes li span { width: 20px; height: 20px; flex: none; border: 2px solid #cfc7d9; font-size: 11px; background: none; color: var(--muted); }
+.admin-body .parcours .pc-etapes li em { white-space: normal; overflow: visible; }
+.admin-body .parcours .pc-etapes li.fait { color: var(--text); }
+.admin-body .parcours .pc-etapes li.fait span { background: var(--ok); border-color: var(--ok); color: #fff; }
+.admin-body .parcours .pc-etapes li.actuelle { background: var(--indigo-fond); color: var(--accent); font-weight: 700; }
+.admin-body .parcours .pc-etapes li.actuelle span { border-color: var(--accent); color: var(--accent); background: #fff; }
+.admin-body .parcours .pc-corps { grid-column: 2; grid-row: 2; padding: 20px 26px 8px; min-height: 0; }
+.admin-body .parcours .pc-erreur { grid-column: 2; margin: 0 26px 10px; }
+.admin-body .parcours .pc-pied { grid-column: 2; margin: 0; padding: 12px 16px; }
+.admin-body .parcours .pc-pied .pc-suivant { min-width: 0; font-size: 14px; }
+.pc-ou { display: flex; align-items: center; gap: 8px; }
+.admin-body .pc-ou .pc-numero { flex: 1; font-size: 13px; }
+.admin-body .pc-voir, .pc-barre { display: none; }
+.admin-body .pc-corps h3 { font: 700 22px var(--display); margin: 2px 0 6px; }
+.admin-body .pc-texte { font-size: 15px; color: var(--muted); }
+.admin-body .pc-contenu > select, .admin-body .pc-contenu > input, .admin-body .pc-champ input, .admin-body .pc-contenu select {
+  min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background-color: var(--surface); font-size: 14px; box-shadow: none;
+}
+.admin-body .pc-champ { font-size: 13px; font-weight: 700; }
+.admin-body .pc-case { gap: 12px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; font-weight: 400; }
+.admin-body .pc-case input { width: 20px; height: 20px; }
+.admin-body .pc-case:has(input:checked) { border-color: var(--ok); background: var(--vert-fond); }
+.admin-body .pc-liste, .admin-body .pc-sim-info, .admin-body .pc-sim-message { font-size: 14px; }
+.admin-body .pc-sim-coches li { padding: 8px 12px; font-size: 14px; border-radius: 10px; }
+.admin-body .pc-sim-coches li span { width: 20px; height: 20px; font-size: 12px; }
+.admin-body .pc-sim-boutons button { min-height: 40px; font-size: 14px; }
+.admin-body .pc-gros { font: 700 30px var(--display); border-width: 1px; }
+@media (max-width: 760px) {
+  /* Téléphone : plein écran ; une barre de progression, la liste des étapes derrière « Voir les étapes ». */
+  .admin-body .parcours { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+  .admin-body .parcours[open] { grid-template-columns: minmax(0, 1fr); }
+  .admin-body .parcours .pc-etapes { display: none; grid-column: 1; grid-row: 2; border-right: 0; }
+  .admin-body .parcours.etapes-ouvertes .pc-etapes { display: block; z-index: 1; }
+  .admin-body .parcours .pc-corps, .admin-body .parcours .pc-erreur, .admin-body .parcours .pc-pied { grid-column: 1; }
+  .admin-body .parcours .pc-corps { padding: 14px 16px 8px; }
+  .admin-body .pc-voir { display: inline; font-weight: 700; font-size: 13px; }
+  .pc-barre { display: flex; gap: 3px; margin: 8px 0 16px; }
+  .pc-barre i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+  .pc-barre i.fait { background: var(--ok); }
+  .pc-barre i.actuelle { background: var(--accent); }
+  .admin-body .parcours .pc-pied > button { flex: 1; min-height: 42px; }
+  .admin-body .parcours .pc-pied .pc-suivant { margin-left: 0; }
+}
+.admin-body .parcours { height: min(640px, calc(100vh - 32px)); }
+.admin-body .parcours .pc-etapes li { padding: 5px 8px; }
+.admin-body .parcours .pc-etapes li.pc-groupe { padding: 10px 8px 3px; }
+.admin-body .pc-voir { color: var(--accent); }
+@media (max-width: 760px) { .admin-body .parcours { height: 100dvh; } }
