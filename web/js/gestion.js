@@ -5071,7 +5071,15 @@ async function remplirClient(email) {
         p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']),
       { vide: 'Aucun paiement pour l\'instant.' });
     const total = lignes.filter((p) => p.statut === 'succeeded').reduce((s, p) => s + p.montant - (p.rembourse || 0), 0);
-    paiements.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(total)}`), h('div', { class: 'table cartes' }, table));
+    // Beaucoup de paiements (un par mois) : les 5 derniers d'abord, le reste à la demande.
+    const suite = [...table.querySelectorAll('tbody tr')].slice(5);
+    suite.forEach((tr) => { tr.hidden = true; });
+    const voir = suite.length ? h('button', { type: 'button', class: 'link small voir-suite', onclick: () => {
+      suite.forEach((tr) => { tr.hidden = false; });
+      voir.remove();
+    } }, `Voir les ${suite.length} paiement${suite.length > 1 ? 's' : ''} plus ancien${suite.length > 1 ? 's' : ''}`) : null;
+    paiements.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(total)}${lignes.length > 1 ? ` en ${lignes.length} paiements` : ''}`),
+      h('div', { class: 'table cartes paiements-courts' }, table), voir);
   } catch (e) {
     paiements.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
   }

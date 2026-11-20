@@ -503,6 +503,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       // de la tablette. Notés une fois sur la carte SIM (sims/{id}.blocages) : pas redemandés au prochain envoi.
       // Le serveur refuse l'étiquette et « Colis déposé » tant qu'ils ne sont pas tous notés.
       cle: 'blocages',
+      plusTard: true,
       titre: 'Blocages chez l\'opérateur',
       texte: 'Dans l\'espace client de la ligne (ou au service client de l\'opérateur), activez ces blocages, puis cochez :',
       // Notés pendant CE parcours : l'étape reste dans la liste, sinon les étapes se décalent d'un cran et
@@ -519,6 +520,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
     },
     {
       cle: 'carton',
+      plusTard: true,
       titre: 'La tablette dans le carton',
       saute: enMain,
       cases: (e) => [
@@ -567,6 +569,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
     },
     {
       cle: 'feutre',
+      plusTard: true,
       saute: enMain,
       titre: 'Le numéro au feutre',
       texte: 'Écrivez ce numéro au feutre sur le carton : il permet de retrouver la commande si l\'étiquette se décolle.',
