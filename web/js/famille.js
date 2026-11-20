@@ -3386,10 +3386,10 @@ function renderMembers(all) {
         more.textContent = '⋮';
         more.addEventListener('click', async () => {
           const options = [];
-          if (f.createdBy === session.uid) options.push({ label: m.enTete ? 'Retirer de la tête' : 'Mettre en tête', value: 'tete' });
-          options.push({ label: isAdmin ? 'Retirer le rôle de responsable' : 'Rendre responsable', value: 'admin' });
-          options.push({ label: 'Retirer de la famille', value: 'remove', danger: true });
-          const choix = await chooseAction(m.name, options);
+          if (f.createdBy === session.uid) options.push({ label: m.enTete ? 'Retirer de la tête' : 'Mettre en tête', value: 'tete', icone: 'haut' });
+          options.push({ label: isAdmin ? 'Retirer le rôle de responsable' : 'Rendre responsable', value: 'admin', icone: 'bouclier' });
+          options.push({ label: 'Retirer de la famille', value: 'remove', danger: true, icone: 'sortie' });
+          const choix = await chooseAction(m.name, options, { photo: faces[m.id] || '', sous: m.email || '' });
           if (choix === 'admin') {
             const msg = isAdmin
               ? `Retirer le rôle de responsable à ${m.name} ? Cette personne ne pourra plus accepter de membres, changer les réglages ni gérer l'abonnement.`
@@ -6016,8 +6016,9 @@ function renderActivity() {
         : `Elle est peut-être éteinte : demandez à ${name} de la brancher.`);
     const quoi = document.createElement('button');
     quoi.type = 'button';
-    quoi.className = 'link';
-    quoi.textContent = 'Que faire ?';
+    quoi.className = 'que-faire-btn';
+    quoi.innerHTML = '<svg aria-hidden="true"><use href="#i-help"/></svg>';
+    quoi.append('Que faire ?');
     quoi.addEventListener('click', async () => {
       if (await queFaireTablette(name, ago(online).replace('il y a ', '')) === 'depanner' && !papoteAller('depanner')) openPage('settings', false);
     });

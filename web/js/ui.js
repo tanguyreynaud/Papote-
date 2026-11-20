@@ -65,12 +65,19 @@ function dialog(message, buttons, extra = null) {
     // action(bouton) : le bouton agit sans fermer la fenêtre (elle change ensuite par l'api) ; sinon il la ferme.
     const poserBoutons = (liste) => {
       row.replaceChildren();
-      for (const { label, value, cls, action, disabled } of liste) {
+      for (const { label, value, cls, action, disabled, icone } of liste) {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = cls;
         b.disabled = !!disabled;
         b.textContent = label;
+        if (icone) {
+          const rond = document.createElement('span');
+          rond.className = 'menu-icone';
+          rond.setAttribute('aria-hidden', 'true');
+          rond.innerHTML = `<svg><use href="#i-${icone}"/></svg>`;
+          b.prepend(rond);
+        }
         b.addEventListener('click', (e) => {
           if (doublon(e) || e.timeStamp - nouveauxDepuis < DOUBLE_MS || b.disabled) return;
           toucherIci = e.timeStamp;
@@ -85,6 +92,19 @@ function dialog(message, buttons, extra = null) {
     h.className = 'dialog-title';
     h.textContent = extra?.title || '';
     if (extra?.title) box.append(h);
+    // Menu d'une personne : sa photo (ou son initiale), son prénom et son adresse en tête de la fenêtre.
+    if (extra?.title && extra.tete) {
+      const tete = document.createElement('div');
+      tete.className = 'dialog-tete';
+      const rond = document.createElement(extra.tete.photo ? 'img' : 'span');
+      rond.className = 'dialog-tete-photo';
+      if (extra.tete.photo) { rond.src = extra.tete.photo; rond.alt = ''; } else { rond.textContent = (extra.title.trim()[0] || '?').toUpperCase(); rond.setAttribute('aria-hidden', 'true'); }
+      const qui = document.createElement('div');
+      h.replaceWith(tete);
+      qui.append(h);
+      if (extra.tete.sous) { const s = document.createElement('p'); s.className = 'dialog-tete-sous'; s.textContent = extra.tete.sous; qui.append(s); }
+      tete.append(rond, qui);
+    }
     // Fenêtre qui change en restant ouverte (SOS : en cours, puis comment il s'est terminé) : titre, texte, boutons.
     extra?.api?.({
       titre: (t) => { h.textContent = t; if (!h.isConnected) box.prepend(h); },
@@ -215,11 +235,11 @@ export function fenetreSosSuivie(etat) {
 }
 
 /** Menu d'actions (bouton « ⋯ ») : renvoie la valeur choisie, ou false si annulé. */
-export function chooseAction(title, options) {
+export function chooseAction(title, options, tete = null) {
   return dialog('', [
-    ...options.map((o) => ({ label: o.label, value: o.value, cls: o.danger ? 'secondary action-danger' : 'secondary' })),
+    ...options.map((o) => ({ label: o.label, value: o.value, icone: o.icone, cls: o.danger ? 'secondary action-danger' : 'secondary' })),
     { label: 'Annuler', value: false, cls: 'link' },
-  ], { title, stack: true, cls: 'dialog-menu' });
+  ], { title, stack: true, cls: 'dialog-menu', tete });
 }
 
 export function notice(message) {
