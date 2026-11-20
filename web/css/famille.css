@@ -768,22 +768,9 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 /* Réglages : « La tablette » ou « Mon profil » (Tanguy, 20/11), en haut des deux pages.
    Le rail est teinté et bordé, le choix actif est plein (indigo) : on voit tout de suite que ce sont deux boutons
    et lequel est ouvert (avant, le rail avait la couleur du fond de page et ne se voyait pas). */
-.reglages-choix {
-  margin: 0 0 18px;
-  padding: 5px;
-  gap: 6px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
-  border: 1.5px solid color-mix(in srgb, var(--accent) 28%, transparent);
-}
-.reglages-choix .seg {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 48px; padding: 8px 10px; border-radius: 12px;
-  color: var(--accent); font-weight: 700; font-size: 16px;
-  transition: background-color .15s, color .15s;
-}
-.reglages-choix .seg svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.reglages-choix .seg.active { background: var(--accent); color: var(--accent-text); box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent); }
+.reglages-choix { margin: 0 0 18px; }
+.reglages-choix .seg { min-height: 48px; font-size: 16px; }
+.seg svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nav-icon { position: relative; display: flex; }
 .nav-badge {
   position: absolute;
@@ -922,9 +909,11 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 
 .list-title { font-size: 15px; color: var(--muted); margin: 16px 20px 8px; text-transform: uppercase; letter-spacing: .05em; }
 .k-anniv { color: var(--accent); }
-.segmented { display: flex; gap: 4px; padding: 4px; margin: 4px 0 8px; border-radius: 14px; background: var(--bg); }
-.seg { flex: 1; padding: 10px; border-radius: 10px; color: var(--muted); }
-.seg.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+/* Sélecteurs à deux ou trois choix (Rappel / Anniversaire, Apparence, Réglages…) : même dessin partout (Tanguy, 20/11).
+   Rail teinté et bordé, choix actif en indigo plein : avant, le rail avait la couleur du fond et ne se voyait pas. */
+.segmented { display: flex; gap: 6px; padding: 5px; margin: 4px 0 10px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border: 1.5px solid color-mix(in srgb, var(--accent) 26%, transparent); }
+.seg { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 8px 10px; border-radius: 12px; color: var(--accent); font-weight: 700; transition: background-color .15s, color .15s; }
+.seg.active { background: var(--accent); color: var(--accent-text); box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent); }
 .bday-date { display: grid; grid-template-columns: 1fr 1.6fr 1.4fr; gap: 10px; }
 .bday-date label { margin: 14px 0 0; }
 
@@ -953,7 +942,7 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 .inline-field input { margin: 0; flex: 1; min-width: 0; }
 .inline-field button { min-height: 0; }
 .members li { flex-wrap: wrap; }
-.member-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.member-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px 8px; flex-wrap: wrap; } /* e-mail collé au prénom, pas à 8 px */
 .member-tel { font-size: .9em; color: var(--indigo, #4f46e5); text-decoration: none; }
 .member-vcard { display: block; margin-top: 4px; padding: 0; font-size: .85em; }
 /* Adresse e-mail d'un proche, vue des responsables seulement (A43) : pour retirer un doublon. */
@@ -1382,7 +1371,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .toggle-row + .toggle-row, .toggle-list .station { border-top: 1px solid var(--line); }
 .toggle-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .toggle-text strong { font-size: 17px; }
-.toggle-text span { font-size: 14px; color: var(--muted); }
+.toggle-text span { font-size: 14px; font-weight: 400; color: var(--muted); }
 .toggle { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 52px !important; height: 32px; margin: 0 !important; padding: 0 !important; border: none !important; border-radius: 999px; background: var(--line); transition: background .2s; cursor: pointer; }
 .toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .2s; }
 .toggle:checked { background: var(--accent); }
@@ -1392,7 +1381,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .toggle-list .station select { width: 100%; margin: 6px 0 0 !important; }
 .option-line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 16px; }
 .option-line + .option-line { border-top: 1px solid var(--line); }
-.option-state { color: var(--muted); }
+.option-state { flex: none; color: var(--muted); white-space: nowrap; text-align: right; } /* « 3 minutes » ne se coupe plus en deux lignes */
 .option-state.on { color: var(--accent); font-weight: 600; }
 .options-value { gap: 0; margin-top: 8px; }
 
