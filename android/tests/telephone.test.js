@@ -138,6 +138,22 @@ test('Julie appelle par téléphone : ça sonne avec sa photo, « Décrocher » 
   } finally { await b.fermer(); }
 });
 
+test('Double appui sur « Décrocher » : le « Raccrocher » apparu sous le doigt ne coupe pas l’appel (Tanguy, 19/11)', async () => {
+  const b = await tablette();
+  try {
+    await b.android('onGsm', { etat: 'sonne', sortant: false, numero: '0612345678', uid: 'julie', name: 'Julie' });
+    await b.toucher('.call-answer');
+    await b.android('onGsm', { etat: 'enLigne', sortant: false, numero: '0612345678', uid: 'julie', name: 'Julie' });
+    await b.toucher('.call-hangup'); // le 2e appui, juste après
+    assert.strictEqual((await b.appels('phoneHangup')).length, 0, 'appel gardé');
+    assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
+    await b.avancer(1500);
+    await b.toucher('.call-hangup'); // un vrai « Raccrocher », plus tard
+    assert.strictEqual((await b.appels('phoneHangup')).length, 1, 'raccroche ensuite normalement');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 test('« Pas maintenant » refuse l’appel ; un appel non décroché se termine par « Julie a appelé »', async () => {
   const b = await tablette();
   try {

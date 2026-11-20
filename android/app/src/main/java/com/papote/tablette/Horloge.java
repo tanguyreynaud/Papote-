@@ -59,6 +59,16 @@ final class Horloge {
         return s + (chrono - c) - murMs;
     }
 
+    /** Heure actuelle selon le dernier serveur entendu (ms), ou 0 si aucun serveur n'a répondu depuis le démarrage. */
+    static long maintenantServeur() {
+        return serveurMs == 0 ? 0 : maintenantServeur(SystemClock.elapsedRealtime());
+    }
+
+    static long maintenantServeur(long chrono) {
+        long s = serveurMs, c = chronoMs;
+        return s == 0 ? 0 : s + (chrono - c);
+    }
+
     /** L'heure murale est utilisable : après la date d'usine, et pas contredite par un serveur. */
     static boolean sure() {
         return sure(System.currentTimeMillis(), SystemClock.elapsedRealtime());

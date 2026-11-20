@@ -192,7 +192,7 @@ test('tablette verrouillée : le SOS de l\'écran verrouillé lance le décompte
     assert.ok(!(await b.visible('.perdue-screen')), 'écran verrouillé écarté pendant le SOS');
     assert.strictEqual(await b.page.evaluate(() => window.papoteSosEnCours), true);
     await b.toucher('.sos-cancel');
-    await b.avancer(500);
+    await b.avancer(3500); // « C'est annulé » 3 s (19/11)
     assert.ok(await b.visible('.perdue-screen'), 'écran verrouillé revenu');
     assert.notStrictEqual(await b.page.evaluate(() => window.papoteSosEnCours), true);
     await sansErreur(b);
@@ -740,6 +740,9 @@ test('carillon d\'un nouvel envoi : pas par-dessus une fenêtre ouverte, normal 
     await b.toucher('#sos-btn');
     assert.strictEqual(await fenetre(), true, 'SOS');
     await b.toucher('.sos-cancel');
+    // « C'est annulé » reste 3 s (banc utilisateurs du 19/11), puis l'accueil.
+    assert.ok(await b.visible('.sos-annule'), '« C’est annulé » affiché');
+    await b.avancer(2500);
     assert.strictEqual(await fenetre(), false, 'SOS annulé');
     await b.toucher('#home-frame');
     assert.ok(await b.visible('#view-photos'));

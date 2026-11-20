@@ -321,6 +321,21 @@ test('réveil par le serveur : aucune écoute ouverte ; un push « appel » fait
   } finally { await b.fermer(); }
 });
 
+test('réveil par le serveur : deux appels lus d\'un coup, le dernier sonne et l\'autre est refusé tout de suite', async () => {
+  const b = await ouvrir('2026-10-26T10:00:00', { ...FAMILLE, push: true });
+  try {
+    await b.android('onPosts', lot([]));
+    await b.avancer(3000);
+    await appelEntrant(b, 'c7', { callerUid: 'paul', callerName: 'Paul' });
+    await appelEntrant(b, 'c8');
+    await b.page.evaluate(() => window.Papote.onPush({ type: 'appel', id: 'c8' }));
+    await b.avancer(500);
+    assert.ok(await b.visible('#call-ring'), 'le réveil fait sonner');
+    assert.strictEqual(await b.texte('#ring-name'), 'Julie');
+    assert.strictEqual((await b.lire('families/F1/calls/c7')).state, 'missed', 'Paul a « Pas de réponse » sans attendre');
+  } finally { await b.fermer(); }
+});
+
 test('réveil par le serveur : un push « ordre » joue le test du son demandé', async () => {
   const b = await ouvrir('2026-10-26T10:00:00', { ...FAMILLE, push: true });
   try {

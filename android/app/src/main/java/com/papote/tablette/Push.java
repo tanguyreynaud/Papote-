@@ -167,10 +167,21 @@ public class Push extends FirebaseMessagingService {
         if (p.getString("pushJetonEcrit", null) == null) return false;
         long depuis = System.currentTimeMillis() - p.getLong("pushPingDemande", 0);
         if (depuis < 0) return true; // horloge revenue en arrière depuis la demande : on redemande
+        if (pingDuFutur(p.getLong("pushPingRecu", 0), System.currentTimeMillis())) return true; // idem, depuis le ping
         // Pas de ping reçu pour la dernière demande (serveur pas encore à jour, coupure) : on redemande
         // toutes les 30 min, au lieu d'attendre le lendemain en gardant l'écoute en direct (28/10).
         boolean sansReponse = p.getLong("pushPingRecu", 0) < p.getLong("pushPingDemande", 0);
         return depuis >= (sansReponse ? PING_RELANCE_MS : PING_CHAQUE_MS);
+    }
+
+    /**
+     * Ping reçu « dans le futur » : il a été noté pendant que l'horloge avançait (date d'usine, batterie vide), puis
+     * Android l'a remise à l'heure. Sans ceci, recu >= demande restait vrai pour toutes les demandes suivantes : la
+     * tablette se croyait réveillable sans aucune vérification (écoutes fermées, appels manqués) aussi longtemps
+     * que l'horloge avait avancé. Le ping n'est plus cru ; controleDu (horloge revenue en arrière) en redemande un.
+     */
+    static boolean pingDuFutur(long recu, long maintenant) {
+        return recu > maintenant + PING_ATTENTE_MS;
     }
 
     static void controleDemande(Context c, long demande) {
@@ -187,6 +198,7 @@ public class Push extends FirebaseMessagingService {
         if (!disponible(c) || jeton == null || !jeton.equals(p.getString("pushJetonEcrit", null))) return false;
         long demande = p.getLong("pushPingDemande", 0);
         long recu = p.getLong("pushPingRecu", 0);
+        if (pingDuFutur(recu, System.currentTimeMillis())) return false;
         if (recu >= demande) return recu > 0;
         long attente = System.currentTimeMillis() - demande;
         boolean enRoute = attente >= 0 && attente < PING_ATTENTE_MS;
