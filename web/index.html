@@ -142,6 +142,7 @@
           <button type="submit" class="primary wide">Se connecter</button>
         </form>
         <p id="login-error" class="error" hidden></p>
+        <button type="button" class="link lien-aide" data-aide>Besoin d'aide ?</button>
       </div>
       <button type="button" class="link wide" id="login-install" hidden>Installer l'app sur ce téléphone</button>
     </section>
@@ -157,6 +158,7 @@
         </label>
         <button type="submit" class="primary wide">Se connecter</button>
         <p id="link-error" class="error" hidden></p>
+        <button type="button" class="link lien-aide" data-aide>Besoin d'aide ?</button>
         <!-- iPhone : lien demandé depuis l'app de l'écran d'accueil, ouvert ici dans Safari. -->
         <div id="link-ios" hidden>
           <p class="small muted">Vous l'avez demandé depuis l'app Papote de l'écran d'accueil ? Copiez ce lien, puis ouvrez l'app et collez-le.</p>
@@ -271,6 +273,7 @@
           <button type="submit" class="primary wide">Rejoindre</button>
           <button type="button" id="join-later" class="secondary wide" hidden>Plus tard</button>
           <p id="join-error" class="error" hidden></p>
+          <button type="button" class="link lien-aide" data-aide>Besoin d'aide ?</button>
         </form>
       </div>
       <button type="button" id="join-logout" class="link wide" data-action="logout">Se déconnecter</button>
@@ -456,6 +459,7 @@
         <h1>Réglages</h1>
       </header>
       <div class="page-pad">
+        <button type="button" class="card nudge aide-card" data-aide><span class="avatar avatar-empty"><svg><use href="#i-help"/></svg></span><span><strong>Besoin d'aide ?</strong><br><span class="muted small">L'assistant Papote vous répond tout de suite</span></span></button>
         <div class="segmented reglages-choix" role="group" aria-label="Réglages">
           <button type="button" class="seg" data-reglages-choix="tablette">La tablette</button>
           <button type="button" class="seg" data-reglages-choix="profil">Mon profil</button>
@@ -742,11 +746,11 @@
     <section id="view-profile" class="page tab-page" hidden>
       <header class="page-head"><h1>Réglages</h1></header>
       <div class="page-pad">
+        <button type="button" class="card nudge aide-card" data-aide><span class="avatar avatar-empty"><svg><use href="#i-help"/></svg></span><span><strong>Besoin d'aide ?</strong><br><span class="muted small">L'assistant Papote vous répond tout de suite</span></span></button>
         <div class="segmented reglages-choix" role="group" aria-label="Réglages">
           <button type="button" class="seg" data-reglages-choix="tablette">La tablette</button>
           <button type="button" class="seg" data-reglages-choix="profil">Mon profil</button>
         </div>
-        <button type="button" class="card nudge aide-card" data-tab="support"><span class="avatar avatar-empty"><svg><use href="#i-help"/></svg></span><span><strong>Aide et support</strong><br><span class="muted small">Questions fréquentes, assistant Papote</span></span></button>
         <div class="card">
           <h2>Ma photo</h2>
           <p class="muted">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
@@ -884,6 +888,7 @@
     <section id="view-support" class="page tab-page" hidden>
       <header class="page-head"><h1>Aide</h1></header>
       <div class="page-pad support-pad">
+        <button type="button" id="support-assistant" class="primary wide" data-aide>Poser une question à l'assistant</button>
         <p id="support-status" class="activity" hidden></p>
         <div class="faq">
           <details>
@@ -927,7 +932,6 @@
   <nav id="nav" class="nav" hidden>
     <button type="button" class="nav-item active" data-tab="home"><svg><use href="#i-home"/></svg><span>Accueil</span></button>
     <button type="button" class="nav-item" data-page="photos"><svg><use href="#i-photo"/></svg><span>Photos</span></button>
-    <button type="button" class="nav-item" id="nav-aide" data-tab="support"><svg><use href="#i-help"/></svg><span>Aide</span></button>
     <button type="button" class="nav-item" id="nav-reglages" data-reglages><svg><use href="#i-gear"/></svg><span>Réglages</span></button>
   </nav>
 

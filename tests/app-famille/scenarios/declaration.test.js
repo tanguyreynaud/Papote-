@@ -103,9 +103,10 @@ async function familleAvecTablette(email, reglage = {}) {
 async function ouvrirChat(t, question) {
   await g.ouvrirProfil(t);
   await g.attendreVue(t, 'view-profile');
-  await t.page.click('.aide-card[data-tab="support"]');
+  await t.page.click('#view-profile .aide-card');
   await g.attendreVue(t, 'view-support');
-  await t.page.locator('.ps-bouton').click();
+  // « Besoin d'aide ? » ouvre l'assistant tout de suite (Tanguy, 20/11 : plus de bulle flottante).
+  await t.page.locator('.ps-panneau textarea').waitFor({ state: 'visible' });
   await t.page.locator('.ps-panneau textarea').fill(question);
   await t.page.locator('.ps-panneau textarea').press('Enter');
   await t.page.locator('.ps-decl').waitFor({ state: 'visible' });
@@ -165,7 +166,7 @@ test('écran fissuré : questions, photos réduites, bulle refermée puis rouver
 
   // Bulle fermée puis rouverte : tout est encore là.
   await julie.page.locator('.ps-panneau .ps-tete button').click();
-  await julie.page.locator('.ps-bouton').click();
+  await julie.page.click('#support-assistant');
   await carte(julie).waitFor({ state: 'visible' });
   assert.strictEqual(await vignettes(julie).count(), 2, 'photos gardées');
   assert.strictEqual(await carte(julie).locator('textarea').inputValue(), 'Tombée du buffet ce matin.');
@@ -216,7 +217,7 @@ test('écran fissuré : questions, photos réduites, bulle refermée puis rouver
 
   // Fermer le chat : la conversation repart de zéro.
   await julie.page.getByRole('button', { name: 'Fermer le chat' }).click();
-  await julie.page.locator('.ps-bouton').click();
+  await julie.page.click('#support-assistant');
   assert.strictEqual(await julie.page.locator('.ps-decl').count(), 0);
 });
 

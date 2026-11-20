@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
@@ -187,7 +187,7 @@ function show(view) {
   clearTimeout(splashNoteTimer);
   $('splash-note').textContent = '';
   if (view === 'loading') splashNoteTimer = setTimeout(() => { if (!$('loading').hidden) $('splash-note').textContent = 'On y est presque…'; }, 4000);
-  document.body.classList.remove('depuis-barre');
+  document.body.classList.remove('depuis-barre', 'chat-libre');
   document.body.classList.toggle('on-support', view === 'view-support');
   // La barre du bas n'apparaît que sur Accueil, Notifications et Support.
   $('nav').hidden = !$(view).classList.contains('tab-page');
@@ -378,7 +378,23 @@ for (const quoi of ['deja', 'prendre']) {
   });
 }
 $('sans-abo-aide').addEventListener('click', () => ouvrirOnglet('support'));
-document.querySelectorAll('.bell-btn[data-tab], .aide-card[data-tab]').forEach((b) => b.addEventListener('click', () => ouvrirOnglet(b.dataset.tab)));
+document.querySelectorAll('.bell-btn[data-tab]').forEach((b) => b.addEventListener('click', () => ouvrirOnglet(b.dataset.tab)));
+
+// ---------- « Besoin d'aide ? » : l'assistant (Tanguy, 20/11) ----------
+// En haut de Réglages, sous les erreurs de connexion, dans les messages d'échec (envoi, appel). Connecté : la page Aide
+// (questions fréquentes) avec l'assistant ouvert par-dessus ; pas encore connecté : l'assistant seul, sur la page où
+// l'on est. Sans assistant (pas de réseau, script pas chargé) : les questions fréquentes, ou l'adresse e-mail.
+function ouvrirAssistant() {
+  const connecte = !!session?.family && $('call').hidden && !VUES_PARCOURS.some((v) => !$(v).hidden) && $('loading').hidden;
+  if (connecte) ouvrirOnglet('support');
+  else document.body.classList.add('chat-libre');
+  try { if (window.papoteChat) { window.papoteChat.ouvrir(); return; } } catch (e) { /* plus bas */ }
+  if (!connecte) notice("L'assistant ne répond pas pour l'instant. Écrivez-nous à contact@mapapote.fr, nous vous répondons vite.");
+}
+async function noticeAvecAide(message) {
+  if (await noticeAide(message) === 'aide') ouvrirAssistant();
+}
+document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', ouvrirAssistant));
 
 const VUES_ONGLETS = ['notifs', 'profile', 'support'];
 
@@ -427,9 +443,6 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
     // Accueil depuis un onglet : comme « retour », l'entrée de l'onglet est juste au-dessus de l'accueil.
     if (btn.dataset.tab === 'home') { if (surOnglet) history.back(); else goHome(); return; }
     ouvrirOnglet(btn.dataset.tab);
-    // Aide : la page des questions fréquentes, avec l'assistant ouvert tout de suite (Tanguy, 20/11). Sans le chat
-    // (pas de réseau, script pas chargé), les questions fréquentes restent.
-    if (btn.id === 'nav-aide') { try { window.papoteChat?.ouvrir(); } catch (e) { /* questions fréquentes seules */ } }
   });
 });
 
@@ -1568,7 +1581,7 @@ async function addPhotoFiles(all) {
       pendingPhotos.push(await compressPhoto(file));
     } catch (err) {
       console.error(err);
-      notice(`La photo « ${file.name} » n'a pas pu être lue.`);
+      noticeAvecAide(`La photo « ${file.name} » n'a pas pu être lue.`);
     }
   }
   setStatus('');
@@ -1730,7 +1743,7 @@ async function queue(item) {
     toast("Pas de réseau : l'envoi partira tout seul");
   } catch (err) {
     console.error(err);
-    notice("L'envoi a échoué. Vérifiez la connexion et réessayez.");
+    noticeAvecAide("L'envoi a échoué. Vérifiez la connexion et réessayez.");
   }
   renderOutbox();
   return id;
@@ -2822,8 +2835,15 @@ $('tile-call').addEventListener('click', async () => {
       console.error(err);
       reportCallIncident('depart-video', `${err && err.name}: ${err && err.message}`);
     }
-    finDAppel(callErrorMessage(err));
-    setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
+    // Tablette occupée : dit sur l'écran d'appel, qui se ferme seul. Vrai échec : l'écran se ferme et le message reste,
+    // avec « Besoin d'aide ? » (Tanguy, 20/11 : l'aide là où l'on bloque).
+    if (err && err.name === 'BusyError') {
+      finDAppel(callErrorMessage(err));
+      setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
+    } else {
+      leaveCallScreen();
+      noticeAvecAide(callErrorMessage(err));
+    }
   } finally {
     callStarting = false;
   }

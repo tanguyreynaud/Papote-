@@ -1156,7 +1156,12 @@ body:has(#hors-ligne-bandeau:not([hidden])) .install-fab { display: none; }
 .disabled-card { pointer-events: none; }
 
 /* Chat d'aide (chat-support.js) : seulement sur la page Support. */
-body:not(.on-support) .ps-bouton, body:not(.on-support) .ps-panneau { display: none !important; }
+body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-panneau { display: none !important; }
+/* Pas de bulle flottante : l'assistant s'ouvre par « Besoin d'aide ? » (Réglages, erreurs ; Tanguy, 20/11). */
+.ps-bouton { display: none !important; }
+/* « Besoin d'aide ? » sous un message d'erreur de la connexion : seulement quand l'erreur est là. */
+.error[hidden] + .lien-aide { display: none; }
+.lien-aide { display: block; margin: 6px auto 0; }
 /* Place sous le dernier élément pour la barre du bas et le bouton du chat. */
 .support-pad { padding-bottom: calc(170px + env(safe-area-inset-bottom)); }
 

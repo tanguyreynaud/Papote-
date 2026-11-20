@@ -259,3 +259,30 @@ test('Premier usage (Tanguy, 20/11) : faute de frappe dans l\'adresse corrigée 
   await paul.page.locator('.guide-back').waitFor();
   assert.match(await paul.page.locator('.guide').innerText(), /Touchez « Envoyer une photo », en haut de l'accueil/);
 });
+
+// Barre du bas Accueil, Photos, Réglages ; « Besoin d'aide ? » en haut de Réglages et sous les erreurs de connexion
+// (Tanguy, 20/11). Sur le banc, l'assistant (mapapote.fr) n'est pas chargé : connecté, la page Aide s'ouvre ; pas
+// encore connecté, l'adresse e-mail.
+test('Aide : « Besoin d\'aide ? » en haut de Réglages et sous une erreur de connexion, barre du bas à 3 boutons', async () => {
+  const julie = await banc.telephone('Julie');
+  await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  assert.deepStrictEqual(await julie.page.locator('#nav .nav-item').allInnerTexts(), ['Accueil', 'Photos', 'Réglages']);
+  assert.strictEqual(await julie.page.locator('#btn-gear').count(), 0, 'plus de roue à côté de la cloche');
+  await julie.page.click('#nav-reglages');
+  await g.attendreVue(julie, 'view-settings');
+  await julie.page.click('#view-settings [data-aide]');
+  await g.attendreVue(julie, 'view-support');
+  await g.ouvrirProfil(julie);
+  await julie.page.click('#view-profile [data-aide]');
+  await g.attendreVue(julie, 'view-support');
+
+  const paul = await banc.telephone('Paul');
+  await g.ouvrir(paul);
+  await g.attendreVue(paul, 'view-login');
+  assert.ok(await paul.page.locator('#view-login .lien-aide').isHidden(), 'pas de lien d\'aide sans erreur');
+  await paul.page.fill('#login-email', 'paul@exemple');
+  await paul.page.click('#btn-email');
+  await paul.page.locator('#login-error', { hasText: 'semble incomplète' }).waitFor();
+  await paul.page.click('#view-login .lien-aide');
+  assert.match(await g.texteFenetre(paul), /contact@mapapote\.fr/);
+});
