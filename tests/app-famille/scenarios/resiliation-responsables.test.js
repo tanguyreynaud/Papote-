@@ -43,7 +43,7 @@ test('Un responsable qui ne paie pas voit et utilise « Résilier l\'abonnement 
   await g.rejoindre(julie, fid, marie, { email: 'marie@exemple.fr', prenom: 'Marie', genre: 'femme' });
 
   // Julie rend Paul responsable : la question dit qu'il pourra gérer l'abonnement.
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirFamille(julie);
   await julie.page.click('button[aria-label="Actions pour Paul"]');
   await g.repondre(julie, 'Rendre responsable');
   assert.match(await g.texteFenetre(julie), /Rendre Paul responsable \?.*gérer l'abonnement \(moyen de paiement, factures, résiliation\)/);

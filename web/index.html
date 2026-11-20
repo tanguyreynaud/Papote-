@@ -100,6 +100,22 @@
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
     <symbol id="i-flip" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h2l1.5-2h5L16 5h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M9 11.5a3 3 0 0 1 5.2-1.6M15 13.5a3 3 0 0 1-5.2 1.6M14.5 8.5v1.6h-1.6M9.5 16.5v-1.6h1.6"/></symbol>
     <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-famille" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.500 6.500 0 0 1 13 0"/><circle cx="17.500" cy="9" r="2.500"/><path d="M17 14.200a5 5 0 0 1 4.500 5"/></symbol>
+    <symbol id="i-son" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.500 8.500a5 5 0 0 1 0 7M19 6a8.500 8.500 0 0 1 0 12"/></symbol>
+    <symbol id="i-voix" viewBox="0 0 24 24"><path d="M21 11.500a8.500 8.500 0 0 1-12.400 7.600L3 20.500l1.400-5A8.500 8.500 0 1 1 21 11.500z"/><path d="M9 10v3M12 8.500v6M15 10v3"/></symbol>
+    <symbol id="i-soleil" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.500M12 19.500V22M2 12h2.500M19.500 12H22M4.900 4.900l1.800 1.800M17.300 17.300l1.800 1.800M4.900 19.100l1.800-1.800M17.300 6.700l1.800-1.800"/></symbol>
+    <symbol id="i-lune" viewBox="0 0 24 24"><path d="M20 14.500A8.500 8.500 0 0 1 9.500 4a8.500 8.500 0 1 0 10.500 10.500z"/></symbol>
+    <symbol id="i-chrono" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.500 2M9.500 2.500h5"/></symbol>
+    <symbol id="i-meteo" viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.500-8A6 6 0 0 1 18 11.500 3.300 3.300 0 0 1 17.500 18z"/></symbol>
+    <symbol id="i-radio" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="3"/><path d="M7 8l9-5"/><circle cx="8.500" cy="14" r="2.500"/><path d="M14.500 12.500h3M14.500 15.500h3"/></symbol>
+    <symbol id="i-sos" viewBox="0 0 24 24"><path d="M12 3l8 3.500V12c0 4.500-3.200 7.800-8 9-4.800-1.200-8-4.500-8-9V6.500z"/><path d="M12 8.500v4.500M12 16h.01"/></symbol>
+    <symbol id="i-bouclier" viewBox="0 0 24 24"><path d="M12 3l8 3.500V12c0 4.500-3.200 7.800-8 9-4.800-1.200-8-4.500-8-9V6.500z"/></symbol>
+    <symbol id="i-oeil-barre" viewBox="0 0 24 24"><path d="M2 12s3.500-7 10-7 10 7 10 7-3.500 7-10 7S2 12 2 12z"/><path d="M4 4l16 16"/></symbol>
+    <symbol id="i-carte" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M7 15h3"/></symbol>
+      <symbol id="i-contraste" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></symbol>
+      <symbol id="i-outil" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8V20h3.2l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.1-.6-.6-2.1z"/></symbol>
+      <symbol id="i-sortie" viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/></symbol>
   </svg>
 
   <!-- En haut de la page, dans le flux : il pousse l'en-tête « Papote » au lieu de le recouvrir. -->
@@ -458,92 +474,138 @@
       <header class="page-head">
         <button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button>
         <h1>Réglages</h1>
+        <button type="button" class="aide-pastille" data-aide><svg aria-hidden="true"><use href="#i-help"/></svg>Besoin d'aide ?</button>
       </header>
       <div class="page-pad">
-        <button type="button" class="card nudge aide-card" data-aide><span class="avatar avatar-empty"><svg><use href="#i-help"/></svg></span><span><strong>Besoin d'aide ?</strong><br><span class="muted small">L'assistant Papote vous répond tout de suite</span></span></button>
         <div class="segmented reglages-choix" role="group" aria-label="Réglages">
-          <button type="button" class="seg" data-reglages-choix="tablette"><svg aria-hidden="true"><use href="#i-tablette"/></svg>La tablette</button>
-          <button type="button" class="seg" data-reglages-choix="profil"><svg aria-hidden="true"><use href="#i-user"/></svg>Mon profil</button>
+          <button type="button" class="seg" data-reglages-choix="tablette">La tablette</button>
+          <button type="button" class="seg" data-reglages-choix="famille">La famille</button>
+          <button type="button" class="seg" data-reglages-choix="profil">Mon profil</button>
         </div>
-        <h3 class="settings-group">La famille</h3>
-        <div id="requests-card" class="card" hidden>
-          <h2>Demandes pour rejoindre</h2>
-          <div id="requests" class="join-list"></div>
-          <p id="family-full" class="error small" hidden>La famille est complète : 30 proches au maximum. Retirez quelqu'un pour en accepter un autre.</p>
-        </div>
-        <div class="card">
-          <h2>Membres</h2>
-          <ul id="members" class="members"></ul>
-          <p id="appels-telephones" class="muted small" hidden></p>
-        </div>
-        <div id="tablet-owner-note" class="card" hidden>
-          <h2>Réglages de la tablette</h2>
-          <p class="muted" id="tablet-owner-text"></p>
-        </div>
-        <h3 class="settings-group">Ce téléphone</h3>
-        <div class="card">
-          <div class="toggle-list">
-            <label class="toggle-row"><span class="toggle-text"><strong>Notifications</strong><span id="phone-push-text"></span></span><input type="checkbox" class="toggle" id="phone-push"></label>
-            <label class="toggle-row" id="rappels-photos-row" hidden><span class="toggle-text"><strong>Petits rappels</strong><span id="rappels-photos-text"></span></span><input type="checkbox" class="toggle" id="rappels-photos" checked></label>
-            <label class="toggle-row" id="phone-pause" hidden><span class="toggle-text"><strong>Arrière-plan</strong><span id="phone-pause-text"></span></span><input type="checkbox" class="toggle" id="phone-pause-toggle"></label>
+        <!-- La tablette : pour les responsables. Une ligne par réglage, rangées par sujet (Tanguy, 20/11). -->
+        <div id="rg-tablette" data-reglages-panneau="tablette">
+        <div id="group-tablet" class="owner-only">
+          <div class="rg-liste">
+          <div id="family-name-card" class="card setting rg rg-qui" hidden>
+            <div class="setting-head">
+              <img id="tface-img" class="avatar avatar-qui" alt="" hidden>
+              <span id="tface-empty" class="avatar avatar-qui avatar-empty"><svg><use href="#i-user"/></svg></span>
+              <div class="rg-qui-tete"><h2 id="family-name-value"></h2><p id="tablette-etat" class="rg-etat"></p></div>
+              <button type="button" class="link setting-modify">Modifier</button>
+            </div>
+            <form id="form-family-name" class="setting-edit" hidden novalidate>
+              <div id="tablet-face-card" class="rg-qui-photo" hidden>
+                <p class="choice-titre">Sa photo</p>
+                <div class="face-buttons">
+                  <button type="button" class="secondary" id="tface-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
+                  <button type="button" class="secondary" id="tface-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
+                  <button type="button" class="link danger" id="tface-remove" hidden>Retirer la photo</button>
+                </div>
+                <input id="in-tface-camera" type="file" accept="image/*" capture="environment" hidden>
+                <input id="in-tface-gallery" type="file" accept="image/*" hidden>
+              </div>
+              <label class="choice-titre" for="family-name">Nom de la tablette</label>
+              <p class="muted small">Souvent celui de la personne qui l'a (« Mamie », « Jeanne »…). Il apparaît partout dans l'app.</p>
+              <input id="family-name" maxlength="40" required aria-describedby="family-name-error">
+              <p id="family-name-error" class="error small" hidden></p>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
           </div>
-        </div>
-        <h3 class="settings-group owner-only" id="group-tablet">La tablette</h3>
-        <div id="tablet-face-card" class="card" hidden>
-          <h2>Photo de <span class="grand-name"></span></h2>
-          <p class="muted small">Elle s'affiche dans l'app, par exemple quand <span class="grand-name"></span> vous appelle.</p>
-          <div class="face-row">
-            <img id="tface-img" class="avatar avatar-lg" alt="" hidden>
-            <span id="tface-empty" class="avatar avatar-lg avatar-empty"><svg><use href="#i-user"/></svg></span>
-            <div class="face-buttons">
-              <button type="button" class="secondary" id="tface-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
-              <button type="button" class="secondary" id="tface-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
-              <button type="button" class="link danger" id="tface-remove" hidden>Retirer la photo</button>
-            </div>
           </div>
-          <input id="in-tface-camera" type="file" accept="image/*" capture="environment" hidden>
-          <input id="in-tface-gallery" type="file" accept="image/*" hidden>
-        </div>
-        <div id="family-name-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Nom de la tablette</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <p id="family-name-value" class="setting-value"></p>
-          <form id="form-family-name" class="setting-edit" hidden novalidate>
-            <p class="muted small">Le nom de la tablette, souvent celui de la personne qui l'a (« Mamie », « Jeanne »…). Il apparaît partout dans l'app.</p>
-            <input id="family-name" maxlength="40" required aria-label="Nom de la tablette" aria-describedby="family-name-error">
-            <p id="family-name-error" class="error small" hidden></p>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div id="meteo-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Ville de la météo</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <p id="meteo-current" class="setting-value"></p>
-          <form id="form-meteo" class="setting-edit" hidden>
-            <label>Code postal
-              <input id="meteo-cp" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" autocomplete="postal-code" placeholder="32000">
-            </label>
-            <div id="meteo-commune-wrap" class="communes" hidden>
-              <p class="communes-titre">Commune</p>
-              <div id="meteo-commune" class="choice communes-liste" role="radiogroup" aria-label="Commune"></div>
-            </div>
-            <p id="meteo-error" class="error small" hidden></p>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div id="options-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Options de la tablette</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <div id="options-value" class="setting-value options-value"></div>
-          <form id="form-options" class="setting-edit" hidden>
-            <div class="toggle-list">
-            <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton «&nbsp;Écouter&nbsp;»</span></span><input type="checkbox" class="toggle" id="opt-lecture"></label>
-            <label class="toggle-row"><span class="toggle-text"><strong>Météo sur l'accueil</strong><span>Le temps du jour sur l'écran de la tablette</span></span><input type="checkbox" class="toggle" id="opt-meteo"></label>
-            <label class="toggle-row"><span class="toggle-text"><strong>Prochain rappel sur l'accueil</strong><span>Le prochain rappel de la journée sur l'écran de la tablette</span></span><input type="checkbox" class="toggle" id="opt-rappels-accueil"></label>
-              <div class="station">
+          <h3 class="settings-group">Son</h3>
+          <div class="rg-liste">
+          <div id="volume-card" class="card setting rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-son"/></svg></span><h2>Volumes</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="volume-text" class="setting-value"></p>
+            <form id="form-volume" class="setting-edit" hidden>
+              <p class="muted small">Touchez « Écouter » pour entendre le son sur la tablette.</p>
+              <div class="setup-son-ligne">
+                <div class="setup-son-tete">
+                  <strong>Sonnerie</strong>
+                  <span id="volume-sonnerie-val" class="setup-son-val"></span>
+                </div>
+                <p class="muted small volume-aide">Les appels qui arrivent</p>
+                <div class="setup-son-ctrl">
+                  <input id="volume-sonnerie" type="range" min="10" max="100" step="5" aria-label="Volume de la sonnerie">
+                  <button type="button" class="setup-essai volume-essai" data-essai="sonnerie" aria-label="Écouter la sonnerie"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
+                </div>
+              </div>
+              <div class="setup-son-ligne">
+                <div class="setup-son-tete">
+                  <strong>Vidéos et messages lus</strong>
+                  <span id="volume-value" class="setup-son-val"></span>
+                </div>
+                <p class="muted small volume-aide">Le son des vidéos, les messages lus à voix haute, la radio</p>
+                <div class="setup-son-ctrl">
+                  <input id="volume" type="range" min="10" max="100" step="5" aria-label="Volume des vidéos et des messages">
+                  <button type="button" class="setup-essai volume-essai" data-essai="voix" aria-label="Écouter la voix"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
+                </div>
+              </div>
+              <div class="setup-son-ligne">
+                <div class="setup-son-tete">
+                  <strong>Appels</strong>
+                  <span id="volume-appel-val" class="setup-son-val"></span>
+                </div>
+                <p class="muted small volume-aide">La voix du proche, en visio et au téléphone. Elle change au prochain appel.</p>
+                <div class="setup-son-ctrl">
+                  <input id="volume-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
+                  <button type="button" class="setup-essai volume-essai" data-essai="appel" aria-label="Écouter la voix d'un appel"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
+                </div>
+              </div>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+          <label class="toggle-row rg-ligne" id="opt-lecture-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-voix"/></svg></span><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et les rappels</span></span><input type="checkbox" class="toggle" id="opt-lecture"></label>
+          </div>
+          <h3 class="settings-group">Écran</h3>
+          <div class="rg-liste">
+          <div id="luminosite-card" class="card setting rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-soleil"/></svg></span><h2>Luminosité</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="luminosite-value" class="setting-value"></p>
+            <form id="form-luminosite" class="setting-edit" hidden>
+              <p class="muted small">La journée. Le soir, la tablette baisse d'elle-même à 55 % au plus, pour ne pas éblouir. Plus lumineux, la batterie dure moins longtemps.</p>
+              <div class="setup-son-ligne">
+                <div class="setup-son-tete">
+                  <strong>Le jour</strong>
+                  <span id="luminosite-val" class="setup-son-val"></span>
+                </div>
+                <div class="setup-son-ctrl">
+                  <input id="luminosite" type="range" min="40" max="100" step="5" aria-label="Luminosité de l'écran le jour">
+                </div>
+              </div>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+          <div id="sleep-card" class="card setting rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-lune"/></svg></span><h2>Nuit</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="sleep-value" class="setting-value"></p>
+            <form id="form-sleep" class="setting-edit" hidden>
+              <p class="muted small">La nuit, l'écran s'éteint ; un toucher le rallume, et un appel ou un rappel le réveille.</p>
+              <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Éteindre l'écran la nuit</strong></span><input type="checkbox" class="toggle" id="sleep-on"></label></div>
+              <div id="sleep-hours" class="sleep-hours">
+                <label>De <select id="sleep-from"></select></label>
+                <label>à <select id="sleep-to"></select></label>
+              </div>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+          <div id="duree-card" class="card setting rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-chrono"/></svg></span><h2>Durée d'un envoi à l'écran</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="duree-value" class="setting-value"></p>
+            <form id="form-duree" class="setting-edit" hidden>
+            <div class="toggle-list"><div class="station">
                 <label for="opt-duree-affichage">Affichage d'une photo, d'un message ou d'un rappel</label>
                 <select id="opt-duree-affichage">
                   <option value="1">1 minute</option>
@@ -553,8 +615,42 @@
                   <option value="5">5 minutes</option>
                 </select>
                 <span class="station-aide">Le temps qu'il reste en grand à l'écran (au moins 1 minute après qu'elle l'a vu). Ensuite il se ferme tout seul, même s'il n'a pas été vu.</span>
+            </div></div>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+            </form>
+          </div>
+          </div>
+          <h3 class="settings-group">Sur l'accueil de la tablette</h3>
+          <div class="rg-liste">
+          <div id="meteo-card" class="card setting rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-meteo"/></svg></span><h2>Météo</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="meteo-current" class="setting-value"></p>
+            <form id="form-meteo" class="setting-edit" hidden>
+              <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Afficher la météo</strong><span>Le temps du jour sur l'écran de la tablette</span></span><input type="checkbox" class="toggle" id="opt-meteo"></label></div>
+              <p class="muted small" id="meteo-ville-titre">Pour changer de ville :</p>
+              <label>Code postal
+                <input id="meteo-cp" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" autocomplete="postal-code" placeholder="32000">
+              </label>
+              <div id="meteo-commune-wrap" class="communes" hidden>
+                <p class="communes-titre">Commune</p>
+                <div id="meteo-commune" class="choice communes-liste" role="radiogroup" aria-label="Commune"></div>
               </div>
-            <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, 5 secondes pour annuler, puis un SMS à toute la famille et la tablette appelle les proches un par un. Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="opt-sos"></label>
+              <p id="meteo-error" class="error small" hidden></p>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+          <label class="toggle-row rg-ligne" id="opt-rappels-accueil-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-agenda"/></svg></span><span class="toggle-text"><strong>Prochain rappel</strong><span id="opt-rappels-accueil-texte">Affiché sur l'accueil</span></span><input type="checkbox" class="toggle" id="opt-rappels-accueil"></label>
+          <div id="radio-card" class="card setting rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-radio"/></svg></span><h2>Radio</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="radio-value" class="setting-value"></p>
+            <form id="form-radio" class="setting-edit" hidden>
+            <div class="toggle-list">
             <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
               <div id="opt-radio-wrap" class="station">
                 <label for="opt-radio-station">Station</label>
@@ -568,144 +664,97 @@
               <button type="button" class="secondary setting-cancel">Annuler</button>
               <button type="submit" class="primary">Enregistrer</button>
             </div>
-          </form>
-        </div>
-        <div id="sos-ordre-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Ordre d'appel SOS</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <div id="sos-ordre-value" class="setting-value sos-ordre-value"></div>
-          <form id="form-sos-ordre" class="setting-edit" hidden>
-            <p class="muted small">Quand votre proche appuie sur SOS, la tablette envoie un SMS à toute la famille, puis appelle les proches un par un, dans cet ordre, jusqu'à ce que quelqu'un réponde. Touchez ↑ ou ↓ pour changer la place d'un proche.</p>
-            <ol id="sos-ordre-liste" class="sos-ordre-liste"></ol>
-            <p id="sos-ordre-annonce" class="sos-ordre-annonce" aria-live="polite"></p>
-            <p id="sos-ordre-sans" class="muted small" hidden></p>
-            <button type="button" id="sos-ordre-defaut" class="secondary sos-ordre-defaut">Revenir à l'ordre par défaut</button>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div id="volume-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Volumes</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <p id="volume-text" class="setting-value"></p>
-          <form id="form-volume" class="setting-edit" hidden>
-            <p class="muted small">Touchez « Écouter » pour entendre le son sur la tablette.</p>
-            <div class="setup-son-ligne">
-              <div class="setup-son-tete">
-                <strong>Sonnerie</strong>
-                <span id="volume-sonnerie-val" class="setup-son-val"></span>
-              </div>
-              <p class="muted small volume-aide">Les appels qui arrivent</p>
-              <div class="setup-son-ctrl">
-                <input id="volume-sonnerie" type="range" min="10" max="100" step="5" aria-label="Volume de la sonnerie">
-                <button type="button" class="setup-essai volume-essai" data-essai="sonnerie" aria-label="Écouter la sonnerie"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
-              </div>
-            </div>
-            <div class="setup-son-ligne">
-              <div class="setup-son-tete">
-                <strong>Vidéos et messages lus</strong>
-                <span id="volume-value" class="setup-son-val"></span>
-              </div>
-              <p class="muted small volume-aide">Le son des vidéos, les messages lus à voix haute, la radio</p>
-              <div class="setup-son-ctrl">
-                <input id="volume" type="range" min="10" max="100" step="5" aria-label="Volume des vidéos et des messages">
-                <button type="button" class="setup-essai volume-essai" data-essai="voix" aria-label="Écouter la voix"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
-              </div>
-            </div>
-            <div class="setup-son-ligne">
-              <div class="setup-son-tete">
-                <strong>Appels</strong>
-                <span id="volume-appel-val" class="setup-son-val"></span>
-              </div>
-              <p class="muted small volume-aide">La voix du proche, en visio et au téléphone. Elle change au prochain appel.</p>
-              <div class="setup-son-ctrl">
-                <input id="volume-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
-                <button type="button" class="setup-essai volume-essai" data-essai="appel" aria-label="Écouter la voix d'un appel"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
-              </div>
-            </div>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div id="luminosite-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Luminosité de l'écran</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <p id="luminosite-value" class="setting-value"></p>
-          <form id="form-luminosite" class="setting-edit" hidden>
-            <p class="muted small">La journée. Le soir, la tablette baisse d'elle-même à 55 % au plus, pour ne pas éblouir. Plus lumineux, la batterie dure moins longtemps.</p>
-            <div class="setup-son-ligne">
-              <div class="setup-son-tete">
-                <strong>Le jour</strong>
-                <span id="luminosite-val" class="setup-son-val"></span>
-              </div>
-              <div class="setup-son-ctrl">
-                <input id="luminosite" type="range" min="40" max="100" step="5" aria-label="Luminosité de l'écran le jour">
-              </div>
-            </div>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div id="sleep-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Écran éteint la nuit</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <p id="sleep-value" class="setting-value"></p>
-          <form id="form-sleep" class="setting-edit" hidden>
-            <p class="muted small">La nuit, l'écran s'éteint ; un toucher le rallume, et un appel ou un rappel le réveille.</p>
-            <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Éteindre l'écran la nuit</strong></span><input type="checkbox" class="toggle" id="sleep-on"></label></div>
-            <div id="sleep-hours" class="sleep-hours">
-              <label>De <select id="sleep-from"></select></label>
-              <label>à <select id="sleep-to"></select></label>
-            </div>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div id="alerte-pas-vue-card" class="card setting" hidden>
-          <div class="setting-head"><h2>Alerte si la tablette n'est pas utilisée</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <p id="alerte-pas-vue-value" class="setting-value"></p>
-          <form id="form-alerte-pas-vue" class="setting-edit" hidden>
-            <p class="muted small">Les responsables reçoivent une notification si la tablette n'a ni vu ni senti <span class="grand-name"></span> pendant ce temps. C'est vérifié une fois par jour, à 10 h : l'alerte peut arriver jusqu'à un jour plus tard.</p>
-            <p class="choice-titre" id="alerte-pas-vue-titre">Me prévenir si la tablette n'est pas utilisée depuis :</p>
-            <div id="alerte-pas-vue-choix" class="choice choice-jours" role="radiogroup" aria-labelledby="alerte-pas-vue-titre">
-              <label><input type="radio" name="alerte-pas-vue" value="1">1 jour</label>
-              <label><input type="radio" name="alerte-pas-vue" value="2">2 jours</label>
-              <label><input type="radio" name="alerte-pas-vue" value="3">3 jours</label>
-              <label><input type="radio" name="alerte-pas-vue" value="4">4 jours</label>
-              <label><input type="radio" name="alerte-pas-vue" value="5">5 jours</label>
-            </div>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div id="wifi-card" class="card" hidden>
-          <div class="setting-head"><h2>Wi-Fi de la tablette</h2><button type="button" id="wifi-modify" class="link setting-modify">Modifier</button></div>
-          <p id="wifi-current" class="setting-value"></p>
-        </div>
-        <div id="remote-card" class="card" hidden>
-          <h2>Dépanner la tablette</h2>
-          <p class="muted small">À utiliser si la tablette ne répond plus ou se comporte bizarrement.</p>
-          <p id="remote-tablet" class="muted small"></p>
-          <div class="remote-buttons">
-            <button type="button" class="primary" data-cmd="status">Obtenir l'état</button>
-            <button type="button" class="secondary" data-cmd="restart">Redémarrer la tablette</button>
-            <button type="button" class="secondary" id="btn-logs" hidden>Obtenir le journal</button>
+            </form>
           </div>
-          <div id="logs-box" class="remote-panel" hidden>
-            <button type="button" class="icon-btn panel-close" data-close="logs-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
-            <p id="logs-info" class="muted small"></p>
-            <pre id="logs" class="logs"></pre>
           </div>
-          <div id="remote-result-box" class="remote-panel" hidden>
-            <button type="button" class="icon-btn panel-close" data-close="remote-result-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
-            <p id="remote-result" class="remote-result"></p>
+          <h3 class="settings-group">Sécurité</h3>
+          <div class="rg-liste">
+          <div id="sos-ordre-card" class="card setting rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-sos"/></svg></span><h2>SOS famille</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <div id="sos-ordre-value" class="setting-value sos-ordre-value"></div>
+            <form id="form-sos-ordre" class="setting-edit" hidden>
+              <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Bouton SOS sur la tablette</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, 5 secondes pour annuler, puis un SMS à toute la famille et la tablette appelle les proches un par un. Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="opt-sos"></label></div>
+              <div id="sos-ordre-zone">
+              <p class="choice-titre">Ordre d'appel</p>
+              <p class="muted small">Quand votre proche appuie sur SOS, la tablette envoie un SMS à toute la famille, puis appelle les proches un par un, dans cet ordre, jusqu'à ce que quelqu'un réponde. Touchez ↑ ou ↓ pour changer la place d'un proche.</p>
+              <ol id="sos-ordre-liste" class="sos-ordre-liste"></ol>
+              <p id="sos-ordre-annonce" class="sos-ordre-annonce" aria-live="polite"></p>
+              <p id="sos-ordre-sans" class="muted small" hidden></p>
+              <button type="button" id="sos-ordre-defaut" class="secondary sos-ordre-defaut">Revenir à l'ordre par défaut</button>
+              </div>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
           </div>
+          <div id="alerte-pas-vue-card" class="card setting rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-oeil-barre"/></svg></span><h2>Tablette pas utilisée</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="alerte-pas-vue-value" class="setting-value"></p>
+            <form id="form-alerte-pas-vue" class="setting-edit" hidden>
+              <p class="muted small">Les responsables reçoivent une notification si la tablette n'a ni vu ni senti <span class="grand-name"></span> pendant ce temps. C'est vérifié une fois par jour, à 10 h : l'alerte peut arriver jusqu'à un jour plus tard.</p>
+              <p class="choice-titre" id="alerte-pas-vue-titre">Me prévenir si la tablette n'est pas utilisée depuis :</p>
+              <div id="alerte-pas-vue-choix" class="choice choice-jours" role="radiogroup" aria-labelledby="alerte-pas-vue-titre">
+                <label><input type="radio" name="alerte-pas-vue" value="1">1 jour</label>
+                <label><input type="radio" name="alerte-pas-vue" value="2">2 jours</label>
+                <label><input type="radio" name="alerte-pas-vue" value="3">3 jours</label>
+                <label><input type="radio" name="alerte-pas-vue" value="4">4 jours</label>
+                <label><input type="radio" name="alerte-pas-vue" value="5">5 jours</label>
+              </div>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+          </div>
+          <h3 class="settings-group" id="group-connexion">Connexion</h3>
+          <div class="rg-liste">
+          <div id="wifi-card" class="card setting-like rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-wifi"/></svg></span><h2>Wi-Fi</h2><button type="button" id="wifi-modify" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="wifi-current" class="setting-value"></p>
+          </div>
+          <details id="remote-card" class="card rg" hidden>
+            <summary class="rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-outil"/></svg></span><span class="rg-texte"><strong class="rg-titre">Dépanner</strong><span class="rg-valeur">État, redémarrage</span></span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rg-corps">
+            <p class="muted small">À utiliser si la tablette ne répond plus ou se comporte bizarrement.</p>
+            <p id="remote-tablet" class="muted small"></p>
+            <div class="remote-buttons">
+              <button type="button" class="primary" data-cmd="status">Obtenir l'état</button>
+              <button type="button" class="secondary" data-cmd="restart">Redémarrer la tablette</button>
+              <button type="button" class="secondary" id="btn-logs" hidden>Obtenir le journal</button>
+            </div>
+            <div id="logs-box" class="remote-panel" hidden>
+              <button type="button" class="icon-btn panel-close" data-close="logs-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+              <p id="logs-info" class="muted small"></p>
+              <pre id="logs" class="logs"></pre>
+            </div>
+            <div id="remote-result-box" class="remote-panel" hidden>
+              <button type="button" class="icon-btn panel-close" data-close="remote-result-box" aria-label="Fermer"><svg><use href="#i-close"/></svg></button>
+              <p id="remote-result" class="remote-result"></p>
+            </div>
+            </div>
+          </details>
+          </div>
+        </div>
+        </div>
+        <!-- La famille : pour tous les proches. -->
+        <div id="rg-famille" data-reglages-panneau="famille" hidden>
+          <div id="requests-card" class="card" hidden>
+            <h2>Demandes pour rejoindre</h2>
+            <div id="requests" class="join-list"></div>
+            <p id="family-full" class="error small" hidden>La famille est complète : 30 proches au maximum. Retirez quelqu'un pour en accepter un autre.</p>
+          </div>
+          <div class="card">
+            <h2>Membres</h2>
+            <ul id="members" class="members"></ul>
+            <p id="appels-telephones" class="muted small" hidden></p>
+          </div>
+          <div id="tablet-owner-note" class="card" hidden>
+            <h2>Réglages de la tablette</h2>
+            <p class="muted" id="tablet-owner-text"></p>
+          </div>
+          <button type="button" class="primary wide" id="btn-invite-famille"><svg><use href="#i-user-plus"/></svg>Inviter un proche</button>
         </div>
       </div>
     </section>
@@ -766,92 +815,94 @@
 
     <!-- Profil : pour chaque membre -->
     <section id="view-profile" class="page tab-page" hidden>
-      <header class="page-head"><h1>Réglages</h1></header>
+      <header class="page-head"><h1>Réglages</h1><button type="button" class="aide-pastille" data-aide><svg aria-hidden="true"><use href="#i-help"/></svg>Besoin d'aide ?</button></header>
       <div class="page-pad">
-        <button type="button" class="card nudge aide-card" data-aide><span class="avatar avatar-empty"><svg><use href="#i-help"/></svg></span><span><strong>Besoin d'aide ?</strong><br><span class="muted small">L'assistant Papote vous répond tout de suite</span></span></button>
         <div class="segmented reglages-choix" role="group" aria-label="Réglages">
-          <button type="button" class="seg" data-reglages-choix="tablette"><svg aria-hidden="true"><use href="#i-tablette"/></svg>La tablette</button>
-          <button type="button" class="seg" data-reglages-choix="profil"><svg aria-hidden="true"><use href="#i-user"/></svg>Mon profil</button>
+          <button type="button" class="seg" data-reglages-choix="tablette">La tablette</button>
+          <button type="button" class="seg" data-reglages-choix="famille">La famille</button>
+          <button type="button" class="seg" data-reglages-choix="profil">Mon profil</button>
         </div>
-        <div class="card">
-          <h2>Ma photo</h2>
-          <p class="muted">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
-          <div class="face-row">
-            <img id="face-img" class="avatar avatar-lg" alt="" hidden>
-            <span id="face-empty" class="avatar avatar-lg avatar-empty"><svg><use href="#i-user"/></svg></span>
-            <div class="face-buttons">
-              <button type="button" class="secondary" id="face-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
-              <button type="button" class="secondary" id="face-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
-              <button type="button" class="link danger" id="face-remove" hidden>Retirer ma photo</button>
+        <div class="rg-liste">
+          <div id="my-name-card" class="card setting rg rg-qui">
+            <div class="setting-head">
+              <img id="face-img" class="avatar avatar-qui" alt="" hidden>
+              <span id="face-empty" class="avatar avatar-qui avatar-empty"><svg><use href="#i-user"/></svg></span>
+              <div class="rg-qui-tete"><h2 id="my-name-value"></h2><p class="rg-qui-sous">Ma photo et mon prénom</p></div>
+              <button type="button" class="link setting-modify">Modifier</button>
             </div>
+            <form id="form-my-name" class="setting-edit" hidden>
+              <div id="ma-photo-card" class="rg-qui-photo">
+                <p class="choice-titre">Ma photo</p>
+                <p class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
+                <div class="face-buttons">
+                  <button type="button" class="secondary" id="face-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
+                  <button type="button" class="secondary" id="face-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
+                  <button type="button" class="link danger" id="face-remove" hidden>Retirer ma photo</button>
+                </div>
+                <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
+                <input id="in-face-gallery" type="file" accept="image/*" hidden>
+              </div>
+              <label class="choice-titre" for="my-name">Mon prénom</label>
+              <input id="my-name" maxlength="40" autocomplete="given-name" aria-describedby="my-name-error">
+              <p id="my-name-error" class="error" hidden></p>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
           </div>
-          <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
-          <input id="in-face-gallery" type="file" accept="image/*" hidden>
-        </div>
-        <div id="my-name-card" class="card setting">
-          <div class="setting-head"><h2>Mon prénom</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <p id="my-name-value" class="setting-value"></p>
-          <form id="form-my-name" class="setting-edit" hidden>
-            <input id="my-name" maxlength="40" autocomplete="given-name" aria-label="Mon prénom" aria-describedby="my-name-error">
-            <p id="my-name-error" class="error" hidden></p>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div id="my-tel-card" class="card setting">
-          <div class="setting-head"><h2>Mon numéro de portable</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <p id="my-tel-value" class="setting-value"></p>
-          <form id="form-my-tel" class="setting-edit" hidden>
-            <input id="my-tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="0612345678" aria-label="Mon numéro de portable">
-            <p class="muted small">Un portable français (06 ou 07). La tablette de votre proche vous appelle à ce numéro, et seuls les numéros de la famille peuvent l'appeler. Visible par votre famille seulement.</p>
-            <p id="my-tel-error" class="error" hidden></p>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div id="my-genre-card" class="card setting">
-          <div class="setting-head"><h2>Je suis</h2><button type="button" class="link setting-modify">Modifier</button></div>
-          <p id="my-genre-value" class="setting-value"></p>
-          <form id="form-my-genre" class="setting-edit" hidden>
-            <div class="choice" role="radiogroup" aria-label="Je suis">
-              <label><input type="radio" name="my-genre" value="femme"> Une femme</label>
-              <label><input type="radio" name="my-genre" value="homme"> Un homme</label>
-            </div>
-            <p class="muted small">La tablette lit vos messages avec une voix de femme ou d'homme.</p>
-            <div class="setting-actions">
-              <button type="button" class="secondary setting-cancel">Annuler</button>
-              <button type="submit" class="primary">Enregistrer</button>
-            </div>
-          </form>
-        </div>
-        <div class="card">
-          <h2>Apparence</h2>
-          <div class="segmented" role="radiogroup" aria-label="Apparence">
-            <button type="button" class="seg" data-theme-choice="light">Clair</button>
-            <button type="button" class="seg" data-theme-choice="dark">Sombre</button>
-            <button type="button" class="seg" data-theme-choice="auto">Automatique</button>
+          <div id="my-tel-card" class="card setting rg">
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-phone"/></svg></span><h2>Mon numéro de portable</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="my-tel-value" class="setting-value"></p>
+            <form id="form-my-tel" class="setting-edit" hidden>
+              <input id="my-tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="0612345678" aria-label="Mon numéro de portable">
+              <p class="muted small">Un portable français (06 ou 07). La tablette de votre proche vous appelle à ce numéro, et seuls les numéros de la famille peuvent l'appeler. Visible par votre famille seulement.</p>
+              <p id="my-tel-error" class="error" hidden></p>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+          <div id="my-genre-card" class="card setting rg">
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-voix"/></svg></span><h2>Je suis</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="my-genre-value" class="setting-value"></p>
+            <form id="form-my-genre" class="setting-edit" hidden>
+              <div class="choice" role="radiogroup" aria-label="Je suis">
+                <label><input type="radio" name="my-genre" value="femme"> Une femme</label>
+                <label><input type="radio" name="my-genre" value="homme"> Un homme</label>
+              </div>
+              <p class="muted small">La tablette lit vos messages avec une voix de femme ou d'homme.</p>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
           </div>
         </div>
-        <details class="card data-card">
-          <summary>Vos données</summary>
-          <p class="muted"><strong>Ce qui est gardé</strong> : les prénoms, adresses e-mail, numéros de portable et dates de naissance des membres, leur photo de profil, les photos, vidéos et messages envoyés, l'agenda et les anniversaires, l'historique des appels, et l'heure à laquelle la tablette a vu ou senti votre proche pour la dernière fois.</p>
-          <p class="muted"><strong>Qui les voit</strong> : les membres de la famille et la tablette. Papote n'y accède que pour vous dépanner. Aucune publicité, rien n'est revendu.</p>
-          <p class="muted"><strong>Combien de temps</strong> : les 200 dernières photos et les 40 dernières vidéos ; les plus anciennes s'effacent toutes seules. Un envoi supprimé disparaît aussi de la tablette.</p>
-          <p class="muted"><strong>Où</strong> : sur les serveurs Google Firebase.</p>
-          <p class="muted"><strong>Une question, une demande</strong> : écrivez au support depuis la page Support.</p>
-          <p id="delete-family-info" class="muted" hidden><strong>Effacer toutes les données</strong> : écrivez-nous à <a id="btn-delete-family" href="mailto:contact@mapapote.fr">contact@mapapote.fr</a>. Nous en parlons ensemble avant d'effacer, car c'est définitif pour toute la famille.</p>
-        </details>
-        <div id="abo-card" class="card" hidden>
-          <h2>Abonnement</h2>
-          <p id="abo-status" class="abo-status"></p>
-          <p id="abo-details" class="muted small"></p>
+        <h3 class="settings-group">Ce téléphone</h3>
+        <div class="rg-liste">
+          <label class="toggle-row rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-bell"/></svg></span><span class="toggle-text"><strong>Notifications</strong><span id="phone-push-text"></span></span><input type="checkbox" class="toggle" id="phone-push"></label>
+          <label class="toggle-row rg-ligne" id="rappels-photos-row" hidden><span class="rg-ico" aria-hidden="true"><svg><use href="#i-photo"/></svg></span><span class="toggle-text"><strong>Petits rappels</strong><span id="rappels-photos-text"></span></span><input type="checkbox" class="toggle" id="rappels-photos" checked></label>
+          <label class="toggle-row rg-ligne" id="phone-pause" hidden><span class="rg-ico" aria-hidden="true"><svg><use href="#i-lune"/></svg></span><span class="toggle-text"><strong>Arrière-plan</strong><span id="phone-pause-text"></span></span><input type="checkbox" class="toggle" id="phone-pause-toggle"></label>
+          <details class="card rg" id="apparence-card">
+            <summary class="rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-contraste"/></svg></span><span class="rg-texte"><strong class="rg-titre">Apparence</strong><span class="rg-valeur" id="apparence-value"></span></span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rg-corps">
+            <div class="segmented" role="radiogroup" aria-label="Apparence">
+              <button type="button" class="seg" data-theme-choice="light">Clair</button>
+              <button type="button" class="seg" data-theme-choice="dark">Sombre</button>
+              <button type="button" class="seg" data-theme-choice="auto">Automatique</button>
+            </div>
+            </div>
+          </details>
+        </div>
+        <h3 class="settings-group" id="abo-titre" hidden>Abonnement</h3>
+        <div id="abo-card" class="rg-liste rg-abo" hidden>
+          <div class="rg-ligne rg-abo-tete"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-carte"/></svg></span><span class="rg-texte"><strong id="abo-status" class="abo-status"></strong><span id="abo-details" class="rg-valeur"></span></span></div>
+          <button type="button" id="btn-abo-page" class="rg-ligne rg-bouton" hidden><span class="rg-ico" aria-hidden="true"><svg><use href="#i-download"/></svg></span><span class="rg-titre">Gérer le paiement et les factures</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button>
+          <div class="rg-corps rg-abo-corps">
           <p id="abo-readonly" class="muted small" hidden>Seuls les responsables de la famille peuvent gérer ou résilier l'abonnement : demandez à l'un d'eux.</p>
           <button type="button" id="btn-portail" class="primary wide" hidden>Régler le paiement</button>
-          <button type="button" id="btn-abo-page" class="secondary wide" hidden>Gérer le paiement et les factures</button>
           <button type="button" id="btn-garder" class="secondary wide" hidden>Garder mon abonnement</button>
           <div id="retour-box" class="abo-retour" hidden>
             <p id="retour-text" class="abo-retour-title"></p>
@@ -887,14 +938,24 @@
             </form>
           </div>
           <p id="abo-error" class="error" hidden></p>
+          </div>
         </div>
-        <div class="card">
-          <h2>Mon compte</h2>
-          <p id="account-email" class="muted"></p>
-          <button type="button" class="primary wide" data-action="other-family">Rejoindre une autre famille</button>
-          <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
+        <h3 class="settings-group">Mon compte</h3>
+        <div class="rg-liste">
+          <div class="rg-ligne rg-fixe"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-mail"/></svg></span><span class="rg-texte"><strong class="rg-titre" id="account-email"></strong><span class="rg-valeur">Adresse de connexion</span></span></div>
+          <button type="button" class="rg-ligne rg-bouton" data-action="other-family"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-user-plus"/></svg></span><span class="rg-titre">Rejoindre une autre famille</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button>
+          <details class="card data-card rg">
+            <summary class="rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-bouclier"/></svg></span><span class="rg-titre">Vos données</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <p class="muted"><strong>Ce qui est gardé</strong> : les prénoms, adresses e-mail, numéros de portable et dates de naissance des membres, leur photo de profil, les photos, vidéos et messages envoyés, l'agenda et les anniversaires, l'historique des appels, et l'heure à laquelle la tablette a vu ou senti votre proche pour la dernière fois.</p>
+            <p class="muted"><strong>Qui les voit</strong> : les membres de la famille et la tablette. Papote n'y accède que pour vous dépanner. Aucune publicité, rien n'est revendu.</p>
+            <p class="muted"><strong>Combien de temps</strong> : les 200 dernières photos et les 40 dernières vidéos ; les plus anciennes s'effacent toutes seules. Un envoi supprimé disparaît aussi de la tablette.</p>
+            <p class="muted"><strong>Où</strong> : sur les serveurs Google Firebase.</p>
+            <p class="muted"><strong>Une question, une demande</strong> : écrivez au support depuis la page Support.</p>
+            <p id="delete-family-info" class="muted" hidden><strong>Effacer toutes les données</strong> : écrivez-nous à <a id="btn-delete-family" href="mailto:contact@mapapote.fr">contact@mapapote.fr</a>. Nous en parlons ensemble avant d'effacer, car c'est définitif pour toute la famille.</p>
+          </details>
+          <button type="button" class="rg-ligne rg-bouton" data-action="logout"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-sortie"/></svg></span><span class="rg-titre">Se déconnecter</span></button>
+          <button type="button" id="btn-leave" class="rg-ligne rg-bouton rg-danger"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-close"/></svg></span><span class="rg-titre">Quitter cette famille</span></button>
         </div>
-        <button id="btn-leave" class="link danger wide">Quitter cette famille</button>
       </div>
     </section>
 

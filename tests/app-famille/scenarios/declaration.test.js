@@ -103,7 +103,7 @@ async function familleAvecTablette(email, reglage = {}) {
 async function ouvrirChat(t, question) {
   await g.ouvrirProfil(t);
   await g.attendreVue(t, 'view-profile');
-  await t.page.click('#view-profile .aide-card');
+  await t.page.click('#view-profile .aide-pastille');
   await g.attendreVue(t, 'view-support');
   // « Besoin d'aide ? » ouvre l'assistant tout de suite (Tanguy, 20/11 : plus de bulle flottante).
   await t.page.locator('.ps-panneau textarea').waitFor({ state: 'visible' });

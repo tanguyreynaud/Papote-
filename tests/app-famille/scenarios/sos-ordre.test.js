@@ -15,7 +15,8 @@ const CARTE = '#sos-ordre-card';
 const lignes = (t) => t.page.locator('#sos-ordre-liste .sos-ordre-prenom').allInnerTexts();
 // Position du bouton dans la page (pas à l'écran : le doigt fait défiler jusqu'à la flèche).
 const hautDansLaPage = (t, sel) => t.page.locator(sel).evaluate((e) => Math.round(e.getBoundingClientRect().top + window.scrollY));
-const resume = (t) => t.page.locator('#sos-ordre-value li').allInnerTexts();
+// La ligne dit « Activé · Julie, Léa, Paul » : l'ordre d'appel.
+const resume = async (t) => { const m = /^Activé · (.+)$/.exec((await t.page.locator('#sos-ordre-value').innerText()).trim()); return m ? m[1].split(', ') : []; };
 const fleche = (t, prenom, sens) => `#sos-ordre-liste li:has(.sos-ordre-prenom:text-is("${prenom}")) .${sens}`;
 
 async function modifier(t) {
@@ -48,9 +49,9 @@ test('Ordre d\'appel SOS : ↑/↓, double appui, enregistré, relu après actua
   // Par défaut : la responsable (Julie) d'abord, puis les prénoms par ordre alphabétique.
   await g.ouvrirTuile(julie, 'settings');
   await julie.page.locator(CARTE).waitFor({ state: 'visible' });
-  assert.strictEqual(await julie.page.locator(`${CARTE} h2`).innerText(), 'Ordre d\'appel SOS');
+  assert.strictEqual(await julie.page.locator(`${CARTE} h2`).innerText(), 'SOS famille');
   await attendreResume(julie, ['Julie', 'Léa', 'Paul'], 'ordre par défaut');
-  await julie.page.locator('#sos-ordre-value', { hasText: 'Ordre par défaut' }).waitFor();
+  await julie.page.locator('#sos-ordre-value', { hasText: 'Activé · Julie' }).waitFor();
 
   await modifier(julie);
   assert.deepStrictEqual(await lignes(julie), ['Julie', 'Léa', 'Paul']);
@@ -92,7 +93,7 @@ test('Ordre d\'appel SOS : ↑/↓, double appui, enregistré, relu après actua
   assert.strictEqual(fam.rev, rev + 1, 'une seule écriture');
   await julie.page.locator(`${CARTE} .setting-edit`).waitFor({ state: 'hidden' });
   await attendreResume(julie, ['Paul', 'Julie', 'Léa'], 'résumé après Enregistrer');
-  await julie.page.locator('#sos-ordre-value', { hasText: 'Ordre choisi par la famille' }).waitFor();
+  await julie.page.locator('#sos-ordre-value', { hasText: 'Activé · ' }).waitFor();
 
   // Page rechargée : l'ordre enregistré revient, dans le résumé et dans la liste à modifier.
   await julie.page.reload();
@@ -104,7 +105,7 @@ test('Ordre d\'appel SOS : ↑/↓, double appui, enregistré, relu après actua
   await julie.page.click(`${CARTE} .setting-cancel`);
 
   // Paul n'est pas responsable : pas de carte.
-  await g.ouvrirTuile(paul, 'settings');
+  await g.ouvrirFamille(paul);
   await paul.page.locator('#tablet-owner-note').waitFor({ state: 'visible' });
   assert.strictEqual(await paul.page.locator(CARTE).isVisible(), false, 'carte cachée pour un proche');
 

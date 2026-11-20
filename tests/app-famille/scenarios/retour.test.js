@@ -28,7 +28,7 @@ test('Retour : chaque écran ramène à celui d\'avant, une fenêtre se ferme sa
   // Profil, puis Aide depuis le Profil : les onglets partagent une étape, retour = accueil.
   await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
-  await julie.page.click('#view-profile .aide-card');
+  await julie.page.click('#view-profile .aide-pastille');
   await g.attendreVue(julie, 'view-support');
   await retour(julie, 'view-home');
 

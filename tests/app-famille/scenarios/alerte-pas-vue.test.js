@@ -24,8 +24,8 @@ test('Alerte « pas vue » : 2 jours par défaut, 3 jours choisis (double appui 
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await g.ouvrirTuile(julie, 'settings');
-  await julie.page.locator(`#${CARTE} h2`, { hasText: 'Alerte si la tablette n\'est pas utilisée' }).waitFor();
-  assert.strictEqual(await valeur(julie).innerText(), 'Si elle n\'est pas utilisée depuis 2 jours');
+  await julie.page.locator(`#${CARTE} h2`, { hasText: 'Tablette pas utilisée' }).waitFor();
+  assert.strictEqual(await valeur(julie).innerText(), 'Alerte aux responsables après 2 jours');
   assert.strictEqual((await g.lire(`families/${fid}`)).alertePasVueJours, undefined, 'rien d\'écrit tant qu\'on ne choisit pas');
 
   await modifier(julie);
@@ -48,14 +48,14 @@ test('Alerte « pas vue » : 2 jours par défaut, 3 jours choisis (double appui 
   await julie.page.waitForTimeout(1500);
   await s.calme();
   assert.strictEqual(((await g.lire(`families/${fid}`)).rev || 0) - revAvant, 1, 'une seule écriture');
-  await valeur(julie).filter({ hasText: 'Si elle n\'est pas utilisée depuis 3 jours' }).waitFor();
+  await valeur(julie).filter({ hasText: 'Alerte aux responsables après 3 jours' }).waitFor();
   assert.strictEqual(await julie.page.locator(`#${CARTE} .setting-edit`).isVisible(), false, 'refermée après l\'enregistrement');
 
   // Page rechargée : toujours 3 jours, coché à la réouverture.
   await julie.page.reload();
   await g.attendreVue(julie, 'view-home');
   await g.ouvrirTuile(julie, 'settings');
-  await valeur(julie).filter({ hasText: 'depuis 3 jours' }).waitFor();
+  await valeur(julie).filter({ hasText: 'après 3 jours' }).waitFor();
   await modifier(julie);
   assert.strictEqual(await coche(julie), '3');
   // Annuler ne change rien.
@@ -63,7 +63,7 @@ test('Alerte « pas vue » : 2 jours par défaut, 3 jours choisis (double appui 
   await julie.page.click(`#${CARTE} .setting-cancel`);
   await julie.page.waitForTimeout(500);
   assert.strictEqual((await g.lire(`families/${fid}`)).alertePasVueJours, 3);
-  await valeur(julie).filter({ hasText: 'depuis 3 jours' }).waitFor();
+  await valeur(julie).filter({ hasText: 'après 3 jours' }).waitFor();
 
   // 1 jour, au singulier.
   await modifier(julie);
@@ -72,13 +72,13 @@ test('Alerte « pas vue » : 2 jours par défaut, 3 jours choisis (double appui 
   await julie.page.click(`#${CARTE} .setting-edit button[type=submit]`);
   await g.toast(julie, 'Alerte enregistrée : après 1 jour');
   await g.attendreBase(async () => (await g.lire(`families/${fid}`)).alertePasVueJours === 1, '1 jour écrit');
-  await valeur(julie).filter({ hasText: /depuis 1 jour$/ }).waitFor();
+  await valeur(julie).filter({ hasText: /après 1 jour$/ }).waitFor();
 
   // Valeur hors bornes écrite par erreur (outil, ancienne version) : affichée ramenée, comme le serveur la lit.
   await s.db.doc(`families/${fid}`).update({ alertePasVueJours: 9 });
-  await valeur(julie).filter({ hasText: 'depuis 5 jours' }).waitFor();
+  await valeur(julie).filter({ hasText: 'après 5 jours' }).waitFor();
   await s.db.doc(`families/${fid}`).update({ alertePasVueJours: 'trois' });
-  await valeur(julie).filter({ hasText: 'depuis 2 jours' }).waitFor();
+  await valeur(julie).filter({ hasText: 'après 2 jours' }).waitFor();
 });
 
 test('Alerte « pas vue » : un proche (pas responsable) ne voit pas le réglage et ne peut pas l\'écrire', async () => {
@@ -86,7 +86,7 @@ test('Alerte « pas vue » : un proche (pas responsable) ne voit pas le réglage
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const paul = await banc.telephone('Paul');
   await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
-  await g.ouvrirTuile(paul, 'settings');
+  await g.ouvrirFamille(paul);
   await paul.page.locator('#tablet-owner-note').waitFor();
   assert.strictEqual(await paul.page.locator(`#${CARTE}`).isVisible(), false, 'carte cachée pour un proche');
 

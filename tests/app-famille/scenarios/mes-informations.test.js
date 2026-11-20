@@ -85,10 +85,11 @@ test('Profil : prénom, genre, numéro, photo (changée puis retirée) enregistr
   assert.deepStrictEqual(local, { p: 'Paulo', g: 'femme', t: '07 11 22 33 44', v: photo });
 
   // Julie le voit sans actualiser.
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirFamille(julie);
   await julie.page.locator('#members li', { hasText: 'Paulo' }).locator('img').waitFor();
 
   // Photo retirée.
+  if (!(await paul.page.locator('#face-remove').isVisible())) await paul.page.click('#my-name-card .setting-modify');
   await paul.page.click('#face-remove');
   // « Retirer » s'ouvre sous le doigt : un appui dans la demi-seconde serait pris pour un double appui (ui.js).
   await paul.page.waitForTimeout(600);
@@ -129,7 +130,7 @@ test('Numéro ajouté dans l\'app puis par l\'admin : compteur, tuile « Appeler
   assert.ok(!(await g.lire(`families/${fid}/members/${uid}`)).telephone, 'Paul sans numéro');
 
   const compteur = (t) => t.page.locator('#appels-telephones').textContent();
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirFamille(julie);
   await julie.page.waitForFunction(() => /La tablette peut appeler 1 proche : celui dont le numéro de portable est enregistré\. 1 proche n'a pas encore de numéro\./
     .test(document.querySelector('#appels-telephones').textContent));
   await paul.page.waitForFunction(() => document.querySelector('#tile-phone').classList.contains('tile-off'));
@@ -161,7 +162,7 @@ test('Numéro ajouté dans l\'app puis par l\'admin : compteur, tuile « Appeler
   await paul.page.locator('#my-tel-value', { hasText: '07 55 44 33 22' }).waitFor();
   // Et la liste des membres chez Paul aussi (compteur).
   await g.retourAccueil(paul);
-  await g.ouvrirTuile(paul, 'settings');
+  await g.ouvrirFamille(paul);
   await paul.page.waitForFunction(() => /La tablette peut appeler 2 proches/.test(document.querySelector('#appels-telephones').textContent));
 });
 
@@ -329,6 +330,7 @@ test('Photo retirée (V2) : ne revient pas après actualisation ni à la réouve
   const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'julie@exemple.fr').id;
   await g.attendreBase(async () => !!(await g.lire(`families/${fid}/members/${uid}`)).face, 'photo de l\'inscription');
   await profil(julie);
+  if (!(await julie.page.locator('#face-remove').isVisible())) await julie.page.click('#my-name-card .setting-modify');
   await julie.page.click('#face-remove');
   await julie.page.waitForTimeout(600);
   await g.repondre(julie, 'Retirer');

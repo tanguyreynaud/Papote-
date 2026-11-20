@@ -24,7 +24,7 @@ const ATTENDU = {
   membres: ['view-settings', '#members'],
   volumes: ['view-settings', '#volume-card'],
   nuit: ['view-settings', '#sleep-card'],
-  options: ['view-settings', '#options-card'],
+  options: ['view-settings', '#group-tablet'],
   inviter: ['view-invite'],
   abonnement: ['view-profile', '#abo-card'],
   profil: ['view-profile'],

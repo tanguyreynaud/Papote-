@@ -287,12 +287,12 @@ test('A43 : les e-mails des proches visibles des responsables seulement', async 
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const paul = await banc.telephone('Paul');
   await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirFamille(julie);
   await julie.page.locator('#members li', { hasText: 'Paul' }).locator('.member-email', { hasText: 'paul@exemple.fr' }).waitFor();
   await julie.page.locator('#members li', { hasText: 'Julie' }).locator('.member-email', { hasText: 'julie@exemple.fr' }).waitFor();
   assert.strictEqual(await julie.page.locator('#members .member-email').count(), 2, 'la tablette n\'a pas d\'adresse');
   await g.verifierLargeur(julie, 'liste des membres');
-  await g.ouvrirTuile(paul, 'settings');
+  await g.ouvrirFamille(paul);
   await paul.page.locator('#members li', { hasText: 'Julie' }).waitFor();
   assert.strictEqual(await paul.page.locator('#members .member-email').count(), 0, 'un simple proche ne voit pas les adresses');
   assert.doesNotMatch(await paul.page.locator('#members').innerText(), /@/);
