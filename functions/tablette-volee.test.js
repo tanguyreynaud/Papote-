@@ -11,6 +11,7 @@ function fausseBase(docs) {
     id: chemin.split('/').pop(),
     set: async (v) => { docs[chemin] = v; ecrits.push(['set', chemin]); },
     update: async (v) => { docs[chemin] = { ...docs[chemin], ...v }; ecrits.push(['update', chemin]); },
+    get: async () => ({ exists: chemin in docs, data: () => docs[chemin], get: (k) => (docs[chemin] || {})[k] }),
     delete: async () => { delete docs[chemin]; ecrits.push(['delete', chemin]); },
   });
   const requete = (col, filtres) => ({
@@ -190,6 +191,31 @@ test('fiche membre d\'une tablette supprimée (remplacement, retour, famille sup
   assert.ok(docs['invites/ABCD2345']);
   assert.strictEqual(await fermerCodes(db, '', 1), 0);
   assert.strictEqual(await fermerCodes(db, undefined, 1), 0);
+});
+
+test('seule la fiche du compte des appels disparaît : le code reste ouvert tant que le compte principal est membre', async () => {
+  const docs = {
+    'pairings/QRST6789': { status: 'confirmed', fid: 'f1', tabletUid: 'tab', callsUid: 'app' },
+    'families/f1/members/tab': { role: 'tablette', pairing: 'QRST6789' },
+  };
+  const db = fausseBase(docs);
+  // Les règles laissent le compte des appels revenir seul avec ce code : il ne doit pas être fermé.
+  assert.strictEqual(await fermerCodes(db, 'app', 2000, { sortie: true }), 0);
+  assert.strictEqual(docs['pairings/QRST6789'].status, 'confirmed');
+  // Le compte principal membre par un AUTRE jumelage ne protège pas ce code.
+  docs['families/f1/members/tab'].pairing = 'AUTRE567';
+  assert.strictEqual(await fermerCodes(db, 'app', 2500, { sortie: true }), 1);
+  docs['pairings/QRST6789'].status = 'confirmed';
+  docs['families/f1/members/tab'].pairing = 'QRST6789';
+  // Le compte principal sort : fermé. Sa fiche est déjà supprimée quand le déclencheur passe.
+  delete docs['families/f1/members/tab'];
+  assert.strictEqual(await fermerCodes(db, 'tab', 3000, { sortie: true }), 1);
+  assert.strictEqual(docs['pairings/QRST6789'].status, 'closed');
+  // Révocation (tablette volée) : tout est fermé même si le compte principal est encore membre.
+  const vol = { 'pairings/QRST6789': { status: 'confirmed', fid: 'f1', tabletUid: 'tab', callsUid: 'app' },
+    'families/f1/members/tab': { role: 'tablette', pairing: 'QRST6789' } };
+  assert.strictEqual(await fermerCodes(fausseBase(vol), 'app', 4000), 1);
+  assert.strictEqual(vol['pairings/QRST6789'].status, 'closed');
 });
 
 test('code supprimé entre la lecture et la fermeture (famille en cours d\'effacement) : pas d\'erreur', async () => {

@@ -104,7 +104,12 @@ async function revoquer(deps, params) {
 // Les premiers sont clos (status 'closed', closedAt, comme gestion.js fermerJumelages), le second effacé. Renvoie le nombre de codes fermés.
 // Appelé à la révocation (tablette volée) et dès qu'une fiche membre de tablette est supprimée, par n'importe quel
 // chemin (remplacement, retour, famille supprimée, tablette qui quitte sa famille) : index.js, compterProches.
-async function fermerCodes(db, uid, maintenant) {
+// sortie : true quand seule la fiche membre de `uid` vient de disparaître (index.js, compterProches). Si c'est le compte
+// des appels et que le compte principal de la même tablette est toujours membre avec ce jumelage, le code reste
+// ouvert : les règles laissent alors le compte des appels revenir seul (members create, « compte des appels de la
+// tablette qui revient »), sinon la tablette resterait sans appels jusqu'à un nouveau jumelage. Le code sera fermé
+// quand le compte principal sortira à son tour. À la révocation (tablette volée), tout est fermé sans condition.
+async function fermerCodes(db, uid, maintenant, { sortie = false } = {}) {
   if (typeof uid !== 'string' || !uid) return 0;
   let n = 0;
   const vus = new Set();
@@ -113,6 +118,11 @@ async function fermerCodes(db, uid, maintenant) {
     for (const c of codes.docs) {
       if (c.get('status') !== 'confirmed' || vus.has(c.ref.path)) continue;
       vus.add(c.ref.path);
+      const principal = c.get('tabletUid');
+      if (sortie && champ === 'callsUid' && principal && principal !== uid && c.get('fid')) {
+        const fiche = await db.doc(`families/${c.get('fid')}/members/${principal}`).get();
+        if (fiche.exists && fiche.get('pairing') === c.ref.id) continue;
+      }
       // Famille en cours d'effacement : le code vient d'être supprimé avec elle, il n'y a plus rien à fermer.
       const ferme = await c.ref.update({ status: 'closed', closedAt: new Date(maintenant) })
         .then(() => true, (e) => { if (e && e.code === 5) return false; throw e; });

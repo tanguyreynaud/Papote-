@@ -3086,7 +3086,7 @@ exports.compterProches = onDocumentWritten(
     // Fiche d'une tablette supprimée, par n'importe quel chemin : les codes par lesquels son compte pourrait rentrer
     // seul dans la famille sont fermés (tablette-volee.js, fermerCodes ; audit du 19/11).
     if (tabletteVolee.tabletteSortie(avant, apres)) {
-      await tabletteVolee.fermerCodes(db, event.params.uid, Date.now())
+      await tabletteVolee.fermerCodes(db, event.params.uid, Date.now(), { sortie: true })
         .then((n) => { if (n) logger.info(`Famille ${event.params.fid} : ${n} code(s) fermé(s) après la sortie de la tablette ${event.params.uid}`); })
         .catch((e) => logger.error(`Famille ${event.params.fid} : codes de la tablette ${event.params.uid} non fermés`, e.message));
     }
