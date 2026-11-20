@@ -2139,7 +2139,8 @@ async function prelevementDernierMois(abo) {
 
 // ---------- Page d'accueil du site vitrine, avec les avis (functions/avis.js) ----------
 // firebase.vitrine.json envoie « / » ici. Le gabarit vitrine/accueil.html est relu toutes les 5 minutes ;
-// la page est gardée 1 minute par le CDN (stock écrit dedans) : un avis modifié dans l'admin apparaît en 1 à 6 minutes.
+// la page est gardée 10 minutes par le navigateur et le CDN (Tanguy, 20/11) : un avis modifié dans l'admin apparaît
+// en 10 à 15 minutes, et le bouton « Commander » / « Être prévenu » peut avoir jusqu'à 10 minutes de retard.
 let gabaritAccueil = { html: '', lu: 0 };
 exports.accueil = onRequest({ maxInstances: 5, memory: '256MiB' }, async (req, res) => {
   try {
@@ -2155,15 +2156,15 @@ exports.accueil = onRequest({ maxInstances: 5, memory: '256MiB' }, async (req, r
     } catch (e) {
       logger.warn('Avis illisibles', e.message);
     }
-    // Stock écrit dans la page : « Commander » ou « Être prévenu » dès le premier dessin (Tanguy, 17/11). Gardée 60 s
-    // par le CDN, comme /api/stock : la page de commande et le paiement revérifient de toute façon.
+    // Stock écrit dans la page : « Commander » ou « Être prévenu » dès le premier dessin (Tanguy, 17/11). Gardée
+    // 10 minutes (Tanguy, 20/11 ; /api/stock reste à 60 s) : la page de commande et le paiement revérifient le stock.
     let etat = null;
     try {
       etat = stock.vendable(await stock.lireEtCompter(db, (q) => q.get(), Date.now()));
     } catch (e) {
       logger.warn('Accueil : stock illisible, la page le demandera', e.message);
     }
-    res.set('Cache-Control', 'public, max-age=60, s-maxage=60');
+    res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
     res.type('html').send(stock.pageAvecStock(avis.pageAvecAvis(gabaritAccueil.html, liste), etat));
   } catch (e) {
     logger.error('Page d\'accueil', e);

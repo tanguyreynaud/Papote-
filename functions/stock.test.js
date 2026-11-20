@@ -80,3 +80,25 @@ test('accueil : l\'état du stock est écrit dans la page, une seule fois, et ri
   const vrai = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'vitrine', 'accueil.html'), 'utf8');
   assert.match(pageAvecStock(vrai, false), /data-stock="complet"/);
 });
+
+// Durées de garde du site (Tanguy, 20/11) : images 7 jours, polices 1 an, /api/stock 60 s, le reste redemandé.
+// Les images n'ont pas d'empreinte dans leur nom : une image remplacée sous le même nom met jusqu'à 7 jours à
+// changer chez un visiteur déjà venu ; pour un changement immédiat, lui donner un nouveau nom.
+test('site : chaque image de vitrine/ est gardée 7 jours, les pages restent redemandées', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const racine = path.join(__dirname, '..');
+  const regles = JSON.parse(fs.readFileSync(path.join(racine, 'firebase.vitrine.json'), 'utf8')).hosting.headers;
+  const garde = (source) => regles.find((r) => r.source === source)?.headers.find((h) => h.key === 'Cache-Control')?.value;
+  const images = regles.find((r) => /jpg/.test(r.source));
+  assert.ok(images, 'une règle pour les images');
+  assert.strictEqual(images.headers[0].value, 'public, max-age=604800');
+  assert.ok(regles.indexOf(images) > regles.findIndex((r) => r.source === '**'), 'après « ** », sinon no-cache l\'emporte');
+  const extensions = images.source.match(/@\(([^)]+)\)/)[1].split('|');
+  const oubliees = fs.readdirSync(path.join(racine, 'vitrine'), { recursive: true })
+    .filter((f) => /\.(jpe?g|png|webp|avif|svg|gif|ico)$/i.test(f))
+    .filter((f) => !extensions.includes(path.extname(f).slice(1).toLowerCase()));
+  assert.deepStrictEqual(oubliees, [], 'images sans durée de garde');
+  assert.strictEqual(garde('**'), 'no-cache');
+  assert.strictEqual(garde('/api/stock'), 'public, max-age=60, s-maxage=60');
+});
