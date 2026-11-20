@@ -6222,6 +6222,9 @@ document.querySelectorAll('[data-action=logout]').forEach((btn) => btn.addEventL
     const uid = session?.uid || authUser?.uid;
     const fids = [...new Set([...myFamilies.map((f) => f.fid), session?.fid].filter(Boolean))];
     stopSession();
+    // Un bandeau du compte qui part (« Photo envoyée à Mamie Emma », 4 s) ne reste pas sous les yeux du suivant.
+    clearTimeout(toast.timer);
+    $('toast').hidden = true;
     show('loading');
     await forgetThisPhone(fids, uid);
     await logOut();

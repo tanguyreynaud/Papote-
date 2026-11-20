@@ -100,7 +100,7 @@ test('App Android : retour depuis l\'accueil demande « Voulez-vous quitter Papo
   await g.familleInstallee(lea, { email: 'lea.retour@exemple.fr', prenom: 'Léa' });
 
   // Un premier toucher sur l'accueil pose l'étape « sortie » sous l'accueil.
-  await lea.page.click('#view-home .brand');
+  await lea.page.click('#view-home .brand', { position: { x: 10, y: 10 } }); // à gauche : la roue Réglages est au milieu du titre
   await lea.page.click('#btn-bell');
   await g.attendreVue(lea, 'view-notifs');
   await retour(lea, 'view-home');

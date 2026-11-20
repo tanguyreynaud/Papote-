@@ -38,7 +38,7 @@ test('SOS : Julie et Paul sonnent ; retour d\'Android ne coupe pas la sonnerie ;
   const paul = await banc.telephone('Paul');
   const uidPaul = await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
   // Un premier toucher sur l'accueil pose l'étape « sortie » de l'app sous l'accueil (famille.js).
-  await julie.page.click('#view-home .brand');
+  await julie.page.click('#view-home .brand', { position: { x: 10, y: 10 } }); // à gauche : la roue Réglages est au milieu du titre
   const mamie = await tablette.ouvrir(fid, tab);
 
   const cid = await tablette.appeler(mamie, { sos: 1 });
