@@ -5,7 +5,7 @@
 // La connexion et les sections familles, envois et maintenance sont dans admin.js.
 import './retour.js';
 import './declarations.js';
-import { demander, saisir, prevenir, menuPoints, annoncer, boutonCharge, patienter, ligneModifiable } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints, menusDansLaPage, annoncer, boutonCharge, patienter, ligneModifiable } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -67,12 +67,12 @@ function remplirTable(table, colonnes, lignes, { total, vide = 'Rien sur cette p
   const ligne = (l) => {
     const cellules = Array.isArray(l) ? l : l.cellules;
     const tr = h('tr', l.onclick ? { tabIndex: 0, onclick: l.onclick, onkeydown: (e) => e.key === 'Enter' && l.onclick() } : {},
-      cellules.map((v, i) => h('td', { class: colonnes[i].n ? 'n' : null, 'data-titre': colonnes[i].titre }, v ?? '')));
+      cellules.map((v, i) => h('td', { class: [colonnes[i].n ? 'n' : '', colonnes[i].classe || ''].join(' ').trim() || null, 'data-titre': colonnes[i].titre }, v ?? '')));
     if (l.classe) tr.className = l.classe;
     return tr;
   };
   table.replaceChildren(
-    h('thead', {}, h('tr', {}, colonnes.map((c) => h('th', { class: c.n ? 'n' : null }, c.titre)))),
+    h('thead', {}, h('tr', {}, colonnes.map((c) => h('th', { class: [c.n ? 'n' : '', c.classe || ''].join(' ').trim() || null }, c.titre)))),
     h('tbody', {},
       lignes.length ? lignes.map(ligne) : h('tr', {}, h('td', { class: 'vide', colSpan: colonnes.length }, vide)),
       total ? h('tr', { class: 'total' }, total.map((v, i) => h('td', { class: colonnes[i].n ? 'n' : null }, v ?? ''))) : null),
@@ -92,6 +92,23 @@ function cliquable(el, faire) {
   el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); faire(); } });
   return el;
 }
+
+// Filtres en pastilles (« Toutes 13 », « À vérifier 3 ») au-dessus d'une liste : [{ valeur, libelle, n }].
+// Une pastille à 0 est cachée, sauf la première (« Toutes ») et celle choisie.
+function filtresPastilles(zone, choix, actuel, choisir) {
+  zone.replaceChildren(...choix.filter((c, i) => i === 0 || c.n || c.valeur === actuel).map((c) => h('button', {
+    type: 'button', class: c.valeur === actuel ? 'actif' : null, 'aria-pressed': String(c.valeur === actuel),
+    onclick: () => choisir(c.valeur),
+  }, c.libelle, c.n != null ? h('span', { class: 'n' }, String(c.n)) : null)));
+}
+
+// Première cellule d'une liste courte : le nom en gras, une ligne de détail en dessous.
+// Le détail complet ne s'affiche que sur téléphone (sur ordinateur, les colonnes le disent déjà) : class « tel ».
+const nomEtDetail = (nom, ...details) => {
+  const d = details.filter(Boolean);
+  return h('div', {}, h('strong', {}, nom),
+    d.length ? h('small', { class: 'tel' }, ...d.flatMap((x, i) => (i ? [' · ', x] : [x]))) : null);
+};
 
 const badge = (texte, classe) => h('span', { class: `badge ${classe || ''}` }, texte);
 
@@ -223,6 +240,9 @@ const memoire = {
   lire: (k, defaut) => { try { return localStorage.getItem(k) || defaut; } catch (e) { return defaut; } },
   ecrire: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* navigation privée */ } },
 };
+
+// Menus « + Ajouter » et « ⋯ » écrits dans admin.html : montés une fois, leurs boutons gardent leur id.
+menusDansLaPage();
 
 const TITRES = {
   accueil: 'Accueil',
@@ -1723,75 +1743,63 @@ const dansGroupe = (g, t) => g[1].includes(t.affiche) && (!g[2] || g[2](t));
 function afficherStock() {
   const stock = donnees.stock.map((t) => ({ ...t, affiche: etatTablette(t) }));
   const compte = (etats) => stock.filter((t) => etats.includes(t.affiche)).length;
-  const valeur = (etats) => stock.filter((t) => etats.includes(t.affiche)).reduce((s, t) => s + (t.prixAchat || 0), 0);
   const aEnvoyer = donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer').length;
-  const pretes = tablettesPretes();
-  const dispo = pretes.length;
-  const reservees = pretes.filter((t) => t.commande).length;
-  const chez = GROUPES_STOCK['g:chez'][1];
-  // Chaque chiffre filtre la liste des tablettes juste en dessous.
-  const filtrer = (valeur) => () => {
-    $('filtre-stock').value = valeur;
-    afficherStock();
-    $('t-stock').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-  const libresListe = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:disponibles'], t));
-  const libres = libresListe.length;
-  const valeurLibres = libresListe.reduce((s, t) => s + (t.prixAchat || 0), 0);
-  const reserveesTout = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:reservees'], t)).length;
-  const manqueTablettes = Math.max(0, aEnvoyer - dispo);
-  // Trois chiffres, chacun ouvre ses tablettes ; le reste en petite ligne, seulement s'il y en a.
-  $('kpi-stock').replaceChildren(
-    cliquable(stat(String(libres), 'en stock, libres',
-      manqueTablettes ? `il manque ${pluriel(manqueTablettes, 'tablette')} pour les commandes` : valeurLibres ? `valeur ${euros(valeurLibres)}` : null,
-      manqueTablettes ? 'neg' : null), filtrer('g:disponibles')),
-    cliquable(stat(String(reserveesTout), 'réservées pour un envoi'), filtrer('g:reservees')),
-    cliquable(stat(String(compte(chez)), 'chez les clients', valeur(chez) ? `valeur ${euros(valeur(chez))}` : null), filtrer('g:chez')));
-  const lien = (n, texte, filtre) => (n ? h('button', { type: 'button', class: 'link', onclick: filtrer(filtre) }, `${n} ${texte}`) : null);
-  const suite = [
-    lien(compte(['commandee']), compte(['commandee']) > 1 ? 'commandées chez le vendeur' : 'commandée chez le vendeur', 'commandee'),
-    lien(stock.filter((t) => dansGroupe(GROUPES_STOCK['g:famille'], t)).length, 'dans une famille, pas à vendre', 'g:famille'),
-    lien(compte(['revenue', 'a-reparer']), 'à vérifier ou réparer', 'g:verifier'),
-    lien(compte(['perdue', 'hors-service']), 'perdue(s) ou hors service', 'g:sorties'),
-    donnees.aVendre == null ? null : h('span', { class: 'muted' }, donnees.aVendre
-      ? `Le site propose ${donnees.aVendre} à la vente (stock + 10 précommandes)`
-      : 'Le site propose « Être prévenu » (plus rien à vendre)'),
-  ].filter(Boolean);
-  $('kpi-stock-suite').replaceChildren(...suite.flatMap((x, i) => (i ? [' · ', x] : [x])));
+  const dispo = tablettesPretes().length;
+  const nGroupe = (cle) => stock.filter((t) => dansGroupe(GROUPES_STOCK[cle], t)).length;
+  const filtre = $('filtre-stock').value;
+  // Filtres en pastilles : chacun montre ses tablettes, avec leur nombre.
+  filtresPastilles($('filtres-stock'), [
+    { valeur: '', libelle: 'Toutes', n: stock.length },
+    { valeur: 'g:disponibles', libelle: 'Libres', n: nGroupe('g:disponibles') },
+    { valeur: 'g:reservees', libelle: 'Réservées', n: nGroupe('g:reservees') },
+    { valeur: 'g:chez', libelle: 'Chez les clients', n: nGroupe('g:chez') },
+    { valeur: 'g:verifier', libelle: 'À vérifier', n: nGroupe('g:verifier') },
+    { valeur: 'commandee', libelle: 'Commandées', n: compte(['commandee']) },
+    { valeur: 'g:famille', libelle: 'Dans une famille', n: nGroupe('g:famille') },
+    { valeur: 'g:sorties', libelle: 'Perdues ou HS', n: nGroupe('g:sorties') },
+  ], filtre, (v) => { $('filtre-stock').value = v; afficherStock(); });
+  const valeurChez = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:chez'], t)).reduce((x, t) => x + (t.prixAchat || 0), 0);
+  const valeurLibres = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:disponibles'], t)).reduce((x, t) => x + (t.prixAchat || 0), 0);
+  $('kpi-stock-suite').textContent = [
+    valeurLibres ? `Stock libre : ${euros(valeurLibres)}` : null,
+    valeurChez ? `chez les clients : ${euros(valeurChez)}` : null,
+    donnees.aVendre == null ? null : donnees.aVendre
+      ? `le site propose ${donnees.aVendre} à la vente (stock + 10 précommandes)`
+      : 'le site propose « Être prévenu » (plus rien à vendre)',
+  ].filter(Boolean).join(' · ');
   const manque = aEnvoyer - dispo;
   $('alerte-stock').hidden = manque <= 0;
   $('alerte-stock').textContent = manque > 0
     ? `Il manque ${pluriel(manque, 'tablette')} pour envoyer toutes les commandes.` : '';
 
-  const filtre = $('filtre-stock').value;
   const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
   $('stock-vide').hidden = stock.length > 0;
+  // Une ligne par tablette : son nom, son état, le client, la carte SIM, une seule chose à savoir. Le reste est
+  // dans sa page (achat, pièces, prix, date).
   remplirTable($('t-stock'), [
-    { titre: 'N° de série' }, { titre: 'Modèle' }, { titre: 'État' }, { titre: 'Achat' }, { titre: 'Client' }, { titre: 'SIM' },
-    { titre: 'Pièces' }, { titre: 'Prix', n: 1 }, { titre: 'Achetée le' },
+    { titre: 'Tablette' }, { titre: 'État' }, { titre: 'Client', classe: 'pc' }, { titre: 'SIM', classe: 'pc' },
+    { titre: 'À savoir', classe: 'pc' },
   ], stock.filter((t) => !filtre || (GROUPES_STOCK[filtre] ? dansGroupe(GROUPES_STOCK[filtre], t) : t.affiche === filtre))
-    .sort((a, b) => (b.acheteeLe || 0) - (a.acheteeLe || 0))
+    .sort((a, b) => String(a.ref || '~').localeCompare(String(b.ref || '~'), 'fr', { numeric: true }))
     .map((t) => {
       const c = parId.get(t.commande);
+      const client = c ? c.nom || c.email || codeCommande(c.code) : DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? nomFamille(t.fid) : '';
+      const alertes = [alerteJumelage(t), t.usure, ...badgesInstallation(t).filter((b) => b.classList.contains('ko')).map((b) => b.textContent)].filter(Boolean);
+      const aSavoir = alertes.length ? h('span', { class: 'texte-ko' }, alertes.join(' · '))
+        : t.essai === true ? h('span', { class: 'muted' }, 'tablette d\'essai')
+          : DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? h('span', { class: 'muted' }, 'pas à vendre')
+          : t.modele && !/tab 60 pro/i.test(t.modele) ? h('span', { class: 'muted' }, t.modele) : '';
       return {
         onclick: () => ouvrirTablette(t.id),
         cellules: [
-          h('div', {}, t.ref ? h('strong', {}, `${t.ref} `) : null, t.numero || t.serieAndroid || h('span', { class: 'muted' }, 'à saisir'),
-            alerteJumelage(t) ? h('div', {}, badge(alerteJumelage(t), 'ko')) : null,
-            DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? h('div', {}, badge(pasAVendre(t), 'info')) : null,
-            t.usure ? h('div', {}, badge(t.usure, 'ko')) : null,
-            ...badgesInstallation(t).map((b) => h('div', {}, b))),
-          t.modele || '',
+          nomEtDetail(t.ref || t.numero || t.serieAndroid || 'Tablette', client || (t.ref ? t.numero : null), alertes.length ? h('span', { class: 'texte-ko' }, alertes[0]) : null),
           badge(donnees.etats[t.affiche] || t.affiche, classeEtat(t.affiche)),
-          celluleAchat(t),
-          c ? nomCommande(c) : '',
-          t.sim || '',
-          h('div', { class: 'pieces-liste' }, piecesTablette(t).map(lienPiece)),
-          euros(t.prixAchat),
-          jour(t.acheteeLe),
+          client || h('span', { class: 'muted' }, '—'),
+          t.sim || h('span', { class: 'muted' }, '—'),
+          aSavoir,
         ],
       };
-    }), { vide: 'Aucune tablette.' });
+    }), { vide: 'Aucune tablette ici.' });
 }
 $('filtre-stock').addEventListener('change', afficherStock);
 
@@ -1867,6 +1875,11 @@ function afficherSim() {
   const parTablette = new Map(donnees.stock.map((t) => [t.id, t]));
   const parCommande = new Map(donnees.commandes.map((c) => [c.id, c]));
   const filtre = $('filtre-sim').value;
+  const nStatut = (st) => donnees.sims.filter((l) => l.statut === st).length;
+  filtresPastilles($('filtres-sim'), [
+    { valeur: '', libelle: 'En cours', n: donnees.sims.filter((l) => l.statut !== 'resiliee').length },
+    ...Object.entries(donnees.statutsSim).map(([k, v]) => ({ valeur: k, libelle: v, n: nStatut(k) })),
+  ], filtre, (v) => { $('filtre-sim').value = v; afficherSim(); });
   const ordre = { active: 0, suspendue: 1, stock: 2, resiliee: 3 };
   const lignes = donnees.sims.filter((l) => (filtre ? l.statut === filtre : l.statut !== 'resiliee'))
     .map((l) => {
@@ -1883,20 +1896,24 @@ function afficherSim() {
   const n = actives.length + anciennes.length;
   $('sim-resume').textContent = `${n} ligne${n > 1 ? 's actives' : ' active'}, ${euros(total)} par mois · `
     + `${pluriel(donnees.sims.filter((l) => l.statut === 'stock').length, 'carte')} en stock`;
+  const nomTab = (t) => (t ? t.ref || t.numero || t.modele || 'tablette' : '');
   remplirTable($('t-sim'), [
-    { titre: 'Statut' }, { titre: 'Opérateur' }, { titre: 'Numéro' }, { titre: 'ICCID' }, { titre: 'Achat' }, { titre: 'Tablette' },
-    { titre: 'Client' }, { titre: 'Par mois', n: 1 }, { titre: 'À regarder' },
+    { titre: 'Ligne' }, { titre: 'Statut' }, { titre: 'Opérateur', classe: 'pc' }, { titre: 'Tablette', classe: 'pc' },
+    { titre: 'Par mois', n: 1, classe: 'pc' }, { titre: 'À regarder', classe: 'pc' },
   ], [
     ...lignes.map(({ l, t, c, alertes }) => ({
       onclick: () => ouvrirSim(l.id),
-      cellules: [badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut]), l.operateur || '', l.numero || '',
-        fin4(l.iccid), lienAchat(l.depense), t ? t.numero || t.modele || '' : '', c ? nomCommande(c) : '', euros(coutLigne(l)),
-        h('span', { class: 'alertes' }, alertes.map((x) => badge(x, 'ko')))],
+      cellules: [
+        nomEtDetail(l.numero || `ICCID ${fin4(l.iccid)}` || 'Carte SIM', l.operateur, t ? `dans ${nomTab(t)}` : null, c ? c.nom || c.email : null,
+          alertes.length ? h('span', { class: 'texte-ko' }, alertes[0]) : null),
+        badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut]),
+        l.operateur || '', t ? nomTab(t) : h('span', { class: 'muted' }, '—'), euros(coutLigne(l)),
+        alertes.length ? h('span', { class: 'texte-ko' }, alertes.join(' · ')) : ''],
     })),
     ...anciennes.map((t) => ({
       onclick: () => ouvrirTablette(t.id),
-      cellules: [badge('Active', 'ok'), t.simOperateur || '', t.sim, h('span', { class: 'muted' }, 'à compléter'), '',
-        t.numero || t.modele || '', '', euros(coutSim(t)), aResilier.has(t.id) ? badge('à résilier ou suspendre', 'ko') : ''],
+      cellules: [nomEtDetail(t.sim, t.simOperateur, `dans ${nomTab(t)}`), badge('Active', 'ok'), t.simOperateur || '', nomTab(t), euros(coutSim(t)),
+        aResilier.has(t.id) ? h('span', { class: 'texte-ko' }, 'à résilier ou suspendre') : h('span', { class: 'muted' }, 'fiche à compléter')],
     })),
   ], { vide: 'Aucune carte SIM enregistrée.' });
 }
@@ -2305,13 +2322,16 @@ function accessoiresAPrevoir() {
 
 function afficherAccessoires() {
   remplirTable($('t-accessoires'), [
-    { titre: 'Accessoire' }, { titre: 'En stock', n: 1 }, { titre: 'Part avec' }, { titre: 'Au retour' }, { titre: 'Prix unitaire', n: 1 }, { titre: 'Achat' }, { titre: '' },
-  ], accessoiresAPrevoir().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => ({
-    onclick: () => ouvrirAccessoire(a.id),
-    cellules: [a.nom, String(a.quantite || 0), donnees.envoisAccessoire[a.parEnvoi || ''], a.retour ? 'Revient' : 'Consommé', euros(a.prixAchat),
-      lienAchat((a.depenses || []).slice(-1)[0]),
-      a.manque ? badge(`il en manque ${a.manque} pour les envois`, 'ko') : a.bas ? badge('stock bas', 'ko') : ''],
-  })), { vide: 'Aucun accessoire.' });
+    { titre: 'Accessoire' }, { titre: 'En stock', n: 1 }, { titre: 'Part avec', classe: 'pc' }, { titre: 'À savoir', classe: 'pc' },
+  ], accessoiresAPrevoir().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => {
+    const alerte = a.manque ? `il en manque ${a.manque} pour les envois` : a.bas ? 'stock bas' : null;
+    return {
+      onclick: () => ouvrirAccessoire(a.id),
+      cellules: [nomEtDetail(a.nom, donnees.envoisAccessoire[a.parEnvoi || ''], alerte ? h('span', { class: 'texte-ko' }, alerte) : null),
+        h('strong', {}, String(a.quantite || 0)), donnees.envoisAccessoire[a.parEnvoi || ''] || '',
+        alerte ? h('span', { class: 'texte-ko' }, alerte) : h('span', { class: 'muted' }, a.retour ? 'revient avec la tablette' : 'consommé')],
+    };
+  }), { vide: 'Aucun accessoire.' });
 }
 
 // Page d'un accessoire : chaque information se modifie avec son crayon ; la livraison reçue et la suppression

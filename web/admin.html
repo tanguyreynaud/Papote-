@@ -260,41 +260,43 @@
           <button type="button" data-onglet="achats">Achats</button>
         </div>
         <div data-onglet="tablettes">
-          <div class="stats" id="kpi-stock"></div>
-          <p class="small kpi-suite" id="kpi-stock-suite"></p>
-          <div class="card">
-            <div class="tete">
-              <select id="filtre-stock" aria-label="Filtrer"><option value="">Toutes</option></select>
-              <div class="actions no-print">
-                <button type="button" class="secondary small-btn" id="x-stock">Exporter</button>
-                <button type="button" class="secondary small-btn" id="btn-achat">Ajouter un achat</button>
-                <button type="button" class="secondary small-btn" id="btn-installer-qr">Installer une tablette</button>
-                <button type="button" class="primary small-btn" id="btn-recevoir">Recevoir une tablette</button>
-              </div>
+          <div class="barre-liste">
+            <div class="filtres no-print" id="filtres-stock" role="group" aria-label="Filtrer les tablettes"></div>
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-texte="+ Ajouter" data-classe="principal" data-titre="Ajouter des tablettes">
+              <button type="button" id="btn-recevoir" data-detail="Elle arrive du vendeur : la noter en stock">Recevoir une tablette</button>
+              <button type="button" id="btn-installer-qr" data-detail="Sur place, par QR code">Installer une tablette</button>
+              <button type="button" id="btn-achat" data-detail="Une commande passée chez un vendeur">Ajouter un achat</button>
             </div>
-            <div class="table"><table id="t-stock"></table></div>
-            <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
+            <div class="menu-actions no-print" data-titre="Autres actions sur les tablettes">
+              <button type="button" id="x-stock" data-detail="Toute la liste, pour Excel">Exporter</button>
+            </div>
           </div>
+          <select id="filtre-stock" aria-label="Filtrer" hidden><option value="">Toutes</option></select>
+          <div class="table courte"><table id="t-stock"></table></div>
+          <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
+          <p class="small muted kpi-suite" id="kpi-stock-suite"></p>
         </div>
         <div data-onglet="sim">
-          <div class="card">
-            <div class="tete">
-              <select id="filtre-sim" aria-label="Filtrer"><option value="">Toutes sauf résiliées</option></select>
-              <button type="button" class="primary small-btn no-print" id="btn-sim">Ajouter une carte SIM</button>
-            </div>
-            <p class="muted small" id="sim-resume"></p>
-            <div class="table"><table id="t-sim"></table></div>
+          <div class="barre-liste">
+            <div class="filtres no-print" id="filtres-sim" role="group" aria-label="Filtrer les cartes SIM"></div>
+            <span class="espace"></span>
+            <button type="button" class="primary small-btn no-print" id="btn-sim">+ Ajouter</button>
           </div>
+          <select id="filtre-sim" aria-label="Filtrer" hidden><option value="">Toutes sauf résiliées</option></select>
+          <div class="table courte"><table id="t-sim"></table></div>
+          <p class="muted small kpi-suite" id="sim-resume"></p>
         </div>
-        <div class="card" data-onglet="accessoires">
-          <div class="tete">
-            <p class="muted small">Ils sortent tout seuls du stock quand une tablette part avec la formule choisie.</p>
-            <div class="actions no-print">
-              <button type="button" class="secondary small-btn" id="btn-accessoire">Ajouter un accessoire</button>
-              <button type="button" class="primary small-btn" id="btn-recevoir-accessoire">Recevoir une livraison</button>
+        <div data-onglet="accessoires">
+          <div class="barre-liste">
+            <p class="muted small" style="margin:0">Ils sortent tout seuls du stock quand une tablette part avec la formule choisie.</p>
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-texte="+ Ajouter" data-classe="principal" data-titre="Ajouter des accessoires">
+              <button type="button" id="btn-recevoir-accessoire" data-detail="Une livraison arrivée : mettre à jour le stock">Recevoir une livraison</button>
+              <button type="button" id="btn-accessoire" data-detail="Une nouvelle sorte (chargeur, support…)">Nouvel accessoire</button>
             </div>
           </div>
-          <div class="table"><table id="t-accessoires"></table></div>
+          <div class="table courte"><table id="t-accessoires"></table></div>
         </div>
         <div class="card" data-onglet="achats">
           <div class="tete">

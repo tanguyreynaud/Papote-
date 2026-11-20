@@ -173,3 +173,35 @@
   .admin-body .card { padding: 14px; }
   .admin-body .nav nav a { font-size: 15px; padding: 10px 12px; }
 }
+
+/* ---------- Liste courte en tableau (.table.courte) : colonnes sur ordinateur, une ligne simple sur téléphone ---------- */
+
+.admin-body .table.courte td:first-child strong { font-weight: 700; }
+.admin-body .table.courte td:first-child small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+.admin-body .table.courte td:first-child .tel { display: none; }
+/* Flèche des lignes cliquables : discrète. */
+.admin-body .table tbody tr[tabindex] td:last-child::after { color: #b9b2c3; font-weight: 400; }
+.texte-ko { color: var(--danger); font-weight: 600; }
+.admin-body .table.courte td.chev { color: #b9b2c3; font-size: 18px; text-align: right; width: 24px; }
+.admin-body .table.courte th.chev { width: 24px; }
+@media (max-width: 640px) {
+  .admin-body .table.courte { overflow: hidden; }
+  .admin-body .table.courte table, .admin-body .table.courte tbody { display: block; }
+  .admin-body .table.courte thead { display: none; }
+  .admin-body [data-panneau] .table.courte tbody tr {
+    display: flex; align-items: center; gap: 10px; padding: 11px 14px; margin: 0; border: 0; border-top: 1px solid var(--line);
+    border-radius: 0; background: none; position: static;
+  }
+  .admin-body [data-panneau] .table.courte tbody tr:first-child { border-top: 0; }
+  .admin-body [data-panneau] .table.courte tbody tr[tabindex]::after { content: '›'; position: static; color: #b9b2c3; font-size: 20px; font-weight: 400; }
+  .admin-body [data-panneau] .table.courte tbody td {
+    display: block; padding: 0; border: 0; margin: 0; text-align: left; font-size: 14px;
+  }
+  .admin-body [data-panneau] .table.courte tbody td::before { content: none; }
+  .admin-body [data-panneau] .table.courte tbody td:first-child { flex: 1; min-width: 0; font-size: 15px; padding: 0; border: 0; margin: 0; }
+  .admin-body [data-panneau] .table.courte tbody td:first-child small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+  .admin-body [data-panneau] .table.courte tbody td.pc { display: none; }
+  .admin-body [data-panneau] .table.courte tbody td.chev { display: block; }
+  .admin-body .table.courte td:first-child .tel { display: block; }
+  .admin-body [data-panneau] .table.courte tbody td.vide { flex: 1; text-align: center; padding: 8px; }
+}
