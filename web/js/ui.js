@@ -173,6 +173,22 @@ export function notice(message) {
   return dialog(message, [{ label: 'OK', value: true, cls: 'primary' }]);
 }
 
+/**
+ * « Que faire ? » quand la tablette ne répond plus (Tanguy, 20/11) : 3 étapes concrètes, puis le lien vers
+ * « Dépanner la tablette » (banc du 19/11 : Julie et Sylvie arrivaient dans Dépanner sans consigne). Rend 'depanner'
+ * si la personne touche ce lien.
+ */
+export function queFaireTablette(nom) {
+  return dialog([
+    `1. Demandez à ${nom} si l'écran de la tablette est allumé.`,
+    "2. S'il est noir : branchez le chargeur, puis appuyez 3 secondes sur le bouton marche/arrêt, sur le côté.",
+    '3. La tablette se reconnecte ensuite toute seule, en quelques minutes.',
+  ].join('\n'), [
+    { label: 'Dépanner la tablette', value: 'depanner', cls: 'secondary' },
+    { label: 'OK', value: true, cls: 'primary' },
+  ], { title: 'Que faire ?', cls: 'dialog-etapes' });
+}
+
 /** Message d'échec avec « Besoin d'aide ? » : rend 'aide' si la personne le touche. */
 export function noticeAide(message) {
   return dialog(message, [
