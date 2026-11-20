@@ -160,8 +160,11 @@
 .admin-body .fiche { font-size: 14px; gap: 0 16px; }
 .admin-body .fiche dt, .admin-body .fiche dd { padding: 7px 0; border-top: 1px solid var(--line); }
 .admin-body .fiche dt:first-of-type, .admin-body .fiche dd:first-of-type { border-top: 0; }
-@media (max-width: 560px) {
-  .admin-body .fiche dd { border-top: 0; padding-top: 0; margin-bottom: 0; }
+/* Téléphone : le libellé à gauche, la valeur à droite, sur une ligne (au lieu de l'un sous l'autre). */
+@media (max-width: 640px) {
+  .admin-body dl.fiche, .admin-body #famille-fiche .family dl.fiche { grid-template-columns: minmax(5.5em, 34%) minmax(0, 1fr); gap: 0 10px; }
+  .admin-body .fiche dt, .admin-body .fiche dd { border-top: 1px solid var(--line); padding: 8px 0; margin: 0; }
+  .admin-body .fiche dt:first-of-type, .admin-body .fiche dd:first-of-type { border-top: 0; }
 }
 
 /* Repli des explications longues. */
@@ -207,4 +210,35 @@
   .admin-body [data-panneau] .table.courte tbody td.chev { display: block; }
   .admin-body .table.courte td:first-child .tel { display: block; }
   .admin-body [data-panneau] .table.courte tbody td.vide { flex: 1; text-align: center; padding: 8px; }
+}
+
+/* ---------- Fiche d'une carte SIM : blocages chez l'opérateur, en liste à cocher ---------- */
+
+.admin-body .bloc-hors-forfait { padding: 0 0 10px; border-bottom: 1px solid var(--line); }
+.admin-body label.case-hors-forfait {
+  display: flex; align-items: center; gap: 12px; margin: 0; padding: 6px 0 0; border: 0; background: none; border-radius: 0;
+  font-size: 15px; font-weight: 600; color: var(--text);
+}
+.admin-body label.case-hors-forfait input { width: 22px; height: 22px; margin: 0; accent-color: var(--ok); flex: none; }
+.admin-body .bloc-hors-forfait [data-hors-forfait-aide] { margin: 2px 0 0 34px; font-size: 12px; }
+.liste-blocages { display: flex; flex-direction: column; }
+.admin-body .contenu button.ligne-blocage {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 0; padding: 11px 0; border: 0; border-radius: 0;
+  border-bottom: 1px solid var(--line); background: none; color: var(--text); font-size: 15px; font-weight: 600; text-align: left;
+  justify-content: flex-start;
+}
+.ligne-blocage .coche {
+  width: 22px; height: 22px; flex: none; border-radius: 6px; border: 2px solid #cfc7d9; display: grid; place-items: center;
+  color: #fff; font-size: 14px; line-height: 1; background: var(--surface);
+}
+.ligne-blocage[aria-pressed="true"] .coche { background: var(--ok); border-color: var(--ok); }
+.ligne-blocage[aria-pressed="true"] .coche::before { content: '✓'; }
+.ligne-blocage.charge .coche { opacity: .5; }
+.bilan-blocages { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; font-weight: 700; font-size: 14px; }
+.bilan-blocages.ok { background: var(--vert-fond); color: var(--ok); }
+.bilan-blocages.a-faire { background: var(--orange-fond); color: var(--orange); }
+/* Très petit téléphone : le libellé repasse au-dessus (un ICCID ou un IBAN ne tient pas à côté). */
+@media (max-width: 340px) {
+  .admin-body dl.fiche, .admin-body #famille-fiche .family dl.fiche { grid-template-columns: minmax(0, 1fr); }
+  .admin-body .fiche dd { border-top: 0; padding-top: 0; }
 }

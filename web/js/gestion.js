@@ -2051,10 +2051,10 @@ function carteRecharges(l, modif, vue) {
       ...ligneFinForfait(l),
       ...(cetteAnnee ? [h('dt', {}, `Payé en ${annee}`), h('dd', {}, euros(cetteAnnee))] : []),
       ...ligneGardeFou(vue && vue.sim)),
-    h('p', { class: 'muted small' }, l.renouvellementAuto
+    h('details', { class: 'aide-repliee' }, h('summary', {}, 'Comment ça marche ?'), h('p', {}, l.renouvellementAuto
       ? 'Les factures de l\'opérateur envoyées à factures@mapapote.fr se rangent ici toutes seules. Sans facture 2 jours après la fin du forfait, une alerte s\'affiche.'
       : 'Rappel 3 jours avant la fin du forfait. Une facture envoyée à factures@mapapote.fr se range aussi ici toute seule.',
-      ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % encore plus, à 95 % elle les passe sans image et les vidéos attendent le Wi-Fi.'),
+      ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % encore plus, à 95 % elle les passe sans image et les vidéos attendent le Wi-Fi.')),
     recharges.length ? h('div', { class: 'table cartes' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
 }
 // Blocages demandés à l'opérateur (Tanguy, 11/11) : un bouton par blocage, appuyé = activé chez l'opérateur. Notés
@@ -2065,16 +2065,19 @@ function carteBlocages(l) {
   if (l.statut === 'resiliee') return null;
   const etat = Object.fromEntries(BLOCAGES_SIM.map(([k]) => [k, !!(l.blocages && l.blocages[k] === true)]));
   let envoi = false;
+  // Une liste à cocher : chaque ligne est un bouton (coché = aria-pressed), le bilan en dessous dit si la carte
+  // peut partir (vert) ou ce qu'il reste (orange).
   const boutons = BLOCAGES_SIM.map(([k, texte]) => h('button', {
-    type: 'button', class: 'choix-fin-forfait no-print', 'data-blocage': k, 'aria-pressed': String(etat[k]),
-  }, texte));
+    type: 'button', class: 'ligne-blocage no-print', 'data-blocage': k, 'aria-pressed': String(etat[k]),
+  }, h('span', { class: 'coche', 'aria-hidden': 'true' }), h('span', {}, texte.charAt(0).toUpperCase() + texte.slice(1))));
   const resume = h('p', { class: 'small' });
   const afficher = () => {
     boutons.forEach((b) => b.setAttribute('aria-pressed', String(etat[b.dataset.blocage])));
+    const reste = BLOCAGES_SIM.filter(([k]) => !etat[k]).length + (horsForfaitBloque(l) ? 0 : 1);
     resume.textContent = blocagesFaits({ blocages: etat })
-      ? (horsForfaitBloque(l) ? 'Tout est bloqué : la carte peut partir.' : 'Les quatre blocages sont notés. Reste le hors-forfait, plus haut.')
-      : 'Il manque un blocage : pas d\'étiquette ni de « Colis déposé » pour cette carte.';
-    resume.className = blocagesFaits({ blocages: etat }) ? 'small muted' : 'small error';
+      ? (horsForfaitBloque(l) ? '✓ Tout est bloqué : la carte peut partir.' : 'Les quatre blocages sont notés. Reste le hors-forfait, plus haut.')
+      : `Encore ${reste} à faire : pas d'étiquette ni de « Colis déposé » pour cette carte.`;
+    resume.className = `bilan-blocages ${blocagesFaits({ blocages: etat }) && horsForfaitBloque(l) ? 'ok' : 'a-faire'}`;
   };
   for (const b of boutons) {
     b.addEventListener('click', async () => {
@@ -2095,9 +2098,10 @@ function carteBlocages(l) {
   return h('div', { class: 'card' },
     h('h2', {}, 'Blocages chez l\'opérateur'),
     caseHorsForfait(l),
-    h('p', { class: 'muted small' }, 'Activez-les dans l\'espace client de la ligne (ou au service client), puis appuyez sur chacun ici. Seule protection qui tient si quelqu\'un sort de l\'appli de la tablette.'),
-    h('div', { class: 'fins-forfait', role: 'group', 'aria-label': 'Blocages chez l\'opérateur' }, ...boutons),
-    resume);
+    h('div', { class: 'liste-blocages', role: 'group', 'aria-label': 'Blocages chez l\'opérateur' }, ...boutons),
+    resume,
+    h('details', { class: 'aide-repliee' }, h('summary', {}, 'Comment faire ?'),
+      h('p', {}, 'Activez chaque blocage dans l\'espace client de la ligne (ou au service client), puis cochez-le ici. C\'est la seule protection qui tient si quelqu\'un sort de l\'appli de la tablette.')));
 }
 
 // « Hors-forfait bloqué chez l'opérateur » (Tanguy, 19/11) : case obligatoire, non cochée sur les lignes d'avant.
