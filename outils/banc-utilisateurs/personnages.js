@@ -27,6 +27,10 @@ const TACHES_FAMILLE = {
   nom: { depart: 'Le nom à donner (tablette pas encore arrivée)', but: "Tu viens de commander Papote pour ta mère. Fais ce que l'app te demande.", reussite: "Le nom est donné et l'app dit que la tablette est en route." },
   reglages: { depart: 'Réglons la tablette (famille toute neuve)', but: "La tablette vient d'arriver chez Mamie. Règle-la comme il faut pour elle (elle se couche à 21 h, entend mal).", reussite: "Les réglages sont finis (écran « c'est prêt » ou retour à l'accueil)." },
   abonnement: { depart: 'Accueil', but: "Savoir combien tu paies chaque mois et où trouver tes factures.", reussite: "Tu as vu le prix ou les factures." },
+  luminosite: { depart: 'Accueil', but: "Mamie trouve l'écran de sa tablette trop sombre en journée. Rends-le plus lumineux, depuis ton téléphone.", reussite: "La luminosité de jour de la tablette est augmentée et enregistrée." },
+  petitsRappels: { depart: 'Accueil', but: "Ton téléphone t'envoie de temps en temps « Une photo pour Mamie ? ». Ça t'agace : arrête ces petits rappels, sur ton téléphone seulement.", reussite: "« Petits rappels » est désactivé pour ce téléphone." },
+  medicament: { depart: 'Accueil', but: "Fais en sorte que la tablette rappelle à Mamie de prendre son cachet tous les matins à 8 h.", reussite: "Un rappel de médicament tous les jours à 8 h est enregistré." },
+  numero: { depart: 'Accueil', but: "Ton numéro de portable a changé, c'est maintenant le 06 11 22 33 44. Mets-le à jour pour que la tablette de Mamie puisse t'appeler.", reussite: "Le nouveau numéro est enregistré dans ton profil." },
   rejoindre: { depart: 'Rejoindre ou installer', but: "Ta sœur t'a dit d'installer Papote et t'a envoyé le code ABCD2345 pour rejoindre la famille de Mamie.", reussite: "Tu as demandé à rejoindre la famille avec le code." },
 };
 
@@ -112,6 +116,11 @@ const LOTS = {
     p('famille', 'marc', 'video'), p('famille', 'lea', 'inviter'), p('famille', 'nadia', 'nom'),
     p('tablette', 'rene', 'appelEntrant'), p('tablette', 'simone', 'sosErreur'), p('tablette', 'marcel', 'appelerJulie'),
     p('tablette', 'odette', 'photo'), p('tablette', 'lucienne', 'appelEntrant'),
+  ],
+  'apres-lot-e': [
+    p('famille', 'julie', 'luminosite'), p('famille', 'sylvie', 'luminosite'), p('famille', 'marc', 'petitsRappels'), p('famille', 'thomas', 'petitsRappels'),
+    p('famille', 'lea', 'medicament'), p('famille', 'nadia', 'medicament'), p('famille', 'ines', 'numero'), p('famille', 'paul', 'numero'),
+    p('tablette', 'jeanne', 'appelEntrant'), p('tablette', 'marcel', 'appelEntrant'), p('tablette', 'odette', 'manque'), p('tablette', 'simone', 'rappel'),
   ],
   'famille-2': [
     p('famille', 'thomas', 'video'), p('famille', 'marc', 'message'), p('famille', 'ines', 'video', { reseau: 'lent' }), p('famille', 'nadia', 'photo'),
