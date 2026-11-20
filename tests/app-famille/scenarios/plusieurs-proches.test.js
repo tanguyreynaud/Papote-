@@ -29,19 +29,27 @@ test('Trois proches envoient une photo puis un message au même instant : tout a
     await g.ouvrirTuile(t, 'photos');
     await t.page.click('.fab[data-add="photo"]');
     await t.page.locator('#sheet-post').waitFor({ state: 'visible' });
-    await t.page.setInputFiles('#in-photo-gallery', await g.photo({ texte: t.nom }));
+    await t.page.setInputFiles('#in-photo-gallery', await g.photo({ texte: t.nom, largeur: 800, hauteur: 600 }));
     await t.page.locator('#btn-send').filter({ visible: true }).waitFor();
   }
   await Promise.all(tels.map((t) => t.page.click('#btn-send')));
-  await Promise.all(tels.map((t) => g.toast(t, 'Envoyé')));
+  // Ce qui compte : les trois photos arrivent, chez tout le monde. Pas le petit mot « Envoyé » : trois iPhone
+  // simulés sur une machine de CI chargée dépassent parfois les 15 s après lesquelles l'appli dit « Le serveur ne
+  // répond pas : l'envoi partira tout seul » (CI du 20/11, iPhone SE) ; l'envoi finit quand même, et on l'attend
+  // jusqu'au bout pour ne jamais fermer un téléphone au milieu d'un envoi.
   // La première photo de Julie (installation) plus les trois.
-  await g.attendreBase(async () => (await g.liste(`families/${fid}/posts`)).filter((p) => p.type === 'photo').length === 4, '4 photos');
-  for (const t of tels) await t.page.waitForFunction(() => document.querySelectorAll('#photos li.shot').length === 4);
+  await g.attendreBase(async () => (await g.liste(`families/${fid}/posts`)).filter((p) => p.type === 'photo').length === 4, '4 photos', 90_000);
+  for (const t of tels) await t.page.waitForFunction(() => document.querySelectorAll('#photos li.shot').length === 4, null, { timeout: 30_000 });
+  for (const t of tels) {
+    const vus = await t.page.evaluate(() => (window.__toastsVus || []).map((v) => v.texte));
+    assert.ok(vus.some((v) => /^Envoyé|serveur ne répond pas/.test(v)), `${t.nom} : un mot après l'envoi (${JSON.stringify(vus)})`);
+  }
+  for (const t of tels) await t.page.locator('#sheet-post').waitFor({ state: 'hidden' });
   for (const t of tels) { await t.page.click('#view-photos .page-head .back'); await g.ouvrirTuile(t, 'messages'); }
   for (const t of tels) await t.page.fill('#message-text', `Bisous de ${t.nom}`);
   await Promise.all(tels.map((t) => t.page.click('#btn-message')));
-  await g.attendreBase(async () => (await g.liste(`families/${fid}/posts`)).filter((p) => /^Bisous de/.test(p.text || '')).length === 3, '3 messages');
-  for (const t of tels) await t.page.waitForFunction(() => document.querySelectorAll('#messages li').length === 3);
+  await g.attendreBase(async () => (await g.liste(`families/${fid}/posts`)).filter((p) => /^Bisous de/.test(p.text || '')).length === 3, '3 messages', 60_000);
+  for (const t of tels) await t.page.waitForFunction(() => document.querySelectorAll('#messages li').length === 3, null, { timeout: 30_000 });
 });
 
 test('Deux proches appellent la tablette au même instant : un seul appel sonne, l\'autre entend « déjà en communication »', async () => {
@@ -59,9 +67,12 @@ test('Deux proches appellent la tablette au même instant : un seul appel sonne,
   const perdant = await Promise.any([dejaEnCours(julie), dejaEnCours(paul)]);
   const gagnant = perdant === julie ? paul : julie;
   await gagnant.page.locator('#call-status', { hasText: 'Ça sonne' }).waitFor();
-  const appels = await g.liste(`families/${fid}/calls`);
-  assert.strictEqual(appels.filter((c) => c.state === 'ringing').length, 1, JSON.stringify(appels.map((c) => [c.callerName, c.state])));
-  assert.strictEqual(appels.find((c) => c.state === 'ringing').callerName, gagnant.nom);
+  // L'appel du perdant est clos juste après son mot (écriture qui part en arrière-plan) : on attend la base.
+  const qui = await g.attendreBase(async () => {
+    const l = (await g.liste(`families/${fid}/calls`)).filter((c) => c.state === 'ringing');
+    return l.length === 1 && l[0].callerName;
+  }, 'un seul appel qui sonne', 15_000);
+  assert.strictEqual(qui, gagnant.nom);
   await perdant.page.locator('#call').waitFor({ state: 'hidden', timeout: 10_000 });
   await perdant.page.waitForTimeout(2500);
   assert.strictEqual(await perdant.page.locator('.dialog-back', { hasText: 'message vidéo' }).count(), 0, 'pas de « laisser un message vidéo »');
