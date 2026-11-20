@@ -2787,7 +2787,7 @@ function blocReleves(zone, t) {
   familleTablette = null;
   zone.hidden = !relieeAUneFamille(t);
   if (zone.hidden) return;
-  zone.replaceChildren(h('h2', {}, 'En ce moment'), h('p', { class: 'muted small' }, 'Lecture de la fiche de la tablette…'));
+  zone.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'muted small' }, 'Lecture de la fiche de la tablette…')));
   const dessiner = () => {
     const m = membreTablette || {};
     const b = m.battery || {};
@@ -2797,16 +2797,22 @@ function blocReleves(zone, t) {
     const signal = sim && sim.signal >= 0 ? `${sim.signal} / 4` : null;
     const mo = sim && sim.dataMoisMo >= 0 ? `${sim.dataMoisMo} Mo ce mois` : null;
     // Une ligne absente (null) ne doit pas s'écrire « null » : replaceChildren écrit tout ce qu'on lui donne.
+    // Le souci de réseau en bandeau tout en haut, puis les quatre chiffres, puis le détail des antennes replié.
+    const reseau = blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid });
+    const souci = reseau && reseau.querySelector('p.error');
+    if (souci) souci.className = 'bandeau rouge';
     zone.replaceChildren(...[
-      h('h2', {}, 'En ce moment'),
-      h('div', { class: 'stats compact' },
+      souci,
+      h('h2', { class: 'sr-only' }, 'En ce moment'),
+      h('div', { class: 'card' }, h('div', { class: 'tuiles quatre' },
         stat(enLigne ? ilYA(enLigne) : '—', 'En ligne', enLigne && Date.now() - enLigne > 70 * 60_000 ? 'ne répond plus ?' : null, enLigne && Date.now() - enLigne > 70 * 60_000 ? 'warn' : null),
         stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
         sim && sim.bloquee ? stat('Carte SIM', texteBloquee(sim).replace('Carte SIM ', ''), null, 'warn') : stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM', mo),
         stat(m.appVersion || '—', 'Version de Papote')),
-      lignePush(modePush(sim)),
-      blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid }),
-      h('p', { class: 'muted small' }, 'Envoyés par la tablette quand elle est en ligne ; la page se met à jour toute seule.'),
+      lignePush(modePush(sim))),
+      reseau ? h('details', { class: 'card repli' }, h('summary', {}, h('h2', {}, 'Réseau mobile chez le client'),
+        h('span', { class: 'badge' }, reseau.querySelectorAll('li').length ? pluriel(reseau.querySelectorAll('li').length, 'antenne') : 'détail')), reseau,
+        h('p', { class: 'muted small' }, 'Envoyés par la tablette quand elle est en ligne ; la page se met à jour toute seule.')) : null,
     ].filter(Boolean));
     rafraichirSousTitres();
   };
@@ -2817,7 +2823,7 @@ function blocReleves(zone, t) {
       dessiner();
     }, (err) => {
       console.warn('Fiche de la tablette illisible', err);
-      zone.replaceChildren(h('h2', {}, 'En ce moment'), h('p', { class: 'muted small' }, `Fiche de la tablette illisible (${messageErreur(err)}).`));
+      zone.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'muted small' }, `Fiche de la tablette illisible (${messageErreur(err)}).`)));
     });
     getDoc(doc(d, 'families', t.fid)).then((snap) => { familleTablette = snap.exists() ? snap.data() : {}; rafraichirSousTitres(); }).catch(() => null);
   });
@@ -3070,11 +3076,10 @@ function remplirTablette(id) {
   const infos = $('dt-infos');
   if (!(infos.dataset.id === t.id && saisieEnCours(infos))) {
     infos.dataset.id = t.id;
-    // Trois blocs : où elle en est (frise), chez qui elle est, ce qu'elle est (Tanguy, 20/11 : « trop brouillon »).
+    // Deux cartes côte à côte : chez qui elle est, ce qu'elle est (maquette du 20/11). La frise est au-dessus.
     const groupe = (titre, ...lignes) => (lignes.flat().length
-      ? h('section', { class: 'fiche-groupe' }, h('h3', {}, titre), h('dl', { class: 'fiche' }, ...lignes)) : null);
+      ? h('section', { class: 'card fiche-groupe' }, h('h2', {}, titre), h('dl', { class: 'fiche kv' }, ...lignes)) : null);
     infos.replaceChildren(...[
-      h('dl', { class: 'fiche fiche-frise' }, ...ligne('Où est-elle ?', friseTablette(t, actions.bouton))),
       groupe('Chez qui',
       // Jumelée sans commande (tablette de test) : elle reste dans sa famille, hors du stock à vendre, rien à faire.
       ...ligne('Famille', DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? badge(pasAVendre(t), 'info') : lienFamille(t.fid)),
@@ -3114,6 +3119,7 @@ function remplirTablette(id) {
       ...modif('Notes', t.notes, 'notes', { valeur: t.notes, long: true, vide: 'aucune' })),
     ].filter(Boolean));
   }
+  $('dt-frise').replaceChildren(friseTablette(t, actions.bouton));
   afficherDocumentsTablette(t);
   // Relevés en direct et actions à distance : redessinés seulement si on change de tablette (un ordre en
   // cours garde son retour affiché quand les données se relisent).
@@ -3128,6 +3134,7 @@ function remplirTablette(id) {
   blocGardeFous($('dt-gardefous'), t);
   $('dt-historique').replaceChildren(...historiqueLisible(t).reverse().map(([le, texte]) => h('li', {},
     h('span', { class: 'quand' }, new Date(le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ', texte)));
+  $('dt-n-historique').textContent = $('dt-historique').children.length ? pluriel($('dt-historique').children.length, 'ligne') : 'vide';
   if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
   $('dt-actions').replaceChildren(actions.menu);
   f.querySelector('.f-msg').hidden = true;
@@ -3246,6 +3253,7 @@ function afficherDocumentsTablette(t) {
   $('dt-pieces').replaceChildren(...docs.map(([p, collection, id, deLAchat]) => h('li', {},
     h('span', { class: 'muted' }, `${genre(p, deLAchat)} : `), lienPiece(p),
     h('button', { type: 'button', class: 'crayon no-print', title: `Retirer « ${p.nom} »`, 'aria-label': `Retirer « ${p.nom} »`, onclick: () => retirerPiece(collection, id, p) }, '✕'))));
+  $('dt-n-pieces').textContent = docs.length ? String(docs.length) : 'aucun';
   if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucun document pour l\'instant.'));
 }
 

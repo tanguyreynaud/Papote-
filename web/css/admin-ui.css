@@ -577,3 +577,46 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 .admin-body .parcours .pc-etapes li.pc-groupe { padding: 10px 8px 3px; }
 .admin-body .pc-voir { color: var(--accent); }
 @media (max-width: 760px) { .admin-body .parcours { height: 100dvh; } }
+
+/* ---------- Fiche tablette (maquette du 20/11 midi) ---------- */
+.admin-body #dt-carte-modif:has(> form[hidden]) { display: none; }
+.admin-body #dt-infos { margin-bottom: 0; }
+.admin-body #dt-infos > section.card { margin-bottom: 12px; }
+.admin-body .fiche-groupe h2 { text-transform: none; letter-spacing: 0; color: var(--text); }
+/* « Où est-elle ? » : une ligne de texte, l'étape actuelle en gras (plus de ronds). */
+.admin-body #dt-frise { margin: -4px 0 12px; }
+.admin-body #dt-frise .stepper { display: flex; flex-wrap: wrap; gap: 2px 6px; font-size: 13px; }
+.admin-body #dt-frise .stepper li { flex-direction: row; gap: 6px; font-size: 13px; color: var(--muted); }
+.admin-body #dt-frise .stepper li::before { content: '›'; position: static; width: auto; height: auto; background: none; color: #cfc7d9; }
+.admin-body #dt-frise .stepper li:first-child::before { display: none; }
+.admin-body #dt-frise .stepper .rond { display: none; }
+.admin-body #dt-frise .stepper li .libelle { visibility: visible; padding: 0; }
+.admin-body #dt-frise .stepper li.actuelle { color: var(--text); font-weight: 700; }
+.admin-body #dt-frise .etape-action { margin-top: 8px; }
+.admin-body .bandeau > button { float: right; margin: -2px 0 0 10px; background: #fff; }
+.admin-body #dt-releves .push-mode { margin: 10px 0 0; font-size: 13px; }
+.admin-body .reseau-mobile h3 { display: none; }
+.admin-body .reseau-mobile ul { margin: 6px 0; padding-left: 18px; }
+/* Bloc replié : son titre, une pastille qui résume, une flèche ; un toucher l'ouvre. */
+.admin-body details.repli > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.admin-body details.repli > summary::-webkit-details-marker { display: none; }
+.admin-body details.repli > summary h2 { flex: 1; margin: 0; font-size: 15px; }
+.admin-body details.repli > summary::after { content: '›'; color: var(--chevron); font-size: 20px; line-height: 1; transition: transform .15s; }
+.admin-body details.repli[open] > summary::after { transform: rotate(90deg); }
+.admin-body details.repli[open] > summary { margin-bottom: 10px; }
+.admin-body details.repli { padding: 11px 14px; }
+.admin-body .cartes-duo { gap: 12px; margin-bottom: 12px; }
+/* Crayon d'une ligne modifiable : discret, à droite de la valeur. */
+.admin-body dl.fiche.kv .crayon { color: var(--chevron); margin-left: 6px; }
+.admin-body dl.fiche.kv .crayon:hover { color: var(--accent); }
+.admin-body dl.fiche.kv dt.modifiable, .admin-body dl.fiche.kv dd.modifiable { padding: 5px 0; border-bottom: 0; min-height: 0; border-top: 1px solid var(--line); }
+.admin-body dl.fiche.kv dt.modifiable { padding-right: 14px; }
+.admin-body dl.fiche.kv dt:first-of-type, .admin-body dl.fiche.kv dd:first-of-type { border-top: 0; }
+.admin-body dl.fiche.kv dd.modifiable { justify-content: flex-end; gap: 2px; }
+.admin-body dl.fiche.kv dd.modifiable .valeur { flex: 0 1 auto; text-align: right; }
+.admin-body dl.fiche.kv dd.modifiable.en-saisie { justify-content: stretch; text-align: left; }
+.admin-body dl.fiche.kv dd.modifiable .saisie-champ { flex: 1; }
+.admin-body #dt-infos > section.card { margin-top: 0; }
+.admin-body .card details.repli > summary h2, .admin-body details.repli.card > summary h2 { margin: 0; font-size: 15px; }
+.admin-body .contenu .lignes-kv button.ligne-kv { padding: 8px 0; border-radius: 0; font-size: 14px; }
+.admin-body .contenu .lignes-kv button.ligne-kv:first-child { border-top: 0; }
