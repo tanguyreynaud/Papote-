@@ -4,8 +4,8 @@ const KEY = 'papote.guideVu';
 // enRoute : famille préparée à la commande, tablette pas encore arrivée (A43) : rien n'est promis « tout de suite ».
 const STEPS = [
   { icon: 'photo', title: 'Envoyer une photo', text: (n, enRoute) => (enRoute
-    ? `Touchez « Photos », puis le bouton + en bas. ${n} la verra sur sa tablette dès son arrivée.`
-    : `Touchez « Photos », puis le bouton + en bas. ${n} la voit tout de suite sur sa tablette.`) },
+    ? `Touchez « Envoyer une photo », en haut de l'accueil. ${n} la verra sur sa tablette dès son arrivée.`
+    : `Touchez « Envoyer une photo », en haut de l'accueil. ${n} la voit tout de suite sur sa tablette.`) },
   { icon: 'message', title: 'Écrire un message', text: (n) => `Touchez « Messages », écrivez en bas et envoyez. Les réponses de ${n} s'affichent ici.` },
   { icon: 'call', title: 'Appeler en vidéo', text: (n) => `Touchez « Appel vidéo » : la tablette de ${n} sonne et l'image s'affiche en grand.` },
 ];

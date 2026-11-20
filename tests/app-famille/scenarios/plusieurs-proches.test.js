@@ -192,3 +192,44 @@ test('Demande acceptée par Julie pendant que Paul la refuse : Ana reste dans la
   assert.strictEqual(await julie.page.locator('.dialog-back', { hasText: 'acceptation a échoué' }).count(), 0);
   assert.ok(!(await g.liste(`families/${fid}/members`)).some((m) => m.email === 'zoe@exemple.fr'), 'Zoé pas entrée');
 });
+
+test('Premier usage (Tanguy, 20/11) : faute de frappe dans l\'adresse corrigée d\'un toucher, prénom sans exemple, guide qui montre « Envoyer une photo »', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  // Invitation : « Vouliez-vous dire … ? » sous la ligne du champ, « Corriger » remplace l'adresse.
+  await julie.page.click('#btn-invite');
+  await g.attendreVue(julie, 'view-invite');
+  await julie.page.fill('#invite-email', 'paul@gmial.com');
+  await julie.page.locator('#invite-email').blur();
+  const propInvite = julie.page.locator('#form-invite + .mel-suggestion');
+  await propInvite.filter({ hasText: 'paul@gmail.com' }).waitFor();
+  await propInvite.locator('button', { hasText: 'Corriger' }).click();
+  assert.strictEqual(await julie.page.inputValue('#invite-email'), 'paul@gmail.com');
+  assert.ok(await propInvite.isHidden());
+
+  // Connexion de Paul : même proposition ; une adresse juste n'en a pas.
+  const { code } = await g.lire(`families/${fid}`);
+  const paul = await banc.telephone('Paul');
+  await g.ouvrir(paul, `?code=${code}`);
+  await g.attendreVue(paul, 'view-login');
+  await paul.page.fill('#login-email', 'paul@orange.f');
+  await paul.page.locator('#login-email').blur();
+  await paul.page.locator('#form-email .mel-suggestion', { hasText: 'paul@orange.fr' }).waitFor();
+  await paul.page.fill('#login-email', 'paul@exemple.fr');
+  await paul.page.locator('#login-email').blur();
+  await paul.page.waitForTimeout(300);
+  assert.ok(await paul.page.locator('#form-email .mel-suggestion').isHidden(), 'rien sous une adresse juste');
+  await paul.page.goto(banc.origine + `/?code=${code}`);
+  await g.seConnecter(paul, 'paul@exemple.fr', `?code=${code}`);
+  await g.attendreVue(paul, 'view-moi');
+  assert.strictEqual(await paul.page.getAttribute('#moi-prenom', 'placeholder'), 'Votre prénom');
+  await g.remplirMoi(paul, { prenom: 'Paul', genre: 'homme' });
+  await g.attendreVue(paul, 'view-join');
+  await paul.page.click('#form-join button[type=submit]');
+  await g.attendreVue(paul, 'view-pending');
+  await julie.page.click('#view-invite .page-head .back').catch(() => {});
+  await julie.page.locator('#pending-banner .join-ok').click();
+  await g.attendreVue(paul, 'view-home');
+  await paul.page.locator('.guide-back').waitFor();
+  assert.match(await paul.page.locator('.guide').innerText(), /Touchez « Envoyer une photo », en haut de l'accueil/);
+});

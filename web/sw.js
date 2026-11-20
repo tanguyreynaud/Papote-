@@ -11,7 +11,7 @@ const PRECACHE = [
   '/', 'manifest.webmanifest', 'css/famille.css', 'icons/icon.svg', 'icons/icon-192.png',
   'js/famille.js', 'js/clavier.js', 'js/firebase.js', 'js/ui.js', 'js/dialogue.js', 'js/guide.js', 'js/appel.js',
   'js/push.js', 'js/video.js', 'js/filmer.js', 'js/agenda.js', 'js/abonnement.js', 'js/compte.js', 'js/notifs.js',
-  'js/parcours.js', 'js/sim.js', 'js/frequences.js', 'js/gestion-api.js', 'vendor/qrcode.js',
+  'js/parcours.js', 'js/email-correcteur.js', 'js/sim.js', 'js/frequences.js', 'js/gestion-api.js', 'vendor/qrcode.js',
   'polices/bricolage.woff2', 'polices/atkinson-400.woff2', 'polices/atkinson-700.woff2',
   ...['app', 'app-check', 'auth', 'firestore', 'functions', 'messaging', 'storage']
     .map((m) => `${FIREBASE}firebase-${m}.js`),

@@ -6131,6 +6131,12 @@ $('btn-google').addEventListener('click', async () => {
   }
 });
 
+// Faute de frappe dans l'adresse (« gmial.com », « orange.f ») : « Vouliez-vous dire … ? » avec « Corriger », comme sur
+// le site (js/email-correcteur.js) ; rien n'est jamais bloqué (Tanguy, 20/11).
+for (const id of ['login-email', 'invite-email']) window.papoteEmail?.brancher($(id));
+// Champ et bouton « Inviter » sur une ligne : la proposition va sous la ligne, pas entre les deux.
+{ const b = $('invite-email').nextElementSibling; if (b?.classList.contains('mel-suggestion')) $('form-invite').after(b); }
+
 // Une adresse e-mail se termine par un point suivi de lettres (« .fr », « .com ») après l'arobase.
 const adresseIncomplete = (email) => /@/.test(email) && !/@[^@\s]+\.[^@\s.]{2,}$/.test(email);
 const ADRESSE_INCOMPLETE = "Cette adresse e-mail semble incomplète : il manque la fin, par exemple « .fr » ou « .com ».";
