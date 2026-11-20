@@ -21,3 +21,20 @@ test('envois : 300 photos et 60 vidéos au plus, messages libres', () => {
   assert.strictEqual(envoiEnTrop('video', 61), true);
   assert.strictEqual(envoiEnTrop('message', 5000), false);
 });
+
+test('envoi en trop : seuls les fichiers de cette famille sont effacés, jamais ceux d\'une autre', () => {
+  const { fichiersDeLEnvoi } = require('./quota');
+  const post = {
+    storagePath: 'families/abc/media/a.mp4',
+    photos: [{ storagePath: 'families/abc/media/b.jpg' }, { storagePath: 'families/autre/media/c.jpg' }, null, {}],
+  };
+  assert.deepStrictEqual([...fichiersDeLEnvoi(post, 'abc')].sort(), ['families/abc/media/a.mp4', 'families/abc/media/b.jpg']);
+  // Un envoi qui ne nomme que les fichiers d'une autre famille, ou un chemin hors du dossier des envois : rien.
+  assert.strictEqual(fichiersDeLEnvoi({ storagePath: 'families/autre/media/x.jpg' }, 'abc').size, 0);
+  assert.strictEqual(fichiersDeLEnvoi({ storagePath: 'families/abc/declarations/x.jpg' }, 'abc').size, 0);
+  assert.strictEqual(fichiersDeLEnvoi({ storagePath: '../families/abc/media/x.jpg' }, 'abc').size, 0);
+  // Champs mal formés (écrits par une appli modifiée) : pas d'erreur, rien d'effacé.
+  assert.strictEqual(fichiersDeLEnvoi({ photos: 'families/abc/media/x.jpg' }, 'abc').size, 0);
+  assert.strictEqual(fichiersDeLEnvoi({ storagePath: 42 }, 'abc').size, 0);
+  assert.strictEqual(fichiersDeLEnvoi({ storagePath: 'families/abc/media/a.jpg' }, '').size, 0);
+});

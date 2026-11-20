@@ -82,6 +82,14 @@ const quotaFichierEfface = onObjectDeleted({ bucket: BUCKET_STORAGE, maxInstance
   });
 });
 
+// Fichiers d'un envoi en trop, à effacer avec lui : seulement ceux de CETTE famille. storagePath est écrit par
+// l'appli : un envoi qui nommerait le fichier d'une autre famille ne doit jamais le faire effacer (audit du 19/11 :
+// aucun essai ne tenait cette condition).
+function fichiersDeLEnvoi(post, fid) {
+  return new Set([post.storagePath, ...(Array.isArray(post.photos) ? post.photos : []).map((p) => p && p.storagePath)]
+    .filter((c) => typeof fid === 'string' && fid && familleDuFichier(c) === fid));
+}
+
 const quotaEnvois = onDocumentCreated(
   { document: 'families/{fid}/posts/{pid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE, maxInstances: 3 },
   async (event) => {
@@ -92,12 +100,10 @@ const quotaEnvois = onDocumentCreated(
     if (!envoiEnTrop(post.type, nombre)) return;
 
     logger.warn('Trop d\'envois : envoi effacé', { fid: event.params.fid, type: post.type, nombre });
-    // Seulement les fichiers de cette famille : storagePath est écrit par l'appli.
-    const chemins = new Set([post.storagePath, ...(post.photos || []).map((p) => p && p.storagePath)]
-      .filter((c) => familleDuFichier(c) === event.params.fid));
+    const chemins = fichiersDeLEnvoi(post, event.params.fid);
     const bucket = admin.storage().bucket(BUCKET_STORAGE);
     await Promise.all([...chemins].map((c) => bucket.file(c).delete({ ignoreNotFound: true })));
     await base().recursiveDelete(event.data.ref);
   });
 
-module.exports = { quotaFichier, quotaFichierEfface, quotaEnvois, familleDuFichier, depasse, envoiEnTrop };
+module.exports = { quotaFichier, quotaFichierEfface, quotaEnvois, familleDuFichier, depasse, envoiEnTrop, fichiersDeLEnvoi };
