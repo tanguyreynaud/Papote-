@@ -417,3 +417,101 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 .admin-body button.ligne-kv[data-genre="*"] { font-weight: 700; color: var(--text); }
 .admin-body .alertes-liste { margin: 8px 0 0; padding: 10px 12px; list-style: none; background: var(--bg); border-radius: 10px; }
 .admin-body .alertes-liste li { padding: 3px 0; }
+
+/* ---------- Listes « À envoyer », « En route », « À récupérer » : une ligne par client ---------- */
+.admin-body .orders { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.admin-body .orders:empty { display: none; }
+.admin-body .orders > li, .admin-body .orders > li:last-child {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 14px; align-items: center; gap: 1px 12px; margin: 0; padding: 11px 14px;
+  border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none;
+}
+.admin-body .orders > li:first-child { border-top: 0; }
+.admin-body .orders > li > * { grid-column: 1; min-width: 0; }
+.admin-body .orders > li::after { content: '›'; grid-column: 3; grid-row: 1 / span 9; color: var(--chevron); font-size: 20px; line-height: 1; }
+.admin-body .orders > li.cliquable:hover { background: var(--bg); }
+.admin-body .orders > li.alert { border-left: 0; padding-left: 14px; }
+.admin-body .orders > li.alert strong, .admin-body .orders > li.alert .titre-commande { color: var(--text); }
+.admin-body .orders > li.alert > .muted { color: var(--danger); }
+.admin-body .orders .titre-commande { color: var(--text); font-weight: 700; }
+.admin-body .orders .titre-commande::after { content: none; }
+.admin-body .orders .adresse { display: none; }
+.admin-body .orders .small { font-size: 13px; }
+.admin-body .orders .envoi-suite { display: contents; }
+.admin-body .orders .avancement { grid-column: 1; color: var(--muted); }
+.admin-body .orders > li button.small-btn, .admin-body .orders .envoi-suite button {
+  grid-column: 2; grid-row: 1 / span 9; align-self: center; margin: 0; min-height: 32px; height: 32px; padding: 0 12px; font-size: 13px; border-radius: 9px;
+}
+.admin-body .orders > li a.small { color: var(--accent); font-weight: 700; text-decoration: none; }
+.admin-body .orders .suite-envoi { margin: 2px 0 0; gap: 2px 14px; }
+.admin-body .orders .suite-envoi li { font-size: 13px; }
+@media (max-width: 640px) {
+  .admin-body .orders > li button.small-btn, .admin-body .orders .envoi-suite button { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
+}
+
+/* ---------- Fiches (commande, tablette, SIM…) : titre + pastille + actions, puis des cartes ---------- */
+.admin-body .tete-fiche { margin: 2px 0 10px; gap: 8px; }
+.admin-body .tete-fiche h2 { font: 700 24px var(--display); }
+.admin-body .sous-fiche { margin: -6px 0 12px; }
+.admin-body [data-panneau] a.retour { margin-bottom: 0; }
+.admin-body [data-panneau] > p:has(> a.retour) { margin: 0 0 4px; }
+/* Lignes « libellé … valeur » : le libellé en gris à gauche, la valeur à droite. */
+.admin-body dl.fiche.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 14px; margin: 0; font-size: 14px; }
+.admin-body dl.fiche.kv dt { color: var(--muted); font-weight: 400; padding: 8px 0; border-top: 1px solid var(--line); }
+.admin-body dl.fiche.kv dd { margin: 0; padding: 8px 0; border-top: 1px solid var(--line); text-align: right; overflow-wrap: anywhere; }
+.admin-body dl.fiche.kv dt:first-of-type, .admin-body dl.fiche.kv dd:first-of-type { border-top: 0; }
+.admin-body dl.fiche.kv a, .admin-body dl.fiche.kv button.link { color: var(--accent); font-weight: 700; text-decoration: none; text-align: right; }
+.admin-body dl.fiche.kv a::after, .admin-body dl.fiche.kv button.link::after { content: ' ›'; }
+@media (max-width: 640px) { .admin-body dl.fiche.kv { grid-template-columns: auto minmax(0, 1fr); } }
+
+/* Parcours d'une commande : un fil, l'étape puis sa date dessous ; faite = coche verte, à venir = rond indigo. */
+.admin-body .frise li { display: flex; flex-direction: column-reverse; gap: 0; padding: 0 0 14px 30px; font-size: 14px; }
+.admin-body .frise li::before { content: '✓'; left: 0; top: 1px; width: 18px; height: 18px; background: var(--ok); color: #fff; font-size: 11px; display: grid; place-items: center; }
+.admin-body .frise li:not(:last-child)::after { left: 8px; top: 22px; bottom: 0; }
+.admin-body .frise-date { text-align: left; font-size: 13px; }
+.admin-body .frise-texte { padding: 0; }
+.admin-body .frise li.frise-suite::before { content: ''; width: 14px; height: 14px; background: var(--surface); border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--indigo-fond); }
+.admin-body .frise-suite .frise-date { display: none; }
+.admin-body .frise-action { margin-top: 8px; }
+
+/* Bandeaux en haut d'une fiche : un rond « ! », une phrase, de petits boutons. */
+.admin-body .alerte-couverture, .admin-body .alerte-doublon, .admin-body .bandeau {
+  position: relative; display: block; margin: 0 0 12px; padding: 12px 14px 12px 48px; border-radius: 14px; font-size: 14px;
+  background: var(--orange-fond); border: 1px solid #f3e2bd; color: var(--text);
+}
+.admin-body .alerte-couverture::before, .admin-body .alerte-doublon::before, .admin-body .bandeau::before {
+  content: '!'; position: absolute; left: 14px; top: 12px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--orange); color: #fff; font-weight: 700; font-size: 13px;
+}
+.admin-body .alerte-doublon.grave, .admin-body .bandeau.rouge { background: var(--rouge-fond); border: 1px solid #f6d3d3; font-size: 14px; color: var(--text); }
+.admin-body .alerte-doublon.grave::before, .admin-body .bandeau.rouge::before { background: var(--danger); }
+.admin-body .alerte-couverture.vue { background: var(--surface); border-color: var(--line); color: var(--muted); }
+.admin-body .alerte-couverture.vue::before { content: '✓'; background: var(--ok); }
+.admin-body .alerte-couverture p, .admin-body .alerte-doublon p { margin: 2px 0 0; font-size: 13px; }
+.admin-body .alerte-couverture > strong, .admin-body .alerte-doublon > strong { display: block; font-size: 15px; }
+.admin-body .alerte-couverture .boutons-couverture { gap: 6px; margin: 8px 0; }
+.admin-body .alerte-couverture .boutons-couverture > * {
+  flex: none; min-height: 30px; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 700; background: #fff; border: 1px solid var(--line); color: var(--text);
+}
+.admin-body .alerte-couverture label.case { margin: 6px 0 0; font-size: 14px; }
+.admin-body .annonce { border-radius: 14px; background: var(--vert-fond); color: var(--ok); font-size: 14px; padding: 10px 14px; margin-bottom: 12px; }
+.admin-body dl.fiche.kv { gap: 0; }
+.admin-body dl.fiche.kv dt { padding-right: 14px; }
+/* Fiche : pas de grand titre de rubrique (le menu dit déjà où l'on est), « ‹ Clients » à sa place. */
+.admin-body .page-fiche .contenu-tete h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; min-width: 0; }
+.admin-body .page-fiche .contenu-tete { min-height: 36px; margin-bottom: 0; }
+.admin-body .page-fiche [data-panneau] > p:has(> a.retour) { margin: -30px 0 10px; width: fit-content; position: relative; }
+@media (max-width: 860px) { .admin-body .page-fiche [data-panneau] > p:has(> a.retour) { margin: 10px 0 6px; } }
+.admin-body .alerte-couverture label.case input { width: 18px; height: 18px; }
+/* Tableaux dans une carte (factures, paiements) : à plat, sans second cadre. */
+.admin-body .card .table { border: 0; border-radius: 0; margin: 6px 0 0; background: none; }
+.admin-body .card .table th { background: none; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+.admin-body .card .table td { padding: 8px 8px 8px 0; }
+.admin-body .card .table + .table { margin-top: 10px; }
+@media (max-width: 640px) {
+  .admin-body .tete-fiche .tete-actions { margin-left: 0; width: 100%; flex-wrap: wrap; }
+  .admin-body .tete-fiche .tete-actions:not(:has(> button, > a)) { width: auto; margin-left: auto; }
+  .admin-body .tete-fiche .tete-actions > .menu-points { margin-left: auto; }
+}
+.admin-body .contenu .alerte-couverture .boutons-couverture > button { flex: none; min-height: 30px; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 700; background: #fff; border: 1px solid var(--line); color: var(--text); }
+.admin-body .contenu-tete .recherche { flex: none; width: 260px; max-width: 100%; }
+@media (max-width: 860px) { .admin-body .contenu-tete .recherche { width: 100%; } }

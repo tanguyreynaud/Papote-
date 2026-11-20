@@ -110,6 +110,12 @@ const nomEtDetail = (nom, ...details) => {
     d.length ? h('small', { class: 'tel' }, ...d.flatMap((x, i) => (i ? [' · ', x] : [x]))) : null);
 };
 
+// Bloc d'une fiche : un titre et ses lignes « libellé … valeur » ; rien si toutes les lignes sont vides.
+const blocFiche = (titre, ...lignes) => {
+  const l = lignes.flat();
+  return l.length ? h('div', { class: 'card' }, h('h2', {}, titre), h('dl', { class: 'fiche kv' }, l)) : null;
+};
+
 const badge = (texte, classe) => h('span', { class: `badge ${classe || ''}` }, texte);
 
 // ---------- CSV pour Excel (séparateur « ; », virgule décimale, BOM UTF-8) ----------
@@ -352,6 +358,8 @@ function afficherPage() {
   const titre = page === 'clients' && onglet === 'familles' && fiche ? 'Famille' : menu === 'statistiques' ? 'Site' : TITRES[page];
   $('titre-page').textContent = page === 'accueil' ? `Bonjour${prenomAdmin ? ` ${prenomAdmin}` : ''}` : titre;
   document.title = `Papote · ${titre}`;
+  // Fiche (commande, tablette, carte SIM…) : son propre titre suffit, le lien « ‹ Clients » remonte à la place du grand titre.
+  document.querySelector('.contenu').classList.toggle('page-fiche', !!document.querySelector(`[data-panneau="${page}"] > p > a.retour`));
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   // Adresse avec une ancre (ANCRES) : la page s'ouvre sur ce bloc ; sinon en haut.
@@ -1137,8 +1145,19 @@ async function remplirCommande(id) {
   const annonce = annonceCommande;
   annonceCommande = null;
   const doublon = c.alerteDoublon;
+  const liv = c.livraison || {};
+  const relais = liv.transporteur === 'mondial-relay';
   $('dc-corps').replaceChildren(...[
     annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
+    // En-tête : le client en titre, l'état en pastille, les actions rares dans le ⋮.
+    h('div', { class: 'tete-fiche' }, h('h2', {}, c.nom || c.email || `Commande ${codeCommande(c.code)}`), badge(texte, classe),
+      h('div', { class: 'tete-actions' },
+        aRecuperer ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => zoneReception.ouvrir(false) }, 'Matériel reçu') : null,
+        // L'étiquette de retour est créée toute seule ; ce bouton ne sert que si elle manque.
+        aRecuperer && sansEtiquette && !c.offerte ? boutonEtiquetteRetour(c) : null,
+        menuCommande(c, t && partie && ['active', 'en-route'].includes(etatCommande(c)) ? zoneRemplacement : null,
+          partie && !aRecuperer && sansEtiquette && t && t.etat === 'en-retour'))),
+    h('p', { class: 'sous-titre sous-fiche' }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''} du ${jour(c.creeLe)} · ${formuleTexte(c)}`),
     c.couvertureAVerifier && c.expedition !== 'annulee' ? blocCouverture(c) : null,
     // E-mail au client rejeté par Brevo ou non parti (A3) : corriger l'adresse ci-dessous efface ce bandeau.
     c.mailErreur ? h('div', { class: 'alerte-doublon', role: 'alert' },
@@ -1149,57 +1168,57 @@ async function remplirCommande(id) {
       doublon.mauvaisPayeur ? h('p', {}, `Sur une commande précédente : ${doublon.raisons.join(', ')}.`) : null,
       h('p', {}, 'Même IBAN, e-mail, téléphone ou adresse que : ',
         ...doublon.commandes.flatMap((x, i) => [i ? ', ' : null, h('a', { href: `#commande/${encodeURIComponent(x.id)}` }, [x.code, x.nom].filter(Boolean).join(' · ') || 'commande')]))) : null,
-    h('div', { class: 'card' },
-      h('div', { class: 'tete-fiche' }, h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''),
-        h('div', { class: 'tete-actions' },
-          aRecuperer ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => zoneReception.ouvrir(false) }, 'Matériel reçu') : null,
-          // L'étiquette de retour est créée toute seule ; ce bouton ne sert que si elle manque.
-          aRecuperer && sansEtiquette && !c.offerte ? boutonEtiquetteRetour(c) : null,
-          menuCommande(c, t && partie && ['active', 'en-route'].includes(etatCommande(c)) ? zoneRemplacement : null,
-            partie && !aRecuperer && sansEtiquette && t && t.etat === 'en-retour'))),
-      zoneRemplacement,
-      zoneReception,
-      h('dl', { class: 'fiche' },
-      ligne('État', badge(texte, classe)),
-      ligne('Commandée le', jour(c.creeLe)),
-      // Le nom ouvre la fiche du client (ses autres commandes, sa famille, ses paiements).
-      ligne('Client', c.email ? h('span', {}, h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email),
-        [c.nom ? c.email : null, c.telephone].filter(Boolean).map((x) => ` · ${x}`).join('')) : [c.nom, c.telephone].filter(Boolean).join(' · ')),
-      // Souvent un proche (compte joint, gendre…) : à regarder avant l'envoi, sans rien bloquer.
-      ligne('Titulaire de l\'IBAN', c.titulaire),
-      ligne('Formule', formuleTexte(c)),
-      ligne('Livraison', livraisonTexte(c)),
-      ligne('Suivi', c.suivi ? `${c.suivi}${c.envoyeeLe ? `, envoyée le ${jour(c.envoyeeLe)}` : ''}` : null),
-      // Famille : un lien vers sa page (proches, code, photos), pour tout avoir depuis le client.
-      ligne('Famille', c.famille ? (c.fid
-        ? h('a', { href: `#clients/familles/${encodeURIComponent(c.fid)}` }, `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}`)
-        : `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}`) : null),
-      ligne('Tablette', t ? h('button', { type: 'button', class: 'link', onclick: () => ouvrirTablette(t.id) },
-        [t.ref, t.numero || (t.ref ? null : 'sans n° de série'), t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · ')) : null),
-      ligne('Carte SIM', simDuKit(t)),
-      ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
-      ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}${c.restitution.prolongations ? ' (délai prolongé)' : ''}` : ''}` : null),
-      ligne('Suivi du retour', suiviRetourDe(c)),
-      ligne('Étiquettes', etiquettesDe(c)),
-      ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null),
-      ligne('Reçue le', c.preparation && c.preparation.recuLe ? `${jour(c.preparation.recuLe)}${c.preparation.recuPar ? ` (${c.preparation.recuPar})` : ''}` : null),
-      ligne('Annulation possible', tabletteDansLaFamille(c) && annulableApresEnvoi(c) ? `jusqu'au ${jour(limiteAnnulation(c))}` : null),
-      ligne('Pause', c.pause && c.pause.jusqua > Date.now() ? `hospitalisation jusqu'au ${jour(c.pause.jusqua)} (mois offert au-delà de 2 semaines)` : null),
-      ligne('Remplacement', c.remplacement && c.remplacement.statut === 'attente-retour'
-        ? `tablette en panne attendue en retour (depuis le ${jour(c.remplacement.le)}) : à sa réception, « Remplacer » → la tablette → Panne → « Ancienne reçue : envoyer la nouvelle »` : null),
-      ligne('Mois remboursés', (c.moisRembourses || []).length ? c.moisRembourses.map((m) => `${euros(m.montant)} le ${jour(m.le)}`).join(', ') : null),
-      ligne('140 € remboursés', c.restitution && c.restitution.rembourse ? (c.restitution.rembourse.statut === 'fait' ? `oui (${euros(c.restitution.rembourse.montant)}, abonnement repris)` : 'à faire (Stripe a refusé, nouvel essai chaque matin)') : null),
-      ligne('Dernier mois', c.dernierMois ? `${euros(c.dernierMois.montant)} ${DERNIER_MOIS[c.dernierMois.statut] || c.dernierMois.statut}${c.dernierMois.erreur ? ` : ${c.dernierMois.erreur}` : ''}` : null),
-      ligne('Prélèvement refusé', c.restitution && c.restitution.statut === 'echec' ? `matériel non rendu${c.restitutionErreur ? ` : ${c.restitutionErreur}` : ''}` : null),
-      ligne('Contesté', (c.contestations || []).length ? c.contestations.map((x) => `${euros(x.montant)} le ${jour(x.le)}`).join(', ') : null))),
-    h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
-      // Frise : la date à gauche (vide pour une étape sans date), l'étape à droite ; la prochaine étape en dernier.
-      h('ol', { class: 'frise' }, ...parcoursCommande(c).map(([le, texte, date]) => {
-        const quand = Number.isFinite(le) ? le : date;
-        return h('li', {}, h('span', { class: 'frise-date' }, quand ? jour(quand) : ''), h('span', { class: 'frise-texte' }, texte));
-      }), etape ? h('li', { class: 'frise-suite' }, h('span', { class: 'frise-date' }, 'À venir'),
-        h('span', { class: 'frise-texte' }, h('strong', {}, 'Prochaine étape : '), etape[0], etape[1] ? h('span', { class: 'frise-action' }, etape[1]) : null)) : null)),
-    h('div', { class: 'card' }, h('h2', {}, 'Factures et paiements du client'), factures),
+    zoneRemplacement,
+    zoneReception,
+    h('div', { class: 'deux-colonnes' },
+      // À gauche ce qui avance (parcours, paiements) ; à droite ce qui ne bouge pas (client, livraison, matériel).
+      h('div', {},
+        h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
+          // Frise : l'étape, sa date dessous ; la prochaine étape en dernier, avec son bouton.
+          h('ol', { class: 'frise' }, ...parcoursCommande(c).map(([le, texteEtape, date]) => {
+            const quand = Number.isFinite(le) ? le : date;
+            return h('li', {}, h('span', { class: 'frise-date' }, quand ? jour(quand) : ''), h('span', { class: 'frise-texte' }, texteEtape));
+          }), etape ? h('li', { class: 'frise-suite' }, h('span', { class: 'frise-date' }, 'À venir'),
+            h('span', { class: 'frise-texte' }, h('strong', {}, 'Prochaine étape : '), etape[0], etape[1] ? h('span', { class: 'frise-action' }, etape[1]) : null)) : null)),
+        h('div', { class: 'card' }, h('h2', {}, 'Paiements'), factures)),
+      h('div', {},
+        blocFiche('Client',
+          // Le nom ouvre la fiche du client (ses autres commandes, sa famille, ses paiements).
+          ligne('Nom', c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c.nom),
+          ligne('E-mail', c.nom ? c.email : null),
+          ligne('Téléphone', c.telephone),
+          // Souvent un proche (compte joint, gendre…) : à regarder avant l'envoi, sans rien bloquer.
+          ligne('Titulaire de l\'IBAN', c.titulaire),
+          // Famille : un lien vers sa page (proches, code, photos), pour tout avoir depuis le client.
+          ligne('Famille', c.famille ? (c.fid
+            ? h('a', { href: `#clients/familles/${encodeURIComponent(c.fid)}` }, `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}`)
+            : `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}`) : null)),
+        blocFiche('Livraison',
+          ...(relais ? [ligne('Point relais', `${liv.nom || ''} (n° ${liv.id || '?'})`),
+            ligne('Adresse', [liv.adresse, `${liv.cp || ''} ${liv.ville || ''}`.trim(), liv.pays && liv.pays !== 'FR' ? liv.pays : null].filter(Boolean).join(', ')),
+            ligne('Retrait par', liv.destinataire)] : [ligne('Livraison', livraisonTexte(c))]),
+          ligne('Chez le proche', c.proche && c.proche.adresse),
+          ligne('Suivi', c.suivi ? `${c.suivi}${c.envoyeeLe ? `, envoyée le ${jour(c.envoyeeLe)}` : ''}` : null),
+          ligne('Reçue le', c.preparation && c.preparation.recuLe ? `${jour(c.preparation.recuLe)}${c.preparation.recuPar ? ` (${c.preparation.recuPar})` : ''}` : null),
+          ligne('Étiquettes', etiquettesDe(c))),
+        blocFiche('Matériel',
+          ligne('Tablette', t ? h('button', { type: 'button', class: 'link', onclick: () => ouvrirTablette(t.id) },
+            (t.ref ? [t.ref, donnees.etats[etatTablette(t)]] : [t.numero || 'sans n° de série', t.modele, donnees.etats[etatTablette(t)]]).filter(Boolean).join(' · ')) : null),
+          ligne('Carte SIM', simDuKit(t)),
+          ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
+          ligne('Remplacement', c.remplacement && c.remplacement.statut === 'attente-retour'
+            ? `tablette en panne attendue en retour (depuis le ${jour(c.remplacement.le)}) : à sa réception, « Remplacer » → la tablette → Panne → « Ancienne reçue : envoyer la nouvelle »` : null)),
+        blocFiche('Retour et remboursements',
+          ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}${c.restitution.prolongations ? ' (délai prolongé)' : ''}` : ''}` : null),
+          ligne('Suivi du retour', suiviRetourDe(c)),
+          ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null),
+          ligne('Annulation possible', tabletteDansLaFamille(c) && annulableApresEnvoi(c) ? `jusqu'au ${jour(limiteAnnulation(c))}` : null),
+          ligne('Pause', c.pause && c.pause.jusqua > Date.now() ? `hospitalisation jusqu'au ${jour(c.pause.jusqua)} (mois offert au-delà de 2 semaines)` : null),
+          ligne('Mois remboursés', (c.moisRembourses || []).length ? c.moisRembourses.map((m) => `${euros(m.montant)} le ${jour(m.le)}`).join(', ') : null),
+          ligne('140 € remboursés', c.restitution && c.restitution.rembourse ? (c.restitution.rembourse.statut === 'fait' ? `oui (${euros(c.restitution.rembourse.montant)}, abonnement repris)` : 'à faire (Stripe a refusé, nouvel essai chaque matin)') : null),
+          ligne('Dernier mois', c.dernierMois ? `${euros(c.dernierMois.montant)} ${DERNIER_MOIS[c.dernierMois.statut] || c.dernierMois.statut}${c.dernierMois.erreur ? ` : ${c.dernierMois.erreur}` : ''}` : null),
+          ligne('Prélèvement refusé', c.restitution && c.restitution.statut === 'echec' ? `matériel non rendu${c.restitutionErreur ? ` : ${c.restitutionErreur}` : ''}` : null),
+          ligne('Contesté', (c.contestations || []).length ? c.contestations.map((x) => `${euros(x.montant)} le ${jour(x.le)}`).join(', ') : null)))),
   ].filter(Boolean));
   if (c.offerte) {
     factures.replaceChildren(h('p', { class: 'muted small' }, 'Commande offerte : aucun paiement.'));
@@ -1354,9 +1373,9 @@ function blocCouverture(c) {
     h('p', {}, `Pourquoi : ${raisons.join(' ; ')}.`),
     adresse ? h('p', {}, 'Adresse du proche : ', h('b', { class: 'selectionnable' }, adresse)) : h('p', {}, 'Adresse du proche inconnue.'),
     h('div', { class: 'boutons-couverture' },
-      h('a', { class: 'primary small-btn', href: v.carte || 'https://monreseaumobile.arcep.fr/', target: '_blank', rel: 'noopener' }, 'Ouvrir la carte de l\'ARCEP'),
+      h('a', { class: 'secondary small-btn', href: v.carte || 'https://monreseaumobile.arcep.fr/', target: '_blank', rel: 'noopener' }, 'Carte de l\'ARCEP'),
       copier,
-      h('a', { class: 'secondary small-btn', href: 'https://www.cartoradio.fr/', target: '_blank', rel: 'noopener' }, 'Antennes (Cartoradio)')),
+      h('a', { class: 'secondary small-btn', href: 'https://www.cartoradio.fr/', target: '_blank', rel: 'noopener' }, 'Antennes')),
     h('p', { class: 'small' }, 'Sur la carte : opérateur Bouygues Telecom, 4G, puis collez l\'adresse dans la recherche.'),
     h('label', { class: 'case' }, coche, ' ', libelle));
 }

@@ -144,8 +144,14 @@ function titreCommande(li, id, texte) {
   li.querySelector('strong').replaceChildren(a);
 }
 
+// Une ligne de liste = le nom du client ; la formule et l'adresse sont sur sa fiche (style du 20/11).
 function orderHead(c) {
-  return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
+  return c.nom || c.email || 'Client';
+}
+// Toute la ligne ouvre la fiche (sauf ses boutons et ses liens).
+function ligneVersFiche(li, id) {
+  li.classList.add('cliquable');
+  li.addEventListener('click', (e) => { if (!e.target.closest('a, button, input, label')) location.hash = `#commande/${encodeURIComponent(id)}`; });
 }
 
 
@@ -161,7 +167,8 @@ async function loadOrders() {
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small adresse"></span>'
         + '<div class="envoi-suite"><span class="small avancement"></span><button type="button" class="primary small-btn"></button></div>';
       titreCommande(li, c.id, orderHead(c));
-      li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
+      ligneVersFiche(li, c.id);
+      li.querySelector('.muted').textContent = `Commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
       li.querySelector('.adresse').textContent = livraisonTexte(c);
       const etapes = etapesEnvoi(c, {}).filter((e) => !e.saute || !e.saute({}));
       const p = c.preparation;
@@ -724,10 +731,13 @@ async function loadShipped() {
       if (c.alerteJumelage) li.classList.add('alert');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><a target="_blank" rel="noopener" class="small"></a>';
       titreCommande(li, c.id, orderHead(c));
-      const infos = [c.email, `envoyée ${ago(toDate(c.envoyeeLe))}`, (c.rappels ? `${c.rappels} rappel${c.rappels > 1 ? 's' : ''} envoyé${c.rappels > 1 ? 's' : ''}` : 'aucun rappel envoyé')];
+      ligneVersFiche(li, c.id);
+      li.querySelector('span.small:not(.muted)').classList.add('adresse');
+      const infos = [`Envoyée ${ago(toDate(c.envoyeeLe))}`, (c.rappels ? `${c.rappels} rappel${c.rappels > 1 ? 's' : ''} envoyé${c.rappels > 1 ? 's' : ''}` : 'aucun rappel envoyé')];
       if (c.alerteJumelage) infos.push('pas jumelée après 20 jours : appeler le client');
       li.querySelector('.muted').textContent = infos.join(' · ');
-      li.querySelector('span.small:not(.muted)').textContent = c.mailErreur ? `E-mail non parti : ${c.mailErreur}` : livraisonTexte(c);
+      li.querySelector('span.adresse').textContent = c.mailErreur ? `E-mail non parti : ${c.mailErreur}` : livraisonTexte(c);
+      if (c.mailErreur) li.querySelector('span.adresse').className = 'small texte-ko';
       // a.small (le lien de suivi) : querySelector('a') prenait le titre (nom du client), qui disparaissait.
       const a = li.querySelector('a.small');
       a.href = lienSuivi(c);
@@ -796,7 +806,7 @@ async function loadReturns() {
       // Information seulement : le retour se coche et l'étiquette se refait sur la page de la commande.
       li.classList.add('cliquable');
       li.addEventListener('click', (e) => { if (!e.target.closest('a')) location.hash = `#commande/${encodeURIComponent(d.id)}`; });
-      li.querySelector('.muted').textContent = `${c.email || ''}${c.telephone ? ` · ${c.telephone}` : ''}`;
+      li.querySelector('.muted').remove();
       li.querySelector('span.small:not(.muted):not(.remb):not(.etiq)').textContent = (r.statut === 'echec'
         ? `Prélèvement échoué${r.erreur ? ` (${r.erreur})` : ''} : à relancer depuis Stripe.`
         : r.statut === 'a-recuperer' ? 'Matériel offert à récupérer.'
