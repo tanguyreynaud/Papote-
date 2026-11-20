@@ -15,7 +15,7 @@ const { s } = banc;
 banc.brancher();
 
 async function seDeconnecter(t) {
-  await t.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(t); // par Réglages, « Mon profil » (barre à 3 boutons, 20/11)
   await g.attendreVue(t, 'view-profile');
   await t.page.click('#view-profile [data-action="logout"]');
   await g.repondre(t, 'Se déconnecter');
