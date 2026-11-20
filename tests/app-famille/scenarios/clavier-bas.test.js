@@ -19,6 +19,11 @@ const trouSousLeChamp = (t, champ) => t.page.evaluate((sel) => {
   return Math.round(innerHeight - el.getBoundingClientRect().bottom);
 }, champ);
 
+/** La barre du bas finit cachée (ou visible) : WebKit lent (iPhone 15 en CI) peut traiter le redimensionnement après 300 ms. */
+async function barre(t, visible, message) {
+  try { await t.page.locator('#nav').waitFor({ state: visible ? 'visible' : 'hidden', timeout: 3000 }); } catch { assert.fail(message); }
+}
+
 async function ecrire(t, champ) {
   await t.page.locator(champ).tap();
   await g.clavier(t, true);
@@ -37,20 +42,20 @@ test('Réglages ouvert depuis la barre du bas, clavier ouvert : la barre se cach
   await julie.page.click('#family-name-card h2');
   await julie.page.locator('#form-family-name').waitFor();
   await ecrire(julie, '#family-name');
-  assert.ok(!(await julie.page.locator('#nav').isVisible()), 'barre du bas cachée, clavier ouvert');
+  await barre(julie, false, 'barre du bas cachée, clavier ouvert');
   // Clavier refermé par le bouton retour d'Android : le champ garde la main, mais la barre du bas revient
   // (Tanguy, 11/11 : les boutons du bas disparaissaient).
   await g.clavier(julie, false);
   await julie.page.waitForTimeout(300);
   assert.ok(await julie.page.evaluate(() => document.activeElement.id === 'family-name'), 'le champ garde la main (comme sur Android)');
-  assert.ok(await julie.page.locator('#nav').isVisible(), 'la barre du bas revient quand le clavier se ferme');
+  await barre(julie, true, 'la barre du bas revient quand le clavier se ferme');
   // Rouvert puis refermé une 2e fois : pareil.
   await g.clavier(julie, true);
   await julie.page.waitForTimeout(300);
-  assert.ok(!(await julie.page.locator('#nav').isVisible()), 'barre cachée, clavier rouvert');
+  await barre(julie, false, 'barre cachée, clavier rouvert');
   await g.clavier(julie, false);
   await julie.page.waitForTimeout(300);
-  assert.ok(await julie.page.locator('#nav').isVisible(), 'barre revenue');
+  await barre(julie, true, 'barre revenue');
   // Tout en bas de Réglages, la dernière carte passe au-dessus de la barre du bas.
   await julie.page.evaluate(() => { document.activeElement.blur(); window.scrollTo(0, document.body.scrollHeight); });
   await julie.page.waitForTimeout(300);
