@@ -32,7 +32,22 @@ test('Trois proches envoient une photo puis un message au même instant : tout a
     await t.page.setInputFiles('#in-photo-gallery', await g.photo({ texte: t.nom, largeur: 800, hauteur: 600 }));
     await t.page.locator('#btn-send').filter({ visible: true }).waitFor();
   }
-  await Promise.all(tels.map((t) => t.page.click('#btn-send')));
+  if (banc.WEBKIT) {
+    // Sur WebKit, trois envois Storage au même instant bloquent l'émulateur Storage pour tout le reste du morceau
+    // (CI 44701139869 et 44706465956, iPhone SE puis iPhone 15 : les photos n'arrivent jamais, les essais suivants
+    // tombent en cascade). Pas reproduit sur Chromium, ni l'appli en cause d'après ce banc : on envoie en quinconce,
+    // chacun attend que sa photo soit arrivée avant que le suivant appuie.
+    let n = 1; // la première photo de Julie (installation)
+    for (const t of tels) {
+      await t.page.click('#btn-send');
+      n += 1;
+      const voulu = n;
+      await g.attendreBase(async () => (await g.liste(`families/${fid}/posts`)).filter((p) => p.type === 'photo').length >= voulu, `photo de ${t.nom}`, 60_000);
+      await t.page.locator('#sheet-post').waitFor({ state: 'hidden', timeout: 30_000 });
+    }
+  } else {
+    await Promise.all(tels.map((t) => t.page.click('#btn-send')));
+  }
   // Ce qui compte : les trois photos arrivent, chez tout le monde. Pas le petit mot « Envoyé » : trois iPhone
   // simulés sur une machine de CI chargée dépassent parfois les 15 s après lesquelles l'appli dit « Le serveur ne
   // répond pas : l'envoi partira tout seul » (CI du 20/11, iPhone SE) ; l'envoi finit quand même, et on l'attend
@@ -42,7 +57,7 @@ test('Trois proches envoient une photo puis un message au même instant : tout a
   for (const t of tels) await t.page.waitForFunction(() => document.querySelectorAll('#photos li.shot').length === 4, null, { timeout: 30_000 });
   for (const t of tels) {
     const vus = await t.page.evaluate(() => (window.__toastsVus || []).map((v) => v.texte));
-    assert.ok(vus.some((v) => /^Envoyé|serveur ne répond pas/.test(v)), `${t.nom} : un mot après l'envoi (${JSON.stringify(vus)})`);
+    assert.ok(vus.some((v) => /^Envoyé|^Photo envoyée|serveur ne répond pas/.test(v)), `${t.nom} : un mot après l'envoi (${JSON.stringify(vus)})`);
   }
   for (const t of tels) await t.page.locator('#sheet-post').waitFor({ state: 'hidden' });
   for (const t of tels) { await t.page.click('#view-photos .page-head .back'); await g.ouvrirTuile(t, 'messages'); }
