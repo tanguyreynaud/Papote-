@@ -152,11 +152,15 @@ test('SOS fini : la même fenêtre dit comment (quelqu\'un au téléphone, arrê
   const debut = Date.now() - 60_000;
   await signaler(fid, tab, { debut, fin: '', uid: '', nom: '' });
   await fenetre(julie, 'Mamie Emma a appuyé sur SOS');
+  // Un toucher ailleurs dans la page juste avant que la tablette change le SOS (CI WebKit, 20/11) : il ne rend pas sourd
+  // le « OK » de la fenêtre changée.
+  await julie.page.evaluate(() => document.getElementById('family-title').click());
   await signaler(fid, tab, { debut, fin: 'repondu', uid: 'paul', nom: 'Paul' });
   let f = await fenetre(julie, 'Mamie Emma a eu quelqu\'un au téléphone');
   assert.deepStrictEqual(libelles(f), ['OK']);
   assert.strictEqual(f.texte, `Paul a répondu. SOS : aujourd'hui à ${heureFr(debut)}.`);
   await g.repondre(julie, 'OK');
+  assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing)').count(), 0, '« OK » ferme la fenêtre changée');
 
   // Nouveau SOS, fermé par « Plus tard », puis arrêté sur la tablette : dit une fois, OK seulement.
   const debut2 = Date.now() - 30_000;
@@ -195,6 +199,18 @@ test('SOS fini : la même fenêtre dit comment (quelqu\'un au téléphone, arrê
   f = await fenetre(julie, 'Mamie Emma a arrêté le SOS');
   assert.deepStrictEqual(libelles(f), ['OK']);
   await g.repondre(julie, 'OK');
+
+  // Nouveau SOS alors que la fenêtre du précédent (fini) est encore ouverte : la fenêtre passe au nouveau.
+  const debut4 = Date.now() - 5_000;
+  await signaler(fid, tab, { debut: debut4 - 60_000, fin: '', uid: '', nom: '' });
+  await fenetre(julie, 'Mamie Emma a appuyé sur SOS');
+  await signaler(fid, tab, { debut: debut4 - 60_000, fin: 'repondu', uid: 'paul', nom: 'Paul' });
+  await fenetre(julie, 'Mamie Emma a eu quelqu\'un au téléphone');
+  await signaler(fid, tab, { debut: debut4, fin: '', uid: '', nom: '' });
+  f = await fenetre(julie, 'Mamie Emma a appuyé sur SOS');
+  assert.strictEqual(f.texte, `Aujourd'hui à ${heureFr(debut4)}. La tablette prévient la famille.`);
+  assert.deepStrictEqual(libelles(f), ['Rappeler Mamie Emma', 'Je m\'en occupe', 'Plus tard']);
+  await g.repondre(julie, 'Plus tard');
   assert.strictEqual(appelsPrendre().length, 0);
   assert.strictEqual((await g.liste(`families/${fid}/calls`)).length, 0, 'aucun appel lancé');
 });
