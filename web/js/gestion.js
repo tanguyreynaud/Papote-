@@ -379,7 +379,11 @@ function afficherPage() {
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   // Adresse avec une ancre (ANCRES) : la page s'ouvre sur ce bloc ; sinon en haut.
   const ancre = ANCRES[location.hash.slice(1)];
-  const placer = () => (ancre ? $(ancre).scrollIntoView({ block: 'center' }) : window.scrollTo(0, 0));
+  const placer = () => {
+    if (!ancre) { window.scrollTo(0, 0); return; }
+    if ($(ancre).tagName === 'DETAILS') $(ancre).open = true; // bloc replié (rentabilité) : l'ouvrir en y arrivant
+    $(ancre).scrollIntoView({ block: 'center' });
+  };
   placer();
   // Téléphone : le menu ☰ se replie juste après et la page restait un peu descendue (titre sous la barre).
   requestAnimationFrame(placer);
@@ -2075,48 +2079,74 @@ function remplirPageSim(id) {
   const remplis = facultatives.filter(([v]) => v);
   const vides = facultatives.filter(([v]) => !v);
   const replieOuvert = !!zone.querySelector('details.a-completer[open]'); // reste ouvert après un enregistrement
-  zone.replaceChildren(...[h('div', { class: 'card' },
+  // Ce qui compte d'abord : la data du mois (forfait de 1 Go), la fin du forfait, le réseau, le hors-forfait.
+  const go = l.go != null ? l.go : 1;
+  const mo = vue && vue.sim.dataMoisMo != null ? vue.sim.dataMoisMo : null;
+  const partData = mo != null && go ? Math.round((mo / (go * 1024)) * 100) : null;
+  const jRecharge = l.prochaineRecharge ? Math.ceil((l.prochaineRecharge - Date.now()) / JOUR_MS) : null;
+  const nBlocages = BLOCAGES_SIM.filter(([k]) => l.blocages && l.blocages[k] === true).length;
+  const tuiles = l.statut === 'resiliee' ? [] : [
+    mo != null ? stat(enGo(mo) || '0 Mo', `utilisés sur ${String(go).replace('.', ',')} Go ce mois`, partData != null ? `${partData} % du forfait` : null, partData >= 88 ? 'neg' : null) : null,
+    stat(l.prochaineRecharge ? jour(l.prochaineRecharge) : 'pas notée', 'fin du forfait',
+      jRecharge == null ? null : jRecharge > 1 ? `dans ${jRecharge} jours` : jRecharge === 1 ? 'demain' : jRecharge === 0 ? 'aujourd\'hui' : `il y a ${-jRecharge} j`,
+      jRecharge != null && jRecharge <= 3 ? 'neg' : null),
+    vue && vue.sim.reseau ? stat(vue.sim.reseau, 'réseau vu par la tablette', vue.sim.signal >= 0 ? `signal ${vue.sim.signal} / 4` : null, vue.sim.signal === 0 ? 'neg' : null) : null,
+    stat(horsForfaitBloque(l) ? 'Bloqué' : 'Pas bloqué', 'hors-forfait', `${nBlocages} autre${nBlocages > 1 ? 's' : ''} blocage${nBlocages > 1 ? 's' : ''} sur ${BLOCAGES_SIM.length}`, horsForfaitBloque(l) ? null : 'neg'),
+  ].filter(Boolean);
+  tete.querySelector('h2').after(badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut]), h('span', { class: 'espace' }));
+  const antennes = (() => {
+    const r = vue ? reseauMobile(vue.sim) : null;
+    return r && r.antennes.length ? r.antennes.map((a) => `${a.texte}${a.utilisee ? ' (utilisée)' : ''}`).join(' · ') : null;
+  })();
+  const recharges = carteRecharges(l, modif, vue);
+  const blocages = carteBlocages(l);
+  zone.replaceChildren(...[
     tete,
-    alertes.length ? h('p', { class: 'small badges-longs' }, ...alertes.map((a) => badge(a, 'ko'))) : null,
-    h('dl', { class: 'fiche' },
-      ...ligne('Statut', badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut])),
-      ...modif('Opérateur', l.operateur, 'operateur', { valeur: l.operateur }),
-      ...modif('Numéro de ligne', l.numero, 'numero', { valeur: l.numero, mode: 'tel' }),
-      ...modif('ICCID', l.iccid, 'iccid', { valeur: l.iccid, mode: 'numeric' }),
-      ...modif('Tablette', t ? h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'tablette') : null,
+    h('p', { class: 'sous-fiche muted' }, [l.operateur, `${String(go).replace('.', ',')} Go par mois`, cout != null ? `${euros(cout)} par mois` : null].filter(Boolean).join(' · ')),
+    alertes.length ? h('div', { class: 'bandeau rouge' }, h('ul', { class: 'bandeau-liste' }, ...alertes.map((a) => h('li', {}, a.charAt(0).toUpperCase() + a.slice(1))))) : null,
+    tuiles.length ? h('div', { class: 'card' }, h('div', { class: `tuiles ${['', '', '', 'trois', 'quatre'][tuiles.length] || ''}` }, ...tuiles)) : null,
+    h('div', { class: 'deux-colonnes egales' },
+      h('div', {},
+        h('div', { class: 'card' }, h('h2', {}, 'Chez qui'),
+          h('dl', { class: 'fiche kv' },
+            ...modif('Tablette', t ? h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'tablette') : null,
         'tablette', { valeur: l.tablette || '', vide: 'dans aucune tablette',
           options: [['', 'Aucune'], ...tablettesPossibles.map((x) => [x.id, [x.ref, x.numero || x.modele, donnees.etats[etatTablette(x)]].filter(Boolean).join(' · ')])],
           convertir: (v) => v || null }),
-      ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}`) : null),
-      ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : null),
-      ...modif('Achat', lienAchat(l.depense), 'depense', { valeur: l.depense || '', options: optionsAchats(), convertir: (v) => v || null }),
-      ...modif('Forfait', l.go != null ? `${l.go} Go par mois` : null, 'go', { valeur: l.go != null ? String(l.go) : '', mode: 'decimal', suffixe: 'Go',
-        convertir: (v) => { if (!v.trim()) return null; const n = Number(v.replace(',', '.')); if (!Number.isFinite(n)) throw new Error('Un nombre de Go.'); return n; } }),
-      ...modif('Prix par mois', l.prix != null ? euros(l.prix) : null, 'prix', { valeur: enEuros(l.prix), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
-      ...(l.finPromo || l.prixApres != null ? modif('Prix après la promo', l.prixApres != null ? euros(l.prixApres) : null, 'prixApres', { valeur: enEuros(l.prixApres), mode: 'decimal', suffixe: '€', convertir: convertirEuros }) : []),
-      ...ligne('Coût actuel', cout != null && cout !== l.prix ? euros(cout) : null),
-      ...modif('Activée le', l.activation ? jour(l.activation) : null, 'activation', { valeur: dateChamp(l.activation), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }),
-      ...(l.statut === 'stock' ? modif('À activer avant', l.activerAvant ? jour(l.activerAvant) : null, 'activerAvant', { valeur: dateChamp(l.activerAvant), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }) : []),
-      ...remplis.flatMap(([, ligneSim]) => ligneSim)),
-    // Infos facultatives encore vides : repliées, pour ne pas aligner cinq « à compléter » (Tanguy, 20/11).
-    vides.length ? h('details', { class: 'aide-repliee a-completer', open: replieOuvert || null },
-      h('summary', {}, `Autres infos à compléter (${vides.length})`),
-      h('dl', { class: 'fiche' }, ...vides.flatMap(([, ligneSim]) => ligneSim))) : null),
-    carteBlocages(l),
-    carteRecharges(l, modif, vue),
-    vue ? h('div', { class: 'card' }, h('h2', {}, 'Ce que dit la tablette'),
-      h('dl', { class: 'fiche' },
+            ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}`) : null),
+            ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : null))),
+        recharges),
+      h('div', {},
+        h('div', { class: 'card' }, h('h2', {}, 'La ligne'),
+          h('dl', { class: 'fiche kv' },
+            ...modif('Opérateur', l.operateur, 'operateur', { valeur: l.operateur }),
+            ...modif('Numéro de ligne', l.numero, 'numero', { valeur: l.numero, mode: 'tel' }),
+            ...modif('ICCID', l.iccid, 'iccid', { valeur: l.iccid, mode: 'numeric' }),
+            ...modif('Forfait', l.go != null ? `${l.go} Go par mois` : null, 'go', { valeur: l.go != null ? String(l.go) : '', mode: 'decimal', suffixe: 'Go',
+              convertir: (v) => { if (!v.trim()) return null; const n = Number(v.replace(',', '.')); if (!Number.isFinite(n)) throw new Error('Un nombre de Go.'); return n; } }),
+            ...modif('Prix par mois', l.prix != null ? euros(l.prix) : null, 'prix', { valeur: enEuros(l.prix), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
+            ...(l.finPromo || l.prixApres != null ? modif('Prix après la promo', l.prixApres != null ? euros(l.prixApres) : null, 'prixApres', { valeur: enEuros(l.prixApres), mode: 'decimal', suffixe: '€', convertir: convertirEuros }) : []),
+            ...ligne('Coût actuel', cout != null && cout !== l.prix ? euros(cout) : null),
+            ...modif('Activée le', l.activation ? jour(l.activation) : null, 'activation', { valeur: dateChamp(l.activation), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }),
+            ...(l.statut === 'stock' ? modif('À activer avant', l.activerAvant ? jour(l.activerAvant) : null, 'activerAvant', { valeur: dateChamp(l.activerAvant), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }) : []),
+            ...modif('Achat', lienAchat(l.depense), 'depense', { valeur: l.depense || '', options: optionsAchats(), convertir: (v) => v || null }),
+            ...remplis.flatMap(([, ligneSim]) => ligneSim)),
+          // Infos facultatives encore vides : repliées, pour ne pas aligner cinq « à compléter » (Tanguy, 20/11).
+          vides.length ? h('details', { class: 'aide-repliee a-completer', open: replieOuvert || null },
+            h('summary', {}, `Autres infos à compléter (${vides.length})`),
+            h('dl', { class: 'fiche kv' }, ...vides.flatMap(([, ligneSim]) => ligneSim))) : null),
+        blocages)),
+    vue ? h('details', { class: 'card repli' },
+      h('summary', {}, h('h2', {}, 'Ce que dit la tablette'), (vue.vuLe || vue.vue) ? h('span', { class: 'badge' }, `vue le ${(vue.vuLe || vue.vue).toLocaleDateString('fr-FR')}`) : null),
+      h('dl', { class: 'fiche kv' },
         ...ligne('Réseau', vue.sim.reseau ? `${vue.sim.reseau}${vue.sim.signal >= 0 ? `, signal ${vue.sim.signal}/4` : ''}` : null),
         ...ligne('Data du mois', enGo(vue.sim.dataMoisMo)),
-        ...ligne('Antennes chez le client', (() => {
-          const r = reseauMobile(vue.sim);
-          return r && r.antennes.length ? r.antennes.map((a) => `${a.texte}${a.utilisee ? ' (utilisée)' : ''}`).join(' · ') : null;
-        })()),
+        ...ligne('Antennes chez le client', antennes),
         ...ligne('Carte vue le', vue.vuLe ? vue.vuLe.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null),
         ...ligne('Tablette en ligne le', vue.vue ? vue.vue.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null),
         ...ligne('ICCID lu', vue.sim.iccid && l.iccid && !String(vue.sim.iccid).endsWith(String(l.iccid).replace(/\D/g, '').slice(-6))
           ? h('span', { class: 'error' }, `…${String(vue.sim.iccid).slice(-6)} : ce n'est pas cette carte`) : null))) : null].filter(Boolean));
-  miseEnFiche(zone, 'La ligne');
+  zone.querySelectorAll('dl.fiche').forEach((d) => d.classList.add('kv'));
 }
 
 function convertirEuros(v) {
@@ -3450,11 +3480,12 @@ function afficherFactures() {
     { valeur: 'void', libelle: 'Annulées', n: nb('void') },
   ], filtre, (v) => { $('filtre-factures').value = v; afficherFactures(); });
   // Les chiffres en une ligne sous la liste (au lieu de trois grosses cases).
-  $('kpi-factures').textContent = [
-    ((n) => `${n} facture${n > 1 ? 's' : ''} émise${n > 1 ? 's' : ''}`)(toutes.filter((f) => f.statut !== 'draft' && f.statut !== 'void').length),
-    `${euros(somme(toutes.filter((f) => f.statut === 'paid'), 'total'))} payés`,
-    ouvertes.length ? `${euros(somme(ouvertes, 'du'))} à encaisser (${pluriel(ouvertes.length, 'facture')})` : 'rien à encaisser',
-  ].join(' · ');
+  const emises = toutes.filter((f) => f.statut !== 'draft' && f.statut !== 'void').length;
+  $('kpi-factures').replaceChildren(
+    stat(String(emises), `facture${emises > 1 ? 's' : ''} émise${emises > 1 ? 's' : ''}`),
+    stat(euros(somme(toutes.filter((f) => f.statut === 'paid'), 'total')), 'payés'),
+    stat(ouvertes.length ? euros(somme(ouvertes, 'du')) : '0,00 €', 'à encaisser', ouvertes.length ? pluriel(ouvertes.length, 'facture') : 'rien en attente'),
+  );
   const parAbonnement = new Map(donnees ? donnees.commandes.map((c) => [c.id, c]) : []);
   remplirTable($('t-factures'), [
     { titre: 'Client' }, { titre: 'Statut' }, { titre: 'N°', classe: 'pc' }, { titre: 'Date', classe: 'pc' },
@@ -3487,32 +3518,46 @@ $('x-factures').addEventListener('click', exporterFactures);
 
 function afficherBilan() {
   const t = totaux(stripe.mouvements, depensesPeriode());
-  $('kpi-argent').replaceChildren(
-    stat(euros(t.encaisse), 'encaissé', pluriel(stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature)).length, 'paiement')),
-    stat(euros(t.rembourse), 'remboursé'),
-    stat(euros(t.frais), 'frais Stripe'),
-    stat(euros(t.depenses), 'dépenses'),
-    stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null),
-  );
   const abos = stripe.abonnements;
   const enCours = abos.filter((a) => ['active', 'trialing', 'past_due'].includes(a.statut));
   const mrr = enCours.filter((a) => a.statut !== 'trialing').reduce((s, a) => s + a.mensuel, 0);
   const commandes = donnees.commandes.filter((c) => dansPeriode(c.creeLe));
-  $('kpi-activite').replaceChildren(
-    stat(String(enCours.length), 'abonnements en cours',
-      `${enCours.filter((a) => a.statut === 'trialing').length} au premier mois · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
+  // Quatre chiffres en haut (ce qui compte), le reste en lignes sur le côté.
+  $('kpi-argent').replaceChildren(
+    stat(euros(t.encaisse), 'encaissé', pluriel(stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature)).length, 'paiement')),
+    stat(euros(t.depenses), 'dépenses'),
+    stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null),
     stat(euros(mrr), 'revenu mensuel', 'abonnements payants'),
-    stat(String(commandes.length), 'commandes', `${commandes.filter((c) => c.formule === 'sim').length} tout compris`),
-    stat(String(abos.filter((a) => dansPeriode(a.finLe)).length), 'abonnements terminés'),
+  );
+  const detail = (texte, valeur, precision) => h('div', { class: 'ligne-kv' },
+    h('span', {}, texte, precision ? h('small', {}, precision) : null), h('span', { class: 'n' }, valeur));
+  $('kpi-activite').replaceChildren(
+    detail('Remboursé', euros(t.rembourse)),
+    detail('Frais Stripe', euros(t.frais)),
+    detail('Net encaissé', euros(t.net)),
+    detail('Abonnements en cours', String(enCours.length),
+      `${enCours.filter((a) => a.statut === 'trialing').length} au premier mois · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
+    detail('Commandes', String(commandes.length), `${commandes.filter((c) => c.formule === 'sim').length} tout compris`),
+    detail('Abonnements terminés', String(abos.filter((a) => dansPeriode(a.finLe)).length)),
   );
   const montant = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
+  const mois = bilanMensuel();
+  const sansMouvement = (l) => !l.encaisse && !l.rembourse && !l.frais && !l.depenses;
   remplirTable($('t-bilan'), [
     { titre: 'Mois' }, { titre: 'Encaissé', n: 1 }, { titre: 'Remboursé', n: 1 }, { titre: 'Frais Stripe', n: 1 },
     { titre: 'Net', n: 1 }, { titre: 'Dépenses', n: 1 }, { titre: 'Résultat', n: 1 },
-  ], bilanMensuel().map((l) => [moisNom(l.cle), euros(l.encaisse), euros(l.rembourse), euros(l.frais), euros(l.net),
-    euros(l.depenses), montant(l.resultat)]),
+  ], mois.map((l) => ({ classe: sansMouvement(l) ? 'mois-vide' : null, cellules: [moisNom(l.cle), euros(l.encaisse), euros(l.rembourse), euros(l.frais), euros(l.net),
+    euros(l.depenses), montant(l.resultat)] })),
   { total: ['Total', euros(t.encaisse), euros(t.rembourse), euros(t.frais), euros(t.net), euros(t.depenses), montant(t.resultat)] });
+  // Les mois sans aucun mouvement sont repliés (ils restent dans l'export et à l'impression).
+  const vides = mois.filter(sansMouvement).length;
+  const montrer = vides === mois.length || bilanVidesOuverts;
+  $('t-bilan').classList.toggle('vides-caches', !montrer);
+  $('bilan-vides').hidden = !vides || vides === mois.length;
+  $('btn-bilan-vides').textContent = montrer ? 'Cacher les mois sans mouvement' : `Voir ${vides > 1 ? `les ${vides} mois` : 'le mois'} sans mouvement`;
 }
+let bilanVidesOuverts = false;
+$('btn-bilan-vides').addEventListener('click', () => { bilanVidesOuverts = !bilanVidesOuverts; afficherBilan(); });
 
 const NATURES = {
   abonnement: 'Abonnement Papote',
@@ -3585,7 +3630,8 @@ function afficherCompta() {
   ], deps.map((d) => {
     const tablettes = estAchat(d) ? donnees.stock.filter((t) => t.depense === d.id).length : 0;
     return { onclick: ouvrirDepense(d), cellules: [
-      nomEtDetail(d.libelle || d.fournisseur || 'Dépense', d.fournisseur, jour(d.date), euros(d.montant)),
+      (() => { const c = nomEtDetail(d.libelle || d.fournisseur || 'Dépense', d.fournisseur, jour(d.date), euros(d.montant));
+        c.append(h('small', { class: 'categorie' }, [d.fournisseur, donnees.categories[d.categorie] || d.categorie].filter(Boolean).join(' · '))); return c; })(),
       etat(d) || '', jour(d.date),
       h('span', {}, donnees.categories[d.categorie] || d.categorie || '',
         tablettes ? h('small', { class: 'muted' }, ` · ${pluriel(tablettes, 'tablette')}`) : null),
@@ -3610,6 +3656,7 @@ function afficherCompta() {
   } else {
     $('t-categories').replaceChildren();
   }
+  $('carte-categories').hidden = !cats.length;
 
   const lignes = recettes().sort((a, b) => a.le - b.le);
   const somme = (k) => lignes.reduce((s, m) => s + m[k], 0);
@@ -4566,6 +4613,7 @@ function afficherRentabilite() {
     total: ['Total', String(lignes.reduce((s, l) => s + l.n, 0)), '', '', '', '', '', '',
       signe(lignes.reduce((s, l) => s + l.amorti * l.n, 0))],
   });
+  $('rentabilite-resume').textContent = `${euros(lignes.reduce((x, l) => x + l.amorti * l.n, 0))} par mois`;
   const accessoires = (donnees.accessoires || []).filter((a) => a.parEnvoi);
   const ligne = (nom, prix, note) => h('li', null, `${nom} : ${euros(prix)}`, note ? h('span', { class: 'muted' }, ` (${note})`) : null);
   $('rentabilite-colis').replaceChildren(

@@ -698,3 +698,32 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 @media (max-width: 640px) { .admin-body .v-etape { padding-top: 44px; } }
 /* Formulaires d'ajout dans la page : une colonne lisible, pas toute la largeur de l'écran. */
 .admin-body [data-panneau="nouveau"] > .card, .admin-body #dsi-corps > .card:only-child, .admin-body #dx-corps > .card:only-child { max-width: 760px; }
+
+/* ---------- Comptabilité : chiffres en tuiles, détail en lignes, deux colonnes ---------- */
+.admin-body .tuiles.trois { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-body [data-panneau="compta"] .tuiles .stat > span { font-size: 22px; }
+@media (max-width: 520px) { .admin-body .tuiles.trois { grid-template-columns: 1fr 1fr; } .admin-body [data-panneau="compta"] .tuiles .stat > span { font-size: 18px; } }
+.admin-body div.ligne-kv { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.admin-body div.ligne-kv:first-child { border-top: 0; }
+.admin-body div.ligne-kv .n { color: var(--text); font-weight: 700; white-space: nowrap; }
+.admin-body div.ligne-kv small { display: block; font-size: 12px; }
+.admin-body #t-bilan.vides-caches tr.mois-vide { display: none; }
+.admin-body #bilan-vides { margin: 8px 0 0; }
+.admin-body #bilan-vides .link { font-size: 13px; padding: 0; min-height: 0; }
+.admin-body [data-panneau="compta"] .card > h2 { font-size: 16px; margin: 0 0 6px; }
+.admin-body [data-panneau="compta"] .card > .tete h2 { font-size: 16px; margin: 0; }
+.admin-body [data-panneau="compta"] .deux-colonnes > div > .table.courte:first-child { margin-top: 0; }
+.admin-body [data-panneau="compta"] .deux-colonnes .card .table table { font-size: 13px; }
+.admin-body #t-categories thead { display: none; }
+.admin-body #t-categories td { padding: 8px 0; color: var(--muted); }
+.admin-body #t-categories td.n { color: var(--text); font-weight: 700; }
+.admin-body details#rentabilite > summary .badge { margin-left: auto; }
+.admin-body details#rentabilite[open] > summary { margin-bottom: 8px; }
+@media print { .admin-body #t-bilan.vides-caches tr.mois-vide { display: table-row; } }
+.admin-body .bandeau-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.admin-body .bandeau-liste li { margin: 0; }
+@media (min-width: 761px) {
+  .admin-body #t-achats th:nth-child(4), .admin-body #t-achats td:nth-child(4) { display: none; }
+  .admin-body #t-achats td:first-child small.categorie { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 1px; }
+}
+@media (max-width: 760px) { .admin-body #t-achats small.categorie { display: none; } }

@@ -308,35 +308,48 @@
           <button type="button" data-onglet="urssaf">Déclarations</button>
         </div>
         <div data-onglet="bilan">
-          <div class="stats" id="kpi-argent"></div>
-          <div class="stats" id="kpi-activite"></div>
           <div class="card">
             <div class="tete-fiche">
-              <h2>Mois par mois</h2>
+              <h2>Sur la période</h2>
               <div class="tete-actions no-print">
-                <button type="button" class="secondary small-btn" id="x-tout">Tout exporter pour le comptable</button>
+                <button type="button" class="secondary small-btn" id="x-tout">Exporter pour le comptable</button>
                 <div class="menu-actions" data-titre="Autres actions sur le bilan">
                   <button type="button" id="imprimer" data-detail="Le bilan de la période, en PDF">Imprimer / PDF</button>
                 </div>
               </div>
             </div>
-            <div class="table"><table id="t-bilan"></table></div>
+            <div class="tuiles quatre" id="kpi-argent"></div>
           </div>
-          <div class="card">
-            <div class="graphiques">
-              <figure><figcaption>Encaissé, dépenses et résultat par mois</figcaption><div id="g-argent"></div></figure>
-              <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
+          <div class="deux-colonnes">
+            <div>
+              <div class="card">
+                <h2>Mois par mois</h2>
+                <div class="table"><table id="t-bilan"></table></div>
+                <p class="no-print" id="bilan-vides" hidden><button type="button" class="link" id="btn-bilan-vides"></button></p>
+              </div>
+              <div class="card">
+                <div class="graphiques">
+                  <figure><figcaption>Encaissé, dépenses et résultat par mois</figcaption><div id="g-argent"></div></figure>
+                  <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="card">
+                <h2>En détail</h2>
+                <div class="lignes-kv" id="kpi-activite"></div>
+              </div>
             </div>
           </div>
-          <div class="card" id="rentabilite">
-            <h2>Rentabilité d'un abonné</h2>
+          <details class="card repli" id="rentabilite">
+            <summary><h2>Rentabilité d'un abonné</h2><span class="badge" id="rentabilite-resume"></span></summary>
             <details class="aide-repliee"><summary>Comment c'est calculé ?</summary>
               <p class="muted small">Par abonné : ce qui reste chaque mois après frais Stripe, URSSAF et forfait SIM ; ce que coûte un nouveau client au départ (matériel, colis, envoi et retour, moins la mise en service) ; et en combien de mois il est remboursé.</p>
             </details>
             <div class="table" tabindex="0"><table id="t-rentabilite"></table></div>
             <h3>Contenu du colis</h3>
             <div id="rentabilite-colis"></div>
-          </div>
+          </details>
         </div>
         <div data-onglet="factures">
           <div class="barre-liste">
@@ -353,8 +366,8 @@
             <option value="uncollectible">Irrécouvrables</option>
             <option value="void">Annulées</option>
           </select>
+          <div class="card"><div class="tuiles trois" id="kpi-factures"></div></div>
           <div class="table courte"><table id="t-factures"></table></div>
-          <p class="small muted kpi-suite" id="kpi-factures"></p>
         </div>
         <div data-onglet="depenses">
           <div class="barre-liste">
@@ -365,8 +378,13 @@
               <button type="button" id="btn-achat-2" data-detail="Tablettes ou matériel commandés chez un vendeur : crée aussi les fiches du stock">Un achat de matériel</button>
             </div>
           </div>
+          <div class="deux-colonnes">
+          <div>
           <div class="table courte"><table id="t-achats"></table></div>
-          <div class="card">
+          </div>
+          <div>
+          <div class="card" id="carte-categories">
+            <h2>Par catégorie</h2>
             <div class="table"><table id="t-categories"></table></div>
           </div>
           <div class="card">
@@ -378,12 +396,12 @@
             <p class="no-print releve"><button type="button" class="secondary small-btn" id="btn-courrier">Relever maintenant</button>
               <span id="courrier-etat" class="small" role="status"></span></p>
           </div>
+          </div>
+          </div>
         </div>
         <div data-onglet="urssaf">
-          <div class="card">
-            <h2>Franchise de TVA</h2>
-            <div id="tva"></div>
-          </div>
+          <div class="deux-colonnes">
+          <div>
           <div class="card">
             <div class="tete">
               <h2>Déclarations URSSAF</h2>
@@ -394,6 +412,18 @@
             </div>
             <div class="table"><table id="t-urssaf"></table></div>
             <p class="muted small">Chiffre d'affaires encaissé, sans déduire frais ni dépenses. Taux à vérifier sur autoentrepreneur.urssaf.fr (réglable dans Réglages).</p>
+          </div>
+          </div>
+          <div>
+          <div class="card">
+            <h2>Franchise de TVA</h2>
+            <div id="tva"></div>
+          </div>
+          <div class="card">
+            <h2>Virements Stripe vers la banque</h2>
+            <div class="table"><table id="t-virements"></table></div>
+          </div>
+          </div>
           </div>
           <h2 class="titre-section" id="registres">Registres</h2>
           <div class="card">
@@ -409,10 +439,6 @@
             <p id="cloture" class="muted small" hidden></p>
             <div class="table"><table id="t-archives"></table></div>
             <div class="table"><table id="t-impots"></table></div>
-          </div>
-          <div class="card">
-            <h2>Virements Stripe vers la banque</h2>
-            <div class="table"><table id="t-virements"></table></div>
           </div>
         </div>
       </section>
