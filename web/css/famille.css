@@ -1958,3 +1958,26 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .shot-count { right: 12px; top: 12px; font-size: 14px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .shot { box-shadow: none; } }
 :root[data-theme="dark"] .shot { box-shadow: none; }
+
+/* Carte d'un envoi : qui et quand en tête (photo ronde, prénom, date), l'image, la légende dessous. */
+.shot-meta { padding: 10px 6px 10px 12px; gap: 10px; }
+.shot-tete { flex: none; width: 38px; height: 38px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; font: 700 16px var(--display); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.shot-meta .shot-qui { display: grid; font-size: 14.5px; line-height: 1.3; }
+.shot-qui strong { font-size: 16px; color: var(--text); }
+.shot-sep { display: none; }
+.shot > .shot-caption { margin: 0; padding: 12px 16px 14px; font-size: 17px; font-weight: 400; line-height: 1.4; overflow-wrap: anywhere; }
+
+/* « Réglons la tablette » : la fenêtre prend la hauteur de ce qu'elle contient, page par page. */
+.intro { height: auto; max-height: calc(100dvh - 48px); padding-top: 22px; }
+.intro .intro-step:not([hidden]) { flex: 0 1 auto; }
+.intro .intro-step[data-step="0"]:not([hidden]), .intro .intro-step[data-step="5"]:not([hidden]) { display: block; padding-bottom: 0; }
+.intro .guide-dots { margin-bottom: 18px; }
+.intro .guide-buttons { margin-top: 0; padding-top: 20px; }
+.intro .intro-step p { margin-bottom: 0; }
+.intro .intro-step > * + * { margin-top: 12px; }
+.intro .intro-step h2 { margin: 0; }
+.intro .guide-icon { margin-bottom: 14px; }
+.intro-son { padding: 14px 16px 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg); }
+.intro-son-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.intro-son-tete .setup-son-val { font-weight: 700; color: var(--accent); }
+.intro #intro-volume { display: block; width: 100%; height: 44px; margin: 4px 0 0; cursor: pointer; }

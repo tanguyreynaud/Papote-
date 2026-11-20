@@ -710,11 +710,23 @@ function galleryItem(post, what, onOpen) {
     caption.textContent = post.text;
     info.append(caption);
   }
+  // Qui a envoyé et quand, en tête de la carte : sa photo (ou son initiale), son prénom, puis la date dessous.
   const who = document.createElement('p');
-  who.className = 'muted small';
-  who.textContent = `${post.authorName} · ${timeLabel(toDate(post.createdAt))}`;
+  who.className = 'muted small shot-qui';
+  const prenom = document.createElement('strong');
+  prenom.textContent = post.authorName;
+  const sep = document.createElement('span');
+  sep.className = 'shot-sep';
+  sep.textContent = ' · ';
+  const quand = document.createElement('span');
+  quand.className = 'shot-quand';
+  quand.textContent = timeLabel(toDate(post.createdAt));
+  who.append(prenom, sep, quand);
   info.append(who);
-  meta.append(info);
+  const tete = faces[post.authorUid] ? avatar(faces[post.authorUid]) : document.createElement('span');
+  tete.classList.add('shot-tete');
+  if (!faces[post.authorUid]) { tete.textContent = (post.authorName || '?').trim().charAt(0).toUpperCase(); tete.setAttribute('aria-hidden', 'true'); }
+  meta.append(tete, info);
   const badge = document.createElement('span');
   badge.className = `read-badge ${post.seenAt ? 'read' : 'unread'}`;
   badge.textContent = post.seenAt ? 'Lu' : 'Envoyé ✓'; // « Envoyé ✓ » puis « Lu » (Tanguy, 19/11 : « Non lu » ne disait pas que c'était bien parti)
@@ -734,7 +746,10 @@ function galleryItem(post, what, onOpen) {
     del.addEventListener('click', () => confirmDelete(post, what));
     meta.append(del);
   }
-  li.append(meta);
+  // La carte : qui et quand en haut, l'image, puis la légende dessous s'il y en a une.
+  li.prepend(meta);
+  const legende = info.querySelector('.shot-caption');
+  if (legende) li.append(legende);
   return li;
 }
 
@@ -1129,8 +1144,12 @@ function showIntroTablette() {
       </div>
       <div class="intro-step" data-step="3" hidden>
         <h2>Le son</h2>
-        <p class="muted">Volume du son : <strong id="intro-volume-val"></strong></p>
-        <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume">
+        <p class="muted">Le son des vidéos, les messages lus à voix haute, la radio.</p>
+        <div class="intro-son">
+          <div class="intro-son-tete"><strong>Volume du son</strong><span id="intro-volume-val" class="setup-son-val"></span></div>
+          <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume">
+        </div>
+        <p class="muted small">La sonnerie et le volume des appels se règlent ensuite dans Réglages.</p>
       </div>
       <div class="intro-step" data-step="4" hidden>
         <h2>Les options</h2>
