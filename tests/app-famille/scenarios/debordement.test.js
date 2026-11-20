@@ -135,7 +135,7 @@ test('Textes longs : nom de la tablette, prénoms, e-mails, Wi-Fi, communes pass
     await julie.page.click(`#view-${page} .back`);
     await g.attendreVue(julie, 'view-home');
   }
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   await debordements(julie, 'Profil');
 });

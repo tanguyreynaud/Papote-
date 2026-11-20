@@ -12,7 +12,7 @@ const { s, acteurs } = banc;
 banc.brancher();
 
 async function profil(t) {
-  await t.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(t);
   await g.attendreVue(t, 'view-profile');
   await t.page.locator('#abo-card').waitFor({ state: 'visible' });
 }
@@ -152,7 +152,7 @@ test('Tablette installée sans commande : prendre l\'abonnement depuis l\'app (p
   // Tablette reliée sans commande (avant le 12/11, ou par Papote) : l'appli ne relie plus de tablette (A29).
   const fid = await g.familleRelieeParPapote(julie, await g.tabletteAllumee());
   assert.strictEqual((await famille(fid)).abonnement.statut, 'installation');
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   const formule = julie.page.locator('#abo-formules .abo-formule', { hasText: 'tout compris' });
   await formule.waitFor();
   const [requete] = await Promise.all([

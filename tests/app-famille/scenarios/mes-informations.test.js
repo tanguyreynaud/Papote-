@@ -19,7 +19,7 @@ async function modifier(t, carte) {
 const enregistrer = (t, carte) => t.page.click(`#${carte} .setting-edit button[type=submit]`);
 
 async function profil(t) {
-  await t.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(t);
   await g.attendreVue(t, 'view-profile');
 }
 

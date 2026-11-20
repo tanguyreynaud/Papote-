@@ -115,6 +115,14 @@ export function notice(message) {
   return dialog(message, [{ label: 'OK', value: true, cls: 'primary' }]);
 }
 
+/** Message d'échec avec « Besoin d'aide ? » : rend 'aide' si la personne le touche. */
+export function noticeAide(message) {
+  return dialog(message, [
+    { label: 'Besoin d\'aide ?', value: 'aide', cls: 'secondary' },
+    { label: 'OK', value: true, cls: 'primary' },
+  ]);
+}
+
 /** Bouton retour d'Android : ferme la dernière fenêtre ouverte comme « Annuler ». false s'il n'y en a pas. */
 export function fermerFenetre() {
   const close = ouvertes[ouvertes.length - 1];

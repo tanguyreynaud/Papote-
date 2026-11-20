@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
@@ -187,11 +187,13 @@ function show(view) {
   clearTimeout(splashNoteTimer);
   $('splash-note').textContent = '';
   if (view === 'loading') splashNoteTimer = setTimeout(() => { if (!$('loading').hidden) $('splash-note').textContent = 'On y est presque…'; }, 4000);
-  document.body.classList.remove('depuis-barre');
+  document.body.classList.remove('depuis-barre', 'chat-libre');
   document.body.classList.toggle('on-support', view === 'view-support');
   // La barre du bas n'apparaît que sur Accueil, Notifications et Support.
   $('nav').hidden = !$(view).classList.contains('tab-page');
-  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view));
+  const reglages = view === 'view-settings' || view === 'view-profile';
+  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view || (reglages && b.id === 'nav-reglages')));
+  document.querySelectorAll('[data-reglages-choix]').forEach((b) => b.classList.toggle('active', (b.dataset.reglagesChoix === 'profil') === (view === 'view-profile')));
   if (view === 'view-notifs') markNotifsRead();
   window.scrollTo(0, 0);
   // Retour sur l'accueil : la file repart à neuf (la carte du moment tout de suite, à sa taille).
@@ -325,7 +327,7 @@ function openPage(name, push = true, onglet = false) {
   document.body.classList.toggle('depuis-barre', onglet);
   if (onglet) {
     $('nav').hidden = false;
-    document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.page === name));
+    document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.page === name || (name === 'settings' && b.id === 'nav-reglages')));
   }
 }
 
@@ -376,7 +378,23 @@ for (const quoi of ['deja', 'prendre']) {
   });
 }
 $('sans-abo-aide').addEventListener('click', () => ouvrirOnglet('support'));
-document.querySelectorAll('.bell-btn[data-tab], .aide-card[data-tab]').forEach((b) => b.addEventListener('click', () => ouvrirOnglet(b.dataset.tab)));
+document.querySelectorAll('.bell-btn[data-tab]').forEach((b) => b.addEventListener('click', () => ouvrirOnglet(b.dataset.tab)));
+
+// ---------- « Besoin d'aide ? » : l'assistant (Tanguy, 20/11) ----------
+// En haut de Réglages, sous les erreurs de connexion, dans les messages d'échec (envoi, appel). Connecté : la page Aide
+// (questions fréquentes) avec l'assistant ouvert par-dessus ; pas encore connecté : l'assistant seul, sur la page où
+// l'on est. Sans assistant (pas de réseau, script pas chargé) : les questions fréquentes, ou l'adresse e-mail.
+function ouvrirAssistant() {
+  const connecte = !!session?.family && $('call').hidden && !VUES_PARCOURS.some((v) => !$(v).hidden) && $('loading').hidden;
+  if (connecte) ouvrirOnglet('support');
+  else document.body.classList.add('chat-libre');
+  try { if (window.papoteChat) { window.papoteChat.ouvrir(); return; } } catch (e) { /* plus bas */ }
+  if (!connecte) notice("L'assistant ne répond pas pour l'instant. Écrivez-nous à contact@mapapote.fr, nous vous répondons vite.");
+}
+async function noticeAvecAide(message) {
+  if (await noticeAide(message) === 'aide') ouvrirAssistant();
+}
+document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', ouvrirAssistant));
 
 const VUES_ONGLETS = ['notifs', 'profile', 'support'];
 
@@ -405,10 +423,22 @@ function ouvrirOnglet(nom) {
   show(`view-${nom}`);
 }
 
+// Réglages (barre du bas, Tanguy 20/11) : « La tablette » (page Réglages) ou « Mon profil » (onglet Profil), choisis
+// en haut des deux pages. La barre ouvre toujours « La tablette » : toujours le même écran au même bouton.
+function ouvrirReglages(choix = 'tablette') {
+  if (choix === 'profil') { ouvrirOnglet('profile'); return; }
+  if (!surUnOnglet()) goHome();
+  openPage('settings', true, true);
+}
+document.querySelectorAll('[data-reglages-choix]').forEach((b) => b.addEventListener('click', () => {
+  if (!b.classList.contains('active')) ouvrirReglages(b.dataset.reglagesChoix);
+}));
+
 // Barre du bas : on change d'onglet sans empiler l'historique.
 document.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
     const surOnglet = surUnOnglet();
+    if (btn.id === 'nav-reglages') { ouvrirReglages(); return; }
     if (btn.dataset.page) { if (!surOnglet) goHome(); openPage(btn.dataset.page, true, true); return; }
     // Accueil depuis un onglet : comme « retour », l'entrée de l'onglet est juste au-dessus de l'accueil.
     if (btn.dataset.tab === 'home') { if (surOnglet) history.back(); else goHome(); return; }
@@ -417,8 +447,6 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 });
 
 $('btn-invite').addEventListener('click', () => openPage('invite'));
-// Roue dentée en haut de l'accueil, à gauche de la cloche : les Réglages sans descendre jusqu'à la tuile (Tanguy, 19/11).
-$('btn-gear').addEventListener('click', () => openPage('settings'));
 
 document.querySelectorAll('.tile[data-page]').forEach((tile) => {
   tile.addEventListener('click', () => openPage(tile.dataset.page));
@@ -1553,7 +1581,7 @@ async function addPhotoFiles(all) {
       pendingPhotos.push(await compressPhoto(file));
     } catch (err) {
       console.error(err);
-      notice(`La photo « ${file.name} » n'a pas pu être lue.`);
+      noticeAvecAide(`La photo « ${file.name} » n'a pas pu être lue.`);
     }
   }
   setStatus('');
@@ -1715,7 +1743,7 @@ async function queue(item) {
     toast("Pas de réseau : l'envoi partira tout seul");
   } catch (err) {
     console.error(err);
-    notice("L'envoi a échoué. Vérifiez la connexion et réessayez.");
+    noticeAvecAide("L'envoi a échoué. Vérifiez la connexion et réessayez.");
   }
   renderOutbox();
   return id;
@@ -2060,7 +2088,7 @@ $('face-remove').addEventListener('click', async () => {
 $('face-nudge').addEventListener('click', () => {
   document.documentElement.classList.add('sans-appui');
   setTimeout(() => document.documentElement.classList.remove('sans-appui'), 400);
-  document.querySelector('.nav-item[data-tab="profile"]').click();
+  ouvrirReglages('profil');
 });
 
 // ---------- Nettoyage : rester dans le quota gratuit de Firebase ----------
@@ -2807,8 +2835,15 @@ $('tile-call').addEventListener('click', async () => {
       console.error(err);
       reportCallIncident('depart-video', `${err && err.name}: ${err && err.message}`);
     }
-    finDAppel(callErrorMessage(err));
-    setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
+    // Tablette occupée : dit sur l'écran d'appel, qui se ferme seul. Vrai échec : l'écran se ferme et le message reste,
+    // avec « Besoin d'aide ? » (Tanguy, 20/11 : l'aide là où l'on bloque).
+    if (err && err.name === 'BusyError') {
+      finDAppel(callErrorMessage(err));
+      setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
+    } else {
+      leaveCallScreen();
+      noticeAvecAide(callErrorMessage(err));
+    }
   } finally {
     callStarting = false;
   }
@@ -2981,7 +3016,7 @@ function renderTelephonesAppels(members) {
   const pluriel = (k, un, plusieurs) => (k > 1 ? plusieurs : un);
   el.textContent = [
     n ? `La tablette peut appeler ${n} proche${pluriel(n, '', 's')} : ${pluriel(n, 'celui', 'ceux')} dont le numéro de portable est enregistré.`
-      : 'La tablette ne peut encore appeler personne : chacun ajoute son numéro de portable dans Profil.',
+      : 'La tablette ne peut encore appeler personne : chacun ajoute son numéro de portable dans Réglages, « Mon profil ».',
     n && sans ? `${sans} proche${pluriel(sans, " n'a", "s n'ont")} pas encore de numéro.` : '',
     proches.some((m) => typeof m.recoitAppels === 'boolean')
       ? `Notifications de Papote activées sur ${notifs} téléphone${pluriel(notifs, '', 's')}.` : '',
@@ -3138,7 +3173,7 @@ $('members').addEventListener('click', (e) => {
   if (more) { more.click(); return; }
   const m = allMembers.find((x) => x.id === li.dataset.uid);
   if (!m) return;
-  if (m.id === session.uid) { toast('C\'est vous : votre prénom, votre photo et votre numéro se changent dans Profil.'); return; }
+  if (m.id === session.uid) { toast('C\'est vous : votre prénom, votre photo et votre numéro se changent dans Réglages, « Mon profil ».'); return; }
   if (m.role === 'tablette') {
     if (!$('tablet-chip').hidden) $('tablet-chip').click();
     else toast(`La tablette de ${session.family.name} n'a pas encore donné de nouvelles.`);
@@ -3426,7 +3461,7 @@ function paused() {
   // Abonnement arrêté (résiliation voulue, décès, EHPAD) : rien n'est à régler (audit « mauvais jours », 5/11).
   if (session?.family?.abonnement?.statut === 'resilie') { notice(TEXTE_ARRETE); return true; }
   notice(amFamilyAdmin()
-    ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Profil en bas de l'écran, puis Abonnement."
+    ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Réglages en bas de l'écran, puis « Mon profil », puis Abonnement."
     : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
   return true;
 }
@@ -3549,7 +3584,7 @@ document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventLi
 
 // L'abonnement est dans Profil.
 function ouvrirAbonnement() {
-  document.querySelector('.nav-item[data-tab="profile"]').click();
+  ouvrirReglages('profil');
   requestAnimationFrame(() => $('abo-card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
 }
 
@@ -4027,7 +4062,7 @@ function renderAbonnement() {
   // Sans abonnement en cours : un responsable peut relier une commande déjà payée sur le site.
   const sansAbo = ['aucun', 'resilie', 'suspendu', 'installation'].includes(statut) && admin;
   // Fin d'installation sans commande reliée : dire quoi faire, pas seulement « en attente ».
-  if (statut === 'aucun' && admin) text = "Aucune commande n'est reliée à cette tablette. Vous l'avez commandée sur le site ? Entrez le code de commande ci-dessous. Sinon, choisissez un abonnement dans Profil.";
+  if (statut === 'aucun' && admin) text = "Aucune commande n'est reliée à cette tablette. Vous l'avez commandée sur le site ? Entrez le code de commande ci-dessous. Sinon, choisissez un abonnement dans Réglages, « Mon profil ».";
   // Installation finie sans commande reliée (B3) : tout fonctionne 48 h, le temps d'entrer le code.
   if (statut === 'installation' && admin) {
     text = `Entrez le code de votre commande (dans l'e-mail de confirmation) pour la relier à cette tablette.${abo.toleranceJusqua ? ` Papote fonctionne en attendant, jusqu'au ${dateLongue(abo.toleranceJusqua)}.` : ''}`;
@@ -4931,7 +4966,7 @@ function renderSosOrdre() {
   if (!proches.length) {
     const p = document.createElement('p');
     p.className = 'muted';
-    p.textContent = 'Personne n\'a encore de numéro de portable enregistré : chacun l\'ajoute dans Profil.';
+    p.textContent = 'Personne n\'a encore de numéro de portable enregistré : chacun l\'ajoute dans Réglages, « Mon profil ».';
     val.replaceChildren(p);
     return;
   }
@@ -5031,7 +5066,7 @@ SETTINGS['sos-ordre-card'] = {
     const sans = allMembers.filter((m) => m.role !== 'tablette' && (!m.status || m.status === 'active') && !telPropre(m.telephone));
     $('sos-ordre-sans').hidden = !sans.length;
     $('sos-ordre-sans').textContent = sans.length
-      ? `Sans numéro de portable, pas appelé${sans.length > 1 ? 's' : ''} par la tablette : ${sans.map((m) => m.name || 'Proche').join(', ')}. Chacun ajoute son numéro dans Profil.`
+      ? `Sans numéro de portable, pas appelé${sans.length > 1 ? 's' : ''} par la tablette : ${sans.map((m) => m.name || 'Proche').join(', ')}. Chacun ajoute son numéro dans Réglages, « Mon profil ».`
       : '';
     $('sos-ordre-defaut').hidden = proches.length < 2;
     dessinerSosOrdre();
@@ -5572,7 +5607,7 @@ $('tile-phone').addEventListener('click', (e) => {
   if (!$('tile-phone').classList.contains('tile-off')) return;
   e.preventDefault();
   toast(`Ajoutez votre numéro de portable : la tablette de ${session?.family?.name || 'votre proche'} ne répond qu'aux numéros de la famille.`);
-  document.querySelector('.nav-item[data-tab="profile"]').click();
+  ouvrirReglages('profil');
   setTimeout(() => { const carte = $('my-tel-card'); if (carte && !carte.classList.contains('editing')) openSetting(carte); }, 300);
 });
 

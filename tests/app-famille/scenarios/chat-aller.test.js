@@ -67,7 +67,7 @@ const DEPARTS = {
   accueil: async () => {},
   page: async (t) => g.ouvrirTuile(t, 'agenda'),
   onglet: async (t) => {
-    await t.page.click('.nav-item[data-tab="profile"]');
+    await g.ouvrirProfil(t);
     await g.attendreVue(t, 'view-profile');
   },
   'feuille Wi-Fi': async (t, fid) => {
@@ -233,7 +233,7 @@ test('Boutons du chat : conversation reprise du site (#chat=…) : false pendant
   await retourAccueil(julie);
 
   // Une question ouverte (Se déconnecter ?) : false, la question reste.
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await julie.page.click('#view-profile [data-action="logout"]');
   await julie.page.locator('.dialog-back:not(.closing) .dialog', { hasText: 'Se déconnecter' }).waitFor();
   assert.strictEqual(await aller(julie, 'agenda'), false);

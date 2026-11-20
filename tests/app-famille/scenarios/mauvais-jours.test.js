@@ -67,7 +67,7 @@ test('Décès : « Votre proche est décédé ? » arrête Papote en un geste, s
   await s.calme();
   await julie.page.reload();
   await g.attendreVue(julie, 'view-home');
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   await julie.page.click('#btn-abo-page');
   await g.attendreVue(julie, 'view-abonnement');

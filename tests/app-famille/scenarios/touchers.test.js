@@ -67,10 +67,10 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await p.locator('#sheet-wifi').waitFor({ state: 'hidden' });
   // Sa propre ligne (son badge « Responsable ») : où changer ses informations.
   await p.locator('#members li', { hasText: 'Julie' }).locator('.badge', { hasText: 'Responsable' }).click();
-  await g.toast(julie, 'C\'est vous : votre prénom, votre photo et votre numéro se changent dans Profil.');
+  await g.toast(julie, 'C\'est vous : votre prénom, votre photo et votre numéro se changent dans Réglages, « Mon profil ».');
   await p.click('#view-settings .back');
   await g.attendreVue(julie, 'view-home');
-  await p.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   assert.ok((await effet(julie, '#face-img, #face-empty')).fichier, 'ma photo : choix d\'une photo');
 
@@ -83,10 +83,10 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await p.click('#view-photos .back');
   await g.attendreVue(julie, 'view-home');
 
-  // Roue dentée en haut de l'accueil : elle ouvre les Réglages (Tanguy, 19/11) ; double appui, une seule page.
-  await p.locator('#btn-gear').dblclick();
+  // Réglages dans la barre du bas (Tanguy, 20/11) ; double appui, une seule page : « retour » ramène à l'accueil.
+  await p.locator('#nav-reglages').dblclick();
   await g.attendreVue(julie, 'view-settings');
-  await p.click('#view-settings .back');
+  await p.goBack();
   await g.attendreVue(julie, 'view-home');
 
   // Agenda : la ligne d'un anniversaire ouvre sa modification ; double appui : une seule fenêtre, et le retour la ferme.
@@ -149,7 +149,7 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
   // Profil.
   await p.click('#view-settings .back');
   await g.attendreVue(julie, 'view-home');
-  await p.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   for (const carte of ['my-name-card', 'my-genre-card']) {
     for (const cible of ['h2', '.setting-value']) {
@@ -157,7 +157,7 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
       await p.click(`#${carte} .setting-cancel`);
     }
   }
-  await verifier(['#view-profile .seg:not(.active)', '#face-camera', '#face-gallery']);
+  await verifier(['#view-profile [data-theme-choice]:not(.active)', '#face-camera', '#face-gallery']);
 });
 
 // V14 (testeur, 17/11) : « Tout télécharger » sur une page Photos vide ne servait à rien. Caché tant qu'il n'y a
