@@ -410,6 +410,13 @@ service cloud.firestore {
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['textSize', 'rev'])
             && isFamilyAdmin(fid)
             && request.resource.data.textSize in ['normal', 'grande', 'tres-grande'])
+          // Luminosité de l'écran en journée (Tanguy, 20/11) : un entier de 40 à 100 %, réglé par un responsable, avec
+          // le compteur qui prévient la tablette. 70 posé par le serveur à l'installation (jamais par-dessus un réglage).
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['luminosite', 'rev'])
+            && isFamilyAdmin(fid)
+            && request.resource.data.luminosite is int
+            && request.resource.data.luminosite >= 40
+            && request.resource.data.luminosite <= 100)
           // Ordre d'appel du SOS (Réglages, « Ordre d'appel SOS ») : posé ou effacé (ordre par défaut) par un responsable.
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sosOrdre', 'rev'])
             && isFamilyAdmin(fid)
