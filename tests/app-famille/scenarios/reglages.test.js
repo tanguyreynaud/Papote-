@@ -310,12 +310,12 @@ test('Nom de la tablette : jamais un numéro (message sous le champ) ; nuit : he
 });
 
 // Luminosité de l'écran le jour (Tanguy, 20/11) : families/{fid}.luminosite de 40 à 100, par un responsable ; la tablette
-// la limite à 55 % le soir. Pas réglée : la tablette garde la sienne, le curseur propose 70 %.
-test('Luminosité : curseur à 70 % proposé, réglée à 85 % par Julie ; Paul (pas responsable) ne voit pas la carte', async () => {
+// la limite à 55 % le soir. Le serveur pose 70 % à la création de la famille (jamais par-dessus un réglage).
+test('Luminosité : 70 % posé par le serveur, réglée à 85 % par Julie ; Paul (pas responsable) ne voit pas la carte', async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await g.ouvrirTuile(julie, 'settings');
-  await julie.page.locator('#luminosite-value', { hasText: 'Pas encore réglée' }).waitFor();
+  await julie.page.locator('#luminosite-value', { hasText: '70 % le jour, 55 % au plus le soir' }).waitFor();
   await julie.page.click('#luminosite-card .setting-modify');
   assert.strictEqual(await julie.page.locator('#luminosite').inputValue(), '70');
   assert.strictEqual(await julie.page.locator('#luminosite-val').innerText(), '70 %');

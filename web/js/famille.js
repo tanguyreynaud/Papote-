@@ -6107,7 +6107,7 @@ function oublierCompte() {
   for (const id of ['members', 'invitations', 'photos', 'videos', 'messages', 'notifs', 'birthdays', 'reminders', 'invitations-sent', 'factures-liste', 'sos-ordre-value', 'sos-ordre-liste', 'sos-ordre-annonce', 'sos-ordre-sans']) $(id)?.replaceChildren();
   // Textes écrits pour ce compte (prénom, adresse, famille) et photos : réécrits à l'arrivée du compte suivant.
   for (const id of ['tablet-owner-text', 'my-name-value', 'my-tel-value', 'my-genre-value', 'account-email', 'join-account',
-    'family-title', 'family-switch', 'contact-titre', 'contact-texte', 'family-name-value']) if ($(id)) $(id).textContent = '';
+    'family-title', 'family-switch', 'contact-titre', 'contact-texte', 'family-name-value', 'rappels-photos-text']) if ($(id)) $(id).textContent = '';
   document.querySelectorAll('.grand-name').forEach((e) => { e.textContent = ''; });
   document.querySelectorAll('main img[src^="data:"], main img[src^="blob:"]').forEach((img) => img.removeAttribute('src'));
   for (const id of ['moi-prenom', 'moi-tel', 'my-name', 'my-tel', 'family-name']) if ($(id)) $(id).value = '';
