@@ -2025,3 +2025,7 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 }
 
 /* ================= Fenêtres et pages, revue du 20/11 (fil « Sublimer les fenêtres et pages ») ==========
+/* « Réglons la tablette » : la fenêtre a la hauteur de son contenu, mais son bas reste à la même place d'une page à
+   l'autre (elle grandit vers le haut) : « Retour » et « Suivant » ne bougent pas sous le doigt (règle V8, double appui). */
+.guide-back.intro-back { align-items: flex-end; padding-bottom: clamp(24px, calc(100dvh - 668px), calc(50dvh - 250px)); }
+.intro { max-height: 100%; }
