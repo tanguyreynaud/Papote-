@@ -2531,24 +2531,34 @@ function remplirPageAccessoire(id) {
       if (await sauverAccessoire({ action: 'supprimer', id: a.id }, 'Accessoire supprimé', 'Suppression de l\'accessoire…')) location.hash = '#stock/accessoires';
     } },
   ], `Actions pour ${a.nom}`);
-  zone.replaceChildren(h('div', { class: 'card' },
-    h('div', { class: 'tete-fiche' }, h('h2', {}, a.nom), h('div', { class: 'tete-actions no-print' }, menu)),
-    a.manque ? h('p', { class: 'small' }, badge(`il en manque ${a.manque} pour les envois`, 'ko')) : a.bas ? h('p', { class: 'small' }, badge('stock bas', 'ko')) : null,
-    h('dl', { class: 'fiche' },
-      ...modif('Nom', a.nom, 'nom', { valeur: a.nom }),
+  zone.replaceChildren(
+    h('div', { class: 'tete-fiche' }, h('h2', {}, a.nom),
+      a.manque ? badge(`il en manque ${a.manque}`, 'ko') : a.bas ? badge('stock bas', 'ko') : null,
+      h('span', { class: 'espace' }), h('div', { class: 'tete-actions no-print' }, menu)),
+    h('p', { class: 'sous-fiche muted' }, [donnees.envoisAccessoire[a.parEnvoi || ''], a.retour ? 'revient et repart chez le client suivant' : 'consommé à chaque envoi'].filter(Boolean).join(' · ')),
+    h('div', { class: 'card' }, h('div', { class: 'tuiles trois' },
+      stat(String(a.quantite || 0), 'en stock', a.seuil != null ? `alerte sous ${a.seuil}` : 'pas d\'alerte réglée', a.manque || a.bas ? 'neg' : null),
+      stat(String(a.besoin || 0), 'à prévoir pour les envois', a.manque ? `il en manque ${a.manque}` : null, a.manque ? 'neg' : null),
+      stat(a.prixAchat != null ? euros(a.prixAchat) : 'pas noté', 'prix unitaire', a.prixAchat != null && a.quantite ? `valeur du stock : ${euros(a.prixAchat * a.quantite)}` : null))),
+    livraison,
+    h('div', { class: 'deux-colonnes egales' },
+      h('div', {}, h('div', { class: 'card' }, h('h2', {}, 'Le stock'),
+        h('dl', { class: 'fiche kv' },
       ...modif('En stock', String(a.quantite || 0), 'quantite', { valeur: a.quantite || 0, mode: 'numeric', convertir: (v) => nombre(v) }),
       ...(a.besoin ? [h('dt', {}, 'Pour les envois'), h('dd', {}, `${a.besoin} à prévoir pour les commandes à envoyer`)] : []),
       ...modif('Alerte sous', a.seuil != null ? String(a.seuil) : null, 'seuil', { valeur: a.seuil ?? '', mode: 'numeric', vide: 'pas d\'alerte', convertir: (v) => nombre(v, true) }),
       ...modif('Prix unitaire', a.prixAchat != null ? euros(a.prixAchat) : null, 'prixAchat', { valeur: enEuros(a.prixAchat), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
-      // Une dépense par livraison : la liste s'allonge (« Ajouter un achat »), une livraison saisie avec son montant s'y ajoute seule.
       ...modif('Achats', (a.depenses || []).length ? h('span', {}, ...a.depenses.flatMap((x, i) => [i ? ', ' : null, lienAchat(x)])) : badge('aucun achat lié', 'neutre'),
         'depenses', { valeur: '', options: optionsAchats('Choisir l\'achat à ajouter'), convertir: (v) => (v ? [...(a.depenses || []), v] : (a.depenses || [])) }),
+        ))),
+      h('div', {}, h('div', { class: 'card' }, h('h2', {}, 'L\'accessoire'),
+        h('dl', { class: 'fiche kv' },
+      ...modif('Nom', a.nom, 'nom', { valeur: a.nom }),
       ...modif('Part avec', donnees.envoisAccessoire[a.parEnvoi || ''], 'parEnvoi', { valeur: a.parEnvoi || '', options: Object.entries(donnees.envoisAccessoire) }),
       ...modif('Au retour', a.retour ? 'Revient et repart chez le client suivant' : 'Consommé à chaque envoi', 'retour', {
         valeur: a.retour ? 'oui' : '', options: [['oui', 'Revient et repart chez le client suivant'], ['', 'Consommé à chaque envoi']], convertir: (v) => v === 'oui' }),
-      ...modif('Note', a.note || null, 'note', { valeur: a.note || '', long: true, vide: 'aucune' })),
-    livraison));
-  miseEnFiche(zone, 'L\'accessoire');
+      ...modif('Note', a.note || null, 'note', { valeur: a.note || '', long: true, vide: 'aucune' }),
+        )))));
 }
 
 async function sauverAccessoire(donneesAppel, fait = 'Enregistré', attente) {
@@ -3721,17 +3731,28 @@ function remplirPageDepense(id) {
   const pieces = [...(d.pieces || []).map(lienPiece),
     d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null].filter(Boolean);
   const valider = d.aVerifier ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => verifierDepense(d) }, 'Valider') : null;
+  const facture = d.confirmation ? ['Pas reçue', 'facture', 'seule la confirmation de commande est arrivée', 'neg']
+    : pieces.length ? ['Reçue', 'facture', pieces.length > 1 ? `${pieces.length} documents joints` : '1 document joint', 'pos']
+      : ['Aucun', 'justificatif', 'à ajouter pour la comptabilité', 'neg'];
   zone.replaceChildren(...[
-    h('div', { class: 'card' },
-      h('div', { class: 'tete-fiche' }, h('h2', {}, titre),
-        h('div', { class: 'tete-actions' }, valider, h('div', { class: 'no-print' }, menuPoints([
+    h('div', { class: 'tete-fiche' }, h('h2', {}, titre), d.aVerifier ? badge('à vérifier', 'ko') : null, h('span', { class: 'espace' }),
+      h('div', { class: 'tete-actions' }, valider, h('div', { class: 'no-print' }, menuPoints([
           { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
           d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
           { libelle: 'Supprimer la dépense', danger: true, faire: async () => { if (await supprimerDepense(d)) location.hash = '#compta/depenses'; } },
         ], `Actions pour « ${d.libelle} »`)))),
-      d.aVerifier ? h('p', { class: 'small a-verifier' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d), ' : vérifiez le montant, la date et le vendeur, puis validez.') : null,
-      d.aVerifier && d.remarque ? h('p', { class: 'small a-verifier' }, d.remarque) : null,
-      h('dl', { class: 'fiche' },
+    h('p', { class: 'sous-fiche muted' }, [achat ? d.libelle : d.fournisseur, jour(d.date), donnees.categories[d.categorie] || d.categorie].filter(Boolean).join(' · ')),
+    d.aVerifier ? h('div', { class: 'bandeau a-verifier' }, h('ul', { class: 'bandeau-liste' },
+      h('li', {}, sourceDepense(d), ' : vérifiez le montant, la date et le vendeur, puis validez.'),
+      d.remarque ? h('li', {}, d.remarque) : null)) : null,
+    h('div', { class: 'card' }, h('div', { class: 'tuiles trois' },
+      stat(euros(d.montant), 'montant TTC', d.recurrence ? 'chaque mois' : null),
+      stat(d.tva != null ? euros(d.tva) : 'Aucune', 'TVA', d.tva != null && d.montant ? `hors taxes : ${euros(d.montant - d.tva)}` : null),
+      stat(...facture))),
+    h('div', { class: 'deux-colonnes egales' },
+      h('div', {},
+        h('div', { class: 'card' }, h('h2', {}, achat ? 'L\'achat' : 'La dépense'),
+          h('dl', { class: 'fiche kv' },
         // Chaque information se corrige avec son crayon (facture mal lue, faute de frappe).
         ...modif('Date', jour(d.date), 'date', { valeur: dateChamp(d.date), type: 'date', convertir: (v) => {
           if (!v) throw new Error('Date manquante.');
@@ -3748,15 +3769,18 @@ function remplirPageDepense(id) {
         } }),
         ...modif('dont TVA', d.tva != null ? euros(d.tva) : null, 'tva', { valeur: enEuros(d.tva), mode: 'decimal', suffixe: '€', vide: 'aucune',
           convertir: (v) => (String(v).trim() ? convertirEuros(v) : null) }),
-        // Facture ajoutée d'ici avec le crayon, comme les autres lignes (Tanguy, 30/10) : roue pendant l'envoi, puis résultat.
-        ...ligneFacture(d, pieces),
-        ligne('Justificatifs', pieces.length ? h('div', { class: 'pieces-liste' }, pieces) : null),
+        ligne('Chaque mois', d.recurrence ? 'oui, ajoutée automatiquement chaque mois' : null),
+        ligne('Entré au stock', (d.materiel || []).length ? d.materiel.join(', ') : null)))),
+      h('div', {}, ...[
+        h('div', { class: 'card carte-facture' }, h('h2', {}, 'La facture'),
+          h('dl', { class: 'fiche kv' },
+            ...ligneFacture(d, pieces),
+            ligne('Documents', pieces.length ? h('div', { class: 'pieces-liste' }, pieces) : null),
         ...(d.categorie === 'sim' && !sims.length ? modif('Carte SIM rechargée', simDe(d.sim), 'sim', { valeur: d.sim || '', vide: 'aucune',
           options: [['', 'Aucune'], ...donnees.sims.filter((l) => l.statut !== 'resiliee' || l.id === d.sim)
             .map((l) => [l.id, [l.operateur, l.numero || fin4(l.iccid)].filter(Boolean).join(' · ') || 'Carte SIM'])],
           convertir: (v) => v || null }) : []),
-        ligne('Chaque mois', d.recurrence ? 'oui, ajoutée automatiquement chaque mois' : null),
-        ligne('Entré au stock', (d.materiel || []).length ? d.materiel.join(', ') : null))),
+          )),
     // Ce que l'achat a fait entrer : les tablettes (achat de tablettes) ou les cartes SIM, chacune vers sa page.
     sims.length ? h('div', { class: 'card' }, h('h2', {}, sims.length > 1 ? `Les ${sims.length} cartes SIM de cet achat` : 'La carte SIM de cet achat'),
       h('ul', { class: 'liste-liens' }, ...sims.map((l) => h('li', {}, h('span', { class: 'll-quoi' }, 'Carte SIM'),
@@ -3767,8 +3791,8 @@ function remplirPageDepense(id) {
         h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'Tablette'),
         h('span', { class: 'muted small' }, donnees.etats[etatTablette(t)] || t.etat))))
         : h('p', { class: 'muted small' }, 'Aucune tablette rattachée à cet achat.')) : null,
+      ].filter(Boolean))),
   ].filter(Boolean));
-  miseEnFiche(zone, achat ? 'L\'achat' : 'La dépense');
 }
 
 // Ligne « Facture » de la page d'un achat : toute la ligne et son crayon ouvrent le choix du fichier.
@@ -3784,7 +3808,7 @@ function ligneFacture(d, pieces) {
   crayon.addEventListener('click', ouvrir);
   const dd = h('dd', { class: 'modifiable' },
     h('span', { class: 'valeur' }, d.confirmation
-      ? [badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : touchez le crayon pour ajouter la facture, ou transférez-la à factures@mapapote.fr')]
+      ? [badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'Seule la confirmation de commande est arrivée. Touchez le crayon pour ajouter la facture, ou transférez-la à factures@mapapote.fr.')]
       : pieces.length ? [badge('reçue', 'ok'), ...(d.source ? [' ', boutonPasLaFacture(d)] : [])]
         : h('span', { class: 'muted' }, 'aucun justificatif : touchez le crayon pour en ajouter un')),
     crayon);

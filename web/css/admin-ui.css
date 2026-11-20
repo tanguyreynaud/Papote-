@@ -741,3 +741,42 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 /* « Chez qui » et « La tablette » : mêmes hauteurs de ligne, crayon ou pas. */
 .admin-body #dt-infos dl.fiche.kv dt, .admin-body #dt-infos dl.fiche.kv dd { min-height: 40px; display: flex; align-items: center; padding-top: 4px; padding-bottom: 4px; }
 .admin-body #dt-infos dl.fiche.kv dd { justify-content: flex-end; }
+
+/* Bloc couverture : trois petits boutons identiques, les liens vers l'extérieur marqués d'une flèche. */
+.admin-body .contenu .alerte-couverture .boutons-couverture > a,
+.admin-body .contenu .alerte-couverture .boutons-couverture > button {
+  flex: none !important; min-height: 32px !important; height: 32px !important; padding: 0 12px !important; border-radius: 999px !important;
+  font-size: 13px !important; font-weight: 600 !important; line-height: 30px !important; background: #fff; border: 1px solid var(--line); color: var(--text);
+  box-shadow: none; display: inline-flex; align-items: center; text-decoration: none; width: auto !important;
+}
+.admin-body .alerte-couverture .boutons-couverture > a[target="_blank"]::after { content: '↗'; margin-left: 6px; color: var(--muted); font-weight: 400; }
+
+/* Familles sur téléphone : les chiffres deviennent une rangée de pastilles, sans tuile orpheline. */
+@media (max-width: 640px) {
+  .admin-body #kpi-familles { display: flex; flex-wrap: wrap; gap: 6px; }
+  .admin-body #kpi-familles .stat.onglet {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border-radius: 999px; margin: 0; width: auto;
+  }
+  .admin-body #kpi-familles .stat.onglet > span { font-size: 15px; line-height: 1; margin: 0; }
+  .admin-body #kpi-familles .stat.onglet > p { font-size: 13px; margin: 0; }
+}
+
+/* Fiche dépense : la ligne « Facture » prend toute la largeur (pastille, explication, crayon), sans libellé répété. */
+.admin-body .carte-facture dl.fiche.kv > dt.modifiable:first-child { display: none; }
+.admin-body .carte-facture dl.fiche.kv > dt.modifiable:first-child + dd { grid-column: 1 / -1; justify-content: space-between; text-align: left; }
+.admin-body .carte-facture dl.fiche.kv > dt.modifiable:first-child + dd .valeur { text-align: left; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.admin-body .carte-facture .pieces-liste { justify-content: flex-end; }
+@media (max-width: 640px) {
+  .admin-body .tuiles.trois > .stat:nth-child(3):last-child { grid-column: 1 / -1; }
+}
+
+/* Fiche famille : nom, pastilles d'état, quatre chiffres, puis les informations fixes. */
+.admin-body #famille-fiche .family-head { flex-wrap: wrap; gap: 6px 8px; margin-bottom: 12px; }
+.admin-body #famille-fiche .family-head .espace { flex: 1; }
+.admin-body #famille-fiche .family > .tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 8px; }
+.admin-body #famille-fiche .family-head h2 { flex: 1 1 60%; min-width: 0; order: 1; }
+.admin-body #famille-fiche .family-head .espace { display: none; }
+.admin-body #famille-fiche .family-head > .menu-points, .admin-body #famille-fiche .family-head > span:empty { order: 2; }
+.admin-body #famille-fiche .family-head > .badge { order: 3; }
+.admin-body #famille-fiche .family-head h2 { flex: 1 1 calc(100% - 90px); }
+.admin-body #famille-fiche .family-head > .dot { display: none; }

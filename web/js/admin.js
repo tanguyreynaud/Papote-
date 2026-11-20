@@ -1172,7 +1172,16 @@ function carteFamille(f) {
   const titre = el('div', 'family-head');
   // Le ⋮ dépend des commandes de la famille (retour en cours) : posé dès qu'elles sont lues.
   const place = el('span');
-  titre.append(el('span', 'dot'), el('h2', null, f.name), place);
+  const abo = f.abonnement?.statut || 'aucun';
+  titre.append(el('span', 'dot'), el('h2', null, f.name),
+    el('span', `badge ${s.cls === 'on' ? 'ok' : s.cls === 'off' ? 'ko' : 'neutre'}`, s.label),
+    el('span', `badge ${['impaye', 'suspendu'].includes(abo) ? 'ko' : ['actif', 'offert'].includes(abo) ? 'info' : 'neutre'}`, `Abonnement : ${(ABONNEMENT_FAMILLE[abo] || 'Aucun').toLowerCase()}`),
+    el('span', 'espace'), place);
+  // Ce qu'on regarde d'abord : la tablette sert-elle, la famille envoie-t-elle.
+  const tuile = (valeur, texte) => { const t = el('div', 'stat'); t.append(el('span', null, String(valeur)), el('p', null, texte)); return t; };
+  const tuiles = el('div', 'tuiles');
+  tuiles.append(tuile(ago(f.active), 'tablette utilisée'), tuile(ago(f.lastPost), 'dernier envoi'),
+    tuile(f.people ?? '–', 'proches'), tuile(f.posts ?? '–', 'photos et messages'));
   donnees().then((d) => d.commandes || []).catch(() => [])
     .then((commandes) => place.replaceWith(menuFamille(f, tete, commandes.filter((c) => c.fid === f.id))));
   const dl = el('dl', 'fiche kv');
@@ -1193,18 +1202,12 @@ function carteFamille(f) {
     }
   } }));
   for (const [k, v] of [
-    ['État', s.label],
     ['Code de la famille', f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '–'],
-    ['Tablette utilisée', ago(f.active)],
-    ['Version', f.version || '–'],
-    ['Abonnement', ABONNEMENT_FAMILLE[f.abonnement?.statut] || 'Aucun'],
-    ['Proches', f.people ?? '–'],
-    ['Photos et messages', f.posts ?? '–'],
-    ['Dernier envoi', ago(f.lastPost)],
+    ['Version de Papote', f.version || '–'],
     ['Créée', toDate(f.createdAt) ? toDate(f.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '–'],
     ['Identifiant', f.id],
-  ]) dl.append(el('dt', null, k), el('dd', k === 'État' ? 'etat' : null, v));
-  tete.append(titre, dl);
+  ]) dl.append(el('dt', null, k), el('dd', null, v));
+  tete.append(titre, tuiles, dl);
 
   // Membres affichés d'office, avec les demandes « veut rejoindre » en tête.
   const membres = el('li', 'card');
