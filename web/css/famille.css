@@ -1984,4 +1984,4 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 
 /* Tablette muette : le fait en rouge, la piste en dessous en texte normal. */
 .activity-piste { display: block; margin-top: 2px; color: var(--muted); font-weight: 400; }
-.activity:has(.activity-piste)::before { align-self: flex-start; margin-top: 8px; }
+.activity:has(.activity-piste)::before { top: 18px; margin-top: 0; }
