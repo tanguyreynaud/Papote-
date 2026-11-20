@@ -1406,6 +1406,9 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .dialog-sos .dialog-title { color: var(--accent); }
 .dialog-sos .dialog-buttons.stack button { min-height: 56px; font-size: 17px; transition: transform .08s, filter .08s; }
 .dialog-sos .dialog-buttons.stack button:active { transform: scale(.97); filter: brightness(.92); }
+.dialog-sos .dialog-buttons.stack .secondary { border-color: var(--accent); color: var(--accent); }
+.dialog-sos .dialog-buttons.stack button:disabled { opacity: .6; cursor: progress; }
+.dialog-sos .dialog-buttons.stack .en-cours { opacity: 1; background: color-mix(in srgb, var(--accent) 12%, var(--bg)); }
 .action-danger { color: var(--danger) !important; }
 .agenda-edit + .agenda-edit { margin-left: 18px; }
 

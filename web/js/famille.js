@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter, fenetreSos } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
@@ -2859,20 +2859,19 @@ $('tile-call').addEventListener('click', async () => {
 let rappelOuvert = false;
 async function offerCallBack(sos = null) {
   try { history.replaceState(history.state, '', location.pathname); } catch (e) { /* rien */ }
-  if (!session || currentCall || callStarting || rappelOuvert) return;
+  if (!session || currentCall || callStarting || rappelOuvert || sosFen) return;
   rappelOuvert = true;
   try {
     if (sos) {
-      const nom = session.family.name;
-      if (!await fenetreSos(nom, quandSos(sos.quand))) return;
-      if (currentCall || callStarting) return;
-      // Le choix téléphone ou vidéo se fait après l'appui : la fiche de la tablette a eu le temps d'arriver.
-      if (numeroTablette() && !$('tile-phone').classList.contains('tile-off')) { $('tile-phone').click(); return; }
-      for (let i = 0; i < 60 && $('tile-call').disabled; i++) await new Promise((r) => setTimeout(r, 250));
-      if ($('tile-call').disabled) { notice(`La tablette de ${nom} ne peut pas recevoir d'appel pour le moment.`); return; }
-      if (currentCall || callStarting) return;
-      appelConfirme = true;
-      $('tile-call').click();
+      // App ouverte par la notification : la fiche de la tablette (son SOS en direct) arrive d'abord, 4 s au plus.
+      await Promise.race([membresServeur, new Promise((r) => { setTimeout(r, 4000); })]);
+      if (!session || currentCall || callStarting || sosFen) return;
+      // SOS suivi par la tablette (members/{uid}.sos) : la même fenêtre, avec « Je m'en occupe » s'il court encore,
+      // ou comment il s'est terminé.
+      const suivi = sosDeLaTablette();
+      if (suivi) { await sosFenetre(suivi, { notif: true }); return; }
+      if (!await fenetreSos(session.family.name, quandSos(sos.quand))) return;
+      await rappelerTablette();
       return;
     }
     if (numeroTablette() && !$('tile-phone').classList.contains('tile-off')) {
@@ -2887,6 +2886,146 @@ async function offerCallBack(sos = null) {
   } finally {
     rappelOuvert = false;
   }
+}
+// « Rappeler <Prénom> » d'une fenêtre SOS (déjà confirmé par ce toucher) : téléphone si la tablette a un numéro, sinon
+// vidéo. Le choix se fait après l'appui : la fiche de la tablette a eu le temps d'arriver.
+async function rappelerTablette() {
+  if (!session || currentCall || callStarting) return;
+  const nom = session.family.name;
+  if (numeroTablette() && !$('tile-phone').classList.contains('tile-off')) { $('tile-phone').click(); return; }
+  for (let i = 0; i < 60 && $('tile-call').disabled; i++) await new Promise((r) => { setTimeout(r, 250); });
+  if ($('tile-call').disabled) { notice(`La tablette de ${nom} ne peut pas recevoir d'appel pour le moment.`); return; }
+  if (currentCall || callStarting) return;
+  appelConfirme = true;
+  $('tile-call').click();
+}
+
+// ---------- SOS suivi en direct (un seul message de fin par SOS, Tanguy 20/11) ----------
+// La tablette signale son SOS sur sa fiche : members/{uid}.sos = { debut (ms), fin, uid, nom }, fin vide tant qu'il
+// court, puis 'repondu' (quelqu'un au téléphone), 'arrete' (arrêté sur la tablette) ou 'pris' (« Je m'en occupe »).
+// Lu par l'écoute des membres déjà ouverte (rien de plus à lire : carte SIM de 1 Go). Un SOS de moins de 30 min qui
+// court ouvre la fenêtre « Mamie a appuyé sur SOS » avec « Rappeler » et « Je m'en occupe » ; une fois fini, la même
+// fenêtre dit comment, avec OK seulement. « Je m'en occupe » passe par le serveur (functions/sos-pris.js,
+// sosJeMenOccupe) : le premier proche gagne, les autres voient « Julie s'en occupe » (families/{fid}.sosPris, lu par
+// l'écoute de la famille déjà ouverte). Une seule fenêtre, jamais deux demandes pour un double appui.
+const SOS_SUIVI_MS = 30 * 60_000;
+const SOS_VU_CLE = 'papote.sosVu';
+let sosFen = null; // fenêtre SOS ouverte : { debut, s, notif, cle, maj }
+let sosRetour = null; // réponse du serveur à « Je m'en occupe » : { debut, fin, uid, nom, message }
+let sosDemande = null; // { debut, erreur } : demande en cours (erreur : '' tant qu'elle attend)
+
+// Le SOS de la tablette s'il a moins de 30 min (horloge de la tablette : 2 min d'avance tolérées), sinon null.
+function sosDeLaTablette() {
+  const s = tabletMembers.map((m) => m.sos).filter((x) => x && Number.isSafeInteger(x.debut) && x.debut > 0)
+    .sort((a, b) => b.debut - a.debut)[0];
+  if (!s) return null;
+  const age = Date.now() - s.debut;
+  return age < SOS_SUIVI_MS && age > -2 * 60_000 ? s : null;
+}
+// Où en est ce SOS : { fin, uid, nom, message }. Un « Je m'en occupe » enregistré par le serveur (sosPris du même SOS)
+// compte tout de suite, sans attendre que la tablette l'ait lu ; la réponse du serveur à mon toucher aussi.
+function sosOuEnEst(s) {
+  if (s.fin) return { fin: s.fin, uid: s.uid || '', nom: s.nom || '', message: '' };
+  const p = session.family?.sosPris;
+  if (p && p.debut === s.debut) {
+    const message = sosRetour?.debut === s.debut ? sosRetour.message : '';
+    return { fin: 'pris', uid: p.uid || '', nom: p.nom || '', message };
+  }
+  if (sosRetour?.debut === s.debut) return sosRetour;
+  return { fin: '', uid: '', nom: '', message: '' };
+}
+function sosVuLire() {
+  try { return JSON.parse(localStorage.getItem(SOS_VU_CLE) || 'null'); } catch (e) { return null; }
+}
+function sosVuNoter(v) {
+  try { localStorage.setItem(SOS_VU_CLE, JSON.stringify(v)); } catch (e) { /* navigation privée : rien de gardé */ }
+}
+// Contenu de la fenêtre pour ce SOS : { cle (change seulement si l'affichage change), titre, texte, boutons }.
+function sosContenu(s, notif) {
+  const nom = session.family.name;
+  const quand = quandSos(s.debut);
+  const quandMin = quand ? quand.charAt(0).toLowerCase() + quand.slice(1) : '';
+  const e = sosOuEnEst(s);
+  if (e.fin) {
+    const moi = e.fin === 'pris' && e.uid === session.uid;
+    const titre = e.fin === 'repondu' ? `${nom} a eu quelqu'un au téléphone`
+      : e.fin === 'arrete' ? `${nom} a arrêté le SOS`
+        : e.fin === 'pris' ? (moi ? 'Vous vous en occupez' : `${e.nom || 'Un proche'} s'en occupe`)
+          : 'Ce SOS est terminé';
+    const detail = e.message || (e.fin === 'repondu' && e.nom ? `${e.nom} a répondu.` : moi ? 'C\'est noté.' : '');
+    return {
+      cle: `fin|${e.fin}|${e.uid}|${e.nom}|${e.message}`,
+      titre,
+      texte: [detail, quandMin ? `SOS : ${quandMin}.` : ''].filter(Boolean).join(' '),
+      boutons: [{ label: 'OK', value: false, cls: 'primary' }],
+    };
+  }
+  const attente = sosDemande?.debut === s.debut && !sosDemande.erreur;
+  const erreur = sosDemande?.debut === s.debut ? sosDemande.erreur : '';
+  const suite = erreur || (notif ? 'Personne n\'a pu répondre.' : 'La tablette prévient la famille.');
+  return {
+    cle: `cours|${attente}|${erreur}`,
+    titre: `${nom} a appuyé sur SOS`,
+    texte: quand ? `${quand}. ${suite}` : suite,
+    boutons: [
+      { label: `Rappeler ${nom}`, value: 'rappeler', cls: 'primary' },
+      { label: attente ? 'Un instant…' : 'Je m\'en occupe', cls: `secondary sos-prendre${attente ? ' en-cours' : ''}`, action: (b) => sosPrendre(s, b) },
+      { label: 'Plus tard', value: false, cls: 'secondary' },
+    ].map((b) => ({ ...b, disabled: attente })),
+  };
+}
+// « Je m'en occupe » : une seule demande (boutons coupés dès le toucher), la fenêtre dit la réponse.
+async function sosPrendre(s, bouton) {
+  if (sosDemande && !sosDemande.erreur) return;
+  sosDemande = { debut: s.debut, erreur: '' };
+  bouton.closest('.dialog-buttons')?.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  bouton.textContent = 'Un instant…';
+  bouton.classList.add('en-cours');
+  try {
+    const r = (await httpsCallable(getFunctions(getApp(), 'europe-west1'), 'sosJeMenOccupe')({ fid: session.fid, debut: s.debut })).data || {};
+    if (r.ok) sosRetour = { debut: s.debut, fin: 'pris', uid: session.uid, nom: r.nom || '', message: '' };
+    else if (r.raison === 'deja') sosRetour = { debut: s.debut, fin: 'pris', uid: r.uid || '', nom: r.nom || '', message: r.message || '' };
+    else sosRetour = { debut: s.debut, fin: r.fin || 'termine', uid: r.uid || '', nom: r.nom || '', message: r.fin ? '' : (r.message || '') };
+    sosDemande = null;
+  } catch (e) {
+    console.warn('« Je m\'en occupe » non enregistré', e);
+    sosDemande = { debut: s.debut, erreur: 'Pas de réponse, vérifiez la connexion et réessayez.' };
+  }
+  sosMaj();
+}
+// La fenêtre ouverte suit le SOS (fiche de la tablette, sosPris, réponse du serveur) ; ne change que si l'affichage change.
+function sosMaj() {
+  if (!sosFen || !session) return;
+  const s = tabletMembers.map((m) => m.sos).find((x) => x && x.debut === sosFen.debut) || sosFen.s;
+  sosFen.s = s;
+  const c = sosContenu(s, sosFen.notif);
+  if (c.cle !== sosFen.cle) {
+    sosFen.cle = c.cle;
+    sosFen.maj(c);
+  }
+  if (c.cle.startsWith('fin|')) sosVuNoter({ fid: session.fid, debut: s.debut, fin: true });
+}
+// Ouvre la fenêtre du SOS ; « Rappeler » lance l'appel une fois la fenêtre fermée.
+async function sosFenetre(s, { notif = false } = {}) {
+  if (sosFen) return;
+  const c = sosContenu(s, notif);
+  sosFen = { debut: s.debut, s, notif, cle: c.cle, ...fenetreSosSuivie(c) };
+  sosVuNoter({ fid: session.fid, debut: s.debut, fin: c.cle.startsWith('fin|') });
+  let choix = false;
+  try { choix = await sosFen.fin; } finally { sosFen = null; }
+  if (choix === 'rappeler') await rappelerTablette();
+}
+// Appelée à chaque nouvelle fiche des membres ou de la famille : ouvre la fenêtre d'un SOS qui court et que ce
+// téléphone n'a pas encore montré ; un SOS fermé par « Plus tard » qui se termine ensuite est dit une fois.
+function sosSuivre() {
+  if (!session || session.member?.role === 'tablette') return;
+  if (sosFen) { sosMaj(); return; }
+  const s = sosDeLaTablette();
+  if (!s || currentCall || callStarting || rappelOuvert) return;
+  const fini = !!sosOuEnEst(s).fin;
+  const vu = sosVuLire();
+  const dejaVu = vu && vu.fid === session.fid && vu.debut === s.debut;
+  if ((!fini && !dejaVu) || (fini && dejaVu && !vu.fin)) sosFenetre(s);
 }
 // ?sos=1&quand=<ms> d'une adresse « Rappeler » : { quand } (0 si l'heure manque), ou null pour un appel manqué ordinaire.
 function sosDe(params) {
@@ -3098,6 +3237,7 @@ function renderMembers(all) {
   setNotifMembers(members);
   renderTelephonesAppels(members);
   renderSosOrdre();
+  sosSuivre();
   renderActivity();
   renderRemote();
   // Le bouton d'appel n'apparaît que si une tablette sait recevoir les appels (Android 5 et plus).
@@ -5313,6 +5453,7 @@ function applyFamily() {
   $('family-name-value').textContent = sansNom ? 'Pas encore choisi' : name;
   if (allMembers.length) renderMembers(allMembers);
   renderPreparee();
+  sosSuivre(); // « Je m'en occupe » d'un autre proche (sosPris) : la fenêtre SOS ouverte le dit tout de suite
 }
 
 // Famille préparée dès la commande (functions/famille-preparee.js) : le nom à donner, puis « tablette en route »

@@ -160,6 +160,18 @@ service cloud.firestore {
         && (l.size() == 0
           || (l.join('/').split('/') == l && l.join('/').matches('[^/]{1,128}(/[^/]{1,128}){0,29}')));
     }
+    // SOS en cours, signalé par la tablette sur sa propre fiche (members/{uid}.sos, Sync.signalerSos) pour l'app famille :
+    // { debut (ms), fin ('' tant qu'il court, puis 'repondu', 'arrete' ou 'pris'), uid, nom } (uid et nom : le proche
+    // qui a répondu ou qui s'en occupe, vides sinon). « Je m'en occupe » lui-même est families/{fid}.sosPris, écrit par le
+    // serveur seulement (functions/sos-pris.js) : aucune règle ne laisse une appli l'écrire.
+    function sosTabletteOk(s) {
+      return s is map
+        && s.keys().hasAll(['debut', 'fin', 'uid', 'nom']) && s.keys().hasOnly(['debut', 'fin', 'uid', 'nom'])
+        && s.debut is int && s.debut > 0
+        && s.fin in ['', 'repondu', 'arrete', 'pris']
+        && s.uid is string && s.uid.size() <= 128
+        && s.nom is string && s.nom.size() <= 40;
+    }
     function isFamilyAdmin(fid) {
       let fam = get(familyPath(fid)).data;
       return isMember(fid)
@@ -580,6 +592,12 @@ service cloud.firestore {
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 40;
+        // La tablette signale son SOS sur SA fiche (sos seul, forme fixe) : personne d'autre, ni un proche sur la sienne.
+        allow update: if signedIn()
+          && uid == request.auth.uid
+          && resource.data.get('role', '') == 'tablette'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sos'])
+          && sosTabletteOk(request.resource.data.sos);
         // Photo de la personne qui a la tablette : choisie par un responsable dans l'app.
         allow update: if isFamilyAdmin(fid)
           && resource.data.role == 'tablette'
