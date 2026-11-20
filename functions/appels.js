@@ -93,6 +93,25 @@ function essaiSos(appel) {
   return appel.calleeName === 'SOS 2' ? 2 : 0;
 }
 
+// Heure de l'appui sur SOS (ms) : création du 1er essai (calleeName 'SOS') de la même tablette, le plus récent avant ce
+// 2e essai et au plus 10 min avant (la tablette relance aussitôt). Repli : début du 2e essai, puis l'heure actuelle.
+const MS = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : null);
+async function heureAppuiSos(db, fid, essai2) {
+  const debut2 = MS(essai2.createdAt);
+  try {
+    if (essai2.callerUid && debut2) {
+      // Deux égalités seulement : pas d'index composé ; peu de SOS par tablette (ménage à 90 jours).
+      const snap = await db.collection(`families/${fid}/calls`).where('callerUid', '==', essai2.callerUid)
+        .where('calleeName', '==', 'SOS').select('createdAt').get();
+      const avant = snap.docs.map((d) => MS(d.get('createdAt'))).filter((t) => t && t <= debut2 && debut2 - t <= 10 * 60_000);
+      if (avant.length) return Math.max(...avant);
+    }
+  } catch (e) {
+    logger.warn(`SOS : heure du 1er essai illisible (${fid})`, e.message);
+  }
+  return debut2 || Date.now();
+}
+
 // Une notification web ne sonne qu'une fois : on la renvoie toutes les 12 s tant que la tablette
 // sonne (même étiquette, « renotify » refait sonner et vibrer), comme une sonnerie qui insiste.
 const REPRISES = 4;
@@ -174,7 +193,10 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
   if (sos && ['missed', 'declined'].includes(apres.state) && !apres.answer) {
     // 1er essai sans réponse : la tablette rappelle tout de suite, rien à dire. Au 2e, l'alerte.
     if (sos === 2) {
-      const n = await envoyer(db, fid, uids, { type: 'alerte', urgence: URGENCE_SOS, titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
+      // fid + quand (heure de l'appui sur SOS, en ms) : toucher la notification ouvre l'app famille sur la bonne famille,
+      // avec la fenêtre « <Prénom> a appuyé sur SOS » et « Rappeler » (Tanguy, 20/11 : avant, on arrivait juste sur l'accueil).
+      const quand = await heureAppuiSos(db, fid, apres);
+      const n = await envoyer(db, fid, uids, { type: 'alerte', urgence: URGENCE_SOS, fid, quand: String(quand), titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
       logger.warn(`SOS ${cid} : personne n'a répondu, famille alertée`);
       await journal.noter(db, { genre: 'sos-sans-reponse', fid, tablette: apres.callerUid, telephones: n });
       if (n === 0) await prevenirSansTelephone(db, fid, uids, { nom, sos: true });

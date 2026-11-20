@@ -2926,6 +2926,18 @@ exports.tabletteVolee = onCall({ maxInstances: 1 }, async (request) => {
   logger.warn(`Tablette ${request.data.serie} révoquée par ${request.auth.uid} : ${JSON.stringify(r)}`);
   return r;
 });
+// « Je m'en occupe » d'un proche pendant un SOS (app famille) : families/{fid}.sosPris, le premier gagne. Aucune
+// notification ni e-mail d'ici : la tablette, réveillée par le changement de sa famille, prévient les autres par SMS.
+const sosPris = require('./sos-pris');
+exports.sosJeMenOccupe = onCall({ region: 'europe-west1', maxInstances: 5 }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Connexion requise.');
+  const r = await sosPris.prendre({
+    db, horodatage: () => FieldValue.serverTimestamp(), maintenant: () => Date.now(),
+  }, request.auth.uid, request.data || {});
+  if (r.erreur) throw new HttpsError(r.code, r.erreur);
+  logger.info(`SOS ${request.data.fid} : « Je m'en occupe » de ${request.auth.uid} → ${r.ok ? 'pris' : r.raison}`);
+  return r;
+});
 // L'ordre de révocation est exécuté (ou refusé) par la tablette : son compte est désactivé.
 exports.tabletteVoleeSuite = onDocumentUpdated(
   { document: 'families/{fid}/commands/{cid}', database: BASE_FIRESTORE, region: REGION_FIRESTORE },

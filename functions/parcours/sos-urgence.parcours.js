@@ -48,6 +48,12 @@ test('A47-5 : SOS sans réponse aux deux essais : appels et alerte portent urgen
   assert.strictEqual(alerte.length, 1);
   assert.strictEqual(alerte[0].urgence, 'sos', 'alerte « a appuyé sur SOS » marquée');
   assert.deepStrictEqual(alerte[0].uids.sort(), [julie.uid, paul.uid].sort());
+  // Toucher l'alerte ouvre l'app famille avec l'heure de l'appui sur SOS (création du 1er essai), pas celle du 2e essai
+  // (fenêtre « Rappeler », 20/11).
+  const debut1 = (await s.db.doc(`families/${fid}/calls/${c1}`).get()).get('createdAt').toMillis();
+  const debut2 = (await s.db.doc(`families/${fid}/calls/${c2}`).get()).get('createdAt').toMillis();
+  assert.ok(debut2 > debut1, 'le 2e essai commence après le 1er');
+  assert.strictEqual(alerte[0].quand, String(debut1), 'alerte : heure de l\'appui sur SOS (1er essai), en ms');
   // Les valeurs des données FCM sont des chaînes.
   [...appel1, ...appel2, ...alerte].forEach((n) => assert.strictEqual(typeof n.urgence, 'string'));
 });

@@ -14,7 +14,9 @@ import java.util.Map;
  *   { type: 'connexion', cid, connexion }  juste après : de quoi ouvrir l'appel dans l'app
  *   { type: 'fin', cid }          la tablette ne sonne plus : silence
  *   { type: 'manque', cid, nom }  personne n'a répondu : « Appel manqué »
- *   { type: 'alerte', titre, texte }
+ *   { type: 'alerte', titre, texte }  alerte sur la tablette
+ *   { type: 'alerte', urgence: 'sos', fid, quand, titre, texte }  SOS sans réponse : la notification ouvre
+ *                                 l'app famille sur « Rappeler » (voir Appels.urlRappelSos)
  */
 public class Sonnerie extends FirebaseMessagingService {
     @Override
@@ -33,7 +35,7 @@ public class Sonnerie extends FirebaseMessagingService {
         } else if ("manque".equals(type) && cid != null) {
             Appels.manque(this, cid, nom);
         } else if ("alerte".equals(type)) {
-            Appels.alerte(this, d.get("titre"), d.get("texte"));
+            Appels.alerte(this, d.get("titre"), d.get("texte"), d.get("urgence"), d.get("fid"), d.get("quand"));
         }
     }
 
