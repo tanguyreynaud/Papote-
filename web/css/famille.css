@@ -997,9 +997,6 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 }
 .dialog p { margin: 0 0 18px; font-size: 17px; line-height: 1.45; }
 .dialog { position: relative; }
-.dialog.avec-croix > p:first-of-type, .dialog.avec-croix > .dialog-title { padding-right: 36px; }
-.dialog-croix { position: absolute; top: 8px; right: 8px; color: var(--muted); }
-.dialog-croix svg { width: 22px; height: 22px; }
 /* Colonnes égales : les boutons gardent la même taille même si leurs marges intérieures diffèrent. */
 .dialog-buttons { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
 .dialog-buttons button { min-height: 48px; justify-content: center; }
