@@ -152,7 +152,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await g.toast(julie, 'Volumes envoyés');
   const fam = await g.lire(`families/${fid}`);
   assert.deepStrictEqual([fam.volume, fam.volumeSonnerie, fam.volumeAppel], [50, 70, 80]);
-  await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 % · Vidéos et messages 50 % · Appels 80 %' }).waitFor();
+  await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 · Vidéos 50 · Appels 80' }).waitFor();
   assert.strictEqual((await essaisSon()).length, total, 'Enregistrer ne fait rien sonner');
 
   // Nuit : le coucher se choisit le soir (19 h à 23 h 30), le réveil le matin (5 h à 10 h), par demi-heure
@@ -172,7 +172,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await enregistrer(julie, 'sleep-card');
   await g.toast(julie, 'Écran éteint la nuit : enregistré');
   assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 22, a: 6, aMin: 30 });
-  await julie.page.locator('#sleep-value', { hasText: 'De 22 h à 6 h 30' }).waitFor();
+  await julie.page.locator('#sleep-value', { hasText: 'Écran éteint de 22 h à 6 h 30' }).waitFor();
 
   // Météo : code postal puis commune, et la météo remise sur l'accueil du même coup.
   await modifier(julie, 'meteo-card');
@@ -187,6 +187,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   assert.strictEqual(apresMeteo.options.dureeAffichage, 5, 'les autres options gardées');
 
   // Photo de Mamie (affichée quand elle appelle) : sur les deux fiches de la tablette.
+  await julie.page.click('#family-name-card .setting-modify');
   await julie.page.locator('#tablet-face-card').waitFor({ state: 'visible' });
   await julie.page.setInputFiles('#in-tface-gallery', await g.photo({ largeur: 1000, hauteur: 1400, texte: 'Mamie' }));
   await g.toast(julie, 'Photo enregistrée');
@@ -195,7 +196,9 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   }
 
   // Dépannage : « Obtenir l'état », la tablette répond.
+  await julie.page.click('#family-name-card .setting-cancel');
   await julie.page.locator('#remote-card').waitFor({ state: 'visible' });
+  await julie.page.click('#remote-card summary');
   await julie.page.click('#remote-card [data-cmd="status"]');
   await julie.page.locator('#remote-result', { hasText: /en attente de la tablette|elle la recevra dès qu'elle sera de nouveau connectée/ }).waitFor();
   const [cmd] = await g.attendreBase(async () => { const l = await g.liste(`families/${fid}/commands`); return l.filter((c) => c.type === 'status').length && l.filter((c) => c.type === 'status'); }, 'commande écrite');
@@ -246,6 +249,7 @@ test('Un proche (pas propriétaire) : réglages de la tablette réservés, profi
   await g.attendreBase(async () => { const m = await g.lire(`families/${fid}/members/${uid}`); return m.name === 'Paulo' && m.genre === 'femme'; }, 'profil enregistré');
   await paul.page.setInputFiles('#in-face-gallery', await g.photo({ texte: 'Paulo' }));
   await paul.page.locator('#face-img').waitFor({ state: 'visible' });
+  await paul.page.click('#apparence-card summary');
   await paul.page.click('[data-theme-choice="dark"]');
   assert.strictEqual(await paul.page.evaluate(() => document.documentElement.dataset.theme), 'dark');
   await paul.page.reload();
@@ -350,16 +354,16 @@ test('Nom de la tablette : jamais un numéro (message sous le champ) ; nuit : he
   // responsable la ramène dans les bornes (réveil le plus proche, en passant minuit : 5 h) et l'envoie à la tablette, sans rien demander.
   await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: 21, a: 20, aMin: 30 } });
   await g.attendreBase(async () => require('node:util').isDeepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 21, a: 10 }), 'veille ramenée à 21 h – 10 h');
-  await julie.page.locator('#sleep-value', { hasText: 'De 21 h à 10 h' }).waitFor();
+  await julie.page.locator('#sleep-value', { hasText: 'Écran éteint de 21 h à 10 h' }).waitFor();
   // Une nuit courte hors bornes (écrite par le serveur, ou les essais de la tablette) : affichée ramenée, pas
   // réécrite (la tablette ne dort pas trop longtemps).
   await s.db.doc(`families/${fid}`).update({ veille: { active: true, de: 15, a: 18 } });
-  await julie.page.locator('#sleep-value', { hasText: 'De 19 h à 10 h' }).waitFor();
+  await julie.page.locator('#sleep-value', { hasText: 'Écran éteint de 19 h à 10 h' }).waitFor();
   await julie.page.waitForTimeout(1500);
   assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 15, a: 18 }, 'pas réécrite');
   // Coucher à 0 h 30 et réveil à midi, écran jamais éteint : affichés 23 h 30 et 10 h ; les listes ne sont jamais vides.
   await s.db.doc(`families/${fid}`).update({ veille: { active: false, de: 0, deMin: 30, a: 12 } });
-  await julie.page.locator('#sleep-value', { hasText: 'Jamais' }).waitFor();
+  await julie.page.locator('#sleep-value', { hasText: 'reste allumé la nuit' }).waitFor();
   await modifier(julie, 'sleep-card');
   await julie.page.locator('#sleep-on').setChecked(true);
   assert.deepStrictEqual([await julie.page.inputValue('#sleep-from'), await julie.page.inputValue('#sleep-to')], ['19:0', '10:0']);
@@ -367,7 +371,7 @@ test('Nom de la tablette : jamais un numéro (message sous le champ) ; nuit : he
   await enregistrer(julie, 'sleep-card');
   await g.toast(julie, 'Écran éteint la nuit : enregistré');
   assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 19, a: 7 });
-  await julie.page.locator('#sleep-value', { hasText: 'De 19 h à 7 h' }).waitFor();
+  await julie.page.locator('#sleep-value', { hasText: 'Écran éteint de 19 h à 7 h' }).waitFor();
 });
 
 // Luminosité de l'écran le jour (Tanguy, 20/11) : families/{fid}.luminosite de 40 à 100, par un responsable ; la tablette
@@ -376,7 +380,7 @@ test('Luminosité : 70 % posé par le serveur, réglée à 85 % par Julie ; Paul
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await g.ouvrirTuile(julie, 'settings');
-  await julie.page.locator('#luminosite-value', { hasText: '70 % le jour, 55 % au plus le soir' }).waitFor();
+  await julie.page.locator('#luminosite-value', { hasText: '70 % le jour' }).waitFor();
   await julie.page.click('#luminosite-card .setting-modify');
   assert.strictEqual(await julie.page.locator('#luminosite').inputValue(), '70');
   assert.strictEqual(await julie.page.locator('#luminosite-val').innerText(), '70 %');
@@ -385,7 +389,7 @@ test('Luminosité : 70 % posé par le serveur, réglée à 85 % par Julie ; Paul
   await julie.page.click('#luminosite-card .setting-edit button[type=submit]');
   await g.toast(julie, 'Luminosité envoyée à la tablette : 85 %');
   await g.attendreBase(async () => (await g.lire(`families/${fid}`)).luminosite === 85, 'luminosite 85');
-  await julie.page.locator('#luminosite-value', { hasText: '85 % le jour, 55 % au plus le soir' }).waitFor();
+  await julie.page.locator('#luminosite-value', { hasText: '85 % le jour' }).waitFor();
 
   await julie.page.click('#view-settings .back');
   await g.attendreVue(julie, 'view-home');

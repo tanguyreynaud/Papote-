@@ -2089,7 +2089,8 @@ async function onTabletFaceChosen(e) {
 $('tface-camera').addEventListener('click', () => $('in-tface-camera').click());
 $('tface-gallery').addEventListener('click', () => $('in-tface-gallery').click());
 // La photo elle-même (ou le rond vide) touchée : « Choisir une photo », comme le bouton à côté (audit des touchers, 17/11).
-['tface-img', 'tface-empty'].forEach((id) => $(id).addEventListener('click', () => $('tface-gallery').click()));
+// La photo touchée : la carte s'ouvre (« Modifier ») ; déjà ouverte, on choisit une photo.
+['tface-img', 'tface-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('family-name-card').classList.contains('editing')) $('tface-gallery').click(); }));
 $('in-tface-camera').addEventListener('change', onTabletFaceChosen);
 $('in-tface-gallery').addEventListener('change', onTabletFaceChosen);
 $('tface-remove').addEventListener('click', async () => {
@@ -2099,7 +2100,7 @@ $('tface-remove').addEventListener('click', async () => {
 
 $('face-camera').addEventListener('click', () => $('in-face-camera').click());
 $('face-gallery').addEventListener('click', () => $('in-face-gallery').click());
-['face-img', 'face-empty'].forEach((id) => $(id).addEventListener('click', () => $('face-gallery').click()));
+['face-img', 'face-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('my-name-card').classList.contains('editing')) $('face-gallery').click(); }));
 $('in-face-camera').addEventListener('change', onFaceChosen);
 $('in-face-gallery').addEventListener('change', onFaceChosen);
 $('face-remove').addEventListener('click', async () => {
@@ -2230,13 +2231,12 @@ async function renderRappelsPhotos() {
   const row = $('rappels-photos-row');
   row.hidden = !session || session.member?.role !== 'famille';
   if (row.hidden) return;
-  const nom = session.family.name;
   let actif = true;
   try { actif = (await getDoc(prefsPush())).data()?.rappelsPhotos !== false; } catch (e) { /* hors ligne : allumé par défaut */ }
   $('rappels-photos').checked = actif;
   $('rappels-photos-text').textContent = actif
-    ? `Si vous n'avez rien envoyé depuis une semaine, une notification vous propose une photo pour ${nom}.`
-    : `Coupés : aucune notification pour vous proposer une photo pour ${nom}.`;
+    ? 'Une idée de photo après une semaine sans envoi'
+    : 'Coupés';
 }
 $('rappels-photos').addEventListener('change', async () => {
   const actif = $('rappels-photos').checked;
@@ -3687,6 +3687,7 @@ function applyTheme(theme) {
   if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
   else delete document.documentElement.dataset.theme;
   document.querySelectorAll('[data-theme-choice]').forEach((b) => b.classList.toggle('active', b.dataset.themeChoice === theme));
+  $('apparence-value').textContent = theme === 'light' ? 'Clair' : theme === 'dark' ? 'Sombre' : 'Automatique';
 }
 
 document.querySelectorAll('[data-theme-choice]').forEach((btn) => btn.addEventListener('click', () => {
@@ -3847,6 +3848,7 @@ const carteReglages = (id) => () => {
   // Carte réservée aux responsables (cachée) : la page Réglages, avec sa note « Réglages de la tablette » si elle est là.
   const cible = carte && !carte.hidden ? carte : (!$('tablet-owner-note').hidden ? $('tablet-owner-note') : $('view-settings'));
   montrerPanneauDe(cible);
+  if (cible.tagName === 'DETAILS') cible.open = true; // « Dépanner » : la ligne s'ouvre
   cible.scrollIntoView({ block: 'start' });
 };
 const ALLER_PAGE = (nom, apres) => ({ etat: { page: nom, onglet: false }, montrer: () => openPage(nom, false), apres });
@@ -4255,6 +4257,7 @@ function renderAbonnement() {
   // non, peut payer, changer de carte ou de compte, voir les factures, résilier ou garder (Tanguy, 18/11). Un
   // simple proche, non. L'abonnement reste celui du client Stripe qui paie : le responsable agit pour la famille.
   $('abo-card').hidden = false;
+  $('abo-titre').hidden = false;
   $('abo-readonly').hidden = admin || !abo;
   if (!abo) {
     $('abo-status').textContent = 'Formule d\u2019origine, sans abonnement payant';
@@ -4713,7 +4716,7 @@ function renderRemote() {
   const vue = tablet?.lastOnline ? toDate(tablet.lastOnline) : null;
   $('tablette-etat').className = `rg-etat${tablet && tabletteEnLigne() ? ' en-ligne' : ''}`;
   $('tablette-etat').textContent = !tablet ? 'Pas encore de tablette reliée'
-    : tabletteEnLigne() ? `En ligne${vue ? `, vue ${ago(vue.getTime())}` : ''}`
+    : tabletteEnLigne() ? `En ligne${vue ? ` ${ago(vue.getTime())}` : ''}`
       : `Hors ligne${vue ? `, vue ${ago(vue.getTime())}` : ''}`;
   renderLogsButton();
   if (tablet) {
@@ -4733,7 +4736,9 @@ function openSetting(card) {
   SETTINGS[card.id]?.fill?.();
   card.classList.add('editing');
   card.querySelector('.setting-edit').hidden = false;
-  card.querySelector('.setting-value').hidden = true;
+  // En tête de liste (la personne, moi), le nom et la photo restent affichés pendant la modification.
+  const valeur = card.querySelector('.setting-value');
+  if (valeur) valeur.hidden = true;
   card.querySelector('.setting-modify').hidden = true;
   // Sans preventScroll, le premier champ (parfois tout en bas, comme le volume des options) faisait défiler
   // jusqu'à lui : on arrive sur le titre de la carte, juste sous l'en-tête collant (Tanguy, 27/10).
@@ -4746,7 +4751,8 @@ function openSetting(card) {
 function closeSetting(card) {
   card.classList.remove('editing');
   card.querySelector('.setting-edit').hidden = true;
-  card.querySelector('.setting-value').hidden = false;
+  const valeur = card.querySelector('.setting-value');
+  if (valeur) valeur.hidden = false;
   card.querySelector('.setting-modify').hidden = false;
 }
 
@@ -4961,8 +4967,8 @@ function corrigerVeille() {
 
 function renderSleep() {
   const v = veilleActuelle();
-  $('sleep-value').textContent = v.active === false ? "Jamais : l'écran reste allumé"
-    : `De ${heureVeille(v.de, v.deMin)} à ${heureVeille(v.a, v.aMin)}`;
+  $('sleep-value').textContent = v.active === false ? "L'écran reste allumé la nuit"
+    : `Écran éteint de ${heureVeille(v.de, v.deMin)} à ${heureVeille(v.a, v.aMin)}`;
   corrigerVeille();
 }
 
@@ -4995,7 +5001,7 @@ function joursPasVue() {
 }
 const joursTexte = (n) => (n === 1 ? '1 jour' : `${n} jours`);
 function renderAlertePasVue() {
-  $('alerte-pas-vue-value').textContent = `Si elle n'est pas utilisée depuis ${joursTexte(joursPasVue())}`;
+  $('alerte-pas-vue-value').textContent = `Alerte aux responsables après ${joursTexte(joursPasVue())}`;
 }
 let alertePasVueEnCours = false;
 SETTINGS['alerte-pas-vue-card'] = {
@@ -5114,6 +5120,7 @@ function renderOptions() {
   $('duree-value').textContent = `${m} minute${m > 1 ? 's' : ''}`;
   $('radio-value').textContent = o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée';
   // Interrupteurs à effet immédiat : ils suivent la base, sauf pendant leur propre envoi.
+  $('opt-rappels-accueil-texte').textContent = o.rappelsAccueil !== false ? "Affiché sur l'accueil" : "Pas affiché sur l'accueil";
   for (const [id, on] of [['opt-lecture', o.lecture !== false], ['opt-rappels-accueil', o.rappelsAccueil !== false]]) {
     if (!$(id).disabled) $(id).checked = on;
   }
@@ -5243,20 +5250,11 @@ function renderSosOrdre() {
     val.replaceChildren(p);
     return;
   }
-  const ol = document.createElement('ol');
-  ol.className = 'sos-ordre-resume';
-  ol.replaceChildren(...proches.map((m) => {
-    const li = document.createElement('li');
-    li.textContent = m.name || 'Proche';
-    return li;
-  }));
-  const note = document.createElement('p');
-  note.className = 'muted small';
-  note.textContent = Array.isArray(session.family.sosOrdre) ? 'Ordre choisi par la famille.' : 'Ordre par défaut : les responsables d\'abord.';
+  // Une seule ligne : « Activé · Julie, Anne, Thomas » (l'ordre d'appel).
   const etat = document.createElement('p');
   etat.className = 'sos-etat';
-  etat.textContent = 'Activé · ordre d\'appel :';
-  val.replaceChildren(etat, ol, note);
+  etat.textContent = `Activé · ${proches.map((m) => m.name || 'Proche').join(', ')}`;
+  val.replaceChildren(etat);
 }
 
 let sosOrdreEdit = []; // uids dans l'ordre affiché pendant la modification
@@ -5374,7 +5372,7 @@ const sonnerieActuelle = () => (Number.isInteger(session.family.volumeSonnerie) 
 const appelActuel = () => (Number.isInteger(session.family.volumeAppel) ? session.family.volumeAppel : 100);
 
 function renderVolume() {
-  $('volume-text').textContent = `Sonnerie ${sonnerieActuelle()} % · Vidéos et messages ${volumeActuel()} % · Appels ${appelActuel()} %`;
+  $('volume-text').textContent = `Sonnerie ${sonnerieActuelle()} · Vidéos ${volumeActuel()} · Appels ${appelActuel()}`;
 }
 
 function syncVolumes() {
@@ -5446,7 +5444,7 @@ function luminositeReglee() {
 }
 function renderLuminosite() {
   const v = luminositeReglee();
-  $('luminosite-value').textContent = v == null ? 'Pas encore réglée : la tablette garde la sienne' : `${v} % le jour, 55 % au plus le soir`;
+  $('luminosite-value').textContent = v == null ? 'Pas encore réglée' : `${v} % le jour`;
 }
 const majLuminositeVal = () => { $('luminosite-val').textContent = `${$('luminosite').value} %`; };
 $('luminosite').addEventListener('input', majLuminositeVal);
@@ -6878,7 +6876,7 @@ function renderFamilySwitch(current) {
 }
 
 function renderAccount() {
-  $('account-email').textContent = `Connecté avec ${myEmail()}`;
+  $('account-email').textContent = myEmail();
 }
 
 // Écran d'appel de l'app Android (#connexion=<jeton>) : connecté au compte du proche par le jeton
