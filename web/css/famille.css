@@ -1752,10 +1752,10 @@ a { text-decoration: none; }
    chevron ; les lignes d'un même sujet sont dans un même cadre. La ligne touchée s'ouvre sur place (mêmes champs,
    mêmes boutons Annuler / Enregistrer qu'avant). Un interrupteur seul sur sa ligne agit tout de suite. */
 .page-head .aide-pastille { margin-left: auto; margin-right: 8px; }
-.aide-pastille { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--accent); font-weight: 700; font-size: 15px; white-space: nowrap; }
+.aide-pastille { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--accent); font-weight: 700; font-size: 16px; white-space: nowrap; }
 .aide-pastille svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 /* Trois choix : l'icône au-dessus du mot, pour tenir sur un petit téléphone. */
-.reglages-choix .seg { flex-direction: column; gap: 2px; min-height: 58px; padding: 6px 4px; font-size: 15px; line-height: 1.2; }
+.reglages-choix .seg { flex-direction: column; gap: 2px; min-height: 58px; padding: 6px 4px; font-size: 16px; line-height: 1.2; }
 .reglages-choix .seg[hidden] { display: none; }
 
 .rg-liste { margin: 0 0 16px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
@@ -1773,13 +1773,13 @@ a { text-decoration: none; }
 .card.rg .setting-head .rg-ico { grid-column: 1; grid-row: 1 / span 2; }
 .card.rg .setting-head h2 { grid-column: 2; grid-row: 1; margin: 0; font-size: 17px; align-self: end; }
 .card.rg .setting-modify { grid-column: 3; grid-row: 1 / span 2; min-height: 44px; min-width: 32px; padding: 0; justify-content: flex-end; }
-.card.rg .setting-value { grid-column: 2; grid-row: 2; margin: 1px 0 0; font-size: 15px; color: var(--muted); align-self: start; }
+.card.rg .setting-value { grid-column: 2; grid-row: 2; margin: 1px 0 0; font-size: 16px; color: var(--muted); align-self: start; }
 .card.rg .setting-edit { grid-column: 1 / -1; grid-row: 3; margin-top: 12px; cursor: auto; }
 .card.rg.editing { cursor: auto; background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
 .card.rg.editing .setting-head h2 { grid-row: 1 / span 2; align-self: center; }
 .card.rg.setting:not(.editing):active, .card.rg.setting-like:active { background: color-mix(in srgb, var(--accent) 7%, transparent); }
-.card.rg .setting-value .muted, .card.rg .setting-value p { margin: 0; font-size: 15px; }
-.card.rg .sos-ordre-resume { margin: 2px 0; padding-left: 22px; font-size: 15px; }
+.card.rg .setting-value .muted, .card.rg .setting-value p { margin: 0; font-size: 16px; }
+.card.rg .sos-ordre-resume { margin: 2px 0; padding-left: 22px; font-size: 16px; }
 .card.rg .sos-ordre-resume li { padding: 1px 0; }
 .sos-etat { margin: 0; }
 .choice-titre + .muted { margin-top: 0; }
@@ -1788,7 +1788,7 @@ a { text-decoration: none; }
 /* Ligne à interrupteur ou à bouton. */
 .rg-liste > .rg-ligne, summary.rg-ligne { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; margin: 0 !important; padding: 12px 14px; text-align: left; font-weight: 400; border-radius: 0; cursor: pointer; }
 .rg-ligne .toggle-text { flex: 1; }
-.rg-ligne .toggle-text span { font-size: 15px; }
+.rg-ligne .toggle-text span { font-size: 16px; }
 .rg-titre { flex: 1; min-width: 0; font-family: var(--display); font-size: 17px; font-weight: 700; color: var(--text); }
 .rg-bouton:active { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .rg-danger .rg-titre { color: var(--danger); }
@@ -1810,12 +1810,12 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .rg-qui-tete h2 { margin: 0; font-size: 21px; }
 .avatar-qui { width: 72px; height: 72px; }
 .rg-qui .face-buttons { gap: 6px; }
-.rg-qui .face-buttons .secondary { min-height: 44px; padding: 8px 12px; font-size: 15px; }
-.rg-etat { margin: 2px 0 12px; font-size: 15px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+.rg-qui .face-buttons .secondary { min-height: 44px; padding: 8px 12px; font-size: 16px; }
+.rg-etat { margin: 2px 0 12px; font-size: 16px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
 .rg-etat::before { content: ''; flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); opacity: .6; }
 .rg-etat.en-ligne::before { background: var(--ok); opacity: 1; }
 #ma-photo-card h2 { font-size: 17px; }
-#ma-photo-card > .muted { font-size: 15px; margin: 2px 0 12px; }
+#ma-photo-card > .muted { font-size: 16px; margin: 2px 0 12px; }
 #btn-invite-famille { margin-top: 4px; }
 #btn-invite-famille svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #rg-famille > .card:last-of-type { margin-bottom: 16px; }
@@ -1825,10 +1825,10 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .rg-qui-photo .face-buttons { flex-direction: row; flex-wrap: wrap; gap: 8px; }
 .rg-qui-photo .face-buttons .secondary { flex: 1 1 150px; justify-content: center; white-space: nowrap; }
 .rg-qui-photo .face-buttons .link { flex-basis: 100%; justify-content: center; }
-#ma-photo-card .rg-qui-tete .muted { margin: 2px 0 0; font-size: 15px; }
+#ma-photo-card .rg-qui-tete .muted { margin: 2px 0 0; font-size: 16px; }
 /* SOS : l'ordre d'appel sur une ligne (1. Julie  2. Anne  3. Thomas). */
 .card.rg .sos-ordre-resume { display: flex; flex-wrap: wrap; gap: 0 12px; padding-left: 0; list-style: none; counter-reset: sos; }
 .card.rg .sos-ordre-resume li { counter-increment: sos; }
 .card.rg .sos-ordre-resume li::before { content: counter(sos) '. '; }
-.rg-qui-photo .face-buttons .secondary { flex: 1 1 0; min-width: 0; padding: 8px 6px; gap: 6px; font-size: 14.5px; }
+.rg-qui-photo .face-buttons .secondary { flex: 1 1 0; min-width: 0; padding: 8px 6px; gap: 6px; font-size: 15px; }
 @media (max-width: 359px) { .rg-qui-photo .face-buttons .secondary { flex-basis: 100%; } }
