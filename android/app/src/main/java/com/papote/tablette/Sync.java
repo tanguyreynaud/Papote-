@@ -293,6 +293,7 @@ final class Sync {
             if (lastFamilyJson == null && c.optJSONObject("family") != null) lastFamilyJson = c.getJSONObject("family").toString();
             if (lastFamilyJson != null && sosOrdre == null) sosOrdre = new JSONObject(lastFamilyJson).optJSONArray("sosOrdre");
             if (lastFamilyJson != null && reglagesAppel == null) reglagesAppel = new JSONObject(lastFamilyJson).optJSONObject("reglagesAppel");
+            if (lastFamilyJson != null && sosPris == null) sosPris = new JSONObject(lastFamilyJson).optJSONObject("sosPris");
             restaurerPhotosGardees();
         } catch (Exception e) {
             Log.w(TAG, "Copie sur la tablette illisible", e);
@@ -633,7 +634,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "luminosite", "volume", "volumeSonnerie", "volumeAppel", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim", "sosOrdre", "reglagesAppel");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "luminosite", "volume", "volumeSonnerie", "volumeAppel", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim", "sosOrdre", "sosPris", "reglagesAppel");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -688,9 +689,13 @@ final class Sync {
                 } catch (Exception ignored) { ordre = null; }
                 // Délais des appels de Mamie réglés à distance (families/{fid}.reglagesAppel), même chemin.
                 JSONObject reglages = ReglagesAppel.lire(ff);
-                if (!String.valueOf(ordre).equals(String.valueOf(sosOrdre)) || !String.valueOf(reglages).equals(String.valueOf(reglagesAppel))) {
+                // « Je m'en occupe » d'un proche pendant un SOS (families/{fid}.sosPris), même chemin.
+                JSONObject pris = SosPris.lire(ff);
+                if (!String.valueOf(ordre).equals(String.valueOf(sosOrdre)) || !String.valueOf(reglages).equals(String.valueOf(reglagesAppel))
+                        || !String.valueOf(pris).equals(String.valueOf(sosPris))) {
                     sosOrdre = ordre;
                     reglagesAppel = reglages;
+                    sosPris = pris;
                     republierSosOrdre();
                 }
                 if (Meteo.applyFamily(context, http, ff) || !meteoReported) {
@@ -1540,6 +1545,31 @@ final class Sync {
         });
     }
 
+    /**
+     * Où en est le SOS, sur la fiche de la tablette (members/{uid}.sos = { debut, fin, uid, nom }) : l'app
+     * famille peut afficher « SOS en cours » avec « Je m'en occupe », puis comment il s'est terminé
+     * (fin : repondu, arrete, pris ; vide tant qu'il court). Un refus (règles pas encore à jour, pas
+     * d'internet) est seulement noté : le SOS, lui, passe par la carte SIM et n'attend rien d'ici.
+     */
+    void signalerSos(long debut, String fin, String uid, String nom) {
+        handler.post(() -> {
+            String fid = prefs.getString("fid", null);
+            if (fid == null || debut <= 0) return;
+            try {
+                JSONObject champs = new JSONObject()
+                        .put("debut", new JSONObject().put("integerValue", String.valueOf(debut)))
+                        .put("fin", Firebase.string(fin == null ? "" : fin))
+                        .put("uid", Firebase.string(uid == null ? "" : uid))
+                        .put("nom", Firebase.string(nom == null ? "" : nom));
+                JSONObject sos = new JSONObject().put("mapValue", new JSONObject().put("fields", champs));
+                firebase.commit(new JSONArray().put(memberWrite(fid, new JSONObject().put("sos", sos),
+                        new JSONArray().put("sos"), null)));
+            } catch (Exception e) {
+                Log.w(TAG, "SOS non signalé à la famille", e);
+            }
+        });
+    }
+
     /** Visage vu par la caméra : members/{uid}.lastSeen, pour l'alerte « pas vue ce matin ». */
     void seen() {
         handler.post(() -> heartbeat(prefs.getString("fid", null), "lastSeen"));
@@ -1783,6 +1813,8 @@ final class Sync {
     private JSONArray sosOrdre = null;
     /** Délais des appels (families/{fid}.reglagesAppel, voir ReglagesAppel), null : valeurs de la page. */
     private JSONObject reglagesAppel = null;
+    /** « Je m'en occupe » d'un proche (families/{fid}.sosPris, voir SosPris), null : personne. */
+    private JSONObject sosPris = null;
 
     /** La page reçoit le nouvel ordre du SOS sans attendre la relecture des proches. */
     private void republierSosOrdre() {
@@ -1791,6 +1823,7 @@ final class Sync {
             JSONObject p = new JSONObject(lastFamilyJson);
             p.put("sosOrdre", sosOrdre == null ? JSONObject.NULL : sosOrdre);
             p.put("reglagesAppel", reglagesAppel == null ? JSONObject.NULL : reglagesAppel);
+            p.put("sosPris", sosPris == null ? JSONObject.NULL : sosPris);
             lastFamilyJson = p.toString();
             listener.onFamily(p);
             saveCache();
@@ -1901,7 +1934,8 @@ final class Sync {
             people = trierProches(fid, people);
             JSONObject payload = new JSONObject().put("faces", faces).put("birthdays", birthdays).put("people", people)
                     .put("sosOrdre", sosOrdre == null ? JSONObject.NULL : sosOrdre)
-                    .put("reglagesAppel", reglagesAppel == null ? JSONObject.NULL : reglagesAppel);
+                    .put("reglagesAppel", reglagesAppel == null ? JSONObject.NULL : reglagesAppel)
+                    .put("sosPris", sosPris == null ? JSONObject.NULL : sosPris);
             String json = payload.toString();
             if (json.equals(lastFamilyJson)) return;
             lastFamilyJson = json;

@@ -751,6 +751,15 @@ public class MainActivity extends Activity implements Sync.Listener {
             Journal.log(MainActivity.this, String.valueOf(message));
         }
 
+        /** SOS parti ou terminé (tablette.js, sosSignaler) : écrit sur la fiche de la tablette pour l'app famille. */
+        @JavascriptInterface
+        public void sosSignaler(String json) {
+            try {
+                JSONObject o = new JSONObject(json);
+                if (sync != null) sync.signalerSos(o.optLong("debut", 0), o.optString("fin", ""), o.optString("uid", ""), o.optString("nom", ""));
+            } catch (JSONException ignored) { }
+        }
+
 
         @JavascriptInterface
         public void wifiDone() {
