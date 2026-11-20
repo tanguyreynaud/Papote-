@@ -83,6 +83,28 @@ const LOTS = {
     p('famille', 'thomas', 'photo'), p('famille', 'lea', 'inviter'), p('famille', 'nadia', 'nuit'),
     p('tablette', 'rene', 'sosErreur'), p('tablette', 'rene', 'appelEntrant'), p('tablette', 'odette', 'photo'),
   ],
+  // Nuit du 19/11 : combinaisons pas encore jouées, sur les branches de corrections.
+  'famille-3': [
+    p('famille', 'ines', 'rappel'), p('famille', 'marc', 'photo'), p('famille', 'nadia', 'video'), p('famille', 'lea', 'photo'),
+    p('famille', 'julie', 'message'), p('famille', 'thomas', 'appeler'), p('famille', 'paul', 'nom'), p('famille', 'sylvie', 'etat'),
+    p('famille', 'ines', 'inviter', { reseau: 'lent' }), p('famille', 'marc', 'reglages'), p('famille', 'lea', 'nuit'), p('famille', 'nadia', 'rejoindre'),
+  ],
+  'tablette-3': [
+    p('tablette', 'jeanne', 'message'), p('tablette', 'odette', 'rappel'), p('tablette', 'rene', 'manque'), p('tablette', 'simone', 'photo'),
+    p('tablette', 'marcel', 'sosErreur'), p('tablette', 'lucienne', 'nuit'), p('tablette', 'jeanne', 'sosErreur'), p('tablette', 'odette', 'perdue'),
+    p('tablette', 'rene', 'message'), p('tablette', 'simone', 'rappel'), p('tablette', 'marcel', 'appelEntrant'), p('tablette', 'lucienne', 'message'),
+  ],
+  // Lot 4 : seulement des combinaisons jamais jouées, loin des problèmes déjà notés (nuit, hors ligne, vidéo depuis l'accueil).
+  'famille-4': [
+    p('famille', 'lea', 'abonnement'), p('famille', 'sylvie', 'abonnement'), p('famille', 'marc', 'abonnement'), p('famille', 'ines', 'appeler'),
+    p('famille', 'nadia', 'appeler'), p('famille', 'sylvie', 'nom'), p('famille', 'ines', 'nom'), p('famille', 'nadia', 'message'),
+    p('famille', 'ines', 'message'), p('famille', 'thomas', 'rappel'), p('famille', 'lea', 'rappel'), p('famille', 'nadia', 'inviter'),
+  ],
+  'tablette-4': [
+    p('tablette', 'jeanne', 'nuit'), p('tablette', 'jeanne', 'appelerJulie'), p('tablette', 'odette', 'appelEntrant'), p('tablette', 'odette', 'sosErreur'),
+    p('tablette', 'rene', 'appelerJulie'), p('tablette', 'rene', 'rappel'), p('tablette', 'rene', 'perdue'), p('tablette', 'simone', 'appelEntrant'),
+    p('tablette', 'simone', 'nuit'), p('tablette', 'marcel', 'message'), p('tablette', 'marcel', 'perdue'), p('tablette', 'lucienne', 'rappel'),
+  ],
   'famille-2': [
     p('famille', 'thomas', 'video'), p('famille', 'marc', 'message'), p('famille', 'ines', 'video', { reseau: 'lent' }), p('famille', 'nadia', 'photo'),
     p('famille', 'paul', 'rappel'), p('famille', 'lea', 'appeler'), p('famille', 'sylvie', 'video'), p('famille', 'julie', 'rappel'),
