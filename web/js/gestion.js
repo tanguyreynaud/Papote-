@@ -2469,8 +2469,9 @@ const ilYA = (le) => {
 function afficherBatterie(t) {
   const b = t.batterie;
   const zone = $('dt-batterie');
-  zone.hidden = !b;
-  if (!b) return;
+  // Le niveau et l'heure sont déjà dans « Derniers relevés » : cette carte ne sert que s'il y a plus à dire.
+  zone.hidden = !b || !(b.sante || b.cycles != null || b.temperature != null || t.usure || (b.fuseau && b.fuseau !== 'Europe/Paris'));
+  if (zone.hidden) return;
   const infos = [
     b.niveau != null ? `${b.niveau} %${b.enCharge ? ', en charge' : ''}` : null,
     b.sante ? `santé ${SANTES[b.sante] || b.sante}` : null,
@@ -2482,11 +2483,11 @@ function afficherBatterie(t) {
   // Fuseau horaire relevé par la tablette : tout sauf Europe/Paris décale la veille et les rappels.
   const fuseau = b.fuseau ? h('p', { class: 'small' }, h('strong', {}, 'Fuseau horaire '), b.fuseau, ' ',
     b.fuseau === 'Europe/Paris' ? null : badge('pas Europe/Paris : veille et rappels décalés', 'ko')) : null;
-  zone.replaceChildren(
+  zone.replaceChildren(...[
     h('p', { class: 'small' }, h('strong', {}, 'Batterie '), infos || 'pas encore de relevé', t.usure ? ' ' : null, t.usure ? badge(t.usure, 'ko') : null),
     vues ? h('p', { class: 'small muted' }, vues) : null,
     fuseau,
-  );
+  ].filter(Boolean));
 }
 
 // Alertes envoyées aux proches (journal du serveur, 90 derniers jours) : un chiffre par sorte d'alerte, qui ouvre
@@ -2707,8 +2708,9 @@ function blocReleves(zone, t) {
     const enLigne = ms(m.lastOnline);
     const signal = sim && sim.signal >= 0 ? `${sim.signal} / 4` : null;
     const mo = sim && sim.dataMoisMo >= 0 ? `${sim.dataMoisMo} Mo ce mois` : null;
-    zone.replaceChildren(
-      h('h2', {}, 'Derniers relevés ', h('span', { class: 'muted small' }, '· envoyés par la tablette avec son signal « en ligne », rien de plus')),
+    // Une ligne absente (null) ne doit pas s'écrire « null » : replaceChildren écrit tout ce qu'on lui donne.
+    zone.replaceChildren(...[
+      h('h2', {}, 'Derniers relevés'),
       h('div', { class: 'stats compact' },
         stat(enLigne ? ilYA(enLigne) : '—', 'En ligne', enLigne && Date.now() - enLigne > 70 * 60_000 ? 'ne répond plus ?' : null, enLigne && Date.now() - enLigne > 70 * 60_000 ? 'warn' : null),
         stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
@@ -2716,8 +2718,8 @@ function blocReleves(zone, t) {
         stat(m.appVersion || '—', 'Version de Papote')),
       lignePush(modePush(sim)),
       blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid }),
-      h('p', { class: 'muted small' }, 'Fiche de la tablette lue en direct : la page se met à jour toute seule quand elle donne de ses nouvelles.'),
-    );
+      h('p', { class: 'muted small' }, 'Envoyés par la tablette quand elle est en ligne ; la page se met à jour toute seule.'),
+    ].filter(Boolean));
     rafraichirSousTitres();
   };
   bdd().then((d) => {
@@ -2735,10 +2737,10 @@ function blocReleves(zone, t) {
 
 // Les sous-titres des boutons (version installée, volumes) suivent les relevés.
 function rafraichirSousTitres() {
-  const zone = $('dt-agir');
+  const zone = $('dt-agir-menu');
   const t = donnees && donnees.stock.find((x) => x.id === tabletteOuverte);
-  if (!t || zone.hidden) return;
-  zone.querySelectorAll('button[data-ordre] small').forEach((el) => {
+  if (!t) return;
+  zone.querySelectorAll('button[data-ordre]:not(:disabled) small').forEach((el) => {
     const o = ORDRES.find((x) => x.type === el.parentElement.dataset.ordre);
     if (o) el.textContent = o.sous(t, membreTablette, familleTablette);
   });
@@ -2747,25 +2749,25 @@ function rafraichirSousTitres() {
 // Boutons d'action, chacun avec son retour visible : « Un instant… » puis le résultat daté (ou « pas de réponse »).
 function blocAgir(zone, t) {
   if (stopOrdre) { stopOrdre(); stopOrdre = null; }
-  zone.hidden = false;
-  if (!relieeAUneFamille(t)) {
-    zone.replaceChildren(h('h2', {}, 'Agir sur la tablette'),
-      h('p', { class: 'muted small' }, 'Cette tablette n\'est pas reliée à une famille : les actions à distance (redémarrer, état, mise à jour…) seront possibles dès qu\'elle sera jumelée.'));
-    return;
-  }
+  // Les ordres à distance sont rangés dans le menu « Actions » en haut de la page ; cette carte n'apparaît que
+  // pour montrer leur réponse (ou la saisie des volumes, ou le journal).
+  zone.hidden = true;
+  $('dt-agir-menu').replaceChildren();
+  if (!relieeAUneFamille(t)) return;
   const retour = h('div', { class: 'retour-ordre', hidden: true, role: 'status' });
   const detail = h('div', { hidden: true });
   const choix = h('div', { class: 'choix-ordre', hidden: true });
-  const grille = h('div', { class: 'agir' });
   const boutons = new Map();
   const occuper = (actif) => boutons.forEach((b) => { b.disabled = actif; });
   const montrer = (texte, classe) => {
+    zone.hidden = false;
     retour.hidden = false;
     retour.className = `retour-ordre ${classe || ''}`;
     retour.textContent = texte;
   };
-  for (const o of ORDRES) {
-    const b = h('button', { type: 'button', class: `secondary${o.danger ? ' danger' : ''}`, 'data-ordre': o.type },
+  const RARES = ['verrouiller', 'usine'];
+  const bouton = (o) => {
+    const b = h('button', { type: 'button', class: o.danger ? 'danger' : null, 'data-ordre': o.type },
       o.titre, h('small', {}, o.sous(t, membreTablette, familleTablette)));
     if (o.type === 'usine' && !['revenue', 'perdue', 'a-reparer', 'hors-service'].includes(t.etat)) {
       b.disabled = true;
@@ -2773,19 +2775,22 @@ function blocAgir(zone, t) {
     }
     b.addEventListener('click', () => lancerOrdre(o, b));
     boutons.set(o.type, b);
-    grille.append(b);
-  }
+    return b;
+  };
   // Tablette volée : un seul geste coupe son identité (fonction tabletteVolee, functions/tablette-volee.js).
-  const volee = h('button', { type: 'button', class: 'secondary danger', 'data-volee': '' },
+  const volee = h('button', { type: 'button', class: 'danger', 'data-volee': '' },
     'Tablette volée : tout couper', h('small', {}, 'Verrouille (ou efface), sort de la famille, désactive ses comptes'));
   volee.addEventListener('click', () => couperTablette(volee));
   boutons.set('volee', volee);
-  grille.append(volee);
-  zone.replaceChildren(
-    h('h2', {}, 'Agir sur la tablette'),
-    h('p', { class: 'muted small' }, 'La tablette est réveillée tout de suite par notification et répond en général en moins d\'une minute. Chaque action lui coûte quelques Ko.'),
-    grille, retour, detail,
-  );
+  const menu = h('div', { class: 'menu-actions', 'data-texte': 'Actions', 'data-titre': 'Actions à distance sur la tablette' },
+    h('p', { 'data-section': '' }, 'À distance (réponse en moins d\'une minute)'),
+    ...ORDRES.filter((o) => !RARES.includes(o.type)).map(bouton),
+    h('p', { 'data-section': '' }, 'Perdue ou volée'),
+    ...ORDRES.filter((o) => RARES.includes(o.type)).map(bouton),
+    volee);
+  $('dt-agir-menu').append(menu);
+  menusDansLaPage($('dt-agir-menu'));
+  zone.replaceChildren(h('h2', {}, 'Action à distance'), choix, retour, detail);
 
   async function lancerOrdre(o, b) {
     detail.hidden = true;
@@ -2887,6 +2892,7 @@ function blocAgir(zone, t) {
       const lignes = snap.exists() ? snap.get('lines') || '' : '';
       const quand = snap.exists() && snap.get('updatedAt') && snap.get('updatedAt').toDate ? snap.get('updatedAt').toDate() : null;
       detail.hidden = false;
+      zone.hidden = false;
       detail.replaceChildren(
         h('p', { class: 'small muted' }, `Journal de la tablette${quand ? ` (envoyé le ${quand.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })})` : ''} · ${lignes ? lignes.split('\n').length : 0} lignes, la plus récente en bas.`),
         h('pre', { class: 'journal-tablette' }, lignes || 'Journal vide.'));
@@ -2906,7 +2912,6 @@ function blocAgir(zone, t) {
     const [lg, ig] = champ('volume', f.volume, 'Général');
     const [la, ia] = champ('volumeAppel', f.volumeAppel ?? 100, 'Appel');
     const [ls, is] = champ('volumeSonnerie', f.volumeSonnerie ?? 100, 'Sonnerie');
-    const b = boutons.get('volumes');
     const appliquer = h('button', { type: 'button', class: 'primary small-btn' }, 'Appliquer');
     appliquer.addEventListener('click', async () => {
       const champs = { rev: increment(1) };
@@ -2923,18 +2928,18 @@ function blocAgir(zone, t) {
         familleTablette = { ...f, ...champs, rev: undefined };
         rafraichirSousTitres();
         montrer(`✓ ${heure()} · Volumes enregistrés : la tablette les applique à son réveil (notification envoyée).`, 'ok');
-        choix.replaceWith(b);
+        choix.hidden = true;
       } catch (err) {
         montrer(`Volumes non enregistrés (${messageErreur(err)}).`, 'ko');
       } finally {
         boutonCharge(appliquer, false);
       }
     });
-    const annuler = h('button', { type: 'button', class: 'secondary small-btn', onclick: () => { choix.replaceWith(b); b.focus(); } }, 'Annuler');
+    const annuler = h('button', { type: 'button', class: 'secondary small-btn', onclick: () => { choix.hidden = true; if (retour.hidden) zone.hidden = true; } }, 'Annuler');
     choix.hidden = false;
+    zone.hidden = false;
     choix.replaceChildren(h('strong', {}, 'Volumes'), lg, la, ls, h('span', { class: 'choix-boutons' }, appliquer, annuler));
-    // La saisie remplace le bouton « Volumes » dans la grille, à sa taille ; le bouton revient après.
-    b.replaceWith(choix);
+    ig.focus();
   }
 }
 
@@ -2955,7 +2960,9 @@ function remplirTablette(id) {
   tabletteOuverte = t.id;
   f.dataset.charge = t.id;
   const nom = [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'sans nom';
-  $('dt-titre').textContent = `Tablette ${nom}`;
+  $('dt-titre').textContent = t.ref ? `Tablette ${t.ref}` : `Tablette ${nom}`;
+  const etatAffiche = etatTablette(t);
+  $('dt-etat').replaceChildren(badge(donnees.etats[etatAffiche] || etatAffiche, classeEtat(etatAffiche)));
   document.title = `Papote · Tablette ${t.ref || ''}`.trim();
   const c = t.commande && donnees.commandes.find((x) => x.id === t.commande);
   // Chaque information se modifie seule (petit crayon) ; l'état change par les boutons d'action.

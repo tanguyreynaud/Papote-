@@ -149,7 +149,10 @@
 /* ---------- Fiches : un résumé en haut, puis des blocs simples ---------- */
 
 .tete-fiche { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
-.tete-fiche h2 { margin: 0; font-size: 22px; font-family: var(--display); }
+.admin-body .tete-fiche { flex-wrap: wrap; }
+.admin-body .tete-fiche h2 { flex: 0 1 auto; min-width: 0; margin: 0; font-size: 20px; font-family: var(--display); }
+.admin-body .tete-fiche .tete-actions { margin-left: auto; }
+.admin-body .tete-fiche .tete-actions > div:empty { display: none; }
 .tete-fiche .espace { flex: 1; }
 .admin-body .tete-actions { display: flex; align-items: center; gap: 8px; }
 
