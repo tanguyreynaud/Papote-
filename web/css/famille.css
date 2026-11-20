@@ -1769,6 +1769,10 @@ a { text-decoration: none; }
 .reglages-choix { margin-bottom: 16px; }
 .reglages-choix .seg { min-height: 48px; padding: 6px 4px; font-size: 16px; line-height: 1.2; }
 #apparence-card .segmented { box-shadow: none; margin: 0; }
+/* Texte agrandi ou écran étroit : « Automatique » passe à la ligne au lieu de sortir de l'écran. Le choix en cours
+   change de couleur d'un coup (pas de fondu) : pendant le fondu, texte sombre sur fond sombre en mode sombre. */
+#apparence-card .segmented { flex-wrap: wrap; }
+#apparence-card .seg { flex: 1 1 auto; min-width: 0; transition: none; }
 .reglages-choix .seg[hidden] { display: none; }
 
 .rg-liste { margin: 0 0 16px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
