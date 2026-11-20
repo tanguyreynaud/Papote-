@@ -96,8 +96,9 @@ function rendre() {
     t['couverture-non'] ? `4G trop faible chez le proche : ${nombre(t['couverture-non'])} fois` : null,
     t.complet ? `page « plus de tablette » vue par ${nombre(t.complet)} visiteur${t.complet > 1 ? 's' : ''}` : null,
   ].filter(Boolean);
-  $('stats-tunnel').replaceChildren(h('ol', { class: 'stat-tunnel' }, lignes),
-    aPart.length ? h('p', { class: 'muted small' }, `À part : ${aPart.join(' · ')}.`) : null);
+  // filter(Boolean) : replaceChildren(null) écrirait « null » dans la page.
+  $('stats-tunnel').replaceChildren(...[h('ol', { class: 'stat-tunnel' }, lignes),
+    aPart.length ? h('p', { class: 'muted small' }, `À part : ${aPart.join(' · ')}.`) : null].filter(Boolean));
   $('stats-perte').hidden = !pire || !pire.perdus;
   if (pire && pire.perdus) {
     $('stats-perte').textContent = `C'est entre ${pire.de} et ${pire.a} que le plus de monde s'arrête : ${pourcent(pire.perdus, pire.avant)} partent.`;
