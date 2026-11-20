@@ -15,24 +15,57 @@ import org.junit.Test;
 public class JumelageTest {
     private static final long MIN = 60_000;
 
+    private static final long H = 60 * MIN;
+
     @Test
-    public void sansReveilRapideJusteApresUneActivite() {
-        assertEquals(4_000, Sync.delaiJumelage(0, false));
-        assertEquals(4_000, Sync.delaiJumelage(MIN, false));
-        assertEquals(4_000, Sync.delaiJumelage(10 * MIN - 1, false));
+    public void rapideDixMinutesApresUnGeste() {
+        assertEquals(4_000, Sync.delaiJumelage(0, false, 5_000, 14 * MIN));
+        assertEquals(4_000, Sync.delaiJumelage(10 * MIN - 1, false, 5 * MIN, 9 * MIN));
+        assertEquals("réveils du serveur reçus : relecture de secours seulement", 60_000, Sync.delaiJumelage(MIN, true, MIN, 14 * MIN));
     }
 
     @Test
-    public void sansReveilLentApresDixMinutesSansActivite() {
-        assertEquals(15_000, Sync.delaiJumelage(10 * MIN, false));
-        assertEquals(15_000, Sync.delaiJumelage(60 * MIN - 1, false));
+    public void sommeilPlusAucuneRelectureJusquAuCodeSuivant() {
+        // Tanguy, 20/11 : après 10 min sans geste, elle ne relit plus ; elle attend son prochain code.
+        assertEquals(9 * MIN + 1_000, Sync.delaiJumelage(10 * MIN, false, 6 * MIN, 9 * MIN));
+        assertEquals(9 * MIN + 1_000, Sync.delaiJumelage(10 * MIN, true, 6 * MIN, 9 * MIN));
+        assertEquals(1_000, Sync.delaiJumelage(3 * H, false, 16 * MIN, -MIN));
     }
 
     @Test
-    public void sansReveilEndormieApresUneHeureDeuxMinutes() {
-        // Nuit du 19/11 : à 15 s sans fin, une tablette oubliée sur l'écran d'attente coûtait ≈ 15 Mo par jour de SIM.
-        assertEquals(2 * MIN, Sync.delaiJumelage(60 * MIN, false));
-        assertEquals(2 * MIN, Sync.delaiJumelage(3 * 24 * 60 * MIN, false));
+    public void sommeilGuetDeTrenteSecondesApresUnNouveauCode() {
+        assertEquals(10_000, Sync.delaiJumelage(2 * H, false, 0, 15 * MIN));
+        assertEquals(10_000, Sync.delaiJumelage(2 * H, false, 29_000, 15 * MIN));
+        assertEquals(15 * MIN - 30_000 + 1_000, Sync.delaiJumelage(2 * H, false, 30_000, 15 * MIN - 30_000));
+        assertEquals("le serveur réveille la tablette : pas de guet", 15 * MIN + 1_000, Sync.delaiJumelage(2 * H, true, 0, 15 * MIN));
+    }
+
+    @Test
+    public void sommeilSansCodeUnEssaiParMinute() {
+        assertEquals(60_000, Sync.delaiJumelage(2 * H, false, -1, 0));
+    }
+
+    @Test
+    public void unCodeParQuartDheurePuisParHeureApres24h() {
+        assertEquals(15 * MIN, Sync.intervalleCode(0));
+        assertEquals(15 * MIN, Sync.intervalleCode(24 * H - 1));
+        assertEquals(60 * MIN, Sync.intervalleCode(24 * H));
+    }
+
+    @Test
+    public void lecturesParJourEnSommeil() {
+        // Un jour bloquée en sommeil : 1 écriture + 4 lectures par code (guet), 96 codes ; puis 24 après 24 h.
+        int premierJour = 0, suivant = 0;
+        for (long t = 0; t < 24 * H; t += 15 * MIN) premierJour += 5;
+        for (long t = 0; t < 24 * H; t += 60 * MIN) suivant += 5;
+        assertTrue("≈ 480 échanges le premier jour (avant : 5 800)", premierJour <= 500);
+        assertTrue("≈ 120 ensuite", suivant <= 130);
+    }
+
+    @Test
+    public void horlogeIncoherenteSommeil() {
+        assertTrue(Sync.jumelageEnSommeil(-1));
+        assertFalse(Sync.jumelageEnSommeil(0));
     }
 
     @Test
@@ -46,17 +79,4 @@ public class JumelageTest {
         assertFalse("échéance illisible", Sync.entreeExpiree(403, 0, exp));
     }
 
-    @Test
-    public void prevenueParLeServeurLaRelectureNestQuUnSecours() {
-        assertEquals(60_000, Sync.delaiJumelage(0, true));
-        assertEquals(60_000, Sync.delaiJumelage(10 * MIN - 1, true));
-        assertEquals(10 * MIN, Sync.delaiJumelage(10 * MIN, true));
-        assertEquals(10 * MIN, Sync.delaiJumelage(3 * 24 * 60 * MIN, true));
-    }
-
-    @Test
-    public void horlogeIncoherenteJamaisPlusViteQueLent() {
-        assertEquals(15_000, Sync.delaiJumelage(-1, false));
-        assertEquals(10 * MIN, Sync.delaiJumelage(-1, true));
-    }
 }

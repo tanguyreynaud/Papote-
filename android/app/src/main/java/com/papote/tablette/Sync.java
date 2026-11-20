@@ -434,11 +434,11 @@ final class Sync {
             // Pendant l'appairage, on regarde souvent si quelqu'un a tapé le code. Hors ligne, Android
             // prévient du retour d'internet (watchNetwork) ; un essai par minute reste en secours.
             boolean offline = "offline".equals(lastState);
-            long delai = pairingActive() ? delaiJumelage(android.os.SystemClock.elapsedRealtime() - jumelageVifDepuis, jumelagePrevenu())
+            long delai = pairingActive() ? delaiJumelage(depuisJumelageVif(), jumelagePrevenu(), depuisCode(), avantNouveauCode())
                     : realtime ? (offline ? 60_000 : nuit() ? Math.min(NIGHT_POLL_MS, msAvantLeJour()) : tourDuJour()) : tourSansPage();
             // Code en attente : renouvelé à l'heure dite (15 min), même quand la relecture n'est qu'un secours.
             if (pairingActive() && prefs.getString("pairing", null) != null) {
-                long reste = prefs.getLong("pairingExpires", 0) - System.currentTimeMillis();
+                long reste = avantNouveauCode();
                 if (reste > 0) delai = Math.min(delai, reste + 1_000);
             }
             // Jamais au-delà de l'échéance du signal « en ligne » (batterie à jour toutes les 30 min).
@@ -1523,7 +1523,16 @@ final class Sync {
     }
 
     void touched() {
-        handler.post(() -> heartbeat(prefs.getString("fid", null), "lastActive"));
+        handler.post(() -> {
+            // Écran d'installation en sommeil : un toucher relance la recherche rapide tout de suite.
+            if (pairingActive()) {
+                boolean dormait = jumelageEnSommeil(depuisJumelageVif());
+                jumelageVif();
+                if (dormait) poke();
+                return;
+            }
+            heartbeat(prefs.getString("fid", null), "lastActive");
+        });
     }
 
     /** Visage vu par la caméra : members/{uid}.lastSeen, pour l'alerte « pas vue ce matin ». */
@@ -2744,37 +2753,70 @@ final class Sync {
     private static final long PAIRING_MS = 15 * 60_000;
     private static final String CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-    /** Tablette pas encore reliée : tour rapide pendant ce temps après la dernière activité, lent ensuite. */
+    /**
+     * Tablette pas encore reliée (écran « On prépare votre tablette… ») : recherche rapide pendant 10 min après
+     * un geste (allumage, « Commencer », écran touché, ordre de l'admin), puis SOMMEIL (Tanguy, 20/11) : plus
+     * aucune relecture ; elle n'écrit qu'un nouveau code tous les quarts d'heure (toutes les heures après 24 h
+     * sans geste) et regarde 30 s si le serveur la prend. Le serveur ne fait entrer une tablette dans sa famille
+     * qu'au moment où elle écrit un code (famille-preparee.js jumeler) : entre deux codes, il n'y a rien à
+     * surveiller. Réveils : écran touché, réveil du serveur (push), retour d'internet.
+     * Avant : 15 s sans fin (≈ 15 Mo par jour de carte SIM), puis 2 min (nuit du 19/11). En sommeil : ≈ 1 Mo
+     * par jour, 0,3 Mo après 24 h.
+     */
     static final long JUMELAGE_VIF_MS = 10 * 60_000;
     static final long JUMELAGE_TOUR_VIF_MS = 4_000;
-    static final long JUMELAGE_TOUR_LENT_MS = 15_000;
-    /**
-     * Sans réveil du serveur, au-delà d'une heure sans activité : une lecture toutes les 2 min (nuit du 19/11).
-     * À 15 s sans fin, une tablette restée sur « On prépare votre tablette… » (famille pas prête, réveils
-     * absents) relisait le serveur ≈ 5 800 fois par jour, de l'ordre de 15 Mo par jour sur la carte SIM.
-     * Toucher l'écran, un ordre ou le retour d'internet repasse en lecture rapide.
-     */
-    static final long JUMELAGE_ENDORMI_APRES_MS = 60 * 60_000;
-    static final long JUMELAGE_TOUR_ENDORMI_MS = 2 * 60_000;
-    /** Le serveur prévient la tablette (push « jumelage ») : la relecture n'est plus qu'un secours. */
+    /** Le serveur prévient la tablette (push « jumelage ») : pendant la recherche rapide, la relecture n'est qu'un secours. */
     static final long JUMELAGE_SECOURS_VIF_MS = 60_000;
-    static final long JUMELAGE_SECOURS_LENT_MS = 10 * 60_000;
+    /** En sommeil, juste après l'écriture d'un code : 30 s de guet, une lecture toutes les 10 s. */
+    static final long JUMELAGE_GUET_MS = 30_000;
+    static final long JUMELAGE_TOUR_GUET_MS = 10_000;
+    /** En sommeil sans code (pas d'internet, écriture refusée) : un essai par minute (Android prévient aussi du retour d'internet). */
+    static final long JUMELAGE_SANS_CODE_MS = 60_000;
+    /** Un nouveau code : tous les quarts d'heure, toutes les heures après 24 h sans geste. */
+    static final long JUMELAGE_SOMMEIL_LONG_APRES_MS = 24 * 3600_000L;
+    static final long JUMELAGE_CODE_LENT_MS = 60 * 60_000;
+
     /** Dernière activité de l'installation (démarrage, écran touché, ordre reçu), horloge depuis l'allumage. */
     private volatile long jumelageVifDepuis = android.os.SystemClock.elapsedRealtime();
 
+    static boolean jumelageEnSommeil(long depuisActiviteMs) {
+        return !(depuisActiviteMs >= 0 && depuisActiviteMs < JUMELAGE_VIF_MS);
+    }
+
+    /** Durée de vie d'un code avant d'en écrire un nouveau (le serveur, lui, le dit expiré au bout de 15 min). */
+    static long intervalleCode(long depuisActiviteMs) {
+        return depuisActiviteMs >= JUMELAGE_SOMMEIL_LONG_APRES_MS ? JUMELAGE_CODE_LENT_MS : PAIRING_MS;
+    }
+
     /**
-     * Écart entre deux lectures du jumelage. Une tablette oubliée allumée en stock relisait le serveur toutes
-     * les 4 s sans fin (données de la carte SIM et lectures pour rien, 19/11).
-     *   prevenue (le serveur a déjà réveillé la tablette pour ce code, donc ses réveils arrivent) : le serveur
-     *     prévient à chaque changement ; relecture de secours toutes les 60 s pendant les 10 minutes qui suivent
-     *     une activité, toutes les 10 minutes ensuite ;
-     *   sinon (pas de services Google, serveur pas à jour, réveil perdu) : 4 s puis 15 s, comme avant.
+     * Écart avant la prochaine lecture du jumelage.
+     *   depuisActiviteMs   temps depuis le dernier geste (horloge depuis l'allumage ; négatif = incohérent, sommeil)
+     *   prevenue           le serveur a déjà réveillé la tablette pour ce code (ses réveils arrivent)
+     *   depuisCodeMs       âge du code affiché, ou -1 sans code
+     *   avantNouveauMs     temps avant d'écrire le code suivant
      */
-    static long delaiJumelage(long depuisActiviteMs, boolean prevenue) {
-        boolean vif = depuisActiviteMs >= 0 && depuisActiviteMs < JUMELAGE_VIF_MS;
-        if (prevenue) return vif ? JUMELAGE_SECOURS_VIF_MS : JUMELAGE_SECOURS_LENT_MS;
-        if (vif) return JUMELAGE_TOUR_VIF_MS;
-        return depuisActiviteMs >= JUMELAGE_ENDORMI_APRES_MS ? JUMELAGE_TOUR_ENDORMI_MS : JUMELAGE_TOUR_LENT_MS;
+    static long delaiJumelage(long depuisActiviteMs, boolean prevenue, long depuisCodeMs, long avantNouveauMs) {
+        if (!jumelageEnSommeil(depuisActiviteMs)) return prevenue ? JUMELAGE_SECOURS_VIF_MS : JUMELAGE_TOUR_VIF_MS;
+        if (depuisCodeMs < 0) return JUMELAGE_SANS_CODE_MS;
+        if (depuisCodeMs < JUMELAGE_GUET_MS && !prevenue) return JUMELAGE_TOUR_GUET_MS;
+        return Math.max(1_000, avantNouveauMs + 1_000);
+    }
+
+    private long depuisJumelageVif() {
+        return android.os.SystemClock.elapsedRealtime() - jumelageVifDepuis;
+    }
+
+    /** Âge du code affiché (horloge murale, comme son échéance), ou -1 sans code. */
+    private long depuisCode() {
+        if (prefs.getString("pairing", null) == null) return -1;
+        long age = System.currentTimeMillis() - (prefs.getLong("pairingExpires", 0) - PAIRING_MS);
+        return age < 0 ? 0 : age; // horloge revenue en arrière : on le croit tout neuf, pas « sans code »
+    }
+
+    /** Temps avant d'écrire le code suivant (négatif : il est dû). */
+    private long avantNouveauCode() {
+        long cree = prefs.getLong("pairingExpires", 0) - PAIRING_MS;
+        return cree + intervalleCode(depuisJumelageVif()) - System.currentTimeMillis();
     }
 
     private void jumelageVif() {
@@ -2951,7 +2993,8 @@ final class Sync {
         }
         String state = f == null ? "gone" : Firebase.str(f, "status");
         // Un code que personne n'a pris expire ; un code réservé, jamais.
-        if ("waiting".equals(state) && System.currentTimeMillis() > prefs.getLong("pairingExpires", 0)) state = "gone";
+        // En sommeil après 24 h sans geste, un code par heure seulement (intervalleCode).
+        if ("waiting".equals(state) && avantNouveauCode() < 0) state = "gone";
         if ("waiting".equals(state) || "reserved".equals(state) || "claimed".equals(state)) {
             welcome(new JSONObject().put("step", "pair").put("code", code));
         } else if ("confirmed".equals(state) && Firebase.str(f, "fid") != null) {
