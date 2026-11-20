@@ -48,6 +48,9 @@ test('A47-5 : SOS sans réponse aux deux essais : appels et alerte portent urgen
   assert.strictEqual(alerte.length, 1);
   assert.strictEqual(alerte[0].urgence, 'sos', 'alerte « a appuyé sur SOS » marquée');
   assert.deepStrictEqual(alerte[0].uids.sort(), [julie.uid, paul.uid].sort());
+  // Toucher l'alerte ouvre l'app famille avec l'heure du SOS (fenêtre « Rappeler », 20/11).
+  assert.match(alerte[0].quand, /^\d{13}$/, 'alerte : heure du SOS en ms');
+  assert.ok(Math.abs(Number(alerte[0].quand) - Date.now()) < 10 * 60_000, 'heure du SOS récente');
   // Les valeurs des données FCM sont des chaînes.
   [...appel1, ...appel2, ...alerte].forEach((n) => assert.strictEqual(typeof n.urgence, 'string'));
 });

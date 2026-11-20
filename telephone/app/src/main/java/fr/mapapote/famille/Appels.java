@@ -194,18 +194,34 @@ final class Appels {
         ctx.getSystemService(NotificationManager.class).notify(cid, ID_MANQUE, n);
     }
 
-    /** Alerte sur la tablette (débranchée, silencieuse…). */
-    static void alerte(Context ctx, String titre, String texte) {
+    /**
+     * Alerte sur la tablette (débranchée, silencieuse…), ou SOS resté sans réponse (urgence « sos ») : celle-ci
+     * ouvre l'app famille sur la fenêtre « Rappeler » (Tanguy, 20/11 : avant, on arrivait juste sur l'accueil).
+     */
+    static void alerte(Context ctx, String titre, String texte, String urgence, String fid, String quand) {
         creerCanaux(ctx);
+        String url = "sos".equals(urgence) ? urlRappelSos(fid, quand) : URL_APP;
         Notification n = new NotificationCompat.Builder(ctx, CANAL_INFOS)
                 .setSmallIcon(R.drawable.ic_notif)
                 .setContentTitle(titre == null || titre.isEmpty() ? "Papote" : titre)
                 .setContentText(texte == null ? "" : texte)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(texte == null ? "" : texte))
                 .setAutoCancel(true)
-                .setContentIntent(ouvrir(ctx, URL_APP, 0))
+                .setContentIntent(ouvrir(ctx, url, 0))
                 .build();
         ctx.getSystemService(NotificationManager.class).notify("alerte", ID_ALERTE, n);
+    }
+
+    /**
+     * Adresse de l'app famille pour rappeler après un SOS : /?famille=…&rappeler=1&sos=1&quand=… (même « rappeler »
+     * que l'appel manqué). fid et quand ne passent que bien formés ; l'heure de réception sinon.
+     */
+    static String urlRappelSos(String fid, String quand) {
+        Uri.Builder u = Uri.parse(URL_APP).buildUpon();
+        if (fid != null && fid.matches("[A-Za-z0-9_-]{1,64}")) u.appendQueryParameter("famille", fid);
+        u.appendQueryParameter("rappeler", "1").appendQueryParameter("sos", "1");
+        u.appendQueryParameter("quand", quand != null && quand.matches("\\d{1,15}") ? quand : String.valueOf(System.currentTimeMillis()));
+        return u.build().toString();
     }
 
     static Intent ecranAppel(Context ctx, String cid, String nom, String action) {

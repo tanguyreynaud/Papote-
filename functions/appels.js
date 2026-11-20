@@ -174,7 +174,10 @@ exports.appelsManques = onDocumentUpdated({ document: DOC, region: REGION_FIREST
   if (sos && ['missed', 'declined'].includes(apres.state) && !apres.answer) {
     // 1er essai sans réponse : la tablette rappelle tout de suite, rien à dire. Au 2e, l'alerte.
     if (sos === 2) {
-      const n = await envoyer(db, fid, uids, { type: 'alerte', urgence: URGENCE_SOS, titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
+      // fid + quand (heure du 2e essai, en ms) : toucher la notification ouvre l'app famille sur la bonne famille, avec la
+      // fenêtre « <Prénom> a appuyé sur SOS » et « Rappeler » (Tanguy, 20/11 : avant, on arrivait juste sur l'accueil).
+      const debut = apres.createdAt && typeof apres.createdAt.toMillis === 'function' ? apres.createdAt.toMillis() : Date.now();
+      const n = await envoyer(db, fid, uids, { type: 'alerte', urgence: URGENCE_SOS, fid, quand: String(debut), titre: `${nom} a appuyé sur SOS`, texte: "Personne n'a pu répondre. Rappelez dès que possible." }, 24 * 3600);
       logger.warn(`SOS ${cid} : personne n'a répondu, famille alertée`);
       await journal.noter(db, { genre: 'sos-sans-reponse', fid, tablette: apres.callerUid, telephones: n });
       if (n === 0) await prevenirSansTelephone(db, fid, uids, { nom, sos: true });
