@@ -32,7 +32,10 @@ if (!fs.existsSync(path.join(FONCTIONS, 'parcours', 'simulation.js'))) {
 const s = require(path.join(FONCTIONS, 'parcours', 'simulation.js'));
 const acteurs = require(path.join(FONCTIONS, 'parcours', 'acteurs.js'));
 const deFonctions = (m) => require(require.resolve(m, { paths: [FONCTIONS] }));
-const admin = deFonctions('firebase-admin');
+// firebase-admin 14 (fonctions à partir du 20/11) n'a plus admin.auth() ni admin.storage() : functions/admin-sdk.js
+// les rend, et c'est le même objet que celui du code et de la simulation. Fonctions d'avant : firebase-admin lui-même.
+const ADMIN_SDK = path.join(FONCTIONS, 'admin-sdk.js');
+const admin = fs.existsSync(ADMIN_SDK) ? require(ADMIN_SDK) : deFonctions('firebase-admin');
 const { getFirestore } = deFonctions('firebase-admin/firestore');
 
 let playwright;
