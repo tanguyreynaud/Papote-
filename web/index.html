@@ -20,11 +20,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Papote">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Les polices n'empêchent plus l'affichage : la page apparaît avec la police du téléphone et change
-       dès qu'elles arrivent (sinon, écran blanc tant que Google Fonts ne répond pas, 6 s en 4G faible). -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" media="print" onload="this.media='all'">
+  <!-- Polices servies par Papote (mêmes fichiers que le site) : plus aucune demande à Google à l'ouverture de l'appli
+       (Tanguy, 20/11). font-display: swap : la page apparaît avec la police du téléphone et change dès qu'elles arrivent. -->
+  <style>
+    @font-face { font-family: "Bricolage Grotesque"; src: url(polices/bricolage.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+    @font-face { font-family: "Atkinson Hyperlegible"; src: url(polices/atkinson-400.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+    @font-face { font-family: "Atkinson Hyperlegible"; src: url(polices/atkinson-700.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+  </style>
   <!-- Écran de démarrage écrit ici même : fond crème et logo dès le premier dessin, avant la feuille de
        style et les scripts (un écran blanc attendait sinon jusqu'à 6 s en 4G faible). -->
   <style>
@@ -85,6 +87,7 @@
     <symbol id="i-gallery" viewBox="0 0 24 24"><rect x="7" y="7" width="14" height="14" rx="2"/><path d="M3 17V5a2 2 0 0 1 2-2h12"/></symbol>
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5M5 9v11h5v-6h4v6h5V9"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 8 2.5 8h-17S6 15 6 9M10 20.5a2 2 0 0 0 4 0"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1.9-1.1 1.6v.3M12 17h.01"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -277,6 +280,7 @@
     <section id="view-home" class="page-pad tab-page" hidden>
       <header class="home-head">
         <button type="button" id="btn-invite" class="invite-btn" data-page="invite"><svg><use href="#i-user-plus"/></svg>Inviter</button>
+        <button type="button" id="btn-gear" class="bell-btn gear-btn" data-page="settings"><span class="sr-only">Réglages</span><svg aria-hidden="true"><use href="#i-gear"/></svg></button>
         <button type="button" id="btn-bell" class="bell-btn" data-tab="notifs"><span class="sr-only">Notifications</span><span class="nav-icon"><svg><use href="#i-bell"/></svg><span id="nav-badge" class="nav-badge" hidden></span></span></button>
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
@@ -301,7 +305,7 @@
         <h2>Comment appelez-vous la personne ?</h2>
         <p class="muted">Le nom que toute la famille utilise, par exemple « Mamie Emma ». Il s'affichera sur la tablette, pour les appels et les alertes.</p>
         <label>Son nom
-          <input id="nom-prepare-input" maxlength="40" placeholder="Mamie Emma" required aria-describedby="nom-prepare-error">
+          <input id="nom-prepare-input" maxlength="40" placeholder="Écrivez son nom ici" required aria-describedby="nom-prepare-error">
         </label>
         <p id="nom-prepare-error" class="error" hidden></p>
         <button type="submit" class="primary wide" id="nom-prepare-btn">Enregistrer</button>
@@ -539,7 +543,7 @@
                   <option value="4">4 minutes</option>
                   <option value="5">5 minutes</option>
                 </select>
-                <span class="station-aide">Le temps qu'il reste à l'écran en attendant qu'elle le voie. Ensuite il se ferme tout seul.</span>
+                <span class="station-aide">Le temps qu'il reste en grand à l'écran (au moins 1 minute après qu'elle l'a vu). Ensuite il se ferme tout seul, même s'il n'a pas été vu.</span>
               </div>
             <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, 5 secondes pour annuler, puis un SMS à toute la famille et la tablette appelle les proches un par un. Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="opt-sos"></label>
             <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
@@ -686,7 +690,7 @@
         <p id="invite-full" class="card error" hidden>La famille est complète : 30 proches au maximum. Pour inviter quelqu'un, un responsable doit d'abord retirer un membre.</p>
         <div id="invite-email-card" class="card" hidden>
           <h2>Inviter par e-mail</h2>
-          <p class="muted small">La personne entre directement dans la famille en se connectant avec cette adresse.</p>
+          <p class="muted small">Papote lui envoie un e-mail avec un lien. Elle entre directement dans la famille en se connectant avec cette adresse.</p>
           <form id="form-invite" class="inline-field">
             <input id="invite-email" type="email" autocomplete="off" placeholder="adresse@exemple.fr" required>
             <button type="submit" class="primary">Inviter</button>
@@ -887,7 +891,7 @@
           </details>
           <details>
             <summary>La tablette ne répond plus</summary>
-            <p>Vérifiez que la tablette est branchée. Si elle utilise le Wi-Fi de la maison, vérifiez que la box est allumée ; sinon, vérifiez que la petite carte SIM est bien en place dans la tablette. Si le problème continue, un responsable peut la redémarrer depuis Réglages > Dépanner la tablette, ou vous pouvez l'éteindre puis la rallumer.</p>
+            <p>Vérifiez que la tablette est branchée. Si elle utilise le Wi-Fi de la maison, vérifiez que la box est allumée ; sinon, vérifiez qu'elle est posée à un endroit où un téléphone capte. Si le problème continue, un responsable peut la redémarrer depuis Réglages > Dépanner la tablette. Sur place, on peut aussi rester appuyé 10 secondes sur le bouton volume bas de la tablette, puis toucher « Oui ».</p>
           </details>
           <details>
             <summary>L'appel vidéo ne fonctionne pas</summary>

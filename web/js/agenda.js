@@ -291,7 +291,8 @@ function openEdit(coll, data) {
     $('rem-title').value = data.title || '';
     const kind = document.querySelector(`input[name="rem-kind"][value="${data.kind || 'autre'}"]`);
     if (kind) kind.checked = true;
-    $('rem-repeat').value = data.repeat || 'daily';
+    // Valeur inconnue (ancien rappel) : « Quand ? » restait vide (banc du 19/11). Une date seule = une seule fois.
+    $('rem-repeat').value = ['daily', 'weekly', 'once'].includes(data.repeat) ? data.repeat : (data.date ? 'once' : 'daily');
     $('rem-date').min = '';
     $('rem-date').value = data.date || todayKey();
     $('rem-days').querySelectorAll('input').forEach((i) => { i.checked = (data.days || []).includes(Number(i.value)); });

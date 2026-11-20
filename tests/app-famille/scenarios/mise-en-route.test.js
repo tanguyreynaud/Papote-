@@ -174,7 +174,7 @@ test('A53 : numéro de commande dans « Rejoindre une famille » : refusé, sans
   await paul.page.locator('#join-error').waitFor({ state: 'visible' });
   await paul.page.locator('#form-join button[type=submit]:not([disabled])', { hasText: 'Rejoindre' }).waitFor();
   assert.strictEqual(await paul.page.locator('#join-error').innerText(),
-    'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à un responsable de vous inviter.');
+    'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à la personne qui vous l’a envoyé de vous inviter.');
   assert.strictEqual((await paul.page.evaluate(() => window.__textes))[0], 'Un instant…', 'réaction visible tout de suite');
   await paul.page.waitForTimeout(500);
   assert.strictEqual(refus(), 1, 'double appui : une seule tentative');

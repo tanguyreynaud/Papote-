@@ -1084,6 +1084,9 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .bell-btn { position: absolute; right: 108px; top: 4px; width: 40px; height: 40px; border-radius: 50%; background: var(--surface); color: var(--accent); box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center; }
 .bell-btn svg { width: 22px; height: 22px; }
 .bell-btn .nav-badge { right: -8px; top: -6px; }
+/* La roue dentée des Réglages, à gauche de la cloche (même rond, même écart). */
+.gear-btn { right: 156px; }
+.gear-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .aide-card { width: 100%; text-align: left; }
 
 /* Appel à l'horizontale même quand le téléphone ne tourne pas l'écran */
@@ -1682,6 +1685,31 @@ a { text-decoration: none; }
 .sos-ordre-annonce { min-height: 4.2em; margin: 10px 0 0; font-size: 15px; font-weight: 600; color: var(--accent); overflow-wrap: anywhere; }
 .sos-ordre-defaut { width: 100%; justify-content: center; min-height: 50px; margin-top: 4px; touch-action: manipulation; }
 
+/* Téléphone tenu à l'horizontale (banc d'utilisateurs du 19/11) : la fenêtre « Réglons la tablette » était si basse
+   que les heures de la nuit tombaient sous les boutons et que les options étaient coupées. Quand la hauteur manque,
+   la fenêtre prend la largeur et presque toute la hauteur, avec des marges réduites, pour que chaque étape tienne. */
+@media (max-height: 520px) {
+  .guide-back.intro-back { padding: 8px 16px; }
+  .intro { max-width: 680px; height: calc(100dvh - 16px); padding: 14px 22px 12px; }
+  .intro .guide-dots { margin: 0 0 4px; }
+  .intro h2 { margin: 2px 0 4px; font-size: 20px; }
+  .intro p.muted { margin: 0 0 6px; font-size: 15px; }
+  .intro .guide-icon { width: 48px; height: 48px; border-radius: 16px; }
+  .intro .guide-icon svg { width: 26px; height: 26px; }
+  .intro .toggle-row { padding-top: 8px; padding-bottom: 8px; }
+  .intro .guide-buttons { padding-top: 8px; }
+  .intro .guide-buttons button { min-height: 46px; }
+  .intro .sleep-hours label { margin: 0; }
+  .intro .sleep-hours select { margin: 2px 0; }
+}
+.intro .intro-step.suite { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
+/* Très petit téléphone (320 px) : la roue, la cloche et « Inviter » se serrent un peu pour laisser « Papote » entier. */
+@media (max-width: 359px) {
+  .home-head .brand { font-size: 26px; }
+  .invite-btn { padding: 8px 10px; }
+  .bell-btn { right: 98px; }
+  .gear-btn { right: 144px; }
+}
 /* « Vouliez-vous dire … ? » sous l'adresse e-mail (js/email-correcteur.js, copie du site ; Tanguy 20/11). */
 .mel-suggestion { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 1rem; color: var(--text); }
 .mel-suggestion[hidden] { display: none; }
