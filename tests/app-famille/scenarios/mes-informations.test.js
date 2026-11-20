@@ -61,7 +61,9 @@ test('Profil : prénom, genre, numéro, photo (changée puis retirée) enregistr
   await enregistrer(paul, 'my-genre-card');
   await g.toast(paul, 'Enregistré');
   await modifier(paul, 'my-tel-card');
-  await paul.page.fill('#my-tel', '0711223344');
+  // L'ancien numéro est sélectionné : ce qu'on tape le remplace (banc du 20/11).
+  assert.ok(await paul.page.locator('#my-tel').evaluate((e) => e.value && e.selectionStart === 0 && e.selectionEnd === e.value.length), 'ancien numéro sélectionné');
+  await paul.page.keyboard.type('0711223344');
   await enregistrer(paul, 'my-tel-card');
   await g.toast(paul, 'Numéro enregistré');
   await paul.page.setInputFiles('#in-face-gallery', await g.photo({ largeur: 600, hauteur: 600, texte: 'Paulo' }));

@@ -4755,7 +4755,10 @@ function openSetting(card) {
   card.querySelector('.setting-modify').hidden = true;
   // Sans preventScroll, le premier champ (parfois tout en bas, comme le volume des options) faisait défiler
   // jusqu'à lui : on arrive sur le titre de la carte, juste sous l'en-tête collant (Tanguy, 27/10).
-  card.querySelector('.setting-edit input:not([type=checkbox]), .setting-edit select')?.focus({ preventScroll: true });
+  const champ = card.querySelector('.setting-edit input:not([type=checkbox]), .setting-edit select');
+  champ?.focus({ preventScroll: true });
+  // Ancien numéro sélectionné : ce qu'on tape le remplace (banc du 20/11 : Paul et Inès tapaient à la suite ; Tanguy, 20/11).
+  if (champ?.type === 'tel' && champ.value) champ.select();
   const entete = card.closest('section')?.querySelector('.page-head');
   const haut = card.getBoundingClientRect().top + window.scrollY - (entete ? entete.getBoundingClientRect().height : 0) - 12;
   window.scrollTo({ top: Math.max(0, haut), behavior: 'smooth' });
@@ -6018,13 +6021,11 @@ function renderActivity() {
     el.classList.add('calme');
     el.textContent = `La tablette de ${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au wifi si vous pouvez.`;
   } else if (now - online > EN_LIGNE_MS) {
-    // Une marche à suivre, pas une question (banc utilisateurs du 19/11 : « l'appli ne me dit pas quoi faire ») ;
-    // toutes les tablettes ont une carte SIM : pas de « wifi » ici. Ce que l'app sait déjà (branchée) est utilisé.
+    // Court (Tanguy, 20/11 : le bloc rouge était long) : la marche à suivre est dans « Que faire ? ».
+    // Ce que l'app sait déjà (branchée) est utilisé.
     el.classList.add('warn');
-    el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. `
-      + (battery?.charging === true
-        ? 'Elle était branchée : le réseau a sans doute coupé, elle se reconnecte toute seule dès qu’il revient.'
-        : `Elle est peut-être éteinte : demandez à ${name} de la brancher.`);
+    el.textContent = `La tablette ne répond plus depuis ${ago(online).replace('il y a ', '')}`
+      + (battery?.charging === true ? ' : sans doute une coupure de réseau.' : '.');
     const quoi = document.createElement('button');
     quoi.type = 'button';
     quoi.className = 'link';

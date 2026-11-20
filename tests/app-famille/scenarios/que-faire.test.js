@@ -17,6 +17,8 @@ test('Tablette muette : « Que faire ? » donne 3 étapes, puis mène à « Dép
   const ilYa2h = s.Timestamp.fromMillis(Date.now() - 2 * 3600_000);
   await s.db.doc(`families/${fid}/members/${tab.id}`).update({ lastOnline: ilYa2h, lastActive: ilYa2h });
   await julie.page.locator('#activity.warn', { hasText: 'ne répond plus' }).waitFor();
+  assert.strictEqual(await julie.page.locator('#activity').innerText(), 'La tablette ne répond plus depuis 2 h. Que faire ?');
+  if (process.env.CAPTURE) await julie.page.screenshot({ path: process.env.CAPTURE });
   await julie.page.locator('#activity button', { hasText: 'Que faire ?' }).click();
   const fenetre = await g.texteFenetre(julie);
   assert.match(fenetre, /Que faire \?/);
