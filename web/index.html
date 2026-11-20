@@ -169,7 +169,7 @@
       <form id="form-moi" class="card" novalidate>
         <h2>Vos informations</h2>
         <label>Votre prénom
-          <input id="moi-prenom" autocomplete="given-name" maxlength="40" placeholder="Julie" aria-describedby="moi-prenom-error">
+          <input id="moi-prenom" autocomplete="given-name" maxlength="40" placeholder="Votre prénom" aria-describedby="moi-prenom-error">
         </label>
         <p id="moi-prenom-error" class="error" hidden></p>
         <p class="genre-titre">Vous êtes</p><div class="genre-choix" role="radiogroup" aria-label="Vous êtes"><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="femme">Une femme</button><button type="button" class="genre-btn" role="radio" aria-checked="false" data-genre="homme">Un homme</button></div>
@@ -1197,6 +1197,7 @@
       }, 8000);
     })();
   </script>
+  <script src="js/email-correcteur.js"></script>
   <script type="module" src="js/famille.js" onerror="window.papoteHorsLigne && papoteHorsLigne()"></script>
   <!-- Chat d'aide (servi par le site mapapote.fr), au-dessus de la barre du bas -->
   <script src="https://mapapote.fr/chat-support.js" data-bas="96" defer></script>
