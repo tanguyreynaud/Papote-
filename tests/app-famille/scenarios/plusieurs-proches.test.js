@@ -42,7 +42,7 @@ test('Trois proches envoient une photo puis un message au même instant : tout a
   for (const t of tels) await t.page.waitForFunction(() => document.querySelectorAll('#photos li.shot').length === 4, null, { timeout: 30_000 });
   for (const t of tels) {
     const vus = await t.page.evaluate(() => (window.__toastsVus || []).map((v) => v.texte));
-    assert.ok(vus.some((v) => /^Envoyé|serveur ne répond pas/.test(v)), `${t.nom} : un mot après l'envoi (${JSON.stringify(vus)})`);
+    assert.ok(vus.some((v) => /^Envoyé|^Photo envoyée|serveur ne répond pas/.test(v)), `${t.nom} : un mot après l'envoi (${JSON.stringify(vus)})`);
   }
   for (const t of tels) await t.page.locator('#sheet-post').waitFor({ state: 'hidden' });
   for (const t of tels) { await t.page.click('#view-photos .page-head .back'); await g.ouvrirTuile(t, 'messages'); }
