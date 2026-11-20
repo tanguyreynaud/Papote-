@@ -2566,7 +2566,7 @@ function blocAlertes(zone, liste, { titre, avecTablette }) {
   };
   // Une pastille par sorte (« Tablette débranchée 1 ») : touchée, elle déplie la liste datée en dessous.
   const chiffre = (genre, n, texte) => h('button', { type: 'button', 'data-genre': genre, 'aria-pressed': 'false', onclick: () => montrer(genre) },
-    texte === 'en tout' ? 'En tout' : texte, h('span', { class: 'n' }, String(n)));
+    texte === 'en tout' ? 'En tout' : String(texte).replace(/^./, (x) => x.toUpperCase()), h('span', { class: 'n' }, String(n)));
   zone.replaceChildren(
     h('h2', {}, `${titre} (${jours} derniers jours)`),
     liste.length
@@ -2600,7 +2600,7 @@ function blocGardeFous(zone, t) {
   };
   // Une pastille par sorte (« Tablette débranchée 1 ») : touchée, elle déplie la liste datée en dessous.
   const chiffre = (genre, n, texte) => h('button', { type: 'button', 'data-genre': genre, 'aria-pressed': 'false', onclick: () => montrer(genre) },
-    texte === 'en tout' ? 'En tout' : texte, h('span', { class: 'n' }, String(n)));
+    texte === 'en tout' ? 'En tout' : String(texte).replace(/^./, (x) => x.toUpperCase()), h('span', { class: 'n' }, String(n)));
   zone.replaceChildren(
     h('h2', {}, 'Garde-fous de la tablette'),
     liste.length
@@ -2740,7 +2740,7 @@ function blocReleves(zone, t) {
   familleTablette = null;
   zone.hidden = !relieeAUneFamille(t);
   if (zone.hidden) return;
-  zone.replaceChildren(h('h2', {}, 'Derniers relevés'), h('p', { class: 'muted small' }, 'Lecture de la fiche de la tablette…'));
+  zone.replaceChildren(h('h2', {}, 'En ce moment'), h('p', { class: 'muted small' }, 'Lecture de la fiche de la tablette…'));
   const dessiner = () => {
     const m = membreTablette || {};
     const b = m.battery || {};
@@ -2751,7 +2751,7 @@ function blocReleves(zone, t) {
     const mo = sim && sim.dataMoisMo >= 0 ? `${sim.dataMoisMo} Mo ce mois` : null;
     // Une ligne absente (null) ne doit pas s'écrire « null » : replaceChildren écrit tout ce qu'on lui donne.
     zone.replaceChildren(...[
-      h('h2', {}, 'Derniers relevés'),
+      h('h2', {}, 'En ce moment'),
       h('div', { class: 'stats compact' },
         stat(enLigne ? ilYA(enLigne) : '—', 'En ligne', enLigne && Date.now() - enLigne > 70 * 60_000 ? 'ne répond plus ?' : null, enLigne && Date.now() - enLigne > 70 * 60_000 ? 'warn' : null),
         stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
@@ -2770,7 +2770,7 @@ function blocReleves(zone, t) {
       dessiner();
     }, (err) => {
       console.warn('Fiche de la tablette illisible', err);
-      zone.replaceChildren(h('h2', {}, 'Derniers relevés'), h('p', { class: 'muted small' }, `Fiche de la tablette illisible (${messageErreur(err)}).`));
+      zone.replaceChildren(h('h2', {}, 'En ce moment'), h('p', { class: 'muted small' }, `Fiche de la tablette illisible (${messageErreur(err)}).`));
     });
     getDoc(doc(d, 'families', t.fid)).then((snap) => { familleTablette = snap.exists() ? snap.data() : {}; rafraichirSousTitres(); }).catch(() => null);
   });
@@ -2989,11 +2989,17 @@ let tabletteOuverte = null;
 function ouvrirTablette(id) {
   location.hash = `#tablette/${encodeURIComponent(id)}`;
 }
+// Lien vers la page d'une famille (son nom), ou rien si la famille n'est pas connue.
+function lienFamille(fid) {
+  const f = fid && (donnees.familles || []).find((x) => x.id === fid);
+  return f ? h('a', { href: `#clients/familles/${encodeURIComponent(fid)}` }, f.nom || f.name || 'Famille') : null;
+}
+
 function remplirTablette(id) {
   const t = donnees.stock.find((x) => x.id === id);
   if (!t) {
     $('dt-titre').textContent = 'Tablette introuvable';
-    $('dt-infos').replaceChildren(h('dt', {}, 'Tablette'), h('dd', {}, 'Elle a peut-être été supprimée.'));
+    $('dt-infos').replaceChildren(h('p', {}, 'Elle a peut-être été supprimée.'));
     return;
   }
   // Même tablette déjà affichée : ne pas effacer ce qui est en cours de saisie.
@@ -3017,13 +3023,19 @@ function remplirTablette(id) {
   const infos = $('dt-infos');
   if (!(infos.dataset.id === t.id && saisieEnCours(infos))) {
     infos.dataset.id = t.id;
-    infos.replaceChildren(
-      ...ligne('Où est-elle ?', friseTablette(t, actions.bouton)),
+    // Trois blocs : où elle en est (frise), chez qui elle est, ce qu'elle est (Tanguy, 20/11 : « trop brouillon »).
+    const groupe = (titre, ...lignes) => (lignes.flat().length
+      ? h('section', { class: 'fiche-groupe' }, h('h3', {}, titre), h('dl', { class: 'fiche' }, ...lignes)) : null);
+    infos.replaceChildren(...[
+      h('dl', { class: 'fiche fiche-frise' }, ...ligne('Où est-elle ?', friseTablette(t, actions.bouton))),
+      groupe('Chez qui',
       // Jumelée sans commande (tablette de test) : elle reste dans sa famille, hors du stock à vendre, rien à faire.
-      ...ligne('Famille', DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? badge(pasAVendre(t), 'info') : null),
+      ...ligne('Famille', DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? badge(pasAVendre(t), 'info') : lienFamille(t.fid)),
       // Attribuée à une commande par « Préparer l'envoi » (SIM, accessoires, étiquette), pas à la main.
       ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : dansUneFamille(t) ? null : h('span', { class: 'muted' }, 'pas encore attribuée')),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
+      ),
+      groupe('La tablette',
       ...(fichesAchetees(t).length
         // Fiche créée à l'installation faute d'achat « En stock » : on choisit la tablette achetée qu'elle est
         // vraiment (la fiche de l'achat prend le T-0… et le n° de série, celle-ci disparaît).
@@ -3052,7 +3064,8 @@ function remplirTablette(id) {
       }),
       ...ligne('Accessoires', (t.accessoires || []).join(', ')),
       ...ligne('Installation', ligneInstallation(t)),
-      ...modif('Notes', t.notes, 'notes', { valeur: t.notes, long: true, vide: 'aucune' }));
+      ...modif('Notes', t.notes, 'notes', { valeur: t.notes, long: true, vide: 'aucune' })),
+    ].filter(Boolean));
   }
   afficherDocumentsTablette(t);
   // Relevés en direct et actions à distance : redessinés seulement si on change de tablette (un ordre en
@@ -3064,7 +3077,7 @@ function remplirTablette(id) {
     blocAgir($('dt-agir'), t);
   }
   afficherBatterie(t);
-  blocAlertes($('dt-alertes'), (donnees.alertes || []).filter((a) => a.fiche === t.id), { titre: 'Alertes de cette tablette' });
+  blocAlertes($('dt-alertes'), (donnees.alertes || []).filter((a) => a.fiche === t.id), { titre: 'Alertes' });
   blocGardeFous($('dt-gardefous'), t);
   $('dt-historique').replaceChildren(...historiqueLisible(t).reverse().map(([le, texte]) => h('li', {},
     h('span', { class: 'quand' }, new Date(le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ', texte)));

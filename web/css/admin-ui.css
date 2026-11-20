@@ -294,3 +294,21 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 /* Colis en route : les trois étapes sur une ligne (✓ Déposé · ○ Reçu · ○ Mis en route), pas en tuiles. */
 .admin-body .orders .suite-envoi { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 8px 0; padding: 0; }
 .admin-body .orders .suite-envoi li { border: 0; background: none; padding: 0; margin: 0; min-height: 0; box-shadow: none; display: inline; font-size: 14px; }
+
+/* ---------- Fiche tablette rangée (20/11, 2e version) ---------- */
+/* La frise en haut, puis « Chez qui » et « La tablette » côte à côte sur ordinateur. */
+.admin-body .fiche-groupes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 32px; }
+.admin-body .fiche-groupes .fiche-frise { grid-column: 1 / -1; margin-bottom: 4px; }
+.admin-body .fiche-groupe h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 12px 0 4px; }
+.admin-body .fiche-groupe .fiche { margin: 0; }
+@media (max-width: 900px) { .admin-body .fiche-groupes { grid-template-columns: 1fr; } }
+/* Deux cartes côte à côte (alertes et garde-fous, documents et historique) ; une seule prend toute la largeur. */
+.admin-body .cartes-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; margin-bottom: 16px; }
+.admin-body .cartes-duo > .card { margin: 0; }
+.admin-body .cartes-duo > [hidden] { display: none; }
+/* « En ce moment » : quatre cases basses, chiffres à taille de lecture (le nom de l'opérateur ne prend plus 2 lignes). */
+.admin-body #dt-releves .stats .stat { padding: 10px 12px; min-height: 0; }
+.admin-body #dt-releves .stats .stat > span { font-size: 18px; line-height: 1.25; }
+.admin-body #dt-releves .stats .stat > p { margin: 2px 0 0; }
+/* Pastilles dans une carte : elles passent à la ligne au lieu de sortir de l'écran. */
+.admin-body .card .filtres { flex-wrap: wrap; overflow: visible; }

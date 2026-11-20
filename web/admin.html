@@ -585,7 +585,7 @@
         <p class="no-print"><a href="#stock/tablettes" class="retour">Retour</a></p>
         <div class="card">
           <div class="tete-fiche"><h2 id="dt-titre">Tablette</h2><span id="dt-etat"></span><span class="espace"></span><div class="tete-actions no-print"><div id="dt-agir-menu"></div><div id="dt-actions"></div></div></div>
-          <dl class="fiche" id="dt-infos"></dl>
+          <div id="dt-infos" class="fiche-groupes"></div>
           <form id="f-tablette" class="grille form-modif" hidden>
             <label>N° de série <span class="avec-bouton"><input name="numero"><button type="button" class="secondary small-btn scanner" data-cible="numero" hidden>Scanner</button></span></label>
             <label>Modèle <input name="modele"></label>
@@ -600,15 +600,20 @@
         <div class="card" id="dt-releves" hidden></div>
         <div class="card" id="dt-agir" hidden></div>
         <div class="card" id="dt-batterie" hidden></div>
-        <div class="card" id="dt-alertes" hidden></div>
-        <div class="card" id="dt-gardefous" hidden></div>
-        <div class="card">
-          <h2>Documents</h2>
-          <ul class="pieces" id="dt-pieces"></ul>
+        <!-- Côte à côte sur ordinateur, l'une sous l'autre sur téléphone. -->
+        <div class="cartes-duo">
+          <div class="card" id="dt-alertes" hidden></div>
+          <div class="card" id="dt-gardefous" hidden></div>
         </div>
-        <div class="card">
-          <h2>Historique</h2>
-          <ul class="historique small muted" id="dt-historique"></ul>
+        <div class="cartes-duo">
+          <div class="card">
+            <h2>Documents</h2>
+            <ul class="pieces" id="dt-pieces"></ul>
+          </div>
+          <div class="card">
+            <h2>Historique</h2>
+            <ul class="historique small muted" id="dt-historique"></ul>
+          </div>
         </div>
       </section>
 
