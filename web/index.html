@@ -91,6 +91,7 @@
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 8 2.5 8h-17S6 15 6 9M10 20.5a2 2 0 0 0 4 0"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1.9-1.1 1.6v.3M12 17h.01"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-tablette" viewBox="0 0 24 24"><rect x="4" y="2.5" width="16" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 7l9 6 9-6"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
@@ -461,8 +462,8 @@
       <div class="page-pad">
         <button type="button" class="card nudge aide-card" data-aide><span class="avatar avatar-empty"><svg><use href="#i-help"/></svg></span><span><strong>Besoin d'aide ?</strong><br><span class="muted small">L'assistant Papote vous répond tout de suite</span></span></button>
         <div class="segmented reglages-choix" role="group" aria-label="Réglages">
-          <button type="button" class="seg" data-reglages-choix="tablette">La tablette</button>
-          <button type="button" class="seg" data-reglages-choix="profil">Mon profil</button>
+          <button type="button" class="seg" data-reglages-choix="tablette"><svg aria-hidden="true"><use href="#i-tablette"/></svg>La tablette</button>
+          <button type="button" class="seg" data-reglages-choix="profil"><svg aria-hidden="true"><use href="#i-user"/></svg>Mon profil</button>
         </div>
         <h3 class="settings-group">La famille</h3>
         <div id="requests-card" class="card" hidden>
@@ -769,8 +770,8 @@
       <div class="page-pad">
         <button type="button" class="card nudge aide-card" data-aide><span class="avatar avatar-empty"><svg><use href="#i-help"/></svg></span><span><strong>Besoin d'aide ?</strong><br><span class="muted small">L'assistant Papote vous répond tout de suite</span></span></button>
         <div class="segmented reglages-choix" role="group" aria-label="Réglages">
-          <button type="button" class="seg" data-reglages-choix="tablette">La tablette</button>
-          <button type="button" class="seg" data-reglages-choix="profil">Mon profil</button>
+          <button type="button" class="seg" data-reglages-choix="tablette"><svg aria-hidden="true"><use href="#i-tablette"/></svg>La tablette</button>
+          <button type="button" class="seg" data-reglages-choix="profil"><svg aria-hidden="true"><use href="#i-user"/></svg>Mon profil</button>
         </div>
         <div class="card">
           <h2>Ma photo</h2>
@@ -1071,7 +1072,7 @@
       <label>Quoi ?
         <input id="rem-title" maxlength="120" placeholder="Prendre le Doliprane">
       </label>
-      <div class="choice" role="radiogroup" aria-label="Type de rappel">
+      <div class="choice choice-ligne" role="radiogroup" aria-label="Type de rappel">
         <label><input type="radio" name="rem-kind" value="medicament" checked> Médicament</label>
         <label><input type="radio" name="rem-kind" value="rdv"> Rendez-vous</label>
         <label><input type="radio" name="rem-kind" value="autre"> Autre</label>
@@ -1112,7 +1113,7 @@
         <input id="rem-fin" type="date">
       </label>
       </div>
-      <button type="submit" class="primary wide" id="btn-reminder">Ajouter le rappel</button>
+      <button type="submit" class="primary wide sheet-valider" id="btn-reminder">Ajouter le rappel</button>
       <p id="rem-error" class="error" hidden></p>
       <p id="rem-limite" class="card doublon" role="status" hidden></p>
     </form>
