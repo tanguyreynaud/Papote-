@@ -192,6 +192,15 @@ test('fiche membre d\'une tablette supprimée (remplacement, retour, famille sup
   assert.strictEqual(await fermerCodes(db, undefined, 1), 0);
 });
 
+test('code supprimé entre la lecture et la fermeture (famille en cours d\'effacement) : pas d\'erreur', async () => {
+  const doc = (update) => ({ get: (k) => ({ status: 'confirmed' })[k], ref: { path: 'pairings/X', update } });
+  const base = (update) => ({ collection: (nom) => ({ where: () => ({ get: async () => ({ docs: nom === 'pairings' ? [doc(update)] : [] }) }) }) });
+  const absent = Object.assign(new Error('5 NOT_FOUND: no entity to update'), { code: 5 });
+  assert.strictEqual(await fermerCodes(base(async () => { throw absent; }), 'tab', 1), 0);
+  // Une autre erreur (réseau, droits) remonte toujours.
+  await assert.rejects(fermerCodes(base(async () => { throw Object.assign(new Error('panne'), { code: 14 }); }), 'tab', 1), /panne/);
+});
+
 test('sortie d\'une tablette : seulement la suppression d\'une fiche de rôle « tablette »', () => {
   assert.strictEqual(tabletteSortie({ role: 'tablette', name: 'Tablette' }, null), true);
   assert.strictEqual(tabletteSortie({ role: 'famille' }, null), false); // un proche qui part

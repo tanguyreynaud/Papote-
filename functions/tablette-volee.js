@@ -113,8 +113,10 @@ async function fermerCodes(db, uid, maintenant) {
     for (const c of codes.docs) {
       if (c.get('status') !== 'confirmed' || vus.has(c.ref.path)) continue;
       vus.add(c.ref.path);
-      await c.ref.update({ status: 'closed', closedAt: new Date(maintenant) });
-      n += 1;
+      // Famille en cours d'effacement : le code vient d'être supprimé avec elle, il n'y a plus rien à fermer.
+      const ferme = await c.ref.update({ status: 'closed', closedAt: new Date(maintenant) })
+        .then(() => true, (e) => { if (e && e.code === 5) return false; throw e; });
+      if (ferme) n += 1;
     }
   }
   const remplacements = await db.collection('invites').where('usedBy', '==', uid).get();
