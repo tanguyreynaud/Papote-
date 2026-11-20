@@ -2265,6 +2265,7 @@
   function gsmClear() {
     if (gsm) clearTimeout(gsm.timer);
     clearTimeout(gsmVeille);
+    clearTimeout(sosReponseSure);
     gsm = null;
     if (android() && android().ring) android().ring(false);
     if (android() && android().inCall) android().inCall(false);
@@ -2440,6 +2441,7 @@
         if (gsm.sos) sosNoter({ enLigneDepuis: gsm.enLigneDepuis });
       }
       gsm.enLigne = true;
+      sosArmerReponseSure();
       appelAbouti(gsm.uid, gsm.name);
       if (android() && android().ring) android().ring(false);
       renderCall('connected', 'En ligne avec ' + gsm.who, 'Parlez normalement, la tablette vous entend.', gsm.uid, gsm.name);
@@ -2624,6 +2626,105 @@
     return e.phase === 'attente-gsm' ? now - e.debut < SOS_ATTENTE_GSM_MS : now - e.maj < SOS_REPRISE_MS;
   }
 
+  // Un seul message de fin par SOS (choix de Tanguy, 20/11) : le premier de ces trois événements envoie un
+  // SMS aux proches qui ont reçu le SMS d'alerte, les suivants n'envoient plus rien.
+  //   repondu  un appel du SOS est resté en ligne 2 min 15 (une messagerie raccroche seule à 2 min 07, mesuré
+  //            sur T-003 : avant, la tablette ne sait pas si c'est un proche ou sa messagerie), ou un proche a
+  //            décroché l'appel par internet ;
+  //   arrete   Mamie a appuyé sur « Raccrocher » pendant le SOS ;
+  //   pris     un proche a touché « Je m'en occupe » dans l'app (families/{fid}.sosPris, lu par Sync.java).
+  //   papote.sosFin { debut, liste, sms, dit, pris } : gardé 30 min après l'appui, il survit à la fin de la
+  //                 chaîne d'appels (un « Je m'en occupe » peut arriver après) et à une relance de la page.
+  var SOS_FIN_CLE = 'papote.sosFin';
+  var SOS_FIN_MS = 30 * 60000;
+  var SOS_REPONSE_SURE_MS = 135000;
+  var SOS_PRIS_AVANCE_MS = 2 * 60000; // horloges de la tablette et du serveur pas tout à fait d'accord
+  var sosReponseSure = null;
+
+  function sosSuiviLu() {
+    var s = null;
+    try { s = JSON.parse(localStorage.getItem(SOS_FIN_CLE) || 'null'); } catch (e) { s = null; }
+    if (!s || !s.debut) return null;
+    var now = Date.now();
+    if (now < s.debut - 60000 || now - s.debut > SOS_FIN_MS) return null;
+    return s;
+  }
+
+  function sosSuiviNoter(s) {
+    try { localStorage.setItem(SOS_FIN_CLE, JSON.stringify(s)); } catch (e) { }
+  }
+
+  // Dit au reste de l'app (fiche de la tablette, lue par l'app famille) où en est le SOS.
+  function sosSignaler(debut, fin, qui) {
+    try {
+      if (android() && android().sosSignaler) android().sosSignaler(JSON.stringify({ debut: debut, fin: fin || '', uid: (qui && qui.uid) || '', nom: (qui && qui.name) || '' }));
+    } catch (e) { }
+  }
+
+  // Les appels du SOS partent : le suivi commence (le même SOS qui reprend après une attente garde le sien).
+  function sosSuiviDemarrer(liste) {
+    var debut = (sosEtat && sosEtat.debut) || Date.now();
+    var s = sosSuiviLu();
+    if (s && s.debut === debut) {
+      if (sosSmsParti && !s.sms) { s.sms = true; sosSuiviNoter(s); }
+      return;
+    }
+    sosSuiviNoter({ debut: debut, liste: liste, sms: sosSmsParti, dit: '' });
+    sosSignaler(debut, '', null);
+  }
+
+  // Le message de fin, une seule fois par SOS. qui : le proche concerné (il ne reçoit pas le SMS, il sait).
+  // true si c'est cet événement qui a clos le SOS.
+  function sosDireFin(genre, qui) {
+    var s = sosSuiviLu();
+    if (!s || s.dit) return false;
+    s.dit = genre; // noté avant l'envoi : jamais deux messages, même si la page est relancée pendant l'envoi
+    sosSuiviNoter(s);
+    var nom = familyName || 'votre proche';
+    var prenom = (qui && qui.name) || 'Un proche';
+    var texte = genre === 'repondu' ? 'Papote : ' + prenom + ' a répondu au SOS de ' + nom + '.'
+      : genre === 'pris' ? 'Papote : ' + prenom + ' s’occupe du SOS de ' + nom + '.'
+        : 'Papote : ' + nom + ' a arrêté son SOS depuis sa tablette.';
+    var tels = [];
+    for (var i = 0; i < (s.liste || []).length; i++) {
+      var p = s.liste[i];
+      if (p && p.tel && !(qui && qui.uid && p.uid === qui.uid) && tels.indexOf(p.tel) < 0) tels.push(p.tel);
+    }
+    var parti = false;
+    // Pas de message de fin à des proches qui n'ont pas reçu le SMS d'alerte : ils ne sauraient pas de quoi on parle.
+    if (s.sms && tels.length) {
+      try { parti = android().sendSms(tels.join(','), texte) === true; } catch (e) { parti = false; }
+    }
+    noterAppel('SOS : fin dite à la famille (' + genre + (qui && qui.name ? ', ' + qui.name : '') + '), SMS ' + (parti ? 'parti vers ' + tels.length + ' numéro(s)' : 'non envoyé'));
+    sosSignaler(s.debut, genre, qui);
+    return true;
+  }
+
+  // Un appel du SOS est en ligne : s'il le reste 2 min 15, c'est une vraie personne, la famille le sait.
+  function sosArmerReponseSure() {
+    clearTimeout(sosReponseSure);
+    if (!gsm || !gsm.sos || !gsm.enLigne) return;
+    var appel = gsm;
+    sosReponseSure = setTimeout(function () {
+      if (gsm !== appel || !appel.enLigne) return;
+      sosDireFin('repondu', { uid: appel.uid, name: appel.name });
+    }, Math.max(0, SOS_REPONSE_SURE_MS - (Date.now() - appel.enLigneDepuis)));
+  }
+
+  // « Je m'en occupe » touché dans l'app (families/{fid}.sosPris = { uid, nom, le }) : les autres proches
+  // sont prévenus et la tablette n'appelle plus personne après l'appel en cours (jamais coupé ici).
+  function sosPrisEnCharge(pris) {
+    if (!pris || !pris.le) return;
+    var s = sosSuiviLu();
+    if (!s || s.dit || pris.le < s.debut - SOS_PRIS_AVANCE_MS) return; // rien en cours, déjà clos, ou un SOS d'avant
+    var qui = { uid: pris.uid || '', name: pris.nom || '' };
+    if (!sosDireFin('pris', qui)) return;
+    if (!sosEtat) return;
+    if (gsm && gsm.sos) { sosNoter({ pris: qui.name || 'Un proche' }); return; } // la chaîne s'arrête à la fin de cet appel
+    if (sosEtat.phase === 'attente-gsm') { sosFini(); return; }
+    if (sosEtat.phase === 'tel') sosNoter({ pris: qui.name || 'Un proche' });
+  }
+
   function smsSosRecent() {
     var t = 0;
     try { t = Number(localStorage.getItem(SOS_SMS_CLE)) || 0; } catch (e) { t = 0; }
@@ -2736,6 +2837,7 @@
     var appel = gsm;
     if (appel && appel.arrete) return; // double appui : un seul arrêt
     if (sosArreterInternet) { try { sosArreterInternet(); } catch (e) { } sosArreterInternet = null; }
+    sosDireFin('arrete', null);
     sosFini();
     noterAppel('SOS : arrêté par « Raccrocher », plus aucun proche appelé');
     if (appel) {
@@ -2818,6 +2920,7 @@
             connecte = true;
             arreter();
             sosFini();
+            sosDireFin('repondu', { uid: info.uid, name: info.name }); // décroché dans l'app : une vraie personne
             appelAbouti(info.uid, info.name);
             renderCall('connected', 'En ligne avec ' + (info.name || 'la famille'), 'Parlez normalement, la tablette vous entend.', info.uid || null, info.name, info.face);
           } else if (state === 'ended') {
@@ -2891,6 +2994,7 @@
       if (sosSmsParti) { try { localStorage.setItem(SOS_SMS_CLE, String(Date.now())); } catch (e) { } }
     }
     sosNoter({ phase: 'tel', liste: liste, index: -1, sms: sosSmsParti, attendreGsm: false, enLigneDepuis: 0 });
+    sosSuiviDemarrer(liste);
     renderSos('starting', 'SOS : on prévient la famille…', null, null);
     sosChaine(liste, 0)(false);
   }
@@ -2902,6 +3006,15 @@
         sosFini();
         renderCall('ended', 'Appel terminé', '');
         setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 4000);
+        return;
+      }
+      // Un proche a touché « Je m'en occupe » pendant l'appel d'avant : plus personne n'est appelé.
+      if (sosEtat && sosEtat.pris) {
+        var quiSen = sosEtat.pris;
+        sosFini();
+        noterAppel('SOS : ' + quiSen + ' s’en occupe, plus aucun proche appelé');
+        renderCall('ended', quiSen + ' s’occupe de vous', 'La famille est prévenue.');
+        setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 8000);
         return;
       }
       if (n >= liste.length) {
@@ -2942,6 +3055,7 @@
       gsm.enLigne = true;
       gsm.enLigneDepuis = e.enLigneDepuis || Date.now();
       if (!e.enLigneDepuis) sosNoter({ enLigneDepuis: gsm.enLigneDepuis });
+      sosArmerReponseSure();
     } else {
       renderSos('starting', 'SOS : on appelle ' + who + '…', gsm.uid, gsm.name);
       var connu = gsm.depart;
@@ -3568,6 +3682,7 @@
     sosOrdre = Array.isArray(payload.sosOrdre) ? payload.sosOrdre : null;
     setReglagesAppel(payload.reglagesAppel);
     setPeople(payload.people);
+    sosPrisEnCharge(payload.sosPris);
     prochesLus = true;
     showSosButton(); // SOS caché tant que la famille n'a aucun proche, montré dès le premier
     // Les photos de profil arrivent parfois après l'envoi affiché : on le met à jour.

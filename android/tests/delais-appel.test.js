@@ -235,7 +235,7 @@ test('SOS : « Raccrocher » pendant que ça sonne chez Paul : raccroché, plus 
     assert.deepStrictEqual(await b.page.evaluate(() => window.__internet), [], 'pas d’appel par internet non plus');
     assert.strictEqual(await raccroches(b), 1, 'aucun raccrochage de plus');
     assert.ok((await journal(b)).some((l) => /SOS : arrêté par « Raccrocher »/.test(l)));
-    assert.strictEqual(await b.page.evaluate(() => Object.keys(localStorage).filter((k) => /sos/i.test(k) && !/sms/i.test(k)).length), 0, 'rien gardé pour une reprise');
+    assert.strictEqual(await b.page.evaluate(() => Object.keys(localStorage).filter((k) => /sos/i.test(k) && !/sms|sosFin/i.test(k)).length), 0, 'rien gardé pour une reprise (papote.sosFin ne sert qu’au message de fin)');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

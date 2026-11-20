@@ -78,7 +78,7 @@ function imitation(etat) {
     // Heure d'un serveur (Horloge.java) : etat.ecartHeure en ms (serveur − tablette) ; absent = aucun serveur n'a répondu.
     ecartHeure: () => (window.__etat.ecartHeure === undefined ? '' : String(window.__etat.ecartHeure)),
     simBudget: () => JSON.stringify(window.__etat.forfait || { plafondMo: 1000, consoMo: 0, niveau: 0, sim: false, cycleDebut: '2026-10-01' }),
-    logError: note('logError'), logAppel: note('logAppel'), wifiDone: note('wifiDone'),
+    logError: note('logError'), logAppel: note('logAppel'), sosSignaler: note('sosSignaler'), wifiDone: note('wifiDone'),
     welcomeBack: note('welcomeBack'), welcomeSeen: note('welcomeSeen'),
     testSon: note('testSon'), getPairing: () => null, ring: note('ring'), inCall: note('inCall'),
     // Appels par la carte SIM (etat.telephone : la tablette sait téléphoner) ; phoneCall renvoie false avec etat.telephoneKo,
