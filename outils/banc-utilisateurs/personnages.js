@@ -129,4 +129,14 @@ const LOTS = {
   ],
 };
 
+// Grand tour (Tanguy, 20/11, 25 $) — étape 1 : chaque tâche de l'app par 5 proches différents (tournant), chaque
+// situation de la tablette par les 6 Mamies. Joué sur la version publiée.
+{
+  const proches = Object.keys(PROCHES);
+  const t1 = [];
+  Object.keys(TACHES_FAMILLE).forEach((tache, i) => { for (let k = 0; k < 5; k++) t1.push(p('famille', proches[(i * 3 + k) % proches.length], tache)); });
+  Object.keys(SITUATIONS).forEach((sit) => { for (const m of Object.keys(MAMIES)) t1.push(p('tablette', m, sit)); });
+  LOTS['tour-1'] = t1;
+}
+
 module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };
