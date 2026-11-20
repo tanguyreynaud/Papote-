@@ -107,6 +107,12 @@ const pause = (p, ms = 700) => p.waitForTimeout(ms);
 const toucher = (...sels) => async (p) => { for (const sel of sels) { await p.locator(sel).first().click(); await pause(p); } };
 const page = (nom) => `.tile[data-page="${nom}"]`;
 const onglet = (nom) => `.nav-item[data-tab="${nom}"]`;
+// Mon profil : Réglages dans la barre du bas, puis « Mon profil » (barre Accueil, Photos, Réglages, Tanguy 20/11) ;
+// ancienne app : l'onglet Profil (touché deux fois, sans effet de plus).
+const PROFIL = [
+  '#nav-reglages, .nav-item[data-tab="profile"]',
+  '#view-settings:not([hidden]) [data-reglages-choix="profil"], .nav-item[data-tab="profile"]',
+];
 // Cloche des notifications en haut de l'accueil (ou l'ancien onglet, selon la version de l'app).
 const cloche = '#btn-bell, .nav-item[data-tab="notifs"]';
 const modifier = (carte) => `#${carte} .setting-modify`;
@@ -140,7 +146,7 @@ const FACTURES = [
   { le: ilYa(33).__ms, numero: 'PAP-0002', montant: 2500, statut: 'payee', pdf: 'https://exemple.invalid/f2.pdf' },
   { le: ilYa(36).__ms, numero: 'PAP-0001', montant: 6000, statut: 'payee', pdf: 'https://exemple.invalid/f1.pdf' },
 ];
-const abonnementPage = toucher(onglet('profile'), '#btn-abo-page');
+const abonnementPage = toucher(...PROFIL, '#btn-abo-page');
 // Appel en cours dans l'app (appel.js n'ouvre pas de vraie connexion ici) : l'écran #call est mis dans l'état voulu,
 // comme l'app le ferait. etat : 'audio' | 'video' | 'sonne' | 'fin' ; texte : la ligne d'état.
 const ecranAppel = (etat, texte = '', extra = {}) => async (p) => {
@@ -467,26 +473,26 @@ const SCENES = [
     return d;
   }, faire: toucher('#btn-invite') },
 
-  { groupe: 'Profil', titre: 'Profil : abonnement actif', plein: true, donnees: () => connecte(), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : tout compris 25 € (offre unique)', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'pretee', finPeriode: ilYa(-12), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : résiliation demandée, « Garder mon abonnement »', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'pretee', finPeriode: ilYa(-12), resiliationLe: ilYa(-12), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : arrêt prévu, renvoyer la tablette dès maintenant', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'incluse', finPeriode: ilYa(-12), resiliationLe: ilYa(-12), arretPar: 'client', stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }, { fonctions: { finDeContrat: { retractation: null, restitution: null, retourAnticipe: true } } }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : abonnement arrêté par Papote (pas de « Garder »)', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'pretee', finPeriode: ilYa(-12), resiliationLe: ilYa(-12), arretPar: 'papote', stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : commandé, tablette pas encore partie', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', essaiJusqua: ilYa(-80), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }, { fonctions: { finDeContrat: { retractation: { jusqua: null, montant: 6000 } } } }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : commande offerte', plein: true, donnees: () => abo({ statut: 'offert' }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : formule d’origine, sans abonnement', plein: true, donnees: () => abo(null), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : paiement en retard', plein: true, donnees: () => abo({ statut: 'impaye', formule: 'sim', graceJusqua: ilYa(-6), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : en pause', plein: true, donnees: () => abo({ statut: 'suspendu', formule: 'sim', stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : résiliation programmée (garder l’abonnement)', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', resiliationLe: ilYa(-18), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : résilié, tablette à renvoyer', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(2), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-12).__ms } } } }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : résilié, QR code de retour Mondial Relay', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(2), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-12).__ms, qr: fauxQr() } } } }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : résilié, sans adresse : adresse demandée pour le QR code', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(2), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-12).__ms }, adresse: false } } }), faire: toucher(onglet('profile'), '#btn-renvoyer') },
-  { groupe: 'Profil', titre: 'Profil : annulé, remboursé à la réception', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(1), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-13).__ms, qr: fauxQr() }, remboursement: { statut: 'au-retour', montant: 6000 } } } }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : tablette bien reçue, remboursée', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(10), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'rendue' }, remboursement: { statut: 'fait', montant: 6000 } } } }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Profil : résilié, garder la tablette ? (reprendre)', donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(2), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-12).__ms } } } }), faire: toucher(onglet('profile'), '#btn-reprendre') },
-  { groupe: 'Profil', titre: 'Profil d’un proche', plein: true, donnees: () => connecte({ proprietaire: false }), faire: toucher(onglet('profile')) },
-  { groupe: 'Profil', titre: 'Modifier : mon numéro de téléphone', donnees: () => connecte(), faire: toucher(onglet('profile'), modifier('my-tel-card')) },
-  { groupe: 'Profil', titre: 'Modifier : mon prénom', donnees: () => connecte(), faire: toucher(onglet('profile'), modifier('my-name-card')) },
+  { groupe: 'Profil', titre: 'Profil : abonnement actif', plein: true, donnees: () => connecte(), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : tout compris 25 € (offre unique)', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'pretee', finPeriode: ilYa(-12), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : résiliation demandée, « Garder mon abonnement »', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'pretee', finPeriode: ilYa(-12), resiliationLe: ilYa(-12), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : arrêt prévu, renvoyer la tablette dès maintenant', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'incluse', finPeriode: ilYa(-12), resiliationLe: ilYa(-12), arretPar: 'client', stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }, { fonctions: { finDeContrat: { retractation: null, restitution: null, retourAnticipe: true } } }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : abonnement arrêté par Papote (pas de « Garder »)', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', tablette: 'pretee', finPeriode: ilYa(-12), resiliationLe: ilYa(-12), arretPar: 'papote', stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : commandé, tablette pas encore partie', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', essaiJusqua: ilYa(-80), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }, { fonctions: { finDeContrat: { retractation: { jusqua: null, montant: 6000 } } } }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : commande offerte', plein: true, donnees: () => abo({ statut: 'offert' }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : formule d’origine, sans abonnement', plein: true, donnees: () => abo(null), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : paiement en retard', plein: true, donnees: () => abo({ statut: 'impaye', formule: 'sim', graceJusqua: ilYa(-6), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : en pause', plein: true, donnees: () => abo({ statut: 'suspendu', formule: 'sim', stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : résiliation programmée (garder l’abonnement)', plein: true, donnees: () => abo({ statut: 'actif', formule: 'sim', resiliationLe: ilYa(-18), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : résilié, tablette à renvoyer', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(2), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-12).__ms } } } }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : résilié, QR code de retour Mondial Relay', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(2), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-12).__ms, qr: fauxQr() } } } }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : résilié, sans adresse : adresse demandée pour le QR code', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(2), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-12).__ms }, adresse: false } } }), faire: toucher(...PROFIL, '#btn-renvoyer') },
+  { groupe: 'Profil', titre: 'Profil : annulé, remboursé à la réception', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(1), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-13).__ms, qr: fauxQr() }, remboursement: { statut: 'au-retour', montant: 6000 } } } }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : tablette bien reçue, remboursée', plein: true, donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(10), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'rendue' }, remboursement: { statut: 'fait', montant: 6000 } } } }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Profil : résilié, garder la tablette ? (reprendre)', donnees: () => abo({ statut: 'resilie', formule: 'sim', finLe: ilYa(2), stripeCustomerId: 'cus_faux' }, { fonctions: { finDeContrat: { restitution: { statut: 'attendue', avant: ilYa(-12).__ms } } } }), faire: toucher(...PROFIL, '#btn-reprendre') },
+  { groupe: 'Profil', titre: 'Profil d’un proche', plein: true, donnees: () => connecte({ proprietaire: false }), faire: toucher(...PROFIL) },
+  { groupe: 'Profil', titre: 'Modifier : mon numéro de téléphone', donnees: () => connecte(), faire: toucher(...PROFIL, modifier('my-tel-card')) },
+  { groupe: 'Profil', titre: 'Modifier : mon prénom', donnees: () => connecte(), faire: toucher(...PROFIL, modifier('my-name-card')) },
   { groupe: 'Profil', titre: 'Abonnement et paiement : factures', plein: true, donnees: () => connecte({ fonctions: { facturesFamille: { factures: FACTURES } } }), faire: abonnementPage },
   { groupe: 'Profil', titre: 'Abonnement et paiement : facture à régler', plein: true, donnees: () => abo({ statut: 'impaye', formule: 'sim', graceJusqua: ilYa(-6), stripeCustomerId: 'cus_faux', stripeSubscriptionId: 'sub_faux' }, { fonctions: { facturesFamille: { factures: [{ le: ilYa(1).__ms, montant: 2500, statut: 'a-payer', page: 'https://exemple.invalid/payer' }, ...FACTURES] } } }), faire: abonnementPage },
   { groupe: 'Profil', titre: 'Abonnement et paiement : aucune facture', plein: true, donnees: () => connecte({ fonctions: { facturesFamille: { factures: [] } } }), faire: abonnementPage },
@@ -494,12 +500,12 @@ const SCENES = [
   { groupe: 'Profil', titre: 'Abonnement et paiement : annuler ma commande (14 jours)', plein: true, donnees: () => connecte({ fonctions: { facturesFamille: { factures: FACTURES.slice(2) }, finDeContrat: { retractation: { jusqua: ilYa(-9).__ms, montant: 6000 } } } }), faire: abonnementPage },
   { groupe: 'Profil', titre: 'Annuler ma commande ? (confirmation)', donnees: () => connecte({ fonctions: { facturesFamille: { factures: FACTURES.slice(2) }, finDeContrat: { retractation: { jusqua: ilYa(-9).__ms, montant: 6000 } } } }), faire: suite(abonnementPage, toucher('#btn-retracter')) },
   { groupe: 'Profil', titre: 'Résilier : avant de partir', donnees: () => connecte({ fonctions: { facturesFamille: { factures: FACTURES } } }), faire: suite(abonnementPage, toucher('#btn-resilier')) },
-  { groupe: 'Profil', titre: 'Quitter la famille ? (proche)', donnees: () => connecte({ proprietaire: false }), faire: toucher(onglet('profile'), '#btn-leave') },
-  { groupe: 'Profil', titre: 'Se déconnecter ?', donnees: () => connecte(), faire: async (p) => { await toucher(onglet('profile'))(p); await bouton('Se déconnecter')(p); } },
+  { groupe: 'Profil', titre: 'Quitter la famille ? (proche)', donnees: () => connecte({ proprietaire: false }), faire: toucher(...PROFIL, '#btn-leave') },
+  { groupe: 'Profil', titre: 'Se déconnecter ?', donnees: () => connecte(), faire: async (p) => { await toucher(...PROFIL)(p); await bouton('Se déconnecter')(p); } },
   // Depuis la barre du bas Accueil / Photos / Messages / Profil (27/10) : la cloche est en haut, le support dans le Profil.
   { groupe: 'Profil', titre: 'Notifications', plein: true, donnees: () => connecte(), faire: toucher(cloche) },
   { groupe: 'Profil', titre: 'Notifications : rien d’autre que les arrivées', plein: true, donnees: () => connecte({ vide: true }), faire: toucher(cloche) },
-  { groupe: 'Profil', titre: 'Support', plein: true, donnees: () => connecte(), faire: toucher(onglet('profile'), '.aide-card, ' + onglet('support')) },
+  { groupe: 'Profil', titre: 'Support', plein: true, donnees: () => connecte(), faire: toucher(...PROFIL, '#view-profile .aide-card') },
 ];
 
 const SDK = fs.readFileSync(path.join(__dirname, 'faux-firebase.js'), 'utf8');
