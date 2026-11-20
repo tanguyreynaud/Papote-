@@ -118,14 +118,21 @@
 
       <!-- ---------- Accueil ---------- -->
       <section data-panneau="accueil">
-        <div class="ligne-chiffres">
-          <div class="stats compact" id="kpi-mois"></div>
+        <p id="sous-accueil" class="sous-titre"></p>
+        <div class="deux-colonnes">
+          <div>
+            <h2 class="titre-bloc">À faire</h2>
+            <div class="filtres no-print" id="filtres-taches" role="group" aria-label="Montrer" hidden></div>
+            <ul id="a-faire" class="a-faire liste-courte"></ul>
+          </div>
+          <div>
+            <div class="card">
+              <div class="carte-tete"><h2>Ce mois-ci</h2><a href="#compta/bilan">Bilan ›</a></div>
+              <div class="tuiles" id="kpi-mois"></div>
+            </div>
+            <div class="card" id="alertes-accueil" hidden></div>
+          </div>
         </div>
-        <div class="card">
-          <h2>À faire</h2>
-          <ul id="a-faire" class="a-faire"></ul>
-        </div>
-        <div class="card" id="alertes-accueil" hidden></div>
       </section>
 
       <!-- ---------- Commandes ---------- -->

@@ -244,6 +244,7 @@ const memoire = {
 // Menus « + Ajouter » et « ⋯ » écrits dans admin.html : montés une fois, leurs boutons gardent leur id.
 menusDansLaPage();
 
+let prenomAdmin = ''; // prénom du compte connecté, pour « Bonjour Tanguy » sur l'accueil
 const TITRES = {
   accueil: 'Accueil',
   commandes: 'Clients',
@@ -349,7 +350,7 @@ function afficherPage() {
     nav.querySelectorAll('a').forEach((a) => a.classList.toggle('actif', a.dataset.page === page && (!a.dataset.versOnglet || a.dataset.versOnglet === ongletVu)));
   });
   const titre = page === 'clients' && onglet === 'familles' && fiche ? 'Famille' : menu === 'statistiques' ? 'Site' : TITRES[page];
-  $('titre-page').textContent = titre;
+  $('titre-page').textContent = page === 'accueil' ? `Bonjour${prenomAdmin ? ` ${prenomAdmin}` : ''}` : titre;
   document.title = `Papote · ${titre}`;
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
@@ -412,6 +413,7 @@ onAuthStateChanged(getAuth(getApp('admin')), async (user) => {
   // Compte sans le badge administrateur : rien n'est chargé (admin.js le déconnecte et l'explique).
   if (user && (await user.getIdTokenResult().catch(() => null))?.claims?.admin !== true) user = null;
   connecte = !!user;
+  prenomAdmin = ((user && user.displayName) || '').trim().split(/\s+/)[0] || '';
   if (!user) { fermerChargement(); return; }
   // La page apparaît tout de suite (menu, titres, cartes fantômes) ; les chiffres arrivent dedans,
   // au lieu d'un logo qui attend que toutes les données soient là (relecture du 28/10).
@@ -718,6 +720,9 @@ function badgesInstallation(t) {
 
 // ---------- Accueil ----------
 
+let filtreTaches = null; // pastille choisie au-dessus de « À faire » (null : pas encore choisie)
+let tachesToutes = false; // « Voir les autres » touché
+
 function afficherAccueil() {
   if (!donnees) return;
   const cmd = donnees.commandes;
@@ -885,26 +890,46 @@ function afficherAccueil() {
     }
   };
   taches = taches.filter((t) => !masquees.has(cleTache(t)));
-  // Rangé par sujet ; chaque ligne : un titre court, le détail en dessous, une pastille si c'est urgent.
-  const groupe = (lien) => (/^#(commande|client)/.test(lien) ? 'Commandes et clients'
+  // Une seule liste courte : l'urgent d'abord, le reste à un toucher (pastilles « Tout », « Clients », « Matériel »…).
+  // Chaque ligne : un titre court, le détail en dessous, un point rouge si c'est urgent, sa rubrique à droite.
+  const groupe = (lien) => (/^#(commande|client)/.test(lien) ? 'Clients'
     : /^#(tablette|stock|sim)/.test(lien) ? 'Matériel' : /^#(depense|compta)/.test(lien) ? 'Comptabilité' : 'Fonctionnement');
-  const groupes = new Map(['Commandes et clients', 'Matériel', 'Comptabilité', 'Fonctionnement'].map((g) => [g, []]));
-  for (const tache of taches) {
+  const urgentes = taches.filter((t) => t[3] === 'ko');
+  const parGroupe = (g) => taches.filter((t) => groupe(t[2]) === g);
+  // Liste déjà courte (8 lignes au plus) : tout est montré, pas besoin de trier.
+  const COURT = 8;
+  if (filtreTaches === null || (filtreTaches !== 'tout' && filtreTaches !== 'urgent' && !parGroupe(filtreTaches).length)) filtreTaches = urgentes.length && taches.length > COURT ? 'urgent' : 'tout';
+  if (filtreTaches === 'urgent' && !urgentes.length) filtreTaches = 'tout';
+  const montrees = filtreTaches === 'urgent' ? urgentes : filtreTaches === 'tout' ? [...urgentes, ...taches.filter((t) => t[3] !== 'ko')] : parGroupe(filtreTaches);
+  $('filtres-taches').hidden = taches.length <= COURT;
+  filtresPastilles($('filtres-taches'), [
+    { valeur: 'tout', libelle: 'Tout', n: taches.length },
+    { valeur: 'urgent', libelle: 'Urgent', n: urgentes.length },
+    ...['Clients', 'Matériel', 'Comptabilité', 'Fonctionnement'].map((g) => ({ valeur: g, libelle: g, n: parGroupe(g).length })),
+  ], filtreTaches, (v) => { filtreTaches = v; tachesToutes = false; afficherAccueil(); });
+  const ligneTache = (tache) => {
     const [, texte, lien, classe] = tache;
     const i = texte.indexOf(' : ');
     const [titre, detail] = i > 0 ? [texte.slice(0, i), texte.slice(i + 3)] : [texte, null];
-    groupes.get(groupe(lien)).push(h('li', { class: 'ligne-tache' }, h('a', { href: lien, class: classe === 'ko' ? 'urgent' : '' },
+    return h('li', { class: 'ligne-tache' }, h('a', { href: lien, class: classe === 'ko' ? 'urgent' : '' },
       h('span', { class: 'pastille-tache', 'aria-hidden': 'true' }),
       h('span', { class: 'tache' }, h('span', { class: 'tache-titre' }, titre.charAt(0).toUpperCase() + titre.slice(1)),
         detail ? h('span', { class: 'tache-detail' }, detail.charAt(0).toUpperCase() + detail.slice(1)) : null),
-      h('span', { class: 'fleche', 'aria-hidden': 'true' }, '›')),
-    menuPoints([tache[4], { libelle: 'Masquer 7 jours', faire: () => masquer(cleTache(tache), 7) }], 'Actions pour cette ligne')));
-  }
-  $('a-faire').replaceChildren(...(taches.length
-    ? [...groupes].filter(([, l]) => l.length).map(([g, l]) => h('li', { class: 'groupe-taches' }, h('h3', {}, g), h('ul', {}, l)))
-    : [h('li', { class: 'muted' }, 'Rien à faire pour le moment.')]),
-  ...(nMasquees ? [h('li', { class: 'muted small masquees' }, `${pluriel(nMasquees, 'ligne')} masquée${nMasquees > 1 ? 's' : ''} pour 7 jours · `,
-    h('button', { type: 'button', class: 'link', onclick: () => masquer(null, 0) }, 'Tout réafficher'))] : []));
+      h('span', { class: 'badge rubrique', 'aria-hidden': 'true' }, groupe(lien))),
+    menuPoints([tache[4], { libelle: 'Masquer 7 jours', faire: () => masquer(cleTache(tache), 7) }], 'Actions pour cette ligne'),
+    h('span', { class: 'fleche', 'aria-hidden': 'true' }, '›'));
+  };
+  const vues = tachesToutes ? montrees : montrees.slice(0, COURT);
+  const reste = montrees.length - vues.length;
+  $('a-faire').replaceChildren(...(taches.length ? vues.map(ligneTache) : [h('li', { class: 'vide' }, 'Rien à faire pour le moment.')]),
+    reste > 0 ? h('li', { class: 'voir-plus' }, h('button', { type: 'button', class: 'link', onclick: () => { tachesToutes = true; afficherAccueil(); } },
+      `Voir ${reste > 1 ? `les ${reste} autres` : 'la dernière'}`)) : null,
+    ...(nMasquees ? [h('li', { class: 'muted small masquees' }, `${pluriel(nMasquees, 'ligne')} masquée${nMasquees > 1 ? 's' : ''} pour 7 jours · `,
+      h('button', { type: 'button', class: 'link', onclick: () => masquer(null, 0) }, 'Tout réafficher'))] : []));
+  // Sous le titre : la date du jour et ce qui presse.
+  const ceJour = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  if (pageCourante() === 'accueil' && prenomAdmin) $('titre-page').textContent = `Bonjour ${prenomAdmin}`;
+  $('sous-accueil').textContent = `${ceJour.charAt(0).toUpperCase()}${ceJour.slice(1)} · ${urgentes.length ? `${pluriel(urgentes.length, 'chose')} urgente${urgentes.length > 1 ? 's' : ''}` : taches.length ? `${pluriel(taches.length, 'chose')} à faire` : 'rien à faire'}`;
 
   const pastille = (id, n) => {
     $(id).hidden = !n;
@@ -2566,14 +2591,15 @@ function blocAlertes(zone, liste, { titre, avecTablette }) {
         ...morceaux.flatMap((m, i) => [i ? ' · ' : ' ', m]));
     }));
   };
-  // Une pastille par sorte (« Tablette débranchée 1 ») : touchée, elle déplie la liste datée en dessous.
-  const chiffre = (genre, n, texte) => h('button', { type: 'button', 'data-genre': genre, 'aria-pressed': 'false', onclick: () => montrer(genre) },
-    texte === 'en tout' ? 'En tout' : String(texte).replace(/^./, (x) => x.toUpperCase()), h('span', { class: 'n' }, String(n)));
+  // Une ligne par sorte (« Tablette débranchée · 1 ») : touchée, elle déplie la liste datée en dessous.
+  const chiffre = (genre, n, texte) => h('button', { type: 'button', class: 'ligne-kv', 'data-genre': genre, 'aria-pressed': 'false', onclick: () => montrer(genre) },
+    h('span', {}, texte === 'en tout' ? 'En tout' : String(texte).replace(/^./, (x) => x.toUpperCase())), h('span', { class: 'n' }, String(n)));
   zone.replaceChildren(
-    h('h2', {}, `${titre} (${jours} derniers jours)`),
+    h('div', { class: 'carte-tete' }, h('h2', {}, titre), h('span', { class: 'muted small' }, `${jours} jours`)),
     liste.length
-      ? h('div', { class: 'filtres', role: 'group' }, chiffre('*', liste.length, 'en tout'),
-        ...[...parGenre.entries()].sort((x, y) => y[1].length - x[1].length).map(([g, l]) => chiffre(g, l.length, genres[g] || g)))
+      ? h('div', { class: 'lignes-kv', role: 'group' },
+        ...[...parGenre.entries()].sort((x, y) => y[1].length - x[1].length).map(([g, l]) => chiffre(g, l.length, genres[g] || g)),
+        chiffre('*', liste.length, 'en tout'))
       : h('p', { class: 'muted small' }, 'Aucune alerte.'),
     detail,
   );

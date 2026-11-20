@@ -312,3 +312,108 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 .admin-body #dt-releves .stats .stat > p { margin: 2px 0 0; }
 /* Pastilles dans une carte : elles passent à la ligne au lieu de sortir de l'écran. */
 .admin-body .card .filtres { flex-wrap: wrap; overflow: visible; }
+
+/* =====================================================================================================
+   Style « Fable » (maquettes du 20/11 midi, validées par Tanguy le 20/11 au soir : « c'est tellement mieux »).
+   Polices du site (Bricolage Grotesque pour les titres, Atkinson pour le texte), fond crème, cartes à bord fin
+   sans ombre, pastilles douces, une seule touche d'indigo par page. Tout ce qui suit s'applique à toute l'admin.
+   ===================================================================================================== */
+
+@font-face { font-family: "Bricolage Grotesque"; src: url(../polices/bricolage.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(../polices/atkinson-400.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(../polices/atkinson-700.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+
+.admin-body {
+  --line: #ece5d9; --muted: #6b6577; --rayon: 14px; --rayon-petit: 10px; --chevron: #b9b2c3;
+  font: 15px/1.4 var(--body);
+}
+.admin-body button, .admin-body input, .admin-body select, .admin-body textarea { font-family: var(--body); }
+.admin-body h1, .admin-body h2, .admin-body h3 { font-family: var(--display); letter-spacing: 0; }
+
+/* ---------- Coquille : menu fin à gauche, sans icônes ---------- */
+.admin-body .shell { grid-template-columns: 220px minmax(0, 1fr); background: linear-gradient(to right, var(--surface) 219px, var(--line) 219px, var(--line) 220px, var(--bg) 220px); }
+.admin-body .nav { padding: 18px 12px; gap: 0; }
+.admin-body .nav-marque { padding: 0 6px 18px; }
+.admin-body .nav-marque .admin-logo { width: 30px; height: 30px; }
+.admin-body .nav-marque strong { font: 700 20px var(--display); }
+.admin-body .nav nav a { gap: 10px; padding: 9px 10px; border-radius: 9px; font-size: 14px; font-weight: 700; color: var(--muted); }
+.admin-body .nav nav a svg { display: none; }
+.admin-body .nav nav a:hover { background: var(--bg); color: var(--text); }
+.admin-body .nav nav a.actif { background: var(--indigo-fond); color: var(--accent); }
+.admin-body .nav nav a.nav-reglages { margin-top: 21px; position: relative; }
+.admin-body .nav nav a.nav-reglages::before { content: ''; position: absolute; left: 6px; right: 6px; top: -11px; height: 1px; background: var(--line); }
+.admin-body .pastille { min-width: 0; padding: 1px 7px; font-size: 11px; font-weight: 700; }
+.admin-body .nav-pied { padding: 0 10px; font-size: 12px; }
+.admin-body .nav-pied .link { font-size: 12px; font-weight: 700; color: var(--text); }
+.admin-body .contenu { padding: 22px 30px 48px; max-width: 1130px; }
+.admin-body .contenu-tete { margin-bottom: 10px; gap: 8px; }
+.admin-body .contenu-tete h1 { font: 700 24px var(--display); }
+.admin-body .recherche input { height: 36px; min-height: 0; width: 260px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; box-shadow: none; margin: 0; }
+@media (max-width: 860px) {
+  .admin-body .shell { background: var(--bg); }
+  .admin-body .nav { padding: calc(8px + env(safe-area-inset-top)) 16px 8px; }
+  .admin-body .nav-marque { padding: 0; }
+  .admin-body .nav-menu { width: 36px; height: 36px; border-radius: 10px; }
+  .admin-body .nav-menu svg { width: 18px; height: 18px; }
+  .admin-body .nav.ouvert nav a.nav-reglages { margin-top: 13px; }
+  .admin-body .nav.ouvert nav a.nav-reglages::before { top: -7px; }
+  .admin-body .contenu { padding: 14px 16px 40px; }
+  .admin-body .contenu-tete h1 { font-size: 24px; flex-basis: 100%; }
+  .admin-body .recherche, .admin-body .recherche input { width: 100%; }
+}
+
+/* ---------- Cartes, titres de bloc, tuiles de chiffres ---------- */
+.admin-body .card { border-radius: 14px; padding: 14px; box-shadow: none; border: 1px solid var(--line); margin-bottom: 12px; }
+.admin-body .card h2, .admin-body h2.titre-bloc { font: 700 17px var(--display); margin: 0 0 8px; }
+.admin-body .sous-titre { color: var(--muted); font-size: 14px; margin: -8px 0 16px; }
+.carte-tete { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.admin-body .carte-tete h2 { flex: 1; margin: 0; }
+.admin-body .carte-tete a, .admin-body .carte-tete button.link { color: var(--accent); font-weight: 700; font-size: 13px; text-decoration: none; }
+.deux-colonnes { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
+.deux-colonnes.egales { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.deux-colonnes > div { min-width: 0; }
+@media (max-width: 1000px) { .deux-colonnes, .deux-colonnes.egales { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+/* Tuiles : un chiffre en gras, son nom dessous, sur fond crème (« il y a 14 min · Dernier signal »). */
+.admin-body .tuiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; }
+.admin-body .tuiles.quatre { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 700px) { .admin-body .tuiles.quatre { grid-template-columns: 1fr 1fr; } }
+.admin-body .tuiles .stat { background: var(--bg); border: 0; border-radius: 10px; padding: 10px; box-shadow: none; min-width: 0; }
+.admin-body .tuiles .stat > span { display: block; font: 700 18px/1.25 var(--display); overflow-wrap: anywhere; }
+.admin-body .tuiles .stat > span.neg { color: var(--danger); }
+.admin-body .tuiles .stat > p { margin: 0; font-size: 12px; color: var(--muted); }
+.admin-body .tuiles .stat > small { display: block; font-size: 12px; color: var(--muted); }
+.admin-body .tuiles .stat.onglet { cursor: pointer; }
+.admin-body .tuiles .stat.onglet:hover { background: #f6f0e4; }
+
+/* ---------- Accueil : « À faire » en liste courte ---------- */
+.admin-body .a-faire.liste-courte > li.ligne-tache { display: flex; align-items: center; gap: 4px; padding-right: 12px; border-bottom: 0; }
+.admin-body .a-faire li.ligne-tache > a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 11px 6px 11px 14px; margin: 0; border-radius: 0; }
+.admin-body .a-faire li.ligne-tache:hover { background: var(--bg); }
+.admin-body .a-faire a:hover { background: none; }
+.admin-body .a-faire .pastille-tache { background: #d9d2c5; }
+.admin-body .a-faire a.urgent .pastille-tache { background: var(--danger); }
+.admin-body .a-faire .tache { gap: 0; }
+.admin-body .a-faire .tache-titre { font-weight: 700; }
+.admin-body .a-faire .tache-detail { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-body .a-faire .fleche { color: var(--chevron); font-size: 20px; }
+.admin-body .a-faire .menu-points-bouton { border: 0; background: none; color: var(--chevron); width: 30px; height: 30px; min-height: 30px; }
+.admin-body .a-faire .menu-points-bouton:hover { color: var(--text); background: var(--line); }
+.admin-body .a-faire li.voir-plus { text-align: center; }
+.admin-body .a-faire li.voir-plus button { width: 100%; padding: 11px; font-weight: 700; }
+.admin-body .a-faire li.masquees, .admin-body .a-faire li.vide { padding: 11px 14px; }
+@media (max-width: 700px) { .admin-body .a-faire .badge.rubrique { display: none; } .admin-body .a-faire .tache-detail { white-space: normal; } }
+.admin-body .a-faire .tache-detail, .admin-body .a-faire li.masquees { font-weight: 400; }
+.admin-body .contenu-tete .recherche { margin-left: auto; }
+@media (max-width: 860px) { .admin-body .sous-titre { margin: 0 0 14px; } .admin-body .contenu-tete .recherche { order: 3; } }
+/* Lignes « libellé … valeur » qu'on peut toucher (alertes envoyées, par sorte). */
+.lignes-kv { display: flex; flex-direction: column; }
+.admin-body .contenu button.ligne-kv, .admin-body button.ligne-kv {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%; min-height: 0; padding: 8px 0; border: 0; border-top: 1px solid var(--line);
+  border-radius: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 400; color: var(--muted); text-align: left;
+}
+.admin-body .lignes-kv button.ligne-kv:first-child { border-top: 0; }
+.admin-body button.ligne-kv .n { color: var(--text); font-weight: 700; }
+.admin-body button.ligne-kv:hover span:first-child, .admin-body button.ligne-kv.actif span:first-child { color: var(--accent); }
+.admin-body button.ligne-kv[data-genre="*"] { font-weight: 700; color: var(--text); }
+.admin-body .alertes-liste { margin: 8px 0 0; padding: 10px 12px; list-style: none; background: var(--bg); border-radius: 10px; }
+.admin-body .alertes-liste li { padding: 3px 0; }
