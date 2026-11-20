@@ -1012,6 +1012,7 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
   animation: rise .18s ease-out;
 }
 .dialog p { margin: 0 0 18px; font-size: 17px; line-height: 1.45; }
+.dialog-etapes p { white-space: pre-line; }
 .dialog { position: relative; }
 /* Colonnes égales : les boutons gardent la même taille même si leurs marges intérieures diffèrent. */
 .dialog-buttons { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
