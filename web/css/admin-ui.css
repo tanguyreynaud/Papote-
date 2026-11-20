@@ -1,0 +1,806 @@
+/* Allure de l'administration (refonte du 20/11, validée par Tanguy) : une page = une liste courte, on touche une
+   ligne et sa fiche s'ouvre, un seul bouton plein par page, le reste dans « ⋯ » ou « Actions ».
+   Chargée en dernier : elle remplace, pour l'admin seulement, les gros boutons de l'app famille (famille.css). */
+
+.admin-body {
+  --rayon: 12px;
+  --rayon-petit: 9px;
+  --ombre-douce: 0 1px 2px rgba(36, 33, 47, .04);
+  --orange: #b45309;
+  --orange-fond: #fdf3e1;
+  --vert-fond: #e8f5ec;
+  --rouge-fond: #fdecec;
+  --indigo-fond: #eef0ff;
+  --neutre-fond: #f3efe8;
+  font-size: 15px;
+}
+
+/* ---------- Boutons : taille de gestion (36 px), pas de pavés ---------- */
+
+.admin-body .contenu button:not(.menu-points-item):not(.piece):not(.link):not(.retour):not(.fermer):not(.onglets button),
+.admin-body .fenetre button:not(.fermer):not(.link):not(.piece),
+.admin-body .dialogue-papote button {
+  min-height: 36px; padding: 7px 14px; border-radius: var(--rayon-petit); font-size: 14px; line-height: 1.25; box-shadow: none;
+}
+.admin-body .primary { min-height: 36px; }
+.admin-body .secondary { background: var(--surface); border: 1px solid var(--line); color: var(--text); justify-content: center; }
+.admin-body .secondary:hover { border-color: #d6ccbb; background: var(--bg); }
+.admin-body .primary:hover { filter: brightness(1.06); }
+.admin-body .actions > button.primary, .admin-body .actions > button.secondary { min-height: 36px; padding: 7px 14px; font-size: 14px; }
+.admin-body .wide { width: auto; }
+.admin-body .contenu .wide { width: 100%; }
+.admin-body button.danger { background: var(--surface); }
+.admin-body .link { min-height: 0; padding: 4px 0; font-size: 14px; }
+
+/* Lien « Retour » : discret, en haut à gauche. */
+.admin-body a.retour, .admin-body button.retour {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 2px 0; border: 0; background: none; box-shadow: none;
+  color: var(--accent); font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.admin-body a.retour::before, .admin-body button.retour::before { content: '‹'; font-size: 20px; line-height: 1; }
+
+/* ---------- Titres, cartes, chiffres ---------- */
+
+.admin-body .contenu-tete { margin-bottom: 12px; }
+.admin-body .contenu-tete h1 { font-size: 26px; font-weight: 700; }
+.admin-body .card {
+  border-radius: var(--rayon); padding: 16px; box-shadow: var(--ombre-douce); border: 1px solid var(--line); margin-bottom: 14px;
+}
+.admin-body .card h2 { font-size: 17px; margin: 0 0 8px; }
+.admin-body .card h3 { font-size: 15px; }
+.admin-body .stats { gap: 10px; margin-bottom: 14px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.admin-body .stat { border-radius: var(--rayon); padding: 12px 14px; box-shadow: none; border: 1px solid var(--line); }
+.admin-body .stat span { font-size: 22px; font-weight: 700; }
+.admin-body .stat p { font-size: 13px; }
+.admin-body .stat small { font-size: 12px; }
+.admin-body .stat.onglet.actif { border-color: var(--accent); background: var(--indigo-fond); }
+.admin-body .ligne-chiffres { border-radius: var(--rayon); box-shadow: var(--ombre-douce); border: 1px solid var(--line); }
+.admin-body p.small, .admin-body .muted.small { font-size: 13px; }
+
+/* ---------- Onglets et filtres : des pastilles ---------- */
+
+.admin-body .onglets { gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--line); border-radius: 0; padding-bottom: 0; }
+.admin-body .onglets button {
+  min-height: 0; padding: 8px 12px 10px; border-radius: 0; font-size: 14px; color: var(--muted); background: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.admin-body .onglets button.actif { color: var(--accent); background: none; border-bottom-color: var(--accent); }
+
+.filtres { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+.filtres button {
+  min-height: 0 !important; height: 32px; padding: 0 12px !important; border-radius: 999px !important;
+  border: 1px solid var(--line) !important; background: var(--surface); color: var(--muted); font-size: 13px !important; font-weight: 600;
+}
+.filtres button .n { margin-left: 6px; font-weight: 400; opacity: .75; }
+.filtres button.actif { background: var(--text); border-color: var(--text) !important; color: #fff; }
+.filtres button[hidden] { display: none; }
+@media (max-width: 560px) {
+  .filtres { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -16px; padding-right: 16px; }
+  .filtres button { flex: none; }
+}
+
+/* En-tête d'une liste : titre ou filtres à gauche, « + Ajouter » et « ⋯ » à droite. */
+.admin-body .tete { gap: 8px; margin-bottom: 10px; }
+.barre-liste { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+.barre-liste .espace { flex: 1; }
+.barre-liste select { width: auto; margin: 0; padding: 7px 12px; font-size: 14px; }
+
+/* ---------- Menus « ⋯ », « + Ajouter », « Actions » ---------- */
+
+.admin-body .menu-points-bouton {
+  width: 36px; height: 36px; min-height: 36px; border-radius: var(--rayon-petit); font-size: 18px; letter-spacing: 1px;
+}
+.admin-body .menu-points-bouton.menu-points-nomme {
+  width: auto; padding: 0 14px; font-size: 14px; font-weight: 700; letter-spacing: 0; gap: 6px;
+}
+.admin-body .menu-points-bouton.menu-points-nomme::after { content: '▾'; font-size: 11px; opacity: .7; }
+.admin-body .menu-points-bouton.principal { background: var(--accent); border-color: var(--accent); color: #fff; }
+.admin-body .menu-points-bouton.principal:hover { filter: brightness(1.06); color: #fff; }
+.admin-body .menu-points-liste { min-width: 240px; border-radius: var(--rayon); padding: 6px; }
+.admin-body .menu-points-item {
+  min-height: 0; padding: 9px 10px; border-radius: 8px; font-size: 14px; font-weight: 600; display: block; width: 100%;
+  background: none; border: 0; text-align: left; color: var(--text); box-shadow: none;
+}
+.admin-body .menu-points-item small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 1px; }
+.admin-body .menu-points-item.danger, .admin-body .menu-points-item.danger small { color: var(--danger); }
+.admin-body .menu-points-item[hidden] { display: none; }
+.admin-body .menu-points-item:disabled { opacity: .45; }
+.menu-points-section {
+  margin: 6px 4px 2px; padding: 8px 6px 2px; border-top: 1px solid var(--line);
+  font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em;
+}
+.menu-points-liste > .menu-points-section:first-child { border-top: 0; margin-top: 0; padding-top: 4px; }
+
+/* ---------- Pastilles d'état ---------- */
+
+.admin-body .badge { border: 0; padding: 2px 9px; font-size: 12px; font-weight: 700; background: var(--neutre-fond); color: var(--muted); }
+.admin-body .badge.ok { background: var(--vert-fond); color: var(--ok); }
+.admin-body .badge.ko { background: var(--rouge-fond); color: var(--danger); }
+.admin-body .badge.info { background: var(--indigo-fond); color: var(--accent); }
+.admin-body .badge.warn { background: var(--orange-fond); color: var(--orange); }
+
+/* ---------- Tableaux : lignes cliquables, une ligne par élément ---------- */
+
+.admin-body .table { margin: 0; border: 1px solid var(--line); border-radius: var(--rayon); background: var(--surface); }
+.admin-body .card .table { margin: 4px -1px 0; }
+.admin-body .table table { font-size: 14px; }
+.admin-body .table th { font-size: 12px; padding: 9px 12px; background: #fbf8f2; }
+.admin-body .table td { padding: 10px 12px; vertical-align: middle; }
+.admin-body .table tr:last-child td { border-bottom: 0; }
+.admin-body .table td small, .admin-body .table td .detail { display: block; color: var(--muted); font-size: 12px; }
+.admin-body .table td.chev { width: 20px; color: #b9b2c3; text-align: right; font-size: 18px; padding-left: 0; }
+.admin-body .table td.court { white-space: nowrap; }
+
+/* Liste courte (téléphone et ordinateur) : une ligne = un nom, un détail, une pastille, une flèche. */
+.liste-courte { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rayon); overflow: hidden; }
+.liste-courte > li { border-top: 1px solid var(--line); }
+.liste-courte > li:first-child { border-top: 0; }
+.liste-courte .ligne {
+  display: flex; align-items: center; gap: 12px; padding: 11px 14px; color: var(--text); text-decoration: none; cursor: pointer;
+}
+.liste-courte .ligne:hover { background: var(--bg); }
+.liste-courte .ligne:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.liste-courte .ligne-texte { flex: 1; min-width: 0; }
+.liste-courte .ligne-texte b { font-weight: 700; }
+.liste-courte .ligne-texte small { display: block; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.liste-courte .ligne::after { content: '›'; color: #b9b2c3; font-size: 20px; line-height: 1; }
+.liste-courte .vide { padding: 18px; color: var(--muted); text-align: center; }
+
+/* ---------- Fiches : un résumé en haut, puis des blocs simples ---------- */
+
+.tete-fiche { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
+.admin-body .tete-fiche { flex-wrap: wrap; }
+.admin-body .tete-fiche h2 { flex: 0 1 auto; min-width: 0; margin: 0; font-size: 20px; font-family: var(--display); }
+.admin-body .tete-fiche .tete-actions { margin-left: auto; }
+.admin-body .tete-fiche .tete-actions > div:empty { display: none; }
+.tete-fiche .espace { flex: 1; }
+.admin-body .tete-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Lignes « libellé : valeur » des fiches. */
+.admin-body .fiche { font-size: 14px; gap: 0 16px; }
+.admin-body .fiche dt, .admin-body .fiche dd { padding: 7px 0; border-top: 1px solid var(--line); }
+.admin-body .fiche dt:first-of-type, .admin-body .fiche dd:first-of-type { border-top: 0; }
+/* Téléphone : le libellé à gauche, la valeur à droite, sur une ligne (au lieu de l'un sous l'autre). */
+@media (max-width: 640px) {
+  .admin-body dl.fiche, .admin-body #famille-fiche .family dl.fiche { grid-template-columns: minmax(5.5em, 34%) minmax(0, 1fr); gap: 0 10px; }
+  .admin-body .fiche dt, .admin-body .fiche dd { border-top: 1px solid var(--line); padding: 8px 0; margin: 0; }
+  .admin-body .fiche dt:first-of-type, .admin-body .fiche dd:first-of-type { border-top: 0; }
+}
+
+/* Repli des explications longues. */
+.admin-body details.aide-repliee > summary { color: var(--accent); font-weight: 600; font-size: 14px; list-style: none; margin-top: 10px; }
+.admin-body details.aide-repliee > summary::-webkit-details-marker { display: none; }
+.admin-body details.aide-repliee > p { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+
+/* ---------- Téléphone ---------- */
+
+@media (max-width: 860px) {
+  .admin-body .contenu-tete h1 { font-size: 22px; }
+  .admin-body .card { padding: 14px; }
+  .admin-body .nav nav a { font-size: 15px; padding: 10px 12px; }
+}
+
+/* ---------- Liste courte en tableau (.table.courte) : colonnes sur ordinateur, une ligne simple sur téléphone ---------- */
+
+.admin-body .table.courte td:first-child strong { font-weight: 700; }
+.admin-body .table.courte td:first-child small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+.admin-body .table.courte td:first-child .tel { display: none; }
+/* Flèche des lignes cliquables : discrète. */
+.admin-body .table tbody tr[tabindex] td:last-child::after { color: #b9b2c3; font-weight: 400; }
+.texte-ko { color: var(--danger); font-weight: 600; }
+.admin-body .table.courte td.chev { color: #b9b2c3; font-size: 18px; text-align: right; width: 24px; }
+.admin-body .table.courte th.chev { width: 24px; }
+@media (max-width: 640px) {
+  .admin-body .table.courte { overflow: hidden; }
+  .admin-body .table.courte table, .admin-body .table.courte tbody { display: block; }
+  .admin-body .table.courte thead { display: none; }
+  .admin-body [data-panneau] .table.courte tbody tr {
+    display: flex; align-items: center; gap: 10px; padding: 11px 14px; margin: 0; border: 0; border-top: 1px solid var(--line);
+    border-radius: 0; background: none; position: static;
+  }
+  .admin-body [data-panneau] .table.courte tbody tr:first-child { border-top: 0; }
+  .admin-body [data-panneau] .table.courte tbody tr[tabindex]::after { content: '›'; position: static; color: #b9b2c3; font-size: 20px; font-weight: 400; }
+  .admin-body [data-panneau] .table.courte tbody td {
+    display: block; padding: 0; border: 0; margin: 0; text-align: left; font-size: 14px;
+  }
+  .admin-body [data-panneau] .table.courte tbody td::before { content: none; }
+  .admin-body [data-panneau] .table.courte tbody td:first-child { flex: 1; min-width: 45%; font-size: 15px; padding: 0; border: 0; margin: 0; }
+  /* La pastille d'état passe sur deux lignes plutôt que d'écraser le nom (petit téléphone). */
+  .admin-body [data-panneau] .table.courte tbody td:not(:first-child) .badge { white-space: normal; text-align: center; }
+  .admin-body [data-panneau] .table.courte tbody td:first-child small { font-size: 13px; overflow-wrap: anywhere; }
+  .admin-body [data-panneau] .table.courte tbody td.pc { display: none; }
+  .admin-body [data-panneau] .table.courte tbody td.chev { display: block; }
+  .admin-body .table.courte td:first-child .tel { display: block; }
+  .admin-body [data-panneau] .table.courte tbody td.vide { flex: 1; text-align: center; padding: 8px; }
+}
+
+/* ---------- Fiche d'une carte SIM : blocages chez l'opérateur, en liste à cocher ---------- */
+
+.admin-body .bloc-hors-forfait { padding: 0 0 10px; border-bottom: 1px solid var(--line); }
+.admin-body label.case-hors-forfait {
+  display: flex; align-items: center; gap: 12px; margin: 0; padding: 6px 0 0; border: 0; background: none; border-radius: 0;
+  font-size: 15px; font-weight: 600; color: var(--text);
+}
+.admin-body label.case-hors-forfait input { width: 22px; height: 22px; margin: 0; accent-color: var(--ok); flex: none; }
+.admin-body .bloc-hors-forfait [data-hors-forfait-aide] { margin: 2px 0 0 34px; font-size: 12px; }
+.liste-blocages { display: flex; flex-direction: column; }
+.admin-body .contenu button.ligne-blocage {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 0; padding: 11px 0; border: 0; border-radius: 0;
+  border-bottom: 1px solid var(--line); background: none; color: var(--text); font-size: 15px; font-weight: 600; text-align: left;
+  justify-content: flex-start;
+}
+.ligne-blocage .coche {
+  width: 22px; height: 22px; flex: none; border-radius: 6px; border: 2px solid #cfc7d9; display: grid; place-items: center;
+  color: #fff; font-size: 14px; line-height: 1; background: var(--surface);
+}
+.ligne-blocage[aria-pressed="true"] .coche { background: var(--ok); border-color: var(--ok); }
+.ligne-blocage[aria-pressed="true"] .coche::before { content: '✓'; }
+.ligne-blocage.charge .coche { opacity: .5; }
+.bilan-blocages { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; font-weight: 700; font-size: 14px; }
+.bilan-blocages.ok { background: var(--vert-fond); color: var(--ok); }
+.bilan-blocages.a-faire { background: var(--orange-fond); color: var(--orange); }
+/* Très petit téléphone : le libellé repasse au-dessus (un ICCID ou un IBAN ne tient pas à côté). */
+@media (max-width: 340px) {
+  .admin-body dl.fiche, .admin-body #famille-fiche .family dl.fiche { grid-template-columns: minmax(0, 1fr); }
+  .admin-body .fiche dd { border-top: 0; padding-top: 0; }
+}
+
+/* ---------- Onglets-liens d'une rubrique (Clients, Site, Réglages) ---------- */
+
+.admin-body .onglets-caches { display: none !important; }
+.admin-body .onglets a, .admin-body .onglets .onglet-lien {
+  flex: none; padding: 8px 12px 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+}
+.admin-body .onglets a:hover { color: var(--text); }
+.admin-body .onglets a.actif { color: var(--accent); border-bottom-color: var(--accent); }
+/* Plus fort que « [data-panneau] a » (gestion.css), qui mettait tous les onglets-liens en bleu. */
+.admin-body [data-panneau] .onglets a:not(.actif) { color: var(--muted); }
+.admin-body [data-panneau] .onglets a:not(.actif):hover { color: var(--text); }
+.admin-body nav.onglets-liens[hidden] { display: none; }
+/* Rubrique avec ses onglets-liens et ses propres onglets dessous (Validation) : le second rang en pastilles. */
+.admin-body nav.onglets-liens:not([hidden]) + .onglets { border-bottom: 0; gap: 6px; }
+.admin-body nav.onglets-liens:not([hidden]) + .onglets button {
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; margin: 0; font-size: 13px; background: var(--surface);
+}
+.admin-body nav.onglets-liens:not([hidden]) + .onglets button.actif { background: var(--text); border-color: var(--text); color: #fff; }
+/* Période des statistiques : des pastilles, pas des onglets. */
+.admin-body #stats-periode { border-bottom: 0; gap: 6px; }
+.admin-body #stats-periode button { border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; margin: 0; font-size: 13px; background: var(--surface); }
+.admin-body #stats-periode button.actif { background: var(--text); border-color: var(--text); color: #fff; }
+
+/* Comptabilité > Déclarations : titre qui sépare URSSAF/TVA des registres. */
+.titre-section { font-size: 1.05rem; margin: 28px 0 10px; color: var(--muted, #5f5a6b); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Champ de recherche au-dessus d'une liste courte (Contacts). */
+#cherche-clients.cherche-liste { flex: 1 1 220px; width: auto; max-width: 360px; margin: 0; }
+.filtres-seuls { margin: 0 0 14px; }
+.table.courte ~ .kpi-suite { margin-top: 10px; }
+
+/* Statistiques : « Jour par jour » replié, le titre sert de bouton. */
+details.repli-jours > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+details.repli-jours > summary::-webkit-details-marker { display: none; }
+details.repli-jours > summary h2 { margin: 0; }
+details.repli-jours > summary::after { content: '▾'; color: var(--muted); }
+details.repli-jours[open] > summary::after { content: '▴'; }
+details.repli-jours[open] > summary { margin-bottom: 12px; }
+
+/* Fiche tablette sur téléphone : la frise « Où est-elle ? » ne garde que le nom de l'étape actuelle
+   (les cinq noms se chevauchaient : « PréparéeEnvoyée »). */
+@media (max-width: 640px) {
+  .admin-body .etapes-tablette .stepper li:not(.actuelle) .libelle { visibility: hidden; }
+}
+
+/* Colis en route : les trois étapes sur une ligne (✓ Déposé · ○ Reçu · ○ Mis en route), pas en tuiles. */
+.admin-body .orders .suite-envoi { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 8px 0; padding: 0; }
+.admin-body .orders .suite-envoi li { border: 0; background: none; padding: 0; margin: 0; min-height: 0; box-shadow: none; display: inline; font-size: 14px; }
+
+/* ---------- Fiche tablette rangée (20/11, 2e version) ---------- */
+/* La frise en haut, puis « Chez qui » et « La tablette » côte à côte sur ordinateur. */
+.admin-body .fiche-groupes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 32px; }
+.admin-body .fiche-groupes .fiche-frise { grid-column: 1 / -1; margin-bottom: 4px; }
+.admin-body .fiche-groupe h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 12px 0 4px; }
+.admin-body .fiche-groupe .fiche { margin: 0; }
+@media (max-width: 900px) { .admin-body .fiche-groupes { grid-template-columns: 1fr; } }
+/* Deux cartes côte à côte (alertes et garde-fous, documents et historique) ; une seule prend toute la largeur. */
+.admin-body .cartes-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; margin-bottom: 16px; }
+.admin-body .cartes-duo > .card { margin: 0; }
+.admin-body .cartes-duo > [hidden] { display: none; }
+/* « En ce moment » : quatre cases basses, chiffres à taille de lecture (le nom de l'opérateur ne prend plus 2 lignes). */
+.admin-body #dt-releves .stats .stat { padding: 10px 12px; min-height: 0; }
+.admin-body #dt-releves .stats .stat > span { font-size: 18px; line-height: 1.25; }
+.admin-body #dt-releves .stats .stat > p { margin: 2px 0 0; }
+/* Pastilles dans une carte : elles passent à la ligne au lieu de sortir de l'écran. */
+.admin-body .card .filtres { flex-wrap: wrap; overflow: visible; }
+
+/* =====================================================================================================
+   Style « Fable » (maquettes du 20/11 midi, validées par Tanguy le 20/11 au soir : « c'est tellement mieux »).
+   Polices du site (Bricolage Grotesque pour les titres, Atkinson pour le texte), fond crème, cartes à bord fin
+   sans ombre, pastilles douces, une seule touche d'indigo par page. Tout ce qui suit s'applique à toute l'admin.
+   ===================================================================================================== */
+
+@font-face { font-family: "Bricolage Grotesque"; src: url(../polices/bricolage.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(../polices/atkinson-400.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Atkinson Hyperlegible"; src: url(../polices/atkinson-700.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+
+.admin-body {
+  --line: #ece5d9; --muted: #6b6577; --rayon: 14px; --rayon-petit: 10px; --chevron: #b9b2c3;
+  font: 15px/1.4 var(--body);
+}
+.admin-body button, .admin-body input, .admin-body select, .admin-body textarea { font-family: var(--body); }
+.admin-body h1, .admin-body h2, .admin-body h3 { font-family: var(--display); letter-spacing: 0; }
+
+/* ---------- Coquille : menu fin à gauche, sans icônes ---------- */
+.admin-body .shell { grid-template-columns: 220px minmax(0, 1fr); background: linear-gradient(to right, var(--surface) 219px, var(--line) 219px, var(--line) 220px, var(--bg) 220px); }
+.admin-body .nav { padding: 18px 12px; gap: 0; }
+.admin-body .nav-marque { padding: 0 6px 18px; }
+.admin-body .nav-marque .admin-logo { width: 30px; height: 30px; }
+.admin-body .nav-marque strong { font: 700 20px var(--display); }
+.admin-body .nav nav a { gap: 10px; padding: 9px 10px; border-radius: 9px; font-size: 14px; font-weight: 700; color: var(--muted); }
+.admin-body .nav nav a svg { display: none; }
+.admin-body .nav nav a:hover { background: var(--bg); color: var(--text); }
+.admin-body .nav nav a.actif { background: var(--indigo-fond); color: var(--accent); }
+.admin-body .nav nav a.nav-reglages { margin-top: 21px; position: relative; }
+.admin-body .nav nav a.nav-reglages::before { content: ''; position: absolute; left: 6px; right: 6px; top: -11px; height: 1px; background: var(--line); }
+.admin-body .pastille { min-width: 0; padding: 1px 7px; font-size: 11px; font-weight: 700; }
+.admin-body .nav-pied { padding: 0 10px; font-size: 12px; }
+.admin-body .nav-pied .link { font-size: 12px; font-weight: 700; color: var(--text); }
+.admin-body .contenu { padding: 22px 30px 48px; max-width: 1130px; }
+.admin-body .contenu-tete { margin-bottom: 10px; gap: 8px; }
+.admin-body .contenu-tete h1 { font: 700 24px var(--display); }
+.admin-body .recherche input { height: 36px; min-height: 0; width: 260px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; box-shadow: none; margin: 0; }
+@media (max-width: 860px) {
+  .admin-body .shell { background: var(--bg); }
+  .admin-body .nav { padding: calc(8px + env(safe-area-inset-top)) 16px 8px; }
+  .admin-body .nav-marque { padding: 0; }
+  .admin-body .nav-menu { width: 36px; height: 36px; border-radius: 10px; }
+  .admin-body .nav-menu svg { width: 18px; height: 18px; }
+  .admin-body .nav.ouvert nav a.nav-reglages { margin-top: 13px; }
+  .admin-body .nav.ouvert nav a.nav-reglages::before { top: -7px; }
+  .admin-body .contenu { padding: 14px 16px 40px; }
+  .admin-body .contenu-tete h1 { font-size: 24px; flex-basis: 100%; }
+  .admin-body .recherche, .admin-body .recherche input { width: 100%; }
+}
+
+/* ---------- Cartes, titres de bloc, tuiles de chiffres ---------- */
+.admin-body .card { border-radius: 14px; padding: 14px; box-shadow: none; border: 1px solid var(--line); margin-bottom: 12px; }
+.admin-body .card h2, .admin-body h2.titre-bloc { font: 700 17px var(--display); margin: 0 0 8px; }
+.admin-body .sous-titre { color: var(--muted); font-size: 14px; margin: -8px 0 16px; }
+.carte-tete { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.admin-body .carte-tete h2 { flex: 1; margin: 0; }
+.admin-body .carte-tete a, .admin-body .carte-tete button.link { color: var(--accent); font-weight: 700; font-size: 13px; text-decoration: none; }
+.deux-colonnes { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
+.deux-colonnes.egales { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.deux-colonnes > div { min-width: 0; }
+@media (max-width: 1000px) { .deux-colonnes, .deux-colonnes.egales { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+/* Tuiles : un chiffre en gras, son nom dessous, sur fond crème (« il y a 14 min · Dernier signal »). */
+.admin-body .tuiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; }
+.admin-body .tuiles.quatre { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 700px) { .admin-body .tuiles.quatre { grid-template-columns: 1fr 1fr; } }
+.admin-body .tuiles .stat { background: var(--bg); border: 0; border-radius: 10px; padding: 10px; box-shadow: none; min-width: 0; }
+.admin-body .tuiles .stat > span { display: block; font: 700 18px/1.25 var(--display); overflow-wrap: anywhere; }
+.admin-body .tuiles .stat > span.neg { color: var(--danger); }
+.admin-body .tuiles .stat > p { margin: 0; font-size: 12px; color: var(--muted); }
+.admin-body .tuiles .stat > small { display: block; font-size: 12px; color: var(--muted); }
+.admin-body .tuiles .stat.onglet { cursor: pointer; }
+.admin-body .tuiles .stat.onglet:hover { background: #f6f0e4; }
+
+/* ---------- Accueil : « À faire » en liste courte ---------- */
+.admin-body .a-faire.liste-courte > li.ligne-tache { display: flex; align-items: center; gap: 4px; padding-right: 12px; border-bottom: 0; }
+.admin-body .a-faire li.ligne-tache > a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 11px 6px 11px 14px; margin: 0; border-radius: 0; }
+.admin-body .a-faire li.ligne-tache:hover { background: var(--bg); }
+.admin-body .a-faire a:hover { background: none; }
+.admin-body .a-faire .pastille-tache { background: #d9d2c5; }
+.admin-body .a-faire a.urgent .pastille-tache { background: var(--danger); }
+.admin-body .a-faire .tache { gap: 0; }
+.admin-body .a-faire .tache-titre { font-weight: 700; }
+.admin-body .a-faire .tache-detail { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-body .a-faire .fleche { color: var(--chevron); font-size: 20px; }
+.admin-body .a-faire .menu-points-bouton { border: 0; background: none; color: var(--chevron); width: 30px; height: 30px; min-height: 30px; }
+.admin-body .a-faire .menu-points-bouton:hover { color: var(--text); background: var(--line); }
+.admin-body .a-faire li.voir-plus { text-align: center; }
+.admin-body .a-faire li.voir-plus button { width: 100%; padding: 11px; font-weight: 700; }
+.admin-body .a-faire li.masquees, .admin-body .a-faire li.vide { padding: 11px 14px; }
+@media (max-width: 700px) { .admin-body .a-faire .badge.rubrique { display: none; } .admin-body .a-faire .tache-detail { white-space: normal; } }
+.admin-body .a-faire .tache-detail, .admin-body .a-faire li.masquees { font-weight: 400; }
+.admin-body .contenu-tete .recherche { margin-left: auto; }
+@media (max-width: 860px) { .admin-body .sous-titre { margin: 0 0 14px; } .admin-body .contenu-tete .recherche { order: 3; } }
+/* Lignes « libellé … valeur » qu'on peut toucher (alertes envoyées, par sorte). */
+.lignes-kv { display: flex; flex-direction: column; }
+.admin-body .contenu button.ligne-kv, .admin-body button.ligne-kv {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%; min-height: 0; padding: 8px 0; border: 0; border-top: 1px solid var(--line);
+  border-radius: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 400; color: var(--muted); text-align: left;
+}
+.admin-body .lignes-kv button.ligne-kv:first-child { border-top: 0; }
+.admin-body button.ligne-kv .n { color: var(--text); font-weight: 700; }
+.admin-body button.ligne-kv:hover span:first-child, .admin-body button.ligne-kv.actif span:first-child { color: var(--accent); }
+.admin-body button.ligne-kv[data-genre="*"] { font-weight: 700; color: var(--text); }
+.admin-body .alertes-liste { margin: 8px 0 0; padding: 10px 12px; list-style: none; background: var(--bg); border-radius: 10px; }
+.admin-body .alertes-liste li { padding: 3px 0; }
+
+/* ---------- Listes « À envoyer », « En route », « À récupérer » : une ligne par client ---------- */
+.admin-body .orders { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.admin-body .orders:empty { display: none; }
+.admin-body .orders > li, .admin-body .orders > li:last-child {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 14px; align-items: center; gap: 1px 12px; margin: 0; padding: 11px 14px;
+  border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none;
+}
+.admin-body .orders > li:first-child { border-top: 0; }
+.admin-body .orders > li > * { grid-column: 1; min-width: 0; }
+.admin-body .orders > li::after { content: '›'; grid-column: 3; grid-row: 1 / span 9; color: var(--chevron); font-size: 20px; line-height: 1; }
+.admin-body .orders > li.cliquable:hover { background: var(--bg); }
+.admin-body .orders > li.alert { border-left: 0; padding-left: 14px; }
+.admin-body .orders > li.alert strong, .admin-body .orders > li.alert .titre-commande { color: var(--text); }
+.admin-body .orders > li.alert > .muted { color: var(--danger); }
+.admin-body .orders .titre-commande { color: var(--text); font-weight: 700; }
+.admin-body .orders .titre-commande::after { content: none; }
+.admin-body .orders .adresse { display: none; }
+.admin-body .orders .small { font-size: 13px; }
+.admin-body .orders .envoi-suite { display: contents; }
+.admin-body .orders .avancement { grid-column: 1; color: var(--muted); }
+.admin-body .orders > li button.small-btn, .admin-body .orders .envoi-suite button {
+  grid-column: 2; grid-row: 1 / span 9; align-self: center; margin: 0; min-height: 32px; height: 32px; padding: 0 12px; font-size: 13px; border-radius: 9px;
+}
+.admin-body .orders > li a.small { color: var(--accent); font-weight: 700; text-decoration: none; }
+.admin-body .orders .suite-envoi { margin: 2px 0 0; gap: 2px 14px; }
+.admin-body .orders .suite-envoi li { font-size: 13px; }
+@media (max-width: 640px) {
+  .admin-body .orders > li button.small-btn, .admin-body .orders .envoi-suite button { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
+}
+
+/* ---------- Fiches (commande, tablette, SIM…) : titre + pastille + actions, puis des cartes ---------- */
+.admin-body .tete-fiche { margin: 2px 0 10px; gap: 8px; }
+.admin-body .tete-fiche h2 { font: 700 24px var(--display); }
+.admin-body .sous-fiche { margin: -6px 0 12px; }
+.admin-body [data-panneau] a.retour { margin-bottom: 0; }
+.admin-body [data-panneau] > p:has(> a.retour) { margin: 0 0 4px; }
+/* Lignes « libellé … valeur » : le libellé en gris à gauche, la valeur à droite. */
+.admin-body dl.fiche.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 14px; margin: 0; font-size: 14px; }
+.admin-body dl.fiche.kv dt { color: var(--muted); font-weight: 400; padding: 8px 0; border-top: 1px solid var(--line); }
+.admin-body dl.fiche.kv dd { margin: 0; padding: 8px 0; border-top: 1px solid var(--line); text-align: right; overflow-wrap: anywhere; }
+.admin-body dl.fiche.kv dt:first-of-type, .admin-body dl.fiche.kv dd:first-of-type { border-top: 0; }
+.admin-body dl.fiche.kv a, .admin-body dl.fiche.kv button.link { color: var(--accent); font-weight: 700; text-decoration: none; text-align: right; }
+.admin-body dl.fiche.kv a::after, .admin-body dl.fiche.kv button.link::after { content: ' ›'; }
+@media (max-width: 640px) { .admin-body dl.fiche.kv { grid-template-columns: auto minmax(0, 1fr); } }
+
+/* Parcours d'une commande : un fil, l'étape puis sa date dessous ; faite = coche verte, à venir = rond indigo. */
+.admin-body .frise li { display: flex; flex-direction: column-reverse; gap: 0; padding: 0 0 14px 30px; font-size: 14px; }
+.admin-body .frise li::before { content: '✓'; left: 0; top: 1px; width: 18px; height: 18px; background: var(--ok); color: #fff; font-size: 11px; display: grid; place-items: center; }
+.admin-body .frise li:not(:last-child)::after { left: 8px; top: 22px; bottom: 0; }
+.admin-body .frise-date { text-align: left; font-size: 13px; }
+.admin-body .frise-texte { padding: 0; }
+.admin-body .frise li.frise-suite::before { content: ''; width: 14px; height: 14px; background: var(--surface); border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--indigo-fond); }
+.admin-body .frise-suite .frise-date { display: none; }
+.admin-body .frise-action { margin-top: 8px; }
+
+/* Bandeaux en haut d'une fiche : un rond « ! », une phrase, de petits boutons. */
+.admin-body .alerte-couverture, .admin-body .alerte-doublon, .admin-body .bandeau {
+  position: relative; display: block; margin: 0 0 12px; padding: 12px 14px 12px 48px; border-radius: 14px; font-size: 14px;
+  background: var(--orange-fond); border: 1px solid #f3e2bd; color: var(--text);
+}
+.admin-body .alerte-couverture::before, .admin-body .alerte-doublon::before, .admin-body .bandeau::before {
+  content: '!'; position: absolute; left: 14px; top: 12px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--orange); color: #fff; font-weight: 700; font-size: 13px;
+}
+.admin-body .alerte-doublon.grave, .admin-body .bandeau.rouge { background: var(--rouge-fond); border: 1px solid #f6d3d3; font-size: 14px; color: var(--text); }
+.admin-body .alerte-doublon.grave::before, .admin-body .bandeau.rouge::before { background: var(--danger); }
+.admin-body .alerte-couverture.vue { background: var(--surface); border-color: var(--line); color: var(--muted); }
+.admin-body .alerte-couverture.vue::before { content: '✓'; background: var(--ok); }
+.admin-body .alerte-couverture p, .admin-body .alerte-doublon p { margin: 2px 0 0; font-size: 13px; }
+.admin-body .alerte-couverture > strong, .admin-body .alerte-doublon > strong { display: block; font-size: 15px; }
+.admin-body .alerte-couverture .boutons-couverture { gap: 6px; margin: 8px 0; }
+.admin-body .alerte-couverture .boutons-couverture > * {
+  flex: none; min-height: 30px; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 700; background: #fff; border: 1px solid var(--line); color: var(--text);
+}
+.admin-body .alerte-couverture label.case { margin: 6px 0 0; font-size: 14px; }
+.admin-body .annonce { border-radius: 14px; background: var(--vert-fond); color: var(--ok); font-size: 14px; padding: 10px 14px; margin-bottom: 12px; }
+.admin-body dl.fiche.kv { gap: 0; }
+.admin-body dl.fiche.kv dt { padding-right: 14px; }
+/* Fiche : pas de grand titre de rubrique (le menu dit déjà où l'on est), « ‹ Clients » à sa place. */
+.admin-body .page-fiche .contenu-tete h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; min-width: 0; }
+.admin-body .page-fiche .contenu-tete { min-height: 36px; margin-bottom: 0; }
+.admin-body .page-fiche [data-panneau] > p:has(> a.retour) { margin: -30px 0 10px; width: fit-content; position: relative; }
+@media (max-width: 860px) { .admin-body .page-fiche [data-panneau] > p:has(> a.retour) { margin: 10px 0 6px; } }
+.admin-body .alerte-couverture label.case input { width: 18px; height: 18px; }
+/* Tableaux dans une carte (factures, paiements) : à plat, sans second cadre. */
+.admin-body .card .table { border: 0; border-radius: 0; margin: 6px 0 0; background: none; }
+.admin-body .card .table th { background: none; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+.admin-body .card .table td { padding: 8px 8px 8px 0; }
+.admin-body .card .table + .table { margin-top: 10px; }
+@media (max-width: 640px) {
+  .admin-body .tete-fiche .tete-actions { margin-left: 0; width: 100%; flex-wrap: wrap; }
+  .admin-body .tete-fiche .tete-actions:not(:has(> button, > a)) { width: auto; margin-left: auto; }
+  .admin-body .tete-fiche .tete-actions > .menu-points { margin-left: auto; }
+}
+.admin-body .contenu .alerte-couverture .boutons-couverture > button { flex: none; min-height: 30px; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 700; background: #fff; border: 1px solid var(--line); color: var(--text); }
+.admin-body .contenu-tete .recherche { flex: none; width: 260px; max-width: 100%; }
+@media (max-width: 860px) { .admin-body .contenu-tete .recherche { width: 100%; } }
+
+/* ---------- Fenêtres ---------- */
+.admin-body .fenetre, .admin-body dialog.dialogue-papote { border-radius: 16px; box-shadow: 0 24px 70px rgba(36, 33, 47, .3); }
+.admin-body .fenetre-tete h2 { font: 700 17px var(--display); }
+.admin-body .fenetre .fermer { border: 0; background: none; border-radius: 10px; font-size: 16px; }
+
+/* ---------- Parcours pas à pas (envoi, réception) : la liste des étapes à gauche, l'étape en cours à droite ---------- */
+.admin-body .parcours { width: min(880px, calc(100vw - 24px)); height: min(600px, calc(100vh - 32px)); padding: 0; overflow: hidden; }
+.admin-body .parcours[open] { display: grid; grid-template-columns: 250px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.admin-body .parcours .fenetre-tete { grid-column: 1 / -1; margin: 0; padding: 12px 16px 12px 20px; border-bottom: 1px solid var(--line); }
+.admin-body .parcours .pc-etapes { grid-column: 1; grid-row: 2 / 5; display: block; margin: 0; padding: 14px 10px; background: #fbf8f2; border-right: 1px solid var(--line); overflow-y: auto; }
+.admin-body .parcours .pc-etapes li { flex: none; display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 14px; text-align: left; color: var(--muted); }
+.admin-body .parcours .pc-etapes li.pc-groupe { padding: 12px 8px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.admin-body .parcours .pc-etapes li.pc-groupe:first-child { padding-top: 0; }
+.admin-body .parcours .pc-etapes li span { width: 20px; height: 20px; flex: none; border: 2px solid #cfc7d9; font-size: 11px; background: none; color: var(--muted); }
+.admin-body .parcours .pc-etapes li em { white-space: normal; overflow: visible; }
+.admin-body .parcours .pc-etapes li.fait { color: var(--text); }
+.admin-body .parcours .pc-etapes li.fait span { background: var(--ok); border-color: var(--ok); color: #fff; }
+.admin-body .parcours .pc-etapes li.actuelle { background: var(--indigo-fond); color: var(--accent); font-weight: 700; }
+.admin-body .parcours .pc-etapes li.actuelle span { border-color: var(--accent); color: var(--accent); background: #fff; }
+.admin-body .parcours .pc-corps { grid-column: 2; grid-row: 2; padding: 20px 26px 8px; min-height: 0; }
+.admin-body .parcours .pc-erreur { grid-column: 2; margin: 0 26px 10px; }
+.admin-body .parcours .pc-pied { grid-column: 2; margin: 0; padding: 12px 16px; }
+.admin-body .parcours .pc-pied .pc-suivant { min-width: 0; font-size: 14px; }
+.pc-ou { display: flex; align-items: center; gap: 8px; }
+.admin-body .pc-ou .pc-numero { flex: 1; font-size: 13px; }
+.admin-body .pc-voir, .pc-barre { display: none; }
+.admin-body .pc-corps h3 { font: 700 22px var(--display); margin: 2px 0 6px; }
+.admin-body .pc-texte { font-size: 15px; color: var(--muted); }
+.admin-body .pc-contenu > select, .admin-body .pc-contenu > input, .admin-body .pc-champ input, .admin-body .pc-contenu select {
+  min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background-color: var(--surface); font-size: 14px; box-shadow: none;
+}
+.admin-body .pc-champ { font-size: 13px; font-weight: 700; }
+.admin-body .pc-case { gap: 12px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; font-weight: 400; }
+.admin-body .pc-case input { width: 20px; height: 20px; }
+.admin-body .pc-case:has(input:checked) { border-color: var(--ok); background: var(--vert-fond); }
+.admin-body .pc-liste, .admin-body .pc-sim-info, .admin-body .pc-sim-message { font-size: 14px; }
+.admin-body .pc-sim-coches li { padding: 8px 12px; font-size: 14px; border-radius: 10px; }
+.admin-body .pc-sim-coches li span { width: 20px; height: 20px; font-size: 12px; }
+.admin-body .pc-sim-boutons button { min-height: 40px; font-size: 14px; }
+.admin-body .pc-gros { font: 700 30px var(--display); border-width: 1px; }
+@media (max-width: 760px) {
+  /* Téléphone : plein écran ; une barre de progression, la liste des étapes derrière « Voir les étapes ». */
+  .admin-body .parcours { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
+  .admin-body .parcours[open] { grid-template-columns: minmax(0, 1fr); }
+  .admin-body .parcours .pc-etapes { display: none; grid-column: 1; grid-row: 2; border-right: 0; }
+  .admin-body .parcours.etapes-ouvertes .pc-etapes { display: block; z-index: 1; }
+  .admin-body .parcours .pc-corps, .admin-body .parcours .pc-erreur, .admin-body .parcours .pc-pied { grid-column: 1; }
+  .admin-body .parcours .pc-corps { padding: 14px 16px 8px; }
+  .admin-body .pc-voir { display: inline; font-weight: 700; font-size: 13px; }
+  .pc-barre { display: flex; gap: 3px; margin: 8px 0 16px; }
+  .pc-barre i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+  .pc-barre i.fait { background: var(--ok); }
+  .pc-barre i.actuelle { background: var(--accent); }
+  .admin-body .parcours .pc-pied > button { flex: 1; min-height: 42px; }
+  .admin-body .parcours .pc-pied .pc-suivant { margin-left: 0; }
+}
+.admin-body .parcours { height: min(640px, calc(100vh - 32px)); }
+.admin-body .parcours .pc-etapes li { padding: 5px 8px; }
+.admin-body .parcours .pc-etapes li.pc-groupe { padding: 10px 8px 3px; }
+.admin-body .pc-voir { color: var(--accent); }
+@media (max-width: 760px) { .admin-body .parcours { height: 100dvh; } }
+
+/* ---------- Fiche tablette (maquette du 20/11 midi) ---------- */
+.admin-body #dt-carte-modif:has(> form[hidden]) { display: none; }
+.admin-body #dt-infos { margin-bottom: 0; }
+.admin-body #dt-infos > section.card { margin-bottom: 12px; }
+.admin-body .fiche-groupe h2 { text-transform: none; letter-spacing: 0; color: var(--text); }
+/* « Où est-elle ? » : une ligne de texte, l'étape actuelle en gras (plus de ronds). */
+.admin-body #dt-frise { margin: -4px 0 12px; }
+.admin-body #dt-frise .stepper { display: flex; flex-wrap: wrap; gap: 2px 6px; font-size: 13px; }
+.admin-body #dt-frise .stepper li { flex-direction: row; gap: 6px; font-size: 13px; color: var(--muted); }
+.admin-body #dt-frise .stepper li::before { content: '›'; position: static; width: auto; height: auto; background: none; color: #cfc7d9; }
+.admin-body #dt-frise .stepper li:first-child::before { display: none; }
+.admin-body #dt-frise .stepper .rond { display: none; }
+.admin-body #dt-frise .stepper li .libelle { visibility: visible; padding: 0; }
+.admin-body #dt-frise .stepper li.actuelle { color: var(--text); font-weight: 700; }
+.admin-body #dt-frise .etape-action { margin-top: 8px; }
+.admin-body .bandeau > button { float: right; margin: -2px 0 0 10px; background: #fff; }
+.admin-body #dt-releves .push-mode { margin: 10px 0 0; font-size: 13px; }
+.admin-body .reseau-mobile h3 { display: none; }
+.admin-body .reseau-mobile ul { margin: 6px 0; padding-left: 18px; }
+/* Bloc replié : son titre, une pastille qui résume, une flèche ; un toucher l'ouvre. */
+.admin-body details.repli > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.admin-body details.repli > summary::-webkit-details-marker { display: none; }
+.admin-body details.repli > summary h2 { flex: 1; margin: 0; font-size: 15px; }
+.admin-body details.repli > summary::after { content: '›'; color: var(--chevron); font-size: 20px; line-height: 1; transition: transform .15s; }
+.admin-body details.repli[open] > summary::after { transform: rotate(90deg); }
+.admin-body details.repli[open] > summary { margin-bottom: 10px; }
+.admin-body details.repli { padding: 11px 14px; }
+.admin-body .cartes-duo { gap: 12px; margin-bottom: 12px; }
+/* Crayon d'une ligne modifiable : discret, à droite de la valeur. */
+.admin-body dl.fiche.kv .crayon { color: var(--chevron); margin-left: 6px; }
+.admin-body dl.fiche.kv .crayon:hover { color: var(--accent); }
+.admin-body dl.fiche.kv dt.modifiable, .admin-body dl.fiche.kv dd.modifiable { padding: 5px 0; border-bottom: 0; min-height: 0; border-top: 1px solid var(--line); }
+.admin-body dl.fiche.kv dt.modifiable { padding-right: 14px; }
+.admin-body dl.fiche.kv dt:first-of-type, .admin-body dl.fiche.kv dd:first-of-type { border-top: 0; }
+.admin-body dl.fiche.kv dd.modifiable { justify-content: flex-end; gap: 2px; }
+.admin-body dl.fiche.kv dd.modifiable .valeur { flex: 0 1 auto; text-align: right; }
+.admin-body dl.fiche.kv dd.modifiable.en-saisie { justify-content: stretch; text-align: left; }
+.admin-body dl.fiche.kv dd.modifiable .saisie-champ { flex: 1; }
+.admin-body #dt-infos > section.card { margin-top: 0; }
+.admin-body .card details.repli > summary h2, .admin-body details.repli.card > summary h2 { margin: 0; font-size: 15px; }
+.admin-body .contenu .lignes-kv button.ligne-kv { padding: 8px 0; border-radius: 0; font-size: 14px; }
+.admin-body .contenu .lignes-kv button.ligne-kv:first-child { border-top: 0; }
+
+/* ---------- Fiches (carte SIM, accessoire, dépense, client, famille) : même rangement que la tablette ---------- */
+.admin-body .colonne-seule { max-width: 640px; }
+.admin-body .deux-colonnes > div > .card:first-child, .admin-body .colonne-seule > .card:first-child { margin-top: 0; }
+.admin-body .deux-colonnes > div > .card > h2:first-child, .admin-body .colonne-seule > .card > h2:first-child { margin: 0 0 6px; font-size: 16px; }
+.admin-body .card > .tete-fiche h2 { font-size: 16px; }
+.admin-body .card > .tete-fiche { margin: 0 0 6px; }
+.admin-body dl.fiche.kv dd .badge { margin-left: 4px; }
+.admin-body dl.fiche.kv dd label.interrupteur { font-size: 14px; font-weight: 400; justify-content: flex-end; }
+.admin-body dl.fiche.kv dd .pieces-liste { justify-content: flex-end; }
+/* Fiches restées en pleine largeur (réglages) : libellés gris, un seul trait fin par ligne. */
+.admin-body dl.fiche:not(.kv) { gap: 0; grid-template-columns: minmax(150px, max-content) minmax(0, 1fr); }
+.admin-body dl.fiche:not(.kv) dt { color: var(--muted); font-weight: 400; padding-right: 20px; }
+.admin-body dl.fiche:not(.kv) dt.modifiable, .admin-body dl.fiche:not(.kv) dd.modifiable { border-bottom: 0; border-top: 1px solid var(--line); padding: 5px 0; min-height: 0; }
+.admin-body dl.fiche:not(.kv) dt:first-of-type, .admin-body dl.fiche:not(.kv) dd:first-of-type { border-top: 0; }
+@media (max-width: 640px) { .admin-body dl.fiche:not(.kv) { grid-template-columns: minmax(0, 1fr); } .admin-body dl.fiche:not(.kv) dt.modifiable { padding-bottom: 0; } .admin-body dl.fiche:not(.kv) dd.modifiable { border-top: 0; padding-top: 0; } }
+/* Liens vers une autre page : des lignes fines avec un chevron, plus des boîtes empilées. */
+.admin-body .liste-liens { gap: 0; }
+.admin-body .liste-liens li, .admin-body .liste-liens li:last-child { border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 9px 22px 9px 0; font-size: 14px; background: none; }
+.admin-body .liste-liens li:first-child { border-top: 0; }
+.admin-body .liste-liens li:has(a):hover { background: none; }
+.admin-body .liste-liens li:has(a):hover a { text-decoration: underline !important; }
+.admin-body .liste-liens li:has(a)::after { right: 2px; font-size: 16px; color: var(--chevron); font-weight: 400; }
+.admin-body .liste-liens .ll-quoi { width: 92px; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 14px; }
+.admin-body .liste-liens li > .muted { margin-left: auto; }
+.admin-body .liste-liens.groupe-commande + .liste-liens.groupe-commande { margin-top: 10px; border-top: 1px solid var(--line); }
+/* Famille : la fiche à gauche, ses liens à droite ; le titre de page laisse la place au nom. */
+.admin-body .contenu:has(#famille-fiche:not([hidden])) .contenu-tete h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; min-width: 0; }
+.admin-body .contenu:has(#famille-fiche:not([hidden])) .contenu-tete { min-height: 36px; margin-bottom: 0; }
+.admin-body #famille-fiche:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; align-items: start; }
+.admin-body #famille-fiche > .retour { grid-column: 1 / -1; justify-self: start; margin: -30px 0 10px; position: relative; }
+.admin-body #famille-fiche > #families { grid-column: 1; grid-row: 2 / span 3; margin: 0; }
+.admin-body #famille-fiche > #famille-liens { grid-column: 2; margin-top: 0; }
+.admin-body #famille-fiche > #famille-actions { grid-column: 2; }
+.admin-body #famille-fiche .family-head h2 { font: 700 24px var(--display); }
+.admin-body #famille-fiche #families > li:first-child { margin-top: 0; }
+@media (max-width: 1000px) {
+  .admin-body #famille-fiche:not([hidden]) { grid-template-columns: minmax(0, 1fr); }
+  .admin-body #famille-fiche > #families, .admin-body #famille-fiche > #famille-liens, .admin-body #famille-fiche > #famille-actions { grid-column: 1; grid-row: auto; }
+  .admin-body #famille-fiche > #famille-liens { margin-top: 12px; }
+}
+@media (max-width: 860px) { .admin-body #famille-fiche > .retour { margin: 10px 0 6px; } }
+/* Que faire si… : des lignes moins hautes. */
+.admin-body details.aide-cas { padding-top: 4px; padding-bottom: 4px; }
+.admin-body details.aide-cas > summary h2 { font-size: 15px; margin: 0; }
+/* Listes : un numéro de téléphone ne se coupe pas. */
+@media (min-width: 761px) { .admin-body #t-sim td:first-child { white-space: nowrap; } }
+.admin-body table td a[href^="tel:"] { white-space: nowrap; }
+.admin-body [data-panneau="clients"]:has(#famille-fiche:not([hidden])) > nav[data-sous] { display: none; }
+.admin-body #famille-fiche .family dl.fiche.kv { gap: 0; grid-template-columns: auto minmax(0, 1fr); }
+.admin-body [data-panneau="outils"] dl.fiche:not(.kv) { max-width: 640px; }
+/* Tablette introuvable : pas de blocs vides. */
+.admin-body details.repli:has(> summary .badge:empty) { display: none; }
+.admin-body .frise-tablette:empty { display: none; }
+/* Familles sur téléphone : une ligne par famille (nom, tablette, abonnement), comme les autres listes. */
+@media (max-width: 760px) {
+  .admin-body #t-familles, .admin-body #t-familles tbody { display: block; }
+  .admin-body #t-familles thead { display: none; }
+  .admin-body #t-familles tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; gap: 2px 8px; padding: 10px 12px; border-top: 1px solid var(--line); align-items: center; }
+  .admin-body #t-familles tbody tr:first-child { border-top: 0; }
+  .admin-body #t-familles tbody td { display: none; padding: 0; border: 0; }
+  .admin-body #t-familles tbody td:nth-child(1) { display: block; grid-column: 1; }
+  .admin-body #t-familles tbody td:nth-child(3) { display: block; grid-column: 1; grid-row: 2; color: var(--muted); font-size: 12px; }
+  .admin-body #t-familles tbody td:nth-child(4) { display: block; grid-column: 2; grid-row: 1 / span 2; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .admin-body #t-familles tbody tr[tabindex]::after { content: '›'; grid-column: 3; grid-row: 1 / span 2; color: var(--chevron); font-size: 20px; position: static; }
+  .admin-body #t-familles tbody td.error { display: block; }
+}
+@media (max-width: 760px) {
+  .admin-body #t-familles tbody td.vide { display: block; grid-column: 1 / -1; }
+  /* Tableaux en fiches dans une carte : des lignes séparées par un trait, pas des boîtes dans la boîte. */
+  .admin-body .card .table.cartes tbody tr { border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 8px 0; margin: 0; background: none; }
+  .admin-body .card .table.cartes tbody tr:first-child { border-top: 0; }
+  .admin-body .card .table.cartes tbody td { padding: 2px 0; font-size: 14px; }
+  .admin-body .card .table.cartes tbody td::before { color: var(--muted); font-weight: 400; }
+}
+@media (max-width: 640px) { .admin-body .v-etape { padding-top: 44px; } }
+/* Formulaires d'ajout dans la page : une colonne lisible, pas toute la largeur de l'écran. */
+.admin-body [data-panneau="nouveau"] > .card, .admin-body #dsi-corps > .card:only-child, .admin-body #dx-corps > .card:only-child { max-width: 760px; }
+
+/* ---------- Comptabilité : chiffres en tuiles, détail en lignes, deux colonnes ---------- */
+.admin-body .tuiles.trois { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-body [data-panneau="compta"] .tuiles .stat > span { font-size: 22px; }
+@media (max-width: 520px) { .admin-body .tuiles.trois { grid-template-columns: 1fr 1fr; } .admin-body [data-panneau="compta"] .tuiles .stat > span { font-size: 18px; } }
+.admin-body div.ligne-kv { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+.admin-body div.ligne-kv:first-child { border-top: 0; }
+.admin-body div.ligne-kv .n { color: var(--text); font-weight: 700; white-space: nowrap; }
+.admin-body div.ligne-kv small { display: block; font-size: 12px; }
+.admin-body #t-bilan.vides-caches tr.mois-vide { display: none; }
+.admin-body #bilan-vides { margin: 8px 0 0; }
+.admin-body #bilan-vides .link { font-size: 13px; padding: 0; min-height: 0; }
+.admin-body [data-panneau="compta"] .card > h2 { font-size: 16px; margin: 0 0 6px; }
+.admin-body [data-panneau="compta"] .card > .tete h2 { font-size: 16px; margin: 0; }
+.admin-body [data-panneau="compta"] .deux-colonnes > div > .table.courte:first-child { margin-top: 0; }
+.admin-body [data-panneau="compta"] .deux-colonnes .card .table table { font-size: 13px; }
+.admin-body #t-categories thead { display: none; }
+.admin-body #t-categories td { padding: 8px 0; color: var(--muted); }
+.admin-body #t-categories td.n { color: var(--text); font-weight: 700; }
+.admin-body details#rentabilite > summary .badge { margin-left: auto; }
+.admin-body details#rentabilite[open] > summary { margin-bottom: 8px; }
+@media print { .admin-body #t-bilan.vides-caches tr.mois-vide { display: table-row; } }
+.admin-body .bandeau-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.admin-body .bandeau-liste li { margin: 0; }
+@media (min-width: 761px) {
+  .admin-body #t-achats th:nth-child(4), .admin-body #t-achats td:nth-child(4) { display: none; }
+  .admin-body #t-achats td:first-child small.categorie { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 1px; }
+}
+@media (max-width: 760px) { .admin-body #t-achats small.categorie { display: none; } }
+
+/* ---------- Tablette : le détail en une seule carte de lignes repliées ---------- */
+.admin-body .card.plis { padding: 0 14px; overflow: hidden; margin-top: 12px; }
+.admin-body .card.plis > details.repli { padding: 12px 0; border-top: 1px solid var(--line); margin-top: -1px; }
+.admin-body .card.plis > details.repli[hidden], .admin-body .card.plis > details.repli:has(> summary .badge:empty) { display: none; }
+.admin-body .card.plis:not(:has(> details.repli:not([hidden]) > summary .badge:not(:empty))) { display: none; }
+.admin-body .card.plis .carte-tete, .admin-body .card.plis #dt-gardefous > h2 { display: none; }
+.admin-body .card.plis .lignes-kv button.ligne-kv { padding-left: 0; padding-right: 0; }
+.admin-body .tuiles + .ligne-version { margin: 8px 2px 0; }
+.admin-body .tuiles ~ .push-mode { margin: 4px 2px 0; }
+.admin-body .tuiles .stat > span.warn { color: var(--orange, #b45309); }
+/* « Chez qui » et « La tablette » : mêmes hauteurs de ligne, crayon ou pas. */
+.admin-body #dt-infos dl.fiche.kv dt, .admin-body #dt-infos dl.fiche.kv dd { min-height: 40px; display: flex; align-items: center; padding-top: 4px; padding-bottom: 4px; }
+.admin-body #dt-infos dl.fiche.kv dd { justify-content: flex-end; }
+
+/* Bloc couverture : trois petits boutons identiques, les liens vers l'extérieur marqués d'une flèche. */
+.admin-body .contenu .alerte-couverture .boutons-couverture > a,
+.admin-body .contenu .alerte-couverture .boutons-couverture > button {
+  flex: none !important; min-height: 32px !important; height: 32px !important; padding: 0 12px !important; border-radius: 999px !important;
+  font-size: 13px !important; font-weight: 600 !important; line-height: 30px !important; background: #fff; border: 1px solid var(--line); color: var(--text);
+  box-shadow: none; display: inline-flex; align-items: center; text-decoration: none; width: auto !important;
+}
+.admin-body .alerte-couverture .boutons-couverture > a[target="_blank"]::after { content: '↗'; margin-left: 6px; color: var(--muted); font-weight: 400; }
+
+/* Familles sur téléphone : les chiffres deviennent une rangée de pastilles, sans tuile orpheline. */
+@media (max-width: 640px) {
+  .admin-body #kpi-familles { display: flex; flex-wrap: wrap; gap: 6px; }
+  .admin-body #kpi-familles .stat.onglet {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border-radius: 999px; margin: 0; width: auto;
+  }
+  .admin-body #kpi-familles .stat.onglet > span { font-size: 15px; line-height: 1; margin: 0; }
+  .admin-body #kpi-familles .stat.onglet > p { font-size: 13px; margin: 0; }
+}
+
+/* Fiche dépense : la ligne « Facture » prend toute la largeur (pastille, explication, crayon), sans libellé répété. */
+.admin-body .carte-facture dl.fiche.kv > dt.modifiable:first-child { display: none; }
+.admin-body .carte-facture dl.fiche.kv > dt.modifiable:first-child + dd { grid-column: 1 / -1; justify-content: space-between; text-align: left; }
+.admin-body .carte-facture dl.fiche.kv > dt.modifiable:first-child + dd .valeur { text-align: left; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.admin-body .carte-facture .pieces-liste { justify-content: flex-end; }
+@media (max-width: 640px) {
+  .admin-body .tuiles.trois > .stat:nth-child(3):last-child { grid-column: 1 / -1; }
+}
+
+/* Fiche famille : nom, pastilles d'état, quatre chiffres, puis les informations fixes. */
+.admin-body #famille-fiche .family-head { flex-wrap: wrap; gap: 6px 8px; margin-bottom: 12px; }
+.admin-body #famille-fiche .family-head .espace { flex: 1; }
+.admin-body #famille-fiche .family > .tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 8px; }
+.admin-body #famille-fiche .family-head h2 { flex: 1 1 60%; min-width: 0; order: 1; }
+.admin-body #famille-fiche .family-head .espace { display: none; }
+.admin-body #famille-fiche .family-head > .menu-points, .admin-body #famille-fiche .family-head > span:empty { order: 2; }
+.admin-body #famille-fiche .family-head > .badge { order: 3; }
+.admin-body #famille-fiche .family-head h2 { flex: 1 1 calc(100% - 90px); }
+.admin-body #famille-fiche .family-head > .dot { display: none; }
+
+/* Parcours : « Plus tard » discret à côté de « C'est fait » ; étape remise marquée dans la liste. */
+.admin-body .parcours .pc-pied .pc-plus-tard { margin-left: auto; min-height: 36px; padding: 0 10px; font-size: 14px; color: var(--muted); background: none; border: 0; text-decoration: underline; flex: none; }
+.admin-body .parcours .pc-pied .pc-plus-tard:not([hidden]) + .pc-suivant { margin-left: 0; }
+.admin-body .parcours .pc-etapes li.remise span { border-style: dashed; color: var(--muted); }
+.admin-body .parcours .pc-remise { background: var(--surface-2, #f6f1e7); border-radius: 10px; padding: 8px 12px; margin: 0 0 10px; }
+.admin-body .voir-suite { margin-top: 8px; }
+.admin-body .table.cartes tr[hidden] { display: none !important; }
+/* Paiements d'un client sur téléphone : deux lignes par paiement (date et montant, puis détail, statut et reçu). */
+@media (max-width: 760px) {
+  .admin-body .card .paiements-courts tbody tr:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; align-items: center; }
+  .admin-body .card .paiements-courts tbody td { display: block; padding: 0; text-align: left; }
+  .admin-body .card .paiements-courts tbody td::before { content: none; display: none; }
+  .admin-body .card .paiements-courts tbody td:nth-child(1) { grid-area: 1 / 1; font-weight: 700; }
+  .admin-body .card .paiements-courts tbody td:nth-child(3) { grid-area: 1 / 2 / 1 / 4; text-align: right; font-weight: 700; }
+  .admin-body .card .paiements-courts tbody td:nth-child(2) { grid-area: 2 / 1; color: var(--muted); font-size: 13px; }
+  .admin-body .card .paiements-courts tbody td:nth-child(4) { display: none; }
+  .admin-body .card .paiements-courts tbody td:nth-child(5) { grid-area: 2 / 2; }
+  .admin-body .card .paiements-courts tbody td:nth-child(6) { grid-area: 2 / 3; }
+}
+@media (max-width: 760px) {
+  .admin-body .card .paiements-courts tbody td:nth-child(4):not(:empty) { display: block; grid-area: 3 / 1 / 3 / 4; color: var(--muted); font-size: 13px; }
+  .admin-body .card .paiements-courts tbody td:nth-child(4):not(:empty)::before { content: 'Remboursé : '; display: inline; }
+}

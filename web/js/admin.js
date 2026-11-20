@@ -99,7 +99,20 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-onAuthStateChanged(auth, (user) => {
+// Seul un compte avec le badge administrateur (claim admin, posé côté serveur) entre dans l'admin. Un autre compte
+// Google est déconnecté tout de suite et revient à l'écran de connexion avec une phrase claire (Tanguy, 20/11),
+// au lieu d'arriver sur un tableau de bord vide. Les fonctions du serveur refusent de toute façon ses demandes.
+const estAdmin = async (user) => !!user && (await user.getIdTokenResult().catch(() => null))?.claims?.admin === true;
+onAuthStateChanged(auth, async (user) => {
+  if (user && !(await estAdmin(user))) {
+    $('dashboard').hidden = true;
+    $('signin').hidden = false;
+    $('signin-error').textContent = `Le compte ${user.email || ''} n'a pas accès à l'administration. Connectez-vous avec le compte administrateur.`;
+    $('signin-error').hidden = false;
+    await signOut(auth);
+    return;
+  }
+  if (user) $('signin-error').hidden = true;
   $('signin').hidden = !!user;
   $('dashboard').hidden = !user;
   $('who').textContent = user ? user.email : '';
@@ -131,8 +144,14 @@ function titreCommande(li, id, texte) {
   li.querySelector('strong').replaceChildren(a);
 }
 
+// Une ligne de liste = le nom du client ; la formule et l'adresse sont sur sa fiche (style du 20/11).
 function orderHead(c) {
-  return `${c.nom || c.email} · ${c.formule === 'sim' ? 'carte SIM' : 'Wi-Fi'}, tablette ${c.tablette === 'incluse' ? 'incluse' : 'achetée'}`;
+  return c.nom || c.email || 'Client';
+}
+// Toute la ligne ouvre la fiche (sauf ses boutons et ses liens).
+function ligneVersFiche(li, id) {
+  li.classList.add('cliquable');
+  li.addEventListener('click', (e) => { if (!e.target.closest('a, button, input, label')) location.hash = `#commande/${encodeURIComponent(id)}`; });
 }
 
 
@@ -148,7 +167,8 @@ async function loadOrders() {
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small adresse"></span>'
         + '<div class="envoi-suite"><span class="small avancement"></span><button type="button" class="primary small-btn"></button></div>';
       titreCommande(li, c.id, orderHead(c));
-      li.querySelector('.muted').textContent = `${c.email}${c.telephone ? ` · ${c.telephone}` : ''} · commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
+      ligneVersFiche(li, c.id);
+      li.querySelector('.muted').textContent = `Commandé ${ago(toDate(c.creeLe))}${c.fid ? ' · famille créée' : ''}`;
       li.querySelector('.adresse').textContent = livraisonTexte(c);
       const etapes = etapesEnvoi(c, {}).filter((e) => !e.saute || !e.saute({}));
       const p = c.preparation;
@@ -195,8 +215,11 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       prevenir(`Commande enregistrée, mais le kit n'a pas pu être sorti du stock : ${err.message}`);
     }
   };
-  return [
-    {
+  // Groupes montrés dans la liste des étapes (style du 20/11) : les noms se lisent en entier, rangés par moment.
+  const GROUPES = { mode: 'Tablette et carte SIM', tablette: 'Tablette et carte SIM', sim: 'Tablette et carte SIM', 'sim-installer': 'Tablette et carte SIM',
+    'hors-forfait': 'Tablette et carte SIM', blocages: 'Tablette et carte SIM', carton: 'Le colis', 'enceinte-choix': 'Le colis', fermer: 'Le colis',
+    feutre: 'Le colis', etiquette: 'L\'envoi', depot: 'L\'envoi', remise: 'L\'envoi' };
+  return [    {
       cle: 'mode',
       titre: 'Envoi ou main propre ?',
       texte: 'Comment la tablette arrive-t-elle chez la famille ?',
@@ -234,7 +257,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         const majChoix = () => {
           e.tablette = choix.value || null;
           const t = tablette(e);
-          alerte.textContent = dispo.length ? '' : 'Installez d\'abord une tablette : Stock > Recevoir une tablette.';
+          alerte.textContent = dispo.length ? '' : 'Installez d\'abord une tablette : Matériel, « + Ajouter », « Recevoir une tablette ».';
           choixSim.hidden = !internet || !t || !!t.simId;
           e.sim = choixSim.hidden ? null : choixSim.value || null;
           maj();
@@ -480,6 +503,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       // de la tablette. Notés une fois sur la carte SIM (sims/{id}.blocages) : pas redemandés au prochain envoi.
       // Le serveur refuse l'étiquette et « Colis déposé » tant qu'ils ne sont pas tous notés.
       cle: 'blocages',
+      plusTard: true,
       titre: 'Blocages chez l\'opérateur',
       texte: 'Dans l\'espace client de la ligne (ou au service client de l\'opérateur), activez ces blocages, puis cochez :',
       // Notés pendant CE parcours : l'étape reste dans la liste, sinon les étapes se décalent d'un cran et
@@ -496,6 +520,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
     },
     {
       cle: 'carton',
+      plusTard: true,
       titre: 'La tablette dans le carton',
       saute: enMain,
       cases: (e) => [
@@ -544,6 +569,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
     },
     {
       cle: 'feutre',
+      plusTard: true,
       saute: enMain,
       titre: 'Le numéro au feutre',
       texte: 'Écrivez ce numéro au feutre sur le carton : il permet de retrouver la commande si l\'étiquette se décolle.',
@@ -652,7 +678,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         await sortirDuStock(e);
       },
     },
-  ];
+  ].map((e) => ({ ...e, groupe: GROUPES[e.cle] }));
 }
 
 // Bouton « Préparer l'envoi » de la page d'une commande (gestion.js).
@@ -711,11 +737,15 @@ async function loadShipped() {
       if (c.alerteJumelage) li.classList.add('alert');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><a target="_blank" rel="noopener" class="small"></a>';
       titreCommande(li, c.id, orderHead(c));
-      const infos = [c.email, `envoyée ${ago(toDate(c.envoyeeLe))}`, `${c.rappels || 0} rappel(s) envoyé(s)`];
+      ligneVersFiche(li, c.id);
+      li.querySelector('span.small:not(.muted)').classList.add('adresse');
+      const infos = [`Envoyée ${ago(toDate(c.envoyeeLe))}`, (c.rappels ? `${c.rappels} rappel${c.rappels > 1 ? 's' : ''} envoyé${c.rappels > 1 ? 's' : ''}` : 'aucun rappel envoyé')];
       if (c.alerteJumelage) infos.push('pas jumelée après 20 jours : appeler le client');
       li.querySelector('.muted').textContent = infos.join(' · ');
-      li.querySelector('span.small:not(.muted)').textContent = c.mailErreur ? `E-mail non parti : ${c.mailErreur}` : livraisonTexte(c);
-      const a = li.querySelector('a');
+      li.querySelector('span.adresse').textContent = c.mailErreur ? `E-mail non parti : ${c.mailErreur}` : livraisonTexte(c);
+      if (c.mailErreur) li.querySelector('span.adresse').className = 'small texte-ko';
+      // a.small (le lien de suivi) : querySelector('a') prenait le titre (nom du client), qui disparaissait.
+      const a = li.querySelector('a.small');
       a.href = lienSuivi(c);
       a.textContent = `Suivre le colis ${c.suivi || ''}`;
       // Suite de l'envoi : déposé, reçu par le client (à cocher d'après le suivi), mis en route (jumelage, automatique).
@@ -782,7 +812,7 @@ async function loadReturns() {
       // Information seulement : le retour se coche et l'étiquette se refait sur la page de la commande.
       li.classList.add('cliquable');
       li.addEventListener('click', (e) => { if (!e.target.closest('a')) location.hash = `#commande/${encodeURIComponent(d.id)}`; });
-      li.querySelector('.muted').textContent = `${c.email || ''}${c.telephone ? ` · ${c.telephone}` : ''}`;
+      li.querySelector('.muted').remove();
       li.querySelector('span.small:not(.muted):not(.remb):not(.etiq)').textContent = (r.statut === 'echec'
         ? `Prélèvement échoué${r.erreur ? ` (${r.erreur})` : ''} : à relancer depuis Stripe.`
         : r.statut === 'a-recuperer' ? 'Matériel offert à récupérer.'
@@ -1150,10 +1180,19 @@ function carteFamille(f) {
   const titre = el('div', 'family-head');
   // Le ⋮ dépend des commandes de la famille (retour en cours) : posé dès qu'elles sont lues.
   const place = el('span');
-  titre.append(el('span', 'dot'), el('h2', null, f.name), place);
+  const abo = f.abonnement?.statut || 'aucun';
+  titre.append(el('span', 'dot'), el('h2', null, f.name),
+    el('span', `badge ${s.cls === 'on' ? 'ok' : s.cls === 'off' ? 'ko' : 'neutre'}`, s.label),
+    el('span', `badge ${['impaye', 'suspendu'].includes(abo) ? 'ko' : ['actif', 'offert'].includes(abo) ? 'info' : 'neutre'}`, `Abonnement : ${(ABONNEMENT_FAMILLE[abo] || 'Aucun').toLowerCase()}`),
+    el('span', 'espace'), place);
+  // Ce qu'on regarde d'abord : la tablette sert-elle, la famille envoie-t-elle.
+  const tuile = (valeur, texte) => { const t = el('div', 'stat'); t.append(el('span', null, String(valeur)), el('p', null, texte)); return t; };
+  const tuiles = el('div', 'tuiles');
+  tuiles.append(tuile(ago(f.active), 'tablette utilisée'), tuile(ago(f.lastPost), 'dernier envoi'),
+    tuile(f.people ?? '–', 'proches'), tuile(f.posts ?? '–', 'photos et messages'));
   donnees().then((d) => d.commandes || []).catch(() => [])
     .then((commandes) => place.replaceWith(menuFamille(f, tete, commandes.filter((c) => c.fid === f.id))));
-  const dl = el('dl', 'fiche');
+  const dl = el('dl', 'fiche kv');
   // Le nom se corrige au crayon, comme sur les pages tablette et carte SIM.
   dl.append(...ligneModifiable('Nom', f.name, { valeur: f.name, enregistrer: async (v) => {
     const nom = v.trim();
@@ -1171,19 +1210,13 @@ function carteFamille(f) {
     }
   } }));
   for (const [k, v] of [
-    ['État', s.label],
     ['Code de la famille', f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '–'],
-    ['Tablette utilisée', ago(f.active)],
-    ['Version', f.version || '–'],
+    ['Version de Papote', f.version || '–'],
     ['Luminosité de jour', luminositeTexte(f.luminosite)],
-    ['Abonnement', ABONNEMENT_FAMILLE[f.abonnement?.statut] || 'Aucun'],
-    ['Proches', f.people ?? '–'],
-    ['Photos et messages', f.posts ?? '–'],
-    ['Dernier envoi', ago(f.lastPost)],
     ['Créée', toDate(f.createdAt) ? toDate(f.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '–'],
     ['Identifiant', f.id],
-  ]) dl.append(el('dt', null, k), el('dd', k === 'État' ? 'etat' : null, v));
-  tete.append(titre, dl);
+  ]) dl.append(el('dt', null, k), el('dd', null, v));
+  tete.append(titre, tuiles, dl);
 
   // Membres affichés d'office, avec les demandes « veut rejoindre » en tête.
   const membres = el('li', 'card');
@@ -1306,7 +1339,7 @@ function render() {
   $('familles-liste').hidden = !!ouverte;
   $('famille-fiche').hidden = !ouverte;
   // Famille ouverte : une page à elle, sans les onglets de la liste.
-  document.querySelector('[data-panneau="clients"] .onglets').hidden = !!ouverte;
+  document.querySelector('[data-panneau="clients"] .onglets-caches').hidden = !!ouverte;
   if (ouverte && $('famille-fiche').dataset.fid !== ouverte.id + JSON.stringify(ouverte.abonnement || null)) {
     $('famille-fiche').dataset.fid = ouverte.id + JSON.stringify(ouverte.abonnement || null);
     $('families').replaceChildren(...carteFamille(ouverte));

@@ -36,6 +36,7 @@
   <link rel="stylesheet" href="css/admin.css">
   <link rel="stylesheet" href="css/gestion.css">
   <link rel="stylesheet" href="css/validation.css">
+  <link rel="stylesheet" href="css/admin-ui.css">
 </head>
 <body class="admin-body">
   <div id="chargement" class="chargement" role="status">
@@ -66,23 +67,17 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
           Accueil<span class="pastille" id="n-accueil" hidden></span></a>
         <a href="#commandes" data-page="commandes">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/></svg>
-          Commandes<span class="pastille" id="n-commandes" hidden></span></a>
-        <a href="#clients" data-page="clients">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1M16 3.5a4 4 0 0 1 0 7M18 14a6 6 0 0 1 4 5.6V21"/></svg>
-          Clients</a>
+          Clients<span class="pastille" id="n-commandes" hidden></span></a>
         <a href="#stock" data-page="stock">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v12H4zM2 4h20v4H2zM10 12h4"/></svg>
-          Stock<span class="pastille" id="n-stock" hidden></span></a>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM11 18h2"/></svg>
+          Matériel<span class="pastille" id="n-stock" hidden></span></a>
         <a href="#compta" data-page="compta">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h3.5v-9H4zm6.25 0h3.5V5h-3.5zM16.5 20H20v-6h-3.5z"/></svg>
           Comptabilité</a>
         <a href="#statistiques" data-page="statistiques">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 15l4-4 3 3 6-7"/></svg>
-          Statistiques</a>
-        <a href="#validation" data-page="validation">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>
-          Validation</a>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          Site</a>
         <a href="#outils" data-page="outils" class="nav-reglages">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z"/></svg>
           Réglages</a>
@@ -123,62 +118,67 @@
 
       <!-- ---------- Accueil ---------- -->
       <section data-panneau="accueil">
-        <div class="ligne-chiffres">
-          <div class="stats compact" id="kpi-mois"></div>
+        <p id="sous-accueil" class="sous-titre"></p>
+        <div class="deux-colonnes">
+          <div>
+            <h2 class="titre-bloc">À faire</h2>
+            <div class="filtres no-print" id="filtres-taches" role="group" aria-label="Montrer" hidden></div>
+            <ul id="a-faire" class="a-faire liste-courte"></ul>
+          </div>
+          <div>
+            <div class="card">
+              <div class="carte-tete"><h2>Ce mois-ci</h2><a href="#compta/bilan">Bilan ›</a></div>
+              <div class="tuiles" id="kpi-mois"></div>
+            </div>
+            <div class="card" id="alertes-accueil" hidden></div>
+          </div>
         </div>
-        <div class="card">
-          <h2>À faire</h2>
-          <ul id="a-faire" class="a-faire"></ul>
-        </div>
-        <div class="card" id="alertes-accueil" hidden></div>
       </section>
 
       <!-- ---------- Commandes ---------- -->
       <section data-panneau="commandes" hidden>
-        <div class="stats" id="kpi-commandes"></div>
-        <div class="card" data-vue="a-envoyer">
-          <div class="tete">
-            <h2>Tablettes à envoyer</h2>
-            <button type="button" class="secondary small-btn no-print" id="b-offerte">+ Commande offerte</button>
+        <nav class="onglets onglets-liens no-print" data-sous="clients" aria-label="Clients"></nav>
+        <div class="barre-liste">
+          <div class="filtres no-print" id="kpi-commandes" role="group" aria-label="Montrer"></div>
+          <span class="espace"></span>
+          <button type="button" class="secondary small-btn no-print" id="b-offerte">+ Commande offerte</button>
+          <div class="menu-actions no-print" data-titre="Autres actions sur les clients">
+            <button type="button" id="x-commandes" data-detail="Toutes les commandes, pour Excel">Exporter</button>
           </div>
+        </div>
+        <div data-vue="a-envoyer">
           <ul id="orders" class="orders"></ul>
           <p id="orders-empty" class="muted small" hidden>Aucune commande en attente.</p>
         </div>
-        <div class="card" data-vue="en-route">
-          <h2>Envoyées, pas encore jumelées</h2>
+        <div data-vue="en-route">
           <ul id="shipped" class="orders"></ul>
           <p id="shipped-empty" class="muted small" hidden>Aucune tablette en route.</p>
         </div>
-        <div class="card" data-vue="retour">
-          <h2>Tablettes à récupérer</h2>
+        <div data-vue="retour">
           <ul id="returns" class="orders"></ul>
           <p id="returns-empty" class="muted small" hidden>Aucune tablette à récupérer.</p>
         </div>
-        <div class="card" data-vue="toutes">
-          <div class="tete">
-            <h2>Toutes les commandes</h2>
-            <div class="actions no-print">
-              <select id="filtre-commandes" aria-label="Filtrer">
-                <option value="">Toutes</option>
-                <option value="a-envoyer">À envoyer</option>
-                <option value="paiement">Paiement en attente (SEPA)</option>
-                <option value="en-route">Envoyées, pas jumelées</option>
-                <option value="active">En service</option>
-                <option value="arret">Arrêt prévu</option>
-                <option value="retour">Tablette à récupérer</option>
-                <option value="terminee">Terminées</option>
-                <option value="annulee">Annulées</option>
-              </select>
-              <button type="button" class="secondary small-btn" id="x-commandes">Exporter</button>
-            </div>
-          </div>
-          <div class="table"><table id="t-commandes" class="cliquable"></table></div>
+        <div data-vue="toutes">
+          <select id="filtre-commandes" aria-label="Filtrer" hidden>
+            <option value="">Toutes</option>
+            <option value="a-envoyer">À envoyer</option>
+            <option value="paiement">Paiement en attente (SEPA)</option>
+            <option value="en-route">Envoyées, pas jumelées</option>
+            <option value="active">En service</option>
+            <option value="arret">Arrêt prévu</option>
+            <option value="retour">Tablette à récupérer</option>
+            <option value="terminee">Terminées</option>
+            <option value="annulee">Annulées</option>
+          </select>
+          <div class="table courte"><table id="t-commandes" class="cliquable"></table></div>
         </div>
       </section>
 
       <!-- ---------- Clients et e-mails d'information ---------- -->
       <section data-panneau="clients" hidden>
-        <div class="onglets no-print" role="tablist">
+        <nav class="onglets onglets-liens no-print" data-sous="clients" aria-label="Clients"></nav>
+        <nav class="onglets onglets-liens no-print" data-sous="site" aria-label="Site"></nav>
+        <div class="onglets no-print onglets-caches" role="tablist">
           <button type="button" data-onglet="liste">Clients</button>
           <button type="button" data-onglet="familles">Familles et tablettes</button>
           <button type="button" data-onglet="email">E-mail d'information</button>
@@ -189,12 +189,15 @@
           <div class="attente" role="status"><span class="roue"></span><p>Chargement des déclarations…</p></div>
         </div>
         <div data-onglet="liste">
-          <div class="stats" id="kpi-clients"></div>
-          <div class="card">
-            <div class="tete">
-              <input id="cherche-clients" type="search" placeholder="Chercher" aria-label="Chercher un nom, un e-mail, un téléphone">
-              <div class="actions no-print">
-                <select id="filtre-clients" aria-label="Filtrer">
+          <div class="barre-liste">
+            <input id="cherche-clients" class="cherche-liste no-print" type="search" placeholder="Chercher un contact" aria-label="Chercher un nom, un e-mail, un téléphone">
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-titre="Autres actions sur les contacts">
+              <button type="button" id="x-clients" data-detail="La liste affichée, pour Excel">Exporter</button>
+            </div>
+          </div>
+          <div class="filtres no-print filtres-seuls" id="kpi-clients" role="group" aria-label="Montrer"></div>
+          <select id="filtre-clients" aria-label="Filtrer" hidden>
                   <option value="">Tout le monde</option>
                   <option value="client">Abonnés</option>
                   <option value="ancien">Anciens clients</option>
@@ -203,11 +206,8 @@
                   <option value="chat">Contacts du chat</option>
                   <option value="accord">Acceptent les e-mails</option>
                 </select>
-                <button type="button" class="secondary small-btn" id="x-clients">Exporter</button>
-              </div>
-            </div>
-            <div class="table"><table id="t-clients" class="cliquable"></table></div>
-          </div>
+          <div class="table courte"><table id="t-clients" class="cliquable"></table></div>
+          <p class="small muted kpi-suite" id="clients-suite"></p>
         </div>
         <div data-onglet="familles">
         <div id="loading-families" class="attente" role="status"><span class="roue"></span><p>Chargement des familles…</p></div>
@@ -218,7 +218,7 @@
           </div>
         </div>
         <div id="famille-fiche" hidden>
-          <button type="button" class="retour" id="famille-retour">Retour</button>
+          <button type="button" class="retour" id="famille-retour">Familles</button>
           <ul id="families" class="families"></ul>
           <div class="card" id="famille-liens"></div>
           <div id="famille-actions"></div>
@@ -256,53 +256,45 @@
           <button type="button" data-onglet="tablettes">Tablettes</button>
           <button type="button" data-onglet="sim">Cartes SIM</button>
           <button type="button" data-onglet="accessoires">Accessoires</button>
-          <button type="button" data-onglet="achats">Achats</button>
         </div>
         <div data-onglet="tablettes">
-          <div class="stats" id="kpi-stock"></div>
-          <p class="small kpi-suite" id="kpi-stock-suite"></p>
-          <div class="card">
-            <div class="tete">
-              <select id="filtre-stock" aria-label="Filtrer"><option value="">Toutes</option></select>
-              <div class="actions no-print">
-                <button type="button" class="secondary small-btn" id="x-stock">Exporter</button>
-                <button type="button" class="secondary small-btn" id="btn-achat">Ajouter un achat</button>
-                <button type="button" class="secondary small-btn" id="btn-installer-qr">Installer une tablette</button>
-                <button type="button" class="primary small-btn" id="btn-recevoir">Recevoir une tablette</button>
-              </div>
+          <div class="barre-liste">
+            <div class="filtres no-print" id="filtres-stock" role="group" aria-label="Filtrer les tablettes"></div>
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-texte="+ Ajouter" data-classe="principal" data-titre="Ajouter des tablettes">
+              <button type="button" id="btn-recevoir" data-detail="Elle arrive du vendeur : la noter en stock">Recevoir une tablette</button>
+              <button type="button" id="btn-installer-qr" data-detail="Sur place, par QR code">Installer une tablette</button>
+              <button type="button" id="btn-achat" data-detail="Une commande passée chez un vendeur">Ajouter un achat</button>
             </div>
-            <div class="table"><table id="t-stock"></table></div>
-            <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
+            <div class="menu-actions no-print" data-titre="Autres actions sur les tablettes">
+              <button type="button" id="x-stock" data-detail="Toute la liste, pour Excel">Exporter</button>
+            </div>
           </div>
+          <select id="filtre-stock" aria-label="Filtrer" hidden><option value="">Toutes</option></select>
+          <div class="table courte"><table id="t-stock"></table></div>
+          <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
+          <p class="small muted kpi-suite" id="kpi-stock-suite"></p>
         </div>
         <div data-onglet="sim">
-          <div class="card">
-            <div class="tete">
-              <select id="filtre-sim" aria-label="Filtrer"><option value="">Toutes sauf résiliées</option></select>
-              <button type="button" class="primary small-btn no-print" id="btn-sim">Ajouter une carte SIM</button>
-            </div>
-            <p class="muted small" id="sim-resume"></p>
-            <div class="table"><table id="t-sim"></table></div>
+          <div class="barre-liste">
+            <div class="filtres no-print" id="filtres-sim" role="group" aria-label="Filtrer les cartes SIM"></div>
+            <span class="espace"></span>
+            <button type="button" class="primary small-btn no-print" id="btn-sim">+ Ajouter</button>
           </div>
+          <select id="filtre-sim" aria-label="Filtrer" hidden><option value="">Toutes sauf résiliées</option></select>
+          <div class="table courte"><table id="t-sim"></table></div>
+          <p class="muted small kpi-suite" id="sim-resume"></p>
         </div>
-        <div class="card" data-onglet="accessoires">
-          <div class="tete">
-            <p class="muted small">Ils sortent tout seuls du stock quand une tablette part avec la formule choisie.</p>
-            <div class="actions no-print">
-              <button type="button" class="secondary small-btn" id="btn-accessoire">Ajouter un accessoire</button>
-              <button type="button" class="primary small-btn" id="btn-recevoir-accessoire">Recevoir une livraison</button>
+        <div data-onglet="accessoires">
+          <div class="barre-liste">
+            <p class="muted small" style="margin:0">Ils sortent tout seuls du stock quand une tablette part avec la formule choisie.</p>
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-texte="+ Ajouter" data-classe="principal" data-titre="Ajouter des accessoires">
+              <button type="button" id="btn-recevoir-accessoire" data-detail="Une livraison arrivée : mettre à jour le stock">Recevoir une livraison</button>
+              <button type="button" id="btn-accessoire" data-detail="Une nouvelle sorte (chargeur, support…)">Nouvel accessoire</button>
             </div>
           </div>
-          <div class="table"><table id="t-accessoires"></table></div>
-        </div>
-        <div class="card" data-onglet="achats">
-          <div class="tete">
-            <p class="muted small">Commandes passées chez les vendeurs (Cdiscount…), avec leur facture. Une facture transférée à factures@mapapote.fr arrive ici toute seule.</p>
-            <div class="actions no-print">
-              <button type="button" class="secondary small-btn" id="btn-achat-2">Ajouter un achat</button>
-            </div>
-          </div>
-          <div class="table"><table id="t-achats-vendeurs"></table></div>
+          <div class="table courte"><table id="t-accessoires"></table></div>
         </div>
       </section>
 
@@ -311,59 +303,105 @@
         <h2 class="titre-print" id="bilan-titre">Bilan</h2>
         <div class="onglets no-print" role="tablist">
           <button type="button" data-onglet="bilan">Bilan</button>
-          <button type="button" data-onglet="factures">Factures</button>
+          <button type="button" data-onglet="factures">Recettes</button>
           <button type="button" data-onglet="depenses">Dépenses</button>
-          <button type="button" data-onglet="urssaf">URSSAF et TVA</button>
-          <button type="button" data-onglet="rentabilite">Rentabilité</button>
-          <button type="button" data-onglet="registres">Registres</button>
+          <button type="button" data-onglet="urssaf">Déclarations</button>
         </div>
         <div data-onglet="bilan">
-          <div class="stats" id="kpi-argent"></div>
-          <div class="stats" id="kpi-activite"></div>
           <div class="card">
-            <div class="tete">
-              <h2>Mois par mois</h2>
-              <div class="actions no-print">
-                <button type="button" class="secondary small-btn" id="imprimer">Imprimer / PDF</button>
-                <button type="button" class="primary small-btn" id="x-tout">Tout exporter pour le comptable</button>
+            <div class="tete-fiche">
+              <h2>Sur la période</h2>
+              <div class="tete-actions no-print">
+                <button type="button" class="secondary small-btn" id="x-tout">Exporter pour le comptable</button>
+                <div class="menu-actions" data-titre="Autres actions sur le bilan">
+                  <button type="button" id="imprimer" data-detail="Le bilan de la période, en PDF">Imprimer / PDF</button>
+                </div>
               </div>
             </div>
-            <div class="table"><table id="t-bilan"></table></div>
+            <div class="tuiles quatre" id="kpi-argent"></div>
           </div>
-          <div class="card">
-            <div class="graphiques">
-              <figure><figcaption>Encaissé, dépenses et résultat par mois</figcaption><div id="g-argent"></div></figure>
-              <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
+          <div class="deux-colonnes">
+            <div>
+              <div class="card">
+                <h2>Mois par mois</h2>
+                <div class="table"><table id="t-bilan"></table></div>
+                <p class="no-print" id="bilan-vides" hidden><button type="button" class="link" id="btn-bilan-vides"></button></p>
+              </div>
+              <div class="card">
+                <div class="graphiques">
+                  <figure><figcaption>Encaissé, dépenses et résultat par mois</figcaption><div id="g-argent"></div></figure>
+                  <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="card">
+                <h2>En détail</h2>
+                <div class="lignes-kv" id="kpi-activite"></div>
+              </div>
             </div>
           </div>
+          <details class="card repli" id="rentabilite">
+            <summary><h2>Rentabilité d'un abonné</h2><span class="badge" id="rentabilite-resume"></span></summary>
+            <details class="aide-repliee"><summary>Comment c'est calculé ?</summary>
+              <p class="muted small">Par abonné : ce qui reste chaque mois après frais Stripe, URSSAF et forfait SIM ; ce que coûte un nouveau client au départ (matériel, colis, envoi et retour, moins la mise en service) ; et en combien de mois il est remboursé.</p>
+            </details>
+            <div class="table" tabindex="0"><table id="t-rentabilite"></table></div>
+            <h3>Contenu du colis</h3>
+            <div id="rentabilite-colis"></div>
+          </details>
         </div>
         <div data-onglet="factures">
-        <div class="stats" id="kpi-factures"></div>
-        <div class="card">
-          <div class="tete">
-            <select id="filtre-factures" aria-label="Filtrer">
-              <option value="">Toutes</option>
-              <option value="paid">Payées</option>
-              <option value="open">À payer</option>
-              <option value="uncollectible">Irrécouvrables</option>
-              <option value="void">Annulées</option>
-            </select>
-            <button type="button" class="secondary small-btn no-print" id="x-factures">Exporter</button>
+          <div class="barre-liste">
+            <div class="filtres no-print" id="filtres-factures" role="group" aria-label="Filtrer les recettes"></div>
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-titre="Autres actions sur les recettes">
+              <button type="button" id="x-factures" data-detail="Toutes les factures, pour Excel">Exporter</button>
+            </div>
           </div>
-          <div class="table"><table id="t-factures"></table></div>
+          <select id="filtre-factures" aria-label="Filtrer" hidden>
+            <option value="">Toutes</option>
+            <option value="paid">Payées</option>
+            <option value="open">À payer</option>
+            <option value="uncollectible">Irrécouvrables</option>
+            <option value="void">Annulées</option>
+          </select>
+          <div class="card"><div class="tuiles trois" id="kpi-factures"></div></div>
+          <div class="table courte"><table id="t-factures"></table></div>
         </div>
-        </div>
-        <div class="card" data-onglet="rentabilite">
-          <p class="muted small">Par abonné : ce qui reste chaque mois après frais Stripe, URSSAF et forfait SIM ; ce que coûte un nouveau client au départ (matériel, colis, envoi et retour, moins la mise en service) ; et en combien de mois il est remboursé.</p>
-          <div class="table" tabindex="0"><table id="t-rentabilite"></table></div>
-          <h3>Contenu du colis</h3>
-          <div id="rentabilite-colis"></div>
+        <div data-onglet="depenses">
+          <div class="barre-liste">
+            <div class="filtres no-print" id="filtres-depenses" role="group" aria-label="Filtrer les dépenses"></div>
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-texte="+ Ajouter" data-classe="principal" data-titre="Ajouter une dépense">
+              <button type="button" id="btn-depense" data-detail="Facture, abonnement, frais…">Une dépense</button>
+              <button type="button" id="btn-achat-2" data-detail="Tablettes ou matériel commandés chez un vendeur : crée aussi les fiches du stock">Un achat de matériel</button>
+            </div>
+          </div>
+          <div class="deux-colonnes">
+          <div>
+          <div class="table courte"><table id="t-achats"></table></div>
+          </div>
+          <div>
+          <div class="card" id="carte-categories">
+            <h2>Par catégorie</h2>
+            <div class="table"><table id="t-categories"></table></div>
+          </div>
+          <div class="card">
+            <h2>Factures reçues par e-mail</h2>
+            <details class="aide-repliee"><summary>Comment ça marche ?</summary>
+              <p class="muted small">Une facture envoyée à <strong>factures@mapapote.fr</strong> est lue et rangée toute seule (boîte relevée chaque heure). Dans « Ajouter une dépense », le justificatif choisi remplit la fiche tout seul ; on peut aussi glisser un fichier sur la page.</p>
+            </details>
+            <p id="courrier" class="small muted"></p>
+            <p class="no-print releve"><button type="button" class="secondary small-btn" id="btn-courrier">Relever maintenant</button>
+              <span id="courrier-etat" class="small" role="status"></span></p>
+          </div>
+          </div>
+          </div>
         </div>
         <div data-onglet="urssaf">
-          <div class="card">
-            <h2>Franchise de TVA</h2>
-            <div id="tva"></div>
-          </div>
+          <div class="deux-colonnes">
+          <div>
           <div class="card">
             <div class="tete">
               <h2>Déclarations URSSAF</h2>
@@ -375,22 +413,19 @@
             <div class="table"><table id="t-urssaf"></table></div>
             <p class="muted small">Chiffre d'affaires encaissé, sans déduire frais ni dépenses. Taux à vérifier sur autoentrepreneur.urssaf.fr (réglable dans Réglages).</p>
           </div>
-        </div>
-        <div class="card" data-onglet="depenses">
-          <div class="tete">
-            <span></span>
-            <div class="actions no-print">
-              <button type="button" class="primary small-btn" id="btn-depense">Ajouter une dépense</button>
-            </div>
           </div>
-          <div class="table"><table id="t-achats"></table></div>
-          <div class="table"><table id="t-categories"></table></div>
-          <p class="muted small">Une facture envoyée à <strong>factures@mapapote.fr</strong> est lue et rangée toute seule (boîte relevée chaque heure). Dans « Ajouter une dépense », le justificatif choisi remplit la fiche tout seul ; on peut aussi glisser un fichier sur la page.</p>
-          <p id="courrier" class="small muted"></p>
-          <p class="no-print releve"><button type="button" class="secondary small-btn" id="btn-courrier">Relever maintenant</button>
-            <span id="courrier-etat" class="small" role="status"></span></p>
-        </div>
-        <div data-onglet="registres">
+          <div>
+          <div class="card">
+            <h2>Franchise de TVA</h2>
+            <div id="tva"></div>
+          </div>
+          <div class="card">
+            <h2>Virements Stripe vers la banque</h2>
+            <div class="table"><table id="t-virements"></table></div>
+          </div>
+          </div>
+          </div>
+          <h2 class="titre-section" id="registres">Registres</h2>
           <div class="card">
             <h2>Livre des recettes</h2>
             <div class="table"><table id="t-recettes"></table></div>
@@ -405,10 +440,6 @@
             <div class="table"><table id="t-archives"></table></div>
             <div class="table"><table id="t-impots"></table></div>
           </div>
-          <div class="card">
-            <h2>Virements Stripe vers la banque</h2>
-            <div class="table"><table id="t-virements"></table></div>
-          </div>
         </div>
       </section>
 
@@ -416,6 +447,7 @@
       <!-- ---------- Validation : tout voir et tout valider avant le 5 décembre (validation.js) ---------- -->
       <!-- ---------- Statistiques du site (js/statistiques.js) : visiteurs, tunnel de commande, provenance ---------- -->
       <section data-panneau="statistiques" hidden>
+        <nav class="onglets onglets-liens no-print" data-sous="site" aria-label="Site"></nav>
         <div class="onglets no-print" id="stats-periode" role="group" aria-label="Période">
           <button type="button" data-jours="7">7 jours</button>
           <button type="button" data-jours="30">30 jours</button>
@@ -433,17 +465,19 @@
           <h2>D'où ils viennent</h2>
           <div id="stats-sources"></div>
         </div>
-        <div class="card">
-          <h2>Jour par jour</h2>
+        <!-- Replié : 30 à 90 lignes, utile seulement pour chercher un jour précis. -->
+        <details class="card repli-jours">
+          <summary><h2>Jour par jour</h2></summary>
           <div id="stats-jours"></div>
-        </div>
+        </details>
       </section>
 
       <section data-panneau="validation" hidden>
+        <nav class="onglets onglets-liens no-print" data-sous="reglages" aria-label="Réglages"></nav>
         <div class="onglets no-print" role="tablist">
           <button type="button" data-onglet="ecrans">Écrans</button>
           <button type="button" data-onglet="parcours">Parcours</button>
-          <button type="button" data-onglet="depenses">Dépenses</button>
+          <button type="button" data-onglet="depenses">Coûts prévus</button>
           <button type="button" data-onglet="gestes">Gestes humains</button>
         </div>
         <div data-onglet="ecrans" id="v-ecrans"></div>
@@ -458,13 +492,16 @@
           <button type="button" data-onglet="expedition">Expédition</button>
           <button type="button" data-onglet="calculs">Calculs</button>
           <button type="button" data-onglet="maintenance">Maintenance</button>
+          <a href="#validation" class="onglet-lien">Validation</a>
         </div>
         <div class="card" data-onglet="automatique">
-          <div class="tete">
+          <div class="tete-fiche">
             <h2>Tâches automatiques</h2>
-            <div class="actions">
-              <button type="button" class="secondary small-btn" id="btn-recap">Envoyer le récap</button>
-              <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
+            <div class="tete-actions no-print">
+              <div class="menu-actions" data-texte="Actions" data-titre="Lancer à la main">
+                <button type="button" id="btn-automatiser" data-detail="Les tâches de la nuit, tout de suite">Lancer maintenant</button>
+                <button type="button" id="btn-recap" data-detail="Le récap de la semaine à contact@mapapote.fr">Envoyer le récap</button>
+              </div>
             </div>
           </div>
           <p class="muted small">Chaque nuit : facture du matériel non rendu, avoirs des remboursements, dépenses mensuelles. Chaque lundi à 8 h : récap de la semaine à contact@mapapote.fr.</p>
@@ -483,7 +520,7 @@
           <h2>Anciennes photos et vidéos</h2>
           <p class="muted small">Déplace vers Storage les envois faits avant Storage, sans rien changer pour les familles.</p>
           <p id="migrate-count" class="small"></p>
-          <button type="button" id="btn-migrate" class="primary wide" disabled>Transférer vers Storage</button>
+          <button type="button" id="btn-migrate" class="secondary small-btn" disabled>Transférer vers Storage</button>
           <pre id="migrate-log" class="log" hidden></pre>
         </div>
       </section>
@@ -509,10 +546,10 @@
         <details class="card aide-cas">
           <summary><h2>Tablette perdue ou volée</h2></summary>
           <ol class="aide-etapes">
-            <li><p><strong>Verrouillez-la à distance.</strong> Ouvrez la tablette dans le stock, puis « Verrouiller (perdue ou volée) » (il faut retaper son n° de série). Plus rien ne répond dessus ; les photos et données de la famille restent gardées. Si elle est éteinte, elle se verrouille dès qu'elle se reconnecte.</p>
+            <li><p><strong>Verrouillez-la à distance.</strong> Ouvrez la tablette (menu Matériel), bouton « Actions », puis « Verrouiller (perdue ou volée) » (il faut retaper son n° de série). Plus rien ne répond dessus ; les photos et données de la famille restent gardées. Si elle est éteinte, elle se verrouille dès qu'elle se reconnecte.</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
             <li><p><strong>Envoyez-en une autre.</strong> Sur la commande du client, menu ⋮ « Remplacer un élément du kit (cassé ou perdu)… » : d'abord la tablette, puis la carte SIM (l'ancienne carte passe « suspendue » : résiliez-la aussi chez l'opérateur). Prévenez la famille par téléphone : l'étiquette de retour qu'elle reçoit par e-mail ne sert pas si la tablette a disparu.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les clients</a></p></li>
             <li><p><strong>Rayez l'ancienne du stock.</strong> Sur sa page, menu ⋮ « Déclarer perdue ». Si elle réapparaît : ⋮ « Retrouvée », puis « Déverrouiller ».</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
           </ol>
@@ -524,9 +561,9 @@
             <li><p><strong>Repérez la famille.</strong> L'accueil l'affiche dans « À faire » : « en retard de paiement », avec la date de mise en pause. Pendant 7 jours, tout marche encore ; ensuite la tablette affiche « Papote est en pause ».</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#accueil">Ouvrir l'accueil</a></p></li>
             <li><p><strong>Appelez la famille.</strong> Elle met à jour sa carte ou son compte dans l'appli famille : Réglages, page Abonnement, « Carte bancaire et factures ». Tout repart dès que le paiement passe. Son numéro est dans la liste des clients.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#clients/liste">Ouvrir les clients</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#clients/liste">Ouvrir les contacts</a></p></li>
             <li><p><strong>Toujours rien ?</strong> Regardez le paiement dans Stripe (refus, contestation). Après 30 jours de pause, l'accueil vous propose de demander le retour de la tablette (« Arrêter l'abonnement » sur la commande).</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="https://dashboard.stripe.com" target="_blank" rel="noopener">Ouvrir Stripe ↗</a><a class="secondary small-btn" href="#compta/factures">Voir les factures</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="https://dashboard.stripe.com" target="_blank" rel="noopener">Ouvrir Stripe ↗</a><a class="secondary small-btn" href="#compta/factures">Voir les recettes</a></p></li>
           </ol>
         </details>
 
@@ -535,9 +572,9 @@
           <ol class="aide-etapes">
             <li><p><strong>Demandez un justificatif.</strong> Un bulletin d'hospitalisation, envoyé par la famille (e-mail ou photo).</p></li>
             <li><p><strong>Mettez en pause.</strong> Sur la commande, menu ⋮ « Pause hospitalisation… », puis la date de sortie prévue. Un mois qui compte plus de 2 semaines d'hospitalisation n'est pas prélevé (le dernier mois à l'arrêt compris), et plus d'alerte « ne répond plus » jusque-là ; la famille reçoit un e-mail. La tablette continue de marcher. Le menu ne la propose qu'après les 30 premiers jours de l'abonnement : avant, appelez la famille.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les clients</a></p></li>
             <li><p><strong>Au retour.</strong> À la date choisie, les prélèvements reprennent seuls. Retour plus tôt : menu ⋮ « Reprendre les prélèvements » sur la commande.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les clients</a></p></li>
           </ol>
         </details>
 
@@ -570,7 +607,7 @@
             <li><p><strong>Trouvez une tablette de rechange.</strong> Il en faut une « En stock » dans la liste des tablettes.</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
             <li><p><strong>Remplacez-la.</strong> Sur la commande du client, menu ⋮ « Remplacer un élément du kit (cassé ou perdu)… », « la tablette », avec le motif (ex. écran cassé). L'étiquette d'envoi s'ouvre ; celle du retour part au client par e-mail. Sa carte SIM passe dans la nouvelle tablette. Vous pouvez aussi faire l'échange en main propre.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les clients</a></p></li>
             <li><p><strong>Quand l'ancienne revient.</strong> L'accueil la suit (« remplacée, à récupérer »). Une fois revenue, sur sa page : menu ⋮ « Mettre à réparer », ou « Déclarer hors service » si elle est fichue.</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
           </ol>
@@ -578,10 +615,12 @@
       </section>
       <!-- ---------- Page d'une tablette (#tablette/id) ---------- -->
       <section data-panneau="tablette" hidden>
-        <p class="no-print"><a href="#stock/tablettes" class="retour">Retour</a></p>
-        <div class="card">
-          <div class="tete-fiche"><h2 id="dt-titre">Tablette</h2><div class="tete-actions no-print" id="dt-actions"></div></div>
-          <dl class="fiche" id="dt-infos"></dl>
+        <p class="no-print"><a href="#stock/tablettes" class="retour">Tablettes</a></p>
+        <div class="tete-fiche"><h2 id="dt-titre">Tablette</h2><span id="dt-etat"></span><span class="espace"></span><div class="tete-actions no-print"><div id="dt-agir-menu"></div><div id="dt-actions"></div></div></div>
+        <div id="dt-frise"></div>
+        <div id="dt-releves" hidden></div>
+        <div id="dt-infos" class="deux-colonnes egales"></div>
+        <div class="card" id="dt-carte-modif">
           <form id="f-tablette" class="grille form-modif" hidden>
             <label>N° de série <span class="avec-bouton"><input name="numero"><button type="button" class="secondary small-btn scanner" data-cible="numero" hidden>Scanner</button></span></label>
             <label>Modèle <input name="modele"></label>
@@ -593,31 +632,43 @@
             <p class="f-msg small large" hidden></p>
           </form>
         </div>
-        <div class="card" id="dt-releves" hidden></div>
         <div class="card" id="dt-agir" hidden></div>
         <div class="card" id="dt-batterie" hidden></div>
-        <div class="card" id="dt-alertes" hidden></div>
-        <div class="card" id="dt-gardefous" hidden></div>
-        <div class="card">
-          <h2>Documents</h2>
-          <ul class="pieces" id="dt-pieces"></ul>
-        </div>
-        <div class="card">
-          <h2>Historique</h2>
-          <ul class="historique small muted" id="dt-historique"></ul>
+        <!-- Une seule carte de lignes qui s'ouvrent d'un toucher : le détail reste à un clic, sans encombrer la page. -->
+        <div class="card plis" id="dt-plis">
+          <details class="repli" id="dt-pli-reseau" hidden>
+            <summary><h2>Réseau mobile chez le client</h2><span class="badge" id="dt-n-reseau"></span></summary>
+            <div id="dt-reseau"></div>
+          </details>
+          <details class="repli" id="dt-pli-alertes">
+            <summary><h2>Alertes envoyées à la famille</h2><span class="badge" id="dt-n-alertes"></span></summary>
+            <div id="dt-alertes" hidden></div>
+          </details>
+          <details class="repli" id="dt-pli-gardefous">
+            <summary><h2>Garde-fous de la tablette</h2><span class="badge" id="dt-n-gardefous"></span></summary>
+            <div id="dt-gardefous" hidden></div>
+          </details>
+          <details class="repli" id="dt-bloc-pieces">
+            <summary><h2>Documents</h2><span class="badge" id="dt-n-pieces"></span></summary>
+            <ul class="pieces" id="dt-pieces"></ul>
+          </details>
+          <details class="repli">
+            <summary><h2>Historique</h2><span class="badge" id="dt-n-historique"></span></summary>
+            <ul class="historique small muted" id="dt-historique"></ul>
+          </details>
         </div>
       </section>
 
       <!-- ---------- Page d'un client (#client/e-mail) ---------- -->
       <section data-panneau="client" hidden>
-        <p class="no-print"><a href="#clients/liste" class="retour">Retour</a></p>
+        <p class="no-print"><a href="#clients/liste" class="retour">Contacts</a></p>
         <div id="dcl-corps"></div>
       </section>
 
       <!-- ---------- Page d'une commande (#commande/id) ---------- -->
       <!-- ---------- Page d'une carte SIM (#sim/id) ---------- -->
       <section data-panneau="sim" hidden>
-        <p class="no-print"><a href="#stock/sim" class="retour">Retour</a></p>
+        <p class="no-print"><a href="#stock/sim" class="retour">Cartes SIM</a></p>
         <div id="dsi-corps"></div>
       </section>
 
@@ -629,18 +680,18 @@
 
       <!-- ---------- Page d'un accessoire (#accessoire/id ; #accessoire/nouveau pour en ajouter un) ---------- -->
       <section data-panneau="accessoire" hidden>
-        <p class="no-print"><a href="#stock/accessoires" class="retour">Retour</a></p>
+        <p class="no-print"><a href="#stock/accessoires" class="retour">Accessoires</a></p>
         <div id="dx-corps"></div>
       </section>
 
       <!-- ---------- Page d'une dépense ou d'un achat fournisseur (#depense/id) ---------- -->
       <section data-panneau="depense" hidden>
-        <p class="no-print"><a href="#compta/depenses" class="retour">Retour</a></p>
+        <p class="no-print"><a href="#compta/depenses" class="retour">Dépenses</a></p>
         <div id="dd-corps"></div>
       </section>
 
       <section data-panneau="commande" hidden>
-        <p class="no-print"><a href="#commandes" class="retour">Retour</a></p>
+        <p class="no-print"><a href="#commandes" class="retour">Clients</a></p>
         <div id="dc-corps"></div>
       </section>
     </main>

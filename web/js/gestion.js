@@ -5,7 +5,7 @@
 // La connexion et les sections familles, envois et maintenance sont dans admin.js.
 import './retour.js';
 import './declarations.js';
-import { demander, saisir, prevenir, menuPoints, annoncer, boutonCharge, patienter, ligneModifiable } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints, menusDansLaPage, annoncer, boutonCharge, patienter, ligneModifiable } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -67,12 +67,12 @@ function remplirTable(table, colonnes, lignes, { total, vide = 'Rien sur cette p
   const ligne = (l) => {
     const cellules = Array.isArray(l) ? l : l.cellules;
     const tr = h('tr', l.onclick ? { tabIndex: 0, onclick: l.onclick, onkeydown: (e) => e.key === 'Enter' && l.onclick() } : {},
-      cellules.map((v, i) => h('td', { class: colonnes[i].n ? 'n' : null, 'data-titre': colonnes[i].titre }, v ?? '')));
+      cellules.map((v, i) => h('td', { class: [colonnes[i].n ? 'n' : '', colonnes[i].classe || ''].join(' ').trim() || null, 'data-titre': colonnes[i].titre }, v ?? '')));
     if (l.classe) tr.className = l.classe;
     return tr;
   };
   table.replaceChildren(
-    h('thead', {}, h('tr', {}, colonnes.map((c) => h('th', { class: c.n ? 'n' : null }, c.titre)))),
+    h('thead', {}, h('tr', {}, colonnes.map((c) => h('th', { class: [c.n ? 'n' : '', c.classe || ''].join(' ').trim() || null }, c.titre)))),
     h('tbody', {},
       lignes.length ? lignes.map(ligne) : h('tr', {}, h('td', { class: 'vide', colSpan: colonnes.length }, vide)),
       total ? h('tr', { class: 'total' }, total.map((v, i) => h('td', { class: colonnes[i].n ? 'n' : null }, v ?? ''))) : null),
@@ -92,6 +92,44 @@ function cliquable(el, faire) {
   el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); faire(); } });
   return el;
 }
+
+// Filtres en pastilles (« Toutes 13 », « À vérifier 3 ») au-dessus d'une liste : [{ valeur, libelle, n }].
+// Une pastille à 0 est cachée, sauf la première (« Toutes ») et celle choisie.
+function filtresPastilles(zone, choix, actuel, choisir) {
+  zone.replaceChildren(...choix.filter((c, i) => i === 0 || c.n || c.valeur === actuel).map((c) => h('button', {
+    type: 'button', class: c.valeur === actuel ? 'actif' : null, 'aria-pressed': String(c.valeur === actuel),
+    onclick: () => choisir(c.valeur),
+  }, c.libelle, c.n != null ? h('span', { class: 'n' }, String(c.n)) : null)));
+}
+
+// Première cellule d'une liste courte : le nom en gras, une ligne de détail en dessous.
+// Le détail complet ne s'affiche que sur téléphone (sur ordinateur, les colonnes le disent déjà) : class « tel ».
+const nomEtDetail = (nom, ...details) => {
+  const d = details.filter(Boolean);
+  return h('div', {}, h('strong', {}, nom),
+    d.length ? h('small', { class: 'tel' }, ...d.flatMap((x, i) => (i ? [' · ', x] : [x]))) : null);
+};
+
+// Bloc d'une fiche : un titre et ses lignes « libellé … valeur » ; rien si toutes les lignes sont vides.
+// Page d'une fiche (carte SIM, accessoire, dépense, client) : le nom et le ⋮ en tête de page, puis deux colonnes
+// de cartes courtes comme sur la tablette et la commande. `gauche` = le nombre de cartes de la colonne de gauche.
+function miseEnFiche(zone, titreCarte, gauche = 1) {
+  const cartes = [...zone.children];
+  const tete = cartes[0] && cartes[0].querySelector(':scope > .tete-fiche');
+  if (!tete) return;
+  zone.querySelectorAll('dl.fiche').forEach((d) => d.classList.add('kv'));
+  if (titreCarte) cartes[0].prepend(h('h2', {}, titreCarte));
+  const g = cartes.slice(0, gauche);
+  const d = cartes.slice(gauche);
+  zone.replaceChildren(tete, d.length
+    ? h('div', { class: 'deux-colonnes egales' }, h('div', {}, ...g), h('div', {}, ...d))
+    : h('div', { class: 'colonne-seule' }, ...g));
+}
+
+const blocFiche = (titre, ...lignes) => {
+  const l = lignes.flat();
+  return l.length ? h('div', { class: 'card' }, h('h2', {}, titre), h('dl', { class: 'fiche kv' }, l)) : null;
+};
 
 const badge = (texte, classe) => h('span', { class: `badge ${classe || ''}` }, texte);
 
@@ -224,13 +262,17 @@ const memoire = {
   ecrire: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* navigation privée */ } },
 };
 
+// Menus « + Ajouter » et « ⋯ » écrits dans admin.html : montés une fois, leurs boutons gardent leur id.
+menusDansLaPage();
+
+let prenomAdmin = ''; // prénom du compte connecté, pour « Bonjour Tanguy » sur l'accueil
 const TITRES = {
   accueil: 'Accueil',
-  commandes: 'Commandes',
+  commandes: 'Clients',
   clients: 'Clients',
-  stock: 'Stock',
+  stock: 'Matériel',
   compta: 'Comptabilité',
-  statistiques: 'Statistiques',
+  statistiques: 'Site',
   validation: 'Validation',
   outils: 'Réglages',
   aide: 'Que faire si…', // guide des pépins courants (admin.html, section « aide »)
@@ -243,10 +285,35 @@ const TITRES = {
   nouveau: 'Ajouter',
 };
 // Pages d'une fiche (#tablette/id, #commande/id) : le menu garde sa section allumée.
-const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients', depense: 'compta', sim: 'stock', accessoire: 'stock', nouveau: 'compta' };
+const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'commandes', depense: 'compta', sim: 'stock', accessoire: 'stock', nouveau: 'compta', validation: 'outils' };
+// Six rubriques (organisation du 20/11) : certaines rassemblent plusieurs pages, reliées par une barre d'onglets-liens
+// en haut (<nav data-sous>). [libellé, adresse, page, onglet] ; l'onglet allumé est celui de l'adresse en cours.
+const SOUS_MENUS = {
+  clients: [['Clients', '#commandes', 'commandes'], ['Familles', '#clients/familles', 'clients', 'familles'], ['Déclarations', '#clients/declarations', 'clients', 'declarations']],
+  site: [['Statistiques', '#statistiques', 'statistiques'], ['Contacts', '#clients/liste', 'clients', 'liste'], ['E-mail d\'information', '#clients/email', 'clients', 'email']],
+  reglages: [['Automatique', '#outils/automatique', 'outils', 'automatique'], ['Expédition', '#outils/expedition', 'outils', 'expedition'],
+    ['Calculs', '#outils/calculs', 'outils', 'calculs'], ['Maintenance', '#outils/maintenance', 'outils', 'maintenance'], ['Validation', '#validation', 'validation']],
+};
+// Onglets de la page Clients rangés dans la rubrique Site (contacts sans commande, e-mail d'information).
+const ONGLETS_SITE = ['liste', 'email'];
+document.querySelectorAll('nav[data-sous]').forEach((nav) => {
+  nav.replaceChildren(...SOUS_MENUS[nav.dataset.sous].map(([texte, href, page, onglet]) => {
+    const a = document.createElement('a');
+    a.href = href;
+    a.textContent = texte;
+    a.dataset.page = page;
+    if (onglet) a.dataset.versOnglet = onglet; // pas data-onglet : ce lien n'est pas un onglet de choisirOnglet
+    return a;
+  }));
+});
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
-const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
+// Stock > Achats est devenu le filtre « Matériel » des dépenses ; Rentabilité est dans Bilan, Registres dans Déclarations.
+const ANCIENNES = {
+  familles: 'clients/familles', factures: 'compta/factures', 'stock/achats': 'compta/depenses',
+  'compta/rentabilite': 'compta/bilan/rentabilite', 'compta/registres': 'compta/urssaf/registres',
+};
 const AVEC_PERIODE = ['compta'];
+let filtreDepenses = ''; // filtre en pastille des dépenses ('' = toutes, 'materiel'…), posé aussi par #stock/achats
 
 let connecte = false; // connexion admin faite (onAuthStateChanged plus bas)
 
@@ -280,28 +347,43 @@ document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) =
 });
 
 // Adresses qui ouvrent une page sur un bloc précis (id de l'élément) plutôt qu'en haut.
-const ANCRES = { 'compta/depenses/releve': 'courrier' };
+const ANCRES = { 'compta/depenses/releve': 'courrier', 'compta/bilan/rentabilite': 'rentabilite', 'compta/urssaf/registres': 'registres' };
 
 function afficherPage() {
-  const ancienne = ANCIENNES[location.hash.slice(1).split('/')[0]];
+  const morceaux = location.hash.slice(1).split('/');
+  const ancienne = ANCIENNES[morceaux.slice(0, 2).join('/')] || ANCIENNES[morceaux[0]];
   if (ancienne) history.replaceState(null, '', `#${ancienne}`);
+  if (morceaux.slice(0, 2).join('/') === 'stock/achats') filtreDepenses = 'materiel';
   const page = pageCourante();
-  const menu = PARENTS[page] || page;
-  document.querySelectorAll('.nav a[data-page]').forEach((a) => {
-    a.classList.toggle('actif', a.dataset.page === menu);
-  });
   document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
   // Page d'une famille (#clients/familles/fid) : titre « Famille », pas « Clients ».
   const [, onglet, fiche] = location.hash.slice(1).split('/');
-  const titre = page === 'clients' && onglet === 'familles' && fiche ? 'Famille' : TITRES[page];
-  $('titre-page').textContent = titre;
   choisirOnglet(page, location.hash.slice(1).split('/')[1]);
+  // Onglet vraiment montré (celui de l'adresse, ou le dernier choisi) : il dit dans quelle rubrique on est.
+  const ongletVu = document.querySelector(`[data-panneau="${page}"] .onglets button[data-onglet].actif`)?.dataset.onglet || onglet;
+  const menu = page === 'clients' ? (ONGLETS_SITE.includes(ongletVu) ? 'statistiques' : 'commandes') : PARENTS[page] || page;
+  document.querySelectorAll('.nav a[data-page]').forEach((a) => {
+    a.classList.toggle('actif', a.dataset.page === menu);
+  });
+  document.querySelectorAll(`[data-panneau="${page}"] nav[data-sous]`).forEach((nav) => {
+    const rubrique = { commandes: 'clients', statistiques: 'site', outils: 'reglages' }[menu];
+    nav.hidden = nav.dataset.sous !== rubrique;
+    nav.querySelectorAll('a').forEach((a) => a.classList.toggle('actif', a.dataset.page === page && (!a.dataset.versOnglet || a.dataset.versOnglet === ongletVu)));
+  });
+  const titre = page === 'clients' && onglet === 'familles' && fiche ? 'Famille' : menu === 'statistiques' ? 'Site' : TITRES[page];
+  $('titre-page').textContent = page === 'accueil' ? `Bonjour${prenomAdmin ? ` ${prenomAdmin}` : ''}` : titre;
   document.title = `Papote · ${titre}`;
+  // Fiche (commande, tablette, carte SIM…) : son propre titre suffit, le lien « ‹ Clients » remonte à la place du grand titre.
+  document.querySelector('.contenu').classList.toggle('page-fiche', !!document.querySelector(`[data-panneau="${page}"] > p > a.retour`));
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   // Adresse avec une ancre (ANCRES) : la page s'ouvre sur ce bloc ; sinon en haut.
   const ancre = ANCRES[location.hash.slice(1)];
-  const placer = () => (ancre ? $(ancre).scrollIntoView({ block: 'center' }) : window.scrollTo(0, 0));
+  const placer = () => {
+    if (!ancre) { window.scrollTo(0, 0); return; }
+    if ($(ancre).tagName === 'DETAILS') $(ancre).open = true; // bloc replié (rentabilité) : l'ouvrir en y arrivant
+    $(ancre).scrollIntoView({ block: 'center' });
+  };
   placer();
   // Téléphone : le menu ☰ se replie juste après et la page restait un peu descendue (titre sous la barre).
   requestAnimationFrame(placer);
@@ -354,8 +436,11 @@ function fermerChargement() {
   setTimeout(() => { e.hidden = true; }, 300);
 }
 
-onAuthStateChanged(getAuth(getApp('admin')), (user) => {
+onAuthStateChanged(getAuth(getApp('admin')), async (user) => {
+  // Compte sans le badge administrateur : rien n'est chargé (admin.js le déconnecte et l'explique).
+  if (user && (await user.getIdTokenResult().catch(() => null))?.claims?.admin !== true) user = null;
   connecte = !!user;
+  prenomAdmin = ((user && user.displayName) || '').trim().split(/\s+/)[0] || '';
   if (!user) { fermerChargement(); return; }
   // La page apparaît tout de suite (menu, titres, cartes fantômes) ; les chiffres arrivent dedans,
   // au lieu d'un logo qui attend que toutes les données soient là (relecture du 28/10).
@@ -419,7 +504,6 @@ function afficherTout() {
     afficherCommandes();
     afficherExpediteur();
     afficherReglagesCalculs();
-    afficherAchats();
     afficherFiche();
   }
   if (donnees && stripe) {
@@ -663,6 +747,9 @@ function badgesInstallation(t) {
 
 // ---------- Accueil ----------
 
+let filtreTaches = null; // pastille choisie au-dessus de « À faire » (null : pas encore choisie)
+let tachesToutes = false; // « Voir les autres » touché
+
 function afficherAccueil() {
   if (!donnees) return;
   const cmd = donnees.commandes;
@@ -791,7 +878,7 @@ function afficherAccueil() {
     ...facturesAttendues.filter((d) => !achatsARelier.has(d.id)).map((d) => [1, `Facture ${d.fournisseur || 'du vendeur'} à télécharger : ${d.libelle || 'achat'}${d.numero ? `, commande ${d.numero}` : ''}. La télécharger chez le vendeur puis l'envoyer à factures@`,
       `#depense/${encodeURIComponent(d.id)}`, 'ko']),
     // Chaque carte SIM et chaque accessoire doit avoir son achat (Tanguy, 2026-10-22).
-    [simsSansAchat, `${pluriel(simsSansAchat, 'carte SIM')} sans achat lié : ouvrir la carte et choisir son achat`, '#stock/sim', ''],
+    [simsSansAchat, `${simsSansAchat} carte${simsSansAchat > 1 ? 's' : ''} SIM sans achat lié : ouvrir la carte et choisir son achat`, '#stock/sim', ''],
     [accessoiresSansAchat, `${pluriel(accessoiresSansAchat, 'accessoire')} sans achat lié : ouvrir l'accessoire et ajouter son achat`, '#stock/accessoires', ''],
     [sansFacture, `${pluriel(sansFacture, 'tablette')} reçue${sansFacture > 1 ? 's' : ''} sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr`, '#stock', 'ko'],
     ...aVerifierMail.map((d) => [1, `Facture ${d.fournisseur || ''} à vérifier : ${[d.libelle, euros(d.montant)].filter(Boolean).join(', ')}, reçue par e-mail`.replace('  ', ' '),
@@ -802,7 +889,7 @@ function afficherAccueil() {
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
     // Contrôle des factures de vente à la clôture (Tanguy, 10/11) : une ligne par point, du mois le plus récent.
-    ...controleVentes().map((t) => [1, t, '#compta/registres', 'ko']),
+    ...controleVentes().map((t) => [1, t, '#compta/urssaf/registres', 'ko']),
     // E-mails rejetés par Brevo ou non partis après un second essai (A3) : une ligne par adresse, mêmes textes que le
     // récap du lundi ; « Réglé » dans le ⋮ la retire (corriger l'adresse sur la commande la retire aussi).
     ...courrielsAFaire().map(({ texte, ids, commande }) => [1, texte, commande ? versCommande({ id: commande }) : '#commandes', 'ko',
@@ -830,26 +917,46 @@ function afficherAccueil() {
     }
   };
   taches = taches.filter((t) => !masquees.has(cleTache(t)));
-  // Rangé par sujet ; chaque ligne : un titre court, le détail en dessous, une pastille si c'est urgent.
-  const groupe = (lien) => (/^#(commande|client)/.test(lien) ? 'Commandes et clients'
-    : /^#(tablette|stock|sim)/.test(lien) ? 'Stock' : /^#(depense|compta)/.test(lien) ? 'Comptabilité' : 'Fonctionnement');
-  const groupes = new Map(['Commandes et clients', 'Stock', 'Comptabilité', 'Fonctionnement'].map((g) => [g, []]));
-  for (const tache of taches) {
+  // Une seule liste courte : l'urgent d'abord, le reste à un toucher (pastilles « Tout », « Clients », « Matériel »…).
+  // Chaque ligne : un titre court, le détail en dessous, un point rouge si c'est urgent, sa rubrique à droite.
+  const groupe = (lien) => (/^#(commande|client)/.test(lien) ? 'Clients'
+    : /^#(tablette|stock|sim)/.test(lien) ? 'Matériel' : /^#(depense|compta)/.test(lien) ? 'Comptabilité' : 'Fonctionnement');
+  const urgentes = taches.filter((t) => t[3] === 'ko');
+  const parGroupe = (g) => taches.filter((t) => groupe(t[2]) === g);
+  // Liste déjà courte (8 lignes au plus) : tout est montré, pas besoin de trier.
+  const COURT = 8;
+  if (filtreTaches === null || (filtreTaches !== 'tout' && filtreTaches !== 'urgent' && !parGroupe(filtreTaches).length)) filtreTaches = urgentes.length && taches.length > COURT ? 'urgent' : 'tout';
+  if (filtreTaches === 'urgent' && !urgentes.length) filtreTaches = 'tout';
+  const montrees = filtreTaches === 'urgent' ? urgentes : filtreTaches === 'tout' ? [...urgentes, ...taches.filter((t) => t[3] !== 'ko')] : parGroupe(filtreTaches);
+  $('filtres-taches').hidden = taches.length <= COURT;
+  filtresPastilles($('filtres-taches'), [
+    { valeur: 'tout', libelle: 'Tout', n: taches.length },
+    { valeur: 'urgent', libelle: 'Urgent', n: urgentes.length },
+    ...['Clients', 'Matériel', 'Comptabilité', 'Fonctionnement'].map((g) => ({ valeur: g, libelle: g, n: parGroupe(g).length })),
+  ], filtreTaches, (v) => { filtreTaches = v; tachesToutes = false; afficherAccueil(); });
+  const ligneTache = (tache) => {
     const [, texte, lien, classe] = tache;
     const i = texte.indexOf(' : ');
     const [titre, detail] = i > 0 ? [texte.slice(0, i), texte.slice(i + 3)] : [texte, null];
-    groupes.get(groupe(lien)).push(h('li', { class: 'ligne-tache' }, h('a', { href: lien, class: classe === 'ko' ? 'urgent' : '' },
+    return h('li', { class: 'ligne-tache' }, h('a', { href: lien, class: classe === 'ko' ? 'urgent' : '' },
       h('span', { class: 'pastille-tache', 'aria-hidden': 'true' }),
       h('span', { class: 'tache' }, h('span', { class: 'tache-titre' }, titre.charAt(0).toUpperCase() + titre.slice(1)),
         detail ? h('span', { class: 'tache-detail' }, detail.charAt(0).toUpperCase() + detail.slice(1)) : null),
-      h('span', { class: 'fleche', 'aria-hidden': 'true' }, '›')),
-    menuPoints([tache[4], { libelle: 'Masquer 7 jours', faire: () => masquer(cleTache(tache), 7) }], 'Actions pour cette ligne')));
-  }
-  $('a-faire').replaceChildren(...(taches.length
-    ? [...groupes].filter(([, l]) => l.length).map(([g, l]) => h('li', { class: 'groupe-taches' }, h('h3', {}, g), h('ul', {}, l)))
-    : [h('li', { class: 'muted' }, 'Rien à faire pour le moment.')]),
-  ...(nMasquees ? [h('li', { class: 'muted small masquees' }, `${pluriel(nMasquees, 'ligne')} masquée${nMasquees > 1 ? 's' : ''} pour 7 jours · `,
-    h('button', { type: 'button', class: 'link', onclick: () => masquer(null, 0) }, 'Tout réafficher'))] : []));
+      h('span', { class: 'badge rubrique', 'aria-hidden': 'true' }, groupe(lien))),
+    menuPoints([tache[4], { libelle: 'Masquer 7 jours', faire: () => masquer(cleTache(tache), 7) }], 'Actions pour cette ligne'),
+    h('span', { class: 'fleche', 'aria-hidden': 'true' }, '›'));
+  };
+  const vues = tachesToutes ? montrees : montrees.slice(0, COURT);
+  const reste = montrees.length - vues.length;
+  $('a-faire').replaceChildren(...(taches.length ? vues.map(ligneTache) : [h('li', { class: 'vide' }, 'Rien à faire pour le moment.')]),
+    ...(reste > 0 ? [h('li', { class: 'voir-plus' }, h('button', { type: 'button', class: 'link', onclick: () => { tachesToutes = true; afficherAccueil(); } },
+      `Voir ${reste > 1 ? `les ${reste} autres` : 'la dernière'}`))] : []),
+    ...(nMasquees ? [h('li', { class: 'muted small masquees' }, `${pluriel(nMasquees, 'ligne')} masquée${nMasquees > 1 ? 's' : ''} pour 7 jours · `,
+      h('button', { type: 'button', class: 'link', onclick: () => masquer(null, 0) }, 'Tout réafficher'))] : []));
+  // Sous le titre : la date du jour et ce qui presse.
+  const ceJour = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  if (pageCourante() === 'accueil' && prenomAdmin) $('titre-page').textContent = `Bonjour ${prenomAdmin}`;
+  $('sous-accueil').textContent = `${ceJour.charAt(0).toUpperCase()}${ceJour.slice(1)} · ${urgentes.length ? `${pluriel(urgentes.length, 'chose')} urgente${urgentes.length > 1 ? 's' : ''}` : taches.length ? `${pluriel(taches.length, 'chose')} à faire` : 'rien à faire'}`;
 
   const pastille = (id, n) => {
     $(id).hidden = !n;
@@ -920,50 +1027,43 @@ function afficherCommandes() {
   for (const c of toutes) parEtat[etatCommande(c)] = (parEtat[etatCommande(c)] || 0) + 1;
   // Les chiffres servent d'onglets : chaque statut montre sa liste, « au total » et « en service » le tableau.
   if (!vueCommandes) vueCommandes = parEtat['a-envoyer'] ? 'a-envoyer' : parEtat.retour ? 'retour' : parEtat['en-route'] ? 'en-route' : 'toutes';
-  const onglet = (vue, valeur, texte, classe, filtre = '') => {
-    const el = stat(String(valeur), texte, null, classe);
-    const actif = vue === vueCommandes && (vue !== 'toutes' || $('filtre-commandes').value === filtre);
-    el.classList.add('onglet');
-    el.classList.toggle('actif', actif);
-    el.tabIndex = 0;
-    el.setAttribute('role', 'button');
-    el.setAttribute('aria-pressed', String(actif));
-    const choisir = () => {
-      vueCommandes = vue;
-      if (vue === 'toutes') $('filtre-commandes').value = filtre;
-      afficherCommandes();
-    };
-    el.addEventListener('click', choisir);
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } });
-    return el;
-  };
-  $('kpi-commandes').replaceChildren(...[
-    onglet('a-envoyer', parEtat['a-envoyer'] || 0, 'à envoyer'),
-    parEtat.paiement ? onglet('toutes', parEtat.paiement, 'paiement en attente', null, 'paiement') : null,
-    onglet('en-route', parEtat['en-route'] || 0, 'en route'),
-    onglet('retour', parEtat.retour || 0, 'à récupérer', parEtat.retour ? 'neg' : null),
-    onglet('toutes', parEtat.active || 0, 'en service', null, 'active'),
-    onglet('toutes', toutes.length, 'commandes au total'),
-  ].filter(Boolean));
+  // Pastilles : chaque statut montre sa liste (à envoyer, en route, à récupérer) ; les autres filtrent le tableau.
+  const actuel = vueCommandes === 'toutes' ? `toutes|${$('filtre-commandes').value}` : vueCommandes;
+  filtresPastilles($('kpi-commandes'), [
+    { valeur: 'toutes|', libelle: 'Tous', n: toutes.length },
+    { valeur: 'a-envoyer', libelle: 'À envoyer', n: parEtat['a-envoyer'] || 0 },
+    { valeur: 'toutes|paiement', libelle: 'Paiement en attente', n: parEtat.paiement || 0 },
+    { valeur: 'en-route', libelle: 'En route', n: parEtat['en-route'] || 0 },
+    { valeur: 'toutes|active', libelle: 'En service', n: parEtat.active || 0 },
+    { valeur: 'retour', libelle: 'À récupérer', n: parEtat.retour || 0 },
+    { valeur: 'toutes|arret', libelle: 'Arrêt prévu', n: parEtat.arret || 0 },
+    { valeur: 'toutes|terminee', libelle: 'Terminées', n: parEtat.terminee || 0 },
+    { valeur: 'toutes|annulee', libelle: 'Annulées', n: parEtat.annulee || 0 },
+  ], actuel, (v) => {
+    const [vue, filtre] = v.split('|');
+    vueCommandes = vue;
+    if (vue === 'toutes') $('filtre-commandes').value = filtre || '';
+    afficherCommandes();
+  });
   document.querySelectorAll('[data-panneau="commandes"] [data-vue]').forEach((c) => { c.hidden = c.dataset.vue !== vueCommandes; });
   const filtre = $('filtre-commandes').value;
   const tablettes = new Map(donnees.stock.filter((t) => t.commande).map((t) => [t.commande, t]));
   remplirTable($('t-commandes'), [
-    { titre: 'Date' }, { titre: 'Code' }, { titre: 'Client' }, { titre: 'Formule' }, { titre: 'État' },
-    { titre: 'Famille' }, { titre: 'Tablette' },
+    { titre: 'Client' }, { titre: 'État' }, { titre: 'Famille', classe: 'pc' }, { titre: 'Tablette', classe: 'pc' },
+    { titre: 'Commandé le', classe: 'pc court' },
   ], toutes.filter((c) => !filtre || etatCommande(c) === filtre).map((c) => {
     const [texte, classe] = ETATS_COMMANDE[etatCommande(c)];
     const t = tablettes.get(c.id);
     return {
       onclick: () => ouvrirCommande(c),
       cellules: [
-        jour(c.creeLe),
-        codeCommande(c.code),
-        h('div', {}, c.nom || c.email || '', c.nom ? h('div', { class: 'muted' }, c.email || '') : null),
-        formuleTexte(c),
+        h('div', {}, h('strong', {}, c.nom || c.email || codeCommande(c.code)),
+          h('small', {}, [codeCommande(c.code), formuleTexte(c), c.famille ? h('span', { class: 'tel-inline' }, c.famille) : null]
+            .filter(Boolean).flatMap((x, i) => (i ? [' · ', x] : [x])))),
         badge(texte, classe),
-        c.famille ? `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}` : '',
-        t ? t.numero || t.modele || 'affectée' : '',
+        c.famille || h('span', { class: 'muted' }, '—'),
+        t ? t.ref || t.numero || t.modele || 'affectée' : h('span', { class: 'muted' }, '—'),
+        jour(c.creeLe),
       ],
     };
   }), { vide: 'Aucune commande.' });
@@ -1064,8 +1164,19 @@ async function remplirCommande(id) {
   const annonce = annonceCommande;
   annonceCommande = null;
   const doublon = c.alerteDoublon;
+  const liv = c.livraison || {};
+  const relais = liv.transporteur === 'mondial-relay';
   $('dc-corps').replaceChildren(...[
     annonce ? h('p', { class: 'annonce', role: 'status' }, annonce) : null,
+    // En-tête : le client en titre, l'état en pastille, les actions rares dans le ⋮.
+    h('div', { class: 'tete-fiche' }, h('h2', {}, c.nom || c.email || `Commande ${codeCommande(c.code)}`), badge(texte, classe),
+      h('div', { class: 'tete-actions' },
+        aRecuperer ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => zoneReception.ouvrir(false) }, 'Matériel reçu') : null,
+        // L'étiquette de retour est créée toute seule ; ce bouton ne sert que si elle manque.
+        aRecuperer && sansEtiquette && !c.offerte ? boutonEtiquetteRetour(c) : null,
+        menuCommande(c, t && partie && ['active', 'en-route'].includes(etatCommande(c)) ? zoneRemplacement : null,
+          partie && !aRecuperer && sansEtiquette && t && t.etat === 'en-retour'))),
+    h('p', { class: 'sous-titre sous-fiche' }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''} du ${jour(c.creeLe)} · ${formuleTexte(c)}`),
     c.couvertureAVerifier && c.expedition !== 'annulee' ? blocCouverture(c) : null,
     // E-mail au client rejeté par Brevo ou non parti (A3) : corriger l'adresse ci-dessous efface ce bandeau.
     c.mailErreur ? h('div', { class: 'alerte-doublon', role: 'alert' },
@@ -1076,52 +1187,57 @@ async function remplirCommande(id) {
       doublon.mauvaisPayeur ? h('p', {}, `Sur une commande précédente : ${doublon.raisons.join(', ')}.`) : null,
       h('p', {}, 'Même IBAN, e-mail, téléphone ou adresse que : ',
         ...doublon.commandes.flatMap((x, i) => [i ? ', ' : null, h('a', { href: `#commande/${encodeURIComponent(x.id)}` }, [x.code, x.nom].filter(Boolean).join(' · ') || 'commande')]))) : null,
-    h('div', { class: 'card' },
-      h('div', { class: 'tete-fiche' }, h('h2', {}, `Commande ${codeCommande(c.code)}`, c.offerte ? ' (offerte)' : ''),
-        h('div', { class: 'tete-actions' },
-          aRecuperer ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => zoneReception.ouvrir(false) }, 'Matériel reçu') : null,
-          // L'étiquette de retour est créée toute seule ; ce bouton ne sert que si elle manque.
-          aRecuperer && sansEtiquette && !c.offerte ? boutonEtiquetteRetour(c) : null,
-          menuCommande(c, t && partie && ['active', 'en-route'].includes(etatCommande(c)) ? zoneRemplacement : null,
-            partie && !aRecuperer && sansEtiquette && t && t.etat === 'en-retour'))),
-      zoneRemplacement,
-      zoneReception,
-      h('dl', { class: 'fiche' },
-      ligne('État', badge(texte, classe)),
-      ligne('Commandée le', jour(c.creeLe)),
-      ligne('Client', [c.nom, c.email, c.telephone].filter(Boolean).join(' · ')),
-      // Souvent un proche (compte joint, gendre…) : à regarder avant l'envoi, sans rien bloquer.
-      ligne('Titulaire de l\'IBAN', c.titulaire),
-      ligne('Formule', formuleTexte(c)),
-      ligne('Livraison', livraisonTexte(c)),
-      ligne('Suivi', c.suivi ? `${c.suivi}${c.envoyeeLe ? `, envoyée le ${jour(c.envoyeeLe)}` : ''}` : null),
-      ligne('Famille', c.famille ? `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}` : null),
-      ligne('Tablette', t ? h('button', { type: 'button', class: 'link', onclick: () => ouvrirTablette(t.id) },
-        [t.ref, t.numero || (t.ref ? null : 'sans n° de série'), t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · ')) : null),
-      ligne('Carte SIM', simDuKit(t)),
-      ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
-      ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}${c.restitution.prolongations ? ' (délai prolongé)' : ''}` : ''}` : null),
-      ligne('Suivi du retour', suiviRetourDe(c)),
-      ligne('Étiquettes', etiquettesDe(c)),
-      ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null),
-      ligne('Reçue le', c.preparation && c.preparation.recuLe ? `${jour(c.preparation.recuLe)}${c.preparation.recuPar ? ` (${c.preparation.recuPar})` : ''}` : null),
-      ligne('Annulation possible', tabletteDansLaFamille(c) && annulableApresEnvoi(c) ? `jusqu'au ${jour(limiteAnnulation(c))}` : null),
-      ligne('Pause', c.pause && c.pause.jusqua > Date.now() ? `hospitalisation jusqu'au ${jour(c.pause.jusqua)} (mois offert au-delà de 2 semaines)` : null),
-      ligne('Remplacement', c.remplacement && c.remplacement.statut === 'attente-retour'
-        ? `tablette en panne attendue en retour (depuis le ${jour(c.remplacement.le)}) : à sa réception, « Remplacer » → la tablette → Panne → « Ancienne reçue : envoyer la nouvelle »` : null),
-      ligne('Mois remboursés', (c.moisRembourses || []).length ? c.moisRembourses.map((m) => `${euros(m.montant)} le ${jour(m.le)}`).join(', ') : null),
-      ligne('140 € remboursés', c.restitution && c.restitution.rembourse ? (c.restitution.rembourse.statut === 'fait' ? `oui (${euros(c.restitution.rembourse.montant)}, abonnement repris)` : 'à faire (Stripe a refusé, nouvel essai chaque matin)') : null),
-      ligne('Dernier mois', c.dernierMois ? `${euros(c.dernierMois.montant)} ${DERNIER_MOIS[c.dernierMois.statut] || c.dernierMois.statut}${c.dernierMois.erreur ? ` : ${c.dernierMois.erreur}` : ''}` : null),
-      ligne('Prélèvement refusé', c.restitution && c.restitution.statut === 'echec' ? `matériel non rendu${c.restitutionErreur ? ` : ${c.restitutionErreur}` : ''}` : null),
-      ligne('Contesté', (c.contestations || []).length ? c.contestations.map((x) => `${euros(x.montant)} le ${jour(x.le)}`).join(', ') : null))),
-    h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
-      // Frise : la date à gauche (vide pour une étape sans date), l'étape à droite ; la prochaine étape en dernier.
-      h('ol', { class: 'frise' }, ...parcoursCommande(c).map(([le, texte, date]) => {
-        const quand = Number.isFinite(le) ? le : date;
-        return h('li', {}, h('span', { class: 'frise-date' }, quand ? jour(quand) : ''), h('span', { class: 'frise-texte' }, texte));
-      }), etape ? h('li', { class: 'frise-suite' }, h('span', { class: 'frise-date' }, 'À venir'),
-        h('span', { class: 'frise-texte' }, h('strong', {}, 'Prochaine étape : '), etape[0], etape[1] ? h('span', { class: 'frise-action' }, etape[1]) : null)) : null)),
-    h('div', { class: 'card' }, h('h2', {}, 'Factures et paiements du client'), factures),
+    zoneRemplacement,
+    zoneReception,
+    h('div', { class: 'deux-colonnes' },
+      // À gauche ce qui avance (parcours, paiements) ; à droite ce qui ne bouge pas (client, livraison, matériel).
+      h('div', {},
+        h('div', { class: 'card' }, h('h2', {}, 'Parcours'),
+          // Frise : l'étape, sa date dessous ; la prochaine étape en dernier, avec son bouton.
+          h('ol', { class: 'frise' }, ...parcoursCommande(c).map(([le, texteEtape, date]) => {
+            const quand = Number.isFinite(le) ? le : date;
+            return h('li', {}, h('span', { class: 'frise-date' }, quand ? jour(quand) : ''), h('span', { class: 'frise-texte' }, texteEtape));
+          }), etape ? h('li', { class: 'frise-suite' }, h('span', { class: 'frise-date' }, 'À venir'),
+            h('span', { class: 'frise-texte' }, h('strong', {}, 'Prochaine étape : '), etape[0], etape[1] ? h('span', { class: 'frise-action' }, etape[1]) : null)) : null)),
+        h('div', { class: 'card' }, h('h2', {}, 'Paiements'), factures)),
+      h('div', {},
+        blocFiche('Client',
+          // Le nom ouvre la fiche du client (ses autres commandes, sa famille, ses paiements).
+          ligne('Nom', c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c.nom),
+          ligne('E-mail', c.nom ? c.email : null),
+          ligne('Téléphone', c.telephone),
+          // Souvent un proche (compte joint, gendre…) : à regarder avant l'envoi, sans rien bloquer.
+          ligne('Titulaire de l\'IBAN', c.titulaire),
+          // Famille : un lien vers sa page (proches, code, photos), pour tout avoir depuis le client.
+          ligne('Famille', c.famille ? (c.fid
+            ? h('a', { href: `#clients/familles/${encodeURIComponent(c.fid)}` }, `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}`)
+            : `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}`) : null)),
+        blocFiche('Livraison',
+          ...(relais ? [ligne('Point relais', `${liv.nom || ''} (n° ${liv.id || '?'})`),
+            ligne('Adresse', [liv.adresse, `${liv.cp || ''} ${liv.ville || ''}`.trim(), liv.pays && liv.pays !== 'FR' ? liv.pays : null].filter(Boolean).join(', ')),
+            ligne('Retrait par', liv.destinataire)] : [ligne('Livraison', livraisonTexte(c))]),
+          ligne('Chez le proche', c.proche && c.proche.adresse),
+          ligne('Suivi', c.suivi ? `${c.suivi}${c.envoyeeLe ? `, envoyée le ${jour(c.envoyeeLe)}` : ''}` : null),
+          ligne('Reçue le', c.preparation && c.preparation.recuLe ? `${jour(c.preparation.recuLe)}${c.preparation.recuPar ? ` (${c.preparation.recuPar})` : ''}` : null),
+          ligne('Étiquettes', etiquettesDe(c))),
+        blocFiche('Matériel',
+          ligne('Tablette', t ? h('button', { type: 'button', class: 'link', onclick: () => ouvrirTablette(t.id) },
+            (t.ref ? [t.ref, donnees.etats[etatTablette(t)]] : [t.numero || 'sans n° de série', t.modele, donnees.etats[etatTablette(t)]]).filter(Boolean).join(' · ')) : null),
+          ligne('Carte SIM', simDuKit(t)),
+          ligne('Accessoires', t && (t.accessoires || []).length ? t.accessoires.join(', ') : null),
+          ligne('Remplacement', c.remplacement && c.remplacement.statut === 'attente-retour'
+            ? `tablette en panne attendue en retour (depuis le ${jour(c.remplacement.le)}) : à sa réception, « Remplacer » → la tablette → Panne → « Ancienne reçue : envoyer la nouvelle »` : null)),
+        blocFiche('Retour et remboursements',
+          ligne('Retour', c.restitution ? `${RETOURS[c.restitution.statut] || c.restitution.statut}${c.restitution.avant && c.restitution.statut === 'attendue' ? ` avant le ${jour(c.restitution.avant)}${c.restitution.prolongations ? ' (délai prolongé)' : ''}` : ''}` : null),
+          ligne('Suivi du retour', suiviRetourDe(c)),
+          ligne('Remboursement', c.remboursement ? `${euros(c.remboursement.montant)} ${REMBOURSEMENTS[c.remboursement.statut] || c.remboursement.statut}` : null),
+          ligne('Annulation possible', tabletteDansLaFamille(c) && annulableApresEnvoi(c) ? `jusqu'au ${jour(limiteAnnulation(c))}` : null),
+          ligne('Pause', c.pause && c.pause.jusqua > Date.now() ? `hospitalisation jusqu'au ${jour(c.pause.jusqua)} (mois offert au-delà de 2 semaines)` : null),
+          ligne('Mois remboursés', (c.moisRembourses || []).length ? c.moisRembourses.map((m) => `${euros(m.montant)} le ${jour(m.le)}`).join(', ') : null),
+          ligne('140 € remboursés', c.restitution && c.restitution.rembourse ? (c.restitution.rembourse.statut === 'fait' ? `oui (${euros(c.restitution.rembourse.montant)}, abonnement repris)` : 'à faire (Stripe a refusé, nouvel essai chaque matin)') : null),
+          ligne('Dernier mois', c.dernierMois ? `${euros(c.dernierMois.montant)} ${DERNIER_MOIS[c.dernierMois.statut] || c.dernierMois.statut}${c.dernierMois.erreur ? ` : ${c.dernierMois.erreur}` : ''}` : null),
+          ligne('Prélèvement refusé', c.restitution && c.restitution.statut === 'echec' ? `matériel non rendu${c.restitutionErreur ? ` : ${c.restitutionErreur}` : ''}` : null),
+          ligne('Contesté', (c.contestations || []).length ? c.contestations.map((x) => `${euros(x.montant)} le ${jour(x.le)}`).join(', ') : null)))),
   ].filter(Boolean));
   if (c.offerte) {
     factures.replaceChildren(h('p', { class: 'muted small' }, 'Commande offerte : aucun paiement.'));
@@ -1276,9 +1392,9 @@ function blocCouverture(c) {
     h('p', {}, `Pourquoi : ${raisons.join(' ; ')}.`),
     adresse ? h('p', {}, 'Adresse du proche : ', h('b', { class: 'selectionnable' }, adresse)) : h('p', {}, 'Adresse du proche inconnue.'),
     h('div', { class: 'boutons-couverture' },
-      h('a', { class: 'primary small-btn', href: v.carte || 'https://monreseaumobile.arcep.fr/', target: '_blank', rel: 'noopener' }, 'Ouvrir la carte de l\'ARCEP'),
+      h('a', { class: 'secondary small-btn', href: v.carte || 'https://monreseaumobile.arcep.fr/', target: '_blank', rel: 'noopener' }, 'Carte de l\'ARCEP'),
       copier,
-      h('a', { class: 'secondary small-btn', href: 'https://www.cartoradio.fr/', target: '_blank', rel: 'noopener' }, 'Antennes (Cartoradio)')),
+      h('a', { class: 'secondary small-btn', href: 'https://www.cartoradio.fr/', target: '_blank', rel: 'noopener' }, 'Antennes')),
     h('p', { class: 'small' }, 'Sur la carte : opérateur Bouygues Telecom, 4G, puis collez l\'adresse dans la recherche.'),
     h('label', { class: 'case' }, coche, ' ', libelle));
 }
@@ -1723,75 +1839,63 @@ const dansGroupe = (g, t) => g[1].includes(t.affiche) && (!g[2] || g[2](t));
 function afficherStock() {
   const stock = donnees.stock.map((t) => ({ ...t, affiche: etatTablette(t) }));
   const compte = (etats) => stock.filter((t) => etats.includes(t.affiche)).length;
-  const valeur = (etats) => stock.filter((t) => etats.includes(t.affiche)).reduce((s, t) => s + (t.prixAchat || 0), 0);
   const aEnvoyer = donnees.commandes.filter((c) => etatCommande(c) === 'a-envoyer').length;
-  const pretes = tablettesPretes();
-  const dispo = pretes.length;
-  const reservees = pretes.filter((t) => t.commande).length;
-  const chez = GROUPES_STOCK['g:chez'][1];
-  // Chaque chiffre filtre la liste des tablettes juste en dessous.
-  const filtrer = (valeur) => () => {
-    $('filtre-stock').value = valeur;
-    afficherStock();
-    $('t-stock').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-  const libresListe = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:disponibles'], t));
-  const libres = libresListe.length;
-  const valeurLibres = libresListe.reduce((s, t) => s + (t.prixAchat || 0), 0);
-  const reserveesTout = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:reservees'], t)).length;
-  const manqueTablettes = Math.max(0, aEnvoyer - dispo);
-  // Trois chiffres, chacun ouvre ses tablettes ; le reste en petite ligne, seulement s'il y en a.
-  $('kpi-stock').replaceChildren(
-    cliquable(stat(String(libres), 'en stock, libres',
-      manqueTablettes ? `il manque ${pluriel(manqueTablettes, 'tablette')} pour les commandes` : valeurLibres ? `valeur ${euros(valeurLibres)}` : null,
-      manqueTablettes ? 'neg' : null), filtrer('g:disponibles')),
-    cliquable(stat(String(reserveesTout), 'réservées pour un envoi'), filtrer('g:reservees')),
-    cliquable(stat(String(compte(chez)), 'chez les clients', valeur(chez) ? `valeur ${euros(valeur(chez))}` : null), filtrer('g:chez')));
-  const lien = (n, texte, filtre) => (n ? h('button', { type: 'button', class: 'link', onclick: filtrer(filtre) }, `${n} ${texte}`) : null);
-  const suite = [
-    lien(compte(['commandee']), compte(['commandee']) > 1 ? 'commandées chez le vendeur' : 'commandée chez le vendeur', 'commandee'),
-    lien(stock.filter((t) => dansGroupe(GROUPES_STOCK['g:famille'], t)).length, 'dans une famille, pas à vendre', 'g:famille'),
-    lien(compte(['revenue', 'a-reparer']), 'à vérifier ou réparer', 'g:verifier'),
-    lien(compte(['perdue', 'hors-service']), 'perdue(s) ou hors service', 'g:sorties'),
-    donnees.aVendre == null ? null : h('span', { class: 'muted' }, donnees.aVendre
-      ? `Le site propose ${donnees.aVendre} à la vente (stock + 10 précommandes)`
-      : 'Le site propose « Être prévenu » (plus rien à vendre)'),
-  ].filter(Boolean);
-  $('kpi-stock-suite').replaceChildren(...suite.flatMap((x, i) => (i ? [' · ', x] : [x])));
+  const dispo = tablettesPretes().length;
+  const nGroupe = (cle) => stock.filter((t) => dansGroupe(GROUPES_STOCK[cle], t)).length;
+  const filtre = $('filtre-stock').value;
+  // Filtres en pastilles : chacun montre ses tablettes, avec leur nombre.
+  filtresPastilles($('filtres-stock'), [
+    { valeur: '', libelle: 'Toutes', n: stock.length },
+    { valeur: 'g:disponibles', libelle: 'Libres', n: nGroupe('g:disponibles') },
+    { valeur: 'g:reservees', libelle: 'Réservées', n: nGroupe('g:reservees') },
+    { valeur: 'g:chez', libelle: 'Chez les clients', n: nGroupe('g:chez') },
+    { valeur: 'g:verifier', libelle: 'À vérifier', n: nGroupe('g:verifier') },
+    { valeur: 'commandee', libelle: 'Commandées', n: compte(['commandee']) },
+    { valeur: 'g:famille', libelle: 'Dans une famille', n: nGroupe('g:famille') },
+    { valeur: 'g:sorties', libelle: 'Perdues ou HS', n: nGroupe('g:sorties') },
+  ], filtre, (v) => { $('filtre-stock').value = v; afficherStock(); });
+  const valeurChez = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:chez'], t)).reduce((x, t) => x + (t.prixAchat || 0), 0);
+  const valeurLibres = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:disponibles'], t)).reduce((x, t) => x + (t.prixAchat || 0), 0);
+  $('kpi-stock-suite').textContent = [
+    valeurLibres ? `Tablettes libres : ${euros(valeurLibres)}` : null,
+    valeurChez ? `tablettes chez les clients : ${euros(valeurChez)}` : null,
+    donnees.aVendre == null ? null : donnees.aVendre
+      ? `le site peut encore en vendre ${donnees.aVendre}`
+      : 'le site n\'a plus rien à vendre (il propose « Être prévenu »)',
+  ].filter(Boolean).join(' · ').replace(/^./, (c) => c.toUpperCase());
   const manque = aEnvoyer - dispo;
   $('alerte-stock').hidden = manque <= 0;
   $('alerte-stock').textContent = manque > 0
     ? `Il manque ${pluriel(manque, 'tablette')} pour envoyer toutes les commandes.` : '';
 
-  const filtre = $('filtre-stock').value;
   const parId = new Map(donnees.commandes.map((c) => [c.id, c]));
   $('stock-vide').hidden = stock.length > 0;
+  // Une ligne par tablette : son nom, son état, le client, la carte SIM, une seule chose à savoir. Le reste est
+  // dans sa page (achat, pièces, prix, date).
   remplirTable($('t-stock'), [
-    { titre: 'N° de série' }, { titre: 'Modèle' }, { titre: 'État' }, { titre: 'Achat' }, { titre: 'Client' }, { titre: 'SIM' },
-    { titre: 'Pièces' }, { titre: 'Prix', n: 1 }, { titre: 'Achetée le' },
+    { titre: 'Tablette' }, { titre: 'État' }, { titre: 'Client', classe: 'pc' }, { titre: 'SIM', classe: 'pc' },
+    { titre: 'À savoir', classe: 'pc' },
   ], stock.filter((t) => !filtre || (GROUPES_STOCK[filtre] ? dansGroupe(GROUPES_STOCK[filtre], t) : t.affiche === filtre))
-    .sort((a, b) => (b.acheteeLe || 0) - (a.acheteeLe || 0))
+    .sort((a, b) => String(a.ref || '~').localeCompare(String(b.ref || '~'), 'fr', { numeric: true }))
     .map((t) => {
       const c = parId.get(t.commande);
+      const client = c ? c.nom || c.email || codeCommande(c.code) : DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? nomFamille(t.fid) : '';
+      const alertes = [alerteJumelage(t), t.usure, ...badgesInstallation(t).filter((b) => b.classList.contains('ko')).map((b) => b.textContent)].filter(Boolean);
+      const aSavoir = alertes.length ? h('span', { class: 'texte-ko' }, alertes.join(' · '))
+        : t.essai === true ? h('span', { class: 'muted' }, 'tablette d\'essai')
+          : DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? h('span', { class: 'muted' }, 'pas à vendre')
+          : t.modele && !/tab 60 pro/i.test(t.modele) ? h('span', { class: 'muted' }, t.modele) : '';
       return {
         onclick: () => ouvrirTablette(t.id),
         cellules: [
-          h('div', {}, t.ref ? h('strong', {}, `${t.ref} `) : null, t.numero || t.serieAndroid || h('span', { class: 'muted' }, 'à saisir'),
-            alerteJumelage(t) ? h('div', {}, badge(alerteJumelage(t), 'ko')) : null,
-            DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? h('div', {}, badge(pasAVendre(t), 'info')) : null,
-            t.usure ? h('div', {}, badge(t.usure, 'ko')) : null,
-            ...badgesInstallation(t).map((b) => h('div', {}, b))),
-          t.modele || '',
+          nomEtDetail(t.ref || t.numero || t.serieAndroid || 'Tablette', client || (t.ref ? t.numero : null), alertes.length ? h('span', { class: 'texte-ko' }, alertes[0]) : null),
           badge(donnees.etats[t.affiche] || t.affiche, classeEtat(t.affiche)),
-          celluleAchat(t),
-          c ? nomCommande(c) : '',
-          t.sim || '',
-          h('div', { class: 'pieces-liste' }, piecesTablette(t).map(lienPiece)),
-          euros(t.prixAchat),
-          jour(t.acheteeLe),
+          client || h('span', { class: 'muted' }, '—'),
+          t.sim || h('span', { class: 'muted' }, '—'),
+          aSavoir,
         ],
       };
-    }), { vide: 'Aucune tablette.' });
+    }), { vide: 'Aucune tablette ici.' });
 }
 $('filtre-stock').addEventListener('change', afficherStock);
 
@@ -1867,6 +1971,11 @@ function afficherSim() {
   const parTablette = new Map(donnees.stock.map((t) => [t.id, t]));
   const parCommande = new Map(donnees.commandes.map((c) => [c.id, c]));
   const filtre = $('filtre-sim').value;
+  const nStatut = (st) => donnees.sims.filter((l) => l.statut === st).length;
+  filtresPastilles($('filtres-sim'), [
+    { valeur: '', libelle: 'En cours', n: donnees.sims.filter((l) => l.statut !== 'resiliee').length },
+    ...Object.entries(donnees.statutsSim).map(([k, v]) => ({ valeur: k, libelle: v, n: nStatut(k) })),
+  ], filtre, (v) => { $('filtre-sim').value = v; afficherSim(); });
   const ordre = { active: 0, suspendue: 1, stock: 2, resiliee: 3 };
   const lignes = donnees.sims.filter((l) => (filtre ? l.statut === filtre : l.statut !== 'resiliee'))
     .map((l) => {
@@ -1883,20 +1992,24 @@ function afficherSim() {
   const n = actives.length + anciennes.length;
   $('sim-resume').textContent = `${n} ligne${n > 1 ? 's actives' : ' active'}, ${euros(total)} par mois · `
     + `${pluriel(donnees.sims.filter((l) => l.statut === 'stock').length, 'carte')} en stock`;
+  const nomTab = (t) => (t ? t.ref || t.numero || t.modele || 'tablette' : '');
   remplirTable($('t-sim'), [
-    { titre: 'Statut' }, { titre: 'Opérateur' }, { titre: 'Numéro' }, { titre: 'ICCID' }, { titre: 'Achat' }, { titre: 'Tablette' },
-    { titre: 'Client' }, { titre: 'Par mois', n: 1 }, { titre: 'À regarder' },
+    { titre: 'Ligne' }, { titre: 'Statut' }, { titre: 'Opérateur', classe: 'pc' }, { titre: 'Tablette', classe: 'pc' },
+    { titre: 'Par mois', n: 1, classe: 'pc' }, { titre: 'À regarder', classe: 'pc' },
   ], [
     ...lignes.map(({ l, t, c, alertes }) => ({
       onclick: () => ouvrirSim(l.id),
-      cellules: [badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut]), l.operateur || '', l.numero || '',
-        fin4(l.iccid), lienAchat(l.depense), t ? t.numero || t.modele || '' : '', c ? nomCommande(c) : '', euros(coutLigne(l)),
-        h('span', { class: 'alertes' }, alertes.map((x) => badge(x, 'ko')))],
+      cellules: [
+        nomEtDetail(l.numero || `ICCID ${fin4(l.iccid)}` || 'Carte SIM', l.operateur, t ? `dans ${nomTab(t)}` : null, c ? c.nom || c.email : null,
+          alertes.length ? h('span', { class: 'texte-ko' }, alertes[0]) : null),
+        badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut]),
+        l.operateur || '', t ? nomTab(t) : h('span', { class: 'muted' }, '—'), euros(coutLigne(l)),
+        alertes.length ? h('span', { class: 'texte-ko' }, alertes.join(' · ')) : ''],
     })),
     ...anciennes.map((t) => ({
       onclick: () => ouvrirTablette(t.id),
-      cellules: [badge('Active', 'ok'), t.simOperateur || '', t.sim, h('span', { class: 'muted' }, 'à compléter'), '',
-        t.numero || t.modele || '', '', euros(coutSim(t)), aResilier.has(t.id) ? badge('à résilier ou suspendre', 'ko') : ''],
+      cellules: [nomEtDetail(t.sim, t.simOperateur, `dans ${nomTab(t)}`), badge('Active', 'ok'), t.simOperateur || '', nomTab(t), euros(coutSim(t)),
+        aResilier.has(t.id) ? h('span', { class: 'texte-ko' }, 'à résilier ou suspendre') : h('span', { class: 'muted' }, 'fiche à compléter')],
     })),
   ], { vide: 'Aucune carte SIM enregistrée.' });
 }
@@ -1956,47 +2069,84 @@ function remplirPageSim(id) {
   const modif = (libelle, affiche, champ, opts = {}) => ligneModifiable(libelle, affiche, { ...opts,
     enregistrer: (v) => modifierChampsSim(l.id, { [champ]: v }) });
   const tablettesPossibles = donnees.stock.filter((x) => x.id === l.tablette || (!x.simId && !x.sim && !['perdue', 'hors-service'].includes(x.etat)));
-  zone.replaceChildren(...[h('div', { class: 'card' },
+  const facultatives = [
+    [l.finPromo, modif('Fin de la promo', l.finPromo ? jour(l.finPromo) : null, 'finPromo', { valeur: dateChamp(l.finPromo), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) })],
+    [l.client, modif('Identifiant client', l.client, 'client', { valeur: l.client })],
+    [l.cb, modif('Carte bancaire', l.cb ? `…${l.cb}` : null, 'cb', { valeur: l.cb, mode: 'numeric', aide: '4 derniers chiffres' })],
+    [l.cbExp, modif('Expiration de la carte', l.cbExp, 'cbExp', { valeur: l.cbExp, type: 'month' })],
+    [l.note, modif('Note', l.note, 'note', { valeur: l.note, long: true })],
+  ];
+  const remplis = facultatives.filter(([v]) => v);
+  const vides = facultatives.filter(([v]) => !v);
+  const replieOuvert = !!zone.querySelector('details.a-completer[open]'); // reste ouvert après un enregistrement
+  // Ce qui compte d'abord : la data du mois (forfait de 1 Go), la fin du forfait, le réseau, le hors-forfait.
+  const go = l.go != null ? l.go : 1;
+  const mo = vue && vue.sim.dataMoisMo != null ? vue.sim.dataMoisMo : null;
+  const partData = mo != null && go ? Math.round((mo / (go * 1024)) * 100) : null;
+  const jRecharge = l.prochaineRecharge ? Math.ceil((l.prochaineRecharge - Date.now()) / JOUR_MS) : null;
+  const nBlocages = BLOCAGES_SIM.filter(([k]) => l.blocages && l.blocages[k] === true).length;
+  const tuiles = l.statut === 'resiliee' ? [] : [
+    mo != null ? stat(enGo(mo) || '0 Mo', `utilisés sur ${String(go).replace('.', ',')} Go ce mois`, partData != null ? `${partData} % du forfait` : null, partData >= 88 ? 'neg' : null) : null,
+    stat(l.prochaineRecharge ? jour(l.prochaineRecharge) : 'pas notée', 'fin du forfait',
+      jRecharge == null ? null : jRecharge > 1 ? `dans ${jRecharge} jours` : jRecharge === 1 ? 'demain' : jRecharge === 0 ? 'aujourd\'hui' : `il y a ${-jRecharge} j`,
+      jRecharge != null && jRecharge <= 3 ? 'neg' : null),
+    vue && vue.sim.reseau ? stat(vue.sim.reseau, 'réseau vu par la tablette', vue.sim.signal >= 0 ? `signal ${vue.sim.signal} / 4` : null, vue.sim.signal === 0 ? 'neg' : null) : null,
+    stat(horsForfaitBloque(l) ? 'Bloqué' : 'Pas bloqué', 'hors-forfait', `${nBlocages} autre${nBlocages > 1 ? 's' : ''} blocage${nBlocages > 1 ? 's' : ''} sur ${BLOCAGES_SIM.length}`, horsForfaitBloque(l) ? null : 'neg'),
+  ].filter(Boolean);
+  tete.querySelector('h2').after(badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut]), h('span', { class: 'espace' }));
+  const antennes = (() => {
+    const r = vue ? reseauMobile(vue.sim) : null;
+    return r && r.antennes.length ? r.antennes.map((a) => `${a.texte}${a.utilisee ? ' (utilisée)' : ''}`).join(' · ') : null;
+  })();
+  const recharges = carteRecharges(l, modif, vue);
+  const blocages = carteBlocages(l);
+  zone.replaceChildren(...[
     tete,
-    alertes.length ? h('p', { class: 'small badges-longs' }, ...alertes.map((a) => badge(a, 'ko'))) : null,
-    h('dl', { class: 'fiche' },
-      ...ligne('Statut', badge(donnees.statutsSim[l.statut] || l.statut, STATUT_CLASSE[l.statut])),
-      ...modif('Opérateur', l.operateur, 'operateur', { valeur: l.operateur }),
-      ...modif('Numéro de ligne', l.numero, 'numero', { valeur: l.numero, mode: 'tel' }),
-      ...modif('ICCID', l.iccid, 'iccid', { valeur: l.iccid, mode: 'numeric' }),
-      ...modif('Tablette', t ? h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'tablette') : null,
+    h('p', { class: 'sous-fiche muted' }, [l.operateur, `${String(go).replace('.', ',')} Go par mois`, cout != null ? `${euros(cout)} par mois` : null].filter(Boolean).join(' · ')),
+    alertes.length ? h('div', { class: 'bandeau rouge' }, h('ul', { class: 'bandeau-liste' }, ...alertes.map((a) => h('li', {}, a.charAt(0).toUpperCase() + a.slice(1))))) : null,
+    tuiles.length ? h('div', { class: 'card' }, h('div', { class: `tuiles ${['', '', '', 'trois', 'quatre'][tuiles.length] || ''}` }, ...tuiles)) : null,
+    h('div', { class: 'deux-colonnes egales' },
+      h('div', {},
+        h('div', { class: 'card' }, h('h2', {}, 'Chez qui'),
+          h('dl', { class: 'fiche kv' },
+            ...modif('Tablette', t ? h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'tablette') : null,
         'tablette', { valeur: l.tablette || '', vide: 'dans aucune tablette',
           options: [['', 'Aucune'], ...tablettesPossibles.map((x) => [x.id, [x.ref, x.numero || x.modele, donnees.etats[etatTablette(x)]].filter(Boolean).join(' · ')])],
           convertir: (v) => v || null }),
-      ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}`) : null),
-      ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : null),
-      ...modif('Achat', lienAchat(l.depense), 'depense', { valeur: l.depense || '', options: optionsAchats(), convertir: (v) => v || null }),
-      ...modif('Forfait', l.go != null ? `${l.go} Go par mois` : null, 'go', { valeur: l.go != null ? String(l.go) : '', mode: 'decimal', suffixe: 'Go',
-        convertir: (v) => { if (!v.trim()) return null; const n = Number(v.replace(',', '.')); if (!Number.isFinite(n)) throw new Error('Un nombre de Go.'); return n; } }),
-      ...modif('Prix par mois', l.prix != null ? euros(l.prix) : null, 'prix', { valeur: enEuros(l.prix), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
-      ...modif('Fin de la promo', l.finPromo ? jour(l.finPromo) : null, 'finPromo', { valeur: dateChamp(l.finPromo), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }),
-      ...(l.finPromo || l.prixApres != null ? modif('Prix après la promo', l.prixApres != null ? euros(l.prixApres) : null, 'prixApres', { valeur: enEuros(l.prixApres), mode: 'decimal', suffixe: '€', convertir: convertirEuros }) : []),
-      ...ligne('Coût actuel', cout != null && cout !== l.prix ? euros(cout) : null),
-      ...modif('Activée le', l.activation ? jour(l.activation) : null, 'activation', { valeur: dateChamp(l.activation), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }),
-      ...(l.statut === 'stock' ? modif('À activer avant', l.activerAvant ? jour(l.activerAvant) : null, 'activerAvant', { valeur: dateChamp(l.activerAvant), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }) : []),
-      ...modif('Identifiant client', l.client, 'client', { valeur: l.client }),
-      ...modif('Carte bancaire', l.cb ? `…${l.cb}` : null, 'cb', { valeur: l.cb, mode: 'numeric', aide: '4 derniers chiffres' }),
-      ...modif('Expiration de la carte', l.cbExp, 'cbExp', { valeur: l.cbExp, type: 'month' }),
-      ...modif('Note', l.note, 'note', { valeur: l.note, long: true }))),
-    carteBlocages(l),
-    carteRecharges(l, modif, vue),
-    vue ? h('div', { class: 'card' }, h('h2', {}, 'Ce que dit la tablette'),
-      h('dl', { class: 'fiche' },
+            ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}`) : null),
+            ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : null))),
+        recharges),
+      h('div', {},
+        h('div', { class: 'card' }, h('h2', {}, 'La ligne'),
+          h('dl', { class: 'fiche kv' },
+            ...modif('Opérateur', l.operateur, 'operateur', { valeur: l.operateur }),
+            ...modif('Numéro de ligne', l.numero, 'numero', { valeur: l.numero, mode: 'tel' }),
+            ...modif('ICCID', l.iccid, 'iccid', { valeur: l.iccid, mode: 'numeric' }),
+            ...modif('Forfait', l.go != null ? `${l.go} Go par mois` : null, 'go', { valeur: l.go != null ? String(l.go) : '', mode: 'decimal', suffixe: 'Go',
+              convertir: (v) => { if (!v.trim()) return null; const n = Number(v.replace(',', '.')); if (!Number.isFinite(n)) throw new Error('Un nombre de Go.'); return n; } }),
+            ...modif('Prix par mois', l.prix != null ? euros(l.prix) : null, 'prix', { valeur: enEuros(l.prix), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
+            ...(l.finPromo || l.prixApres != null ? modif('Prix après la promo', l.prixApres != null ? euros(l.prixApres) : null, 'prixApres', { valeur: enEuros(l.prixApres), mode: 'decimal', suffixe: '€', convertir: convertirEuros }) : []),
+            ...ligne('Coût actuel', cout != null && cout !== l.prix ? euros(cout) : null),
+            ...modif('Activée le', l.activation ? jour(l.activation) : null, 'activation', { valeur: dateChamp(l.activation), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }),
+            ...(l.statut === 'stock' ? modif('À activer avant', l.activerAvant ? jour(l.activerAvant) : null, 'activerAvant', { valeur: dateChamp(l.activerAvant), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }) : []),
+            ...modif('Achat', lienAchat(l.depense), 'depense', { valeur: l.depense || '', options: optionsAchats(), convertir: (v) => v || null }),
+            ...remplis.flatMap(([, ligneSim]) => ligneSim)),
+          // Infos facultatives encore vides : repliées, pour ne pas aligner cinq « à compléter » (Tanguy, 20/11).
+          vides.length ? h('details', { class: 'aide-repliee a-completer', open: replieOuvert || null },
+            h('summary', {}, `Autres infos à compléter (${vides.length})`),
+            h('dl', { class: 'fiche kv' }, ...vides.flatMap(([, ligneSim]) => ligneSim))) : null),
+        blocages)),
+    vue ? h('details', { class: 'card repli' },
+      h('summary', {}, h('h2', {}, 'Ce que dit la tablette'), (vue.vuLe || vue.vue) ? h('span', { class: 'badge' }, `vue le ${(vue.vuLe || vue.vue).toLocaleDateString('fr-FR')}`) : null),
+      h('dl', { class: 'fiche kv' },
         ...ligne('Réseau', vue.sim.reseau ? `${vue.sim.reseau}${vue.sim.signal >= 0 ? `, signal ${vue.sim.signal}/4` : ''}` : null),
         ...ligne('Data du mois', enGo(vue.sim.dataMoisMo)),
-        ...ligne('Antennes chez le client', (() => {
-          const r = reseauMobile(vue.sim);
-          return r && r.antennes.length ? r.antennes.map((a) => `${a.texte}${a.utilisee ? ' (utilisée)' : ''}`).join(' · ') : null;
-        })()),
+        ...ligne('Antennes chez le client', antennes),
         ...ligne('Carte vue le', vue.vuLe ? vue.vuLe.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null),
         ...ligne('Tablette en ligne le', vue.vue ? vue.vue.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null),
         ...ligne('ICCID lu', vue.sim.iccid && l.iccid && !String(vue.sim.iccid).endsWith(String(l.iccid).replace(/\D/g, '').slice(-6))
           ? h('span', { class: 'error' }, `…${String(vue.sim.iccid).slice(-6)} : ce n'est pas cette carte`) : null))) : null].filter(Boolean));
+  zone.querySelectorAll('dl.fiche').forEach((d) => d.classList.add('kv'));
 }
 
 function convertirEuros(v) {
@@ -2034,10 +2184,10 @@ function carteRecharges(l, modif, vue) {
       ...ligneFinForfait(l),
       ...(cetteAnnee ? [h('dt', {}, `Payé en ${annee}`), h('dd', {}, euros(cetteAnnee))] : []),
       ...ligneGardeFou(vue && vue.sim)),
-    h('p', { class: 'muted small' }, l.renouvellementAuto
+    h('details', { class: 'aide-repliee' }, h('summary', {}, 'Comment ça marche ?'), h('p', {}, l.renouvellementAuto
       ? 'Les factures de l\'opérateur envoyées à factures@mapapote.fr se rangent ici toutes seules. Sans facture 2 jours après la fin du forfait, une alerte s\'affiche.'
       : 'Rappel 3 jours avant la fin du forfait. Une facture envoyée à factures@mapapote.fr se range aussi ici toute seule.',
-      ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % encore plus, à 95 % elle les passe sans image et les vidéos attendent le Wi-Fi.'),
+      ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % encore plus, à 95 % elle les passe sans image et les vidéos attendent le Wi-Fi.')),
     recharges.length ? h('div', { class: 'table cartes' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
 }
 // Blocages demandés à l'opérateur (Tanguy, 11/11) : un bouton par blocage, appuyé = activé chez l'opérateur. Notés
@@ -2048,16 +2198,19 @@ function carteBlocages(l) {
   if (l.statut === 'resiliee') return null;
   const etat = Object.fromEntries(BLOCAGES_SIM.map(([k]) => [k, !!(l.blocages && l.blocages[k] === true)]));
   let envoi = false;
+  // Une liste à cocher : chaque ligne est un bouton (coché = aria-pressed), le bilan en dessous dit si la carte
+  // peut partir (vert) ou ce qu'il reste (orange).
   const boutons = BLOCAGES_SIM.map(([k, texte]) => h('button', {
-    type: 'button', class: 'choix-fin-forfait no-print', 'data-blocage': k, 'aria-pressed': String(etat[k]),
-  }, texte));
+    type: 'button', class: 'ligne-blocage no-print', 'data-blocage': k, 'aria-pressed': String(etat[k]),
+  }, h('span', { class: 'coche', 'aria-hidden': 'true' }), h('span', {}, texte.charAt(0).toUpperCase() + texte.slice(1))));
   const resume = h('p', { class: 'small' });
   const afficher = () => {
     boutons.forEach((b) => b.setAttribute('aria-pressed', String(etat[b.dataset.blocage])));
+    const reste = BLOCAGES_SIM.filter(([k]) => !etat[k]).length + (horsForfaitBloque(l) ? 0 : 1);
     resume.textContent = blocagesFaits({ blocages: etat })
-      ? (horsForfaitBloque(l) ? 'Tout est bloqué : la carte peut partir.' : 'Les quatre blocages sont notés. Reste le hors-forfait, plus haut.')
-      : 'Il manque un blocage : pas d\'étiquette ni de « Colis déposé » pour cette carte.';
-    resume.className = blocagesFaits({ blocages: etat }) ? 'small muted' : 'small error';
+      ? (horsForfaitBloque(l) ? '✓ Tout est bloqué : la carte peut partir.' : 'Les quatre blocages sont notés. Reste le hors-forfait, plus haut.')
+      : `Encore ${reste} à faire : pas d'étiquette ni de « Colis déposé » pour cette carte.`;
+    resume.className = `bilan-blocages ${blocagesFaits({ blocages: etat }) && horsForfaitBloque(l) ? 'ok' : 'a-faire'}`;
   };
   for (const b of boutons) {
     b.addEventListener('click', async () => {
@@ -2078,9 +2231,10 @@ function carteBlocages(l) {
   return h('div', { class: 'card' },
     h('h2', {}, 'Blocages chez l\'opérateur'),
     caseHorsForfait(l),
-    h('p', { class: 'muted small' }, 'Activez-les dans l\'espace client de la ligne (ou au service client), puis appuyez sur chacun ici. Seule protection qui tient si quelqu\'un sort de l\'appli de la tablette.'),
-    h('div', { class: 'fins-forfait', role: 'group', 'aria-label': 'Blocages chez l\'opérateur' }, ...boutons),
-    resume);
+    h('div', { class: 'liste-blocages', role: 'group', 'aria-label': 'Blocages chez l\'opérateur' }, ...boutons),
+    resume,
+    h('details', { class: 'aide-repliee' }, h('summary', {}, 'Comment faire ?'),
+      h('p', {}, 'Activez chaque blocage dans l\'espace client de la ligne (ou au service client), puis cochez-le ici. C\'est la seule protection qui tient si quelqu\'un sort de l\'appli de la tablette.')));
 }
 
 // « Hors-forfait bloqué chez l'opérateur » (Tanguy, 19/11) : case obligatoire, non cochée sur les lignes d'avant.
@@ -2305,13 +2459,16 @@ function accessoiresAPrevoir() {
 
 function afficherAccessoires() {
   remplirTable($('t-accessoires'), [
-    { titre: 'Accessoire' }, { titre: 'En stock', n: 1 }, { titre: 'Part avec' }, { titre: 'Au retour' }, { titre: 'Prix unitaire', n: 1 }, { titre: 'Achat' }, { titre: '' },
-  ], accessoiresAPrevoir().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => ({
-    onclick: () => ouvrirAccessoire(a.id),
-    cellules: [a.nom, String(a.quantite || 0), donnees.envoisAccessoire[a.parEnvoi || ''], a.retour ? 'Revient' : 'Consommé', euros(a.prixAchat),
-      lienAchat((a.depenses || []).slice(-1)[0]),
-      a.manque ? badge(`il en manque ${a.manque} pour les envois`, 'ko') : a.bas ? badge('stock bas', 'ko') : ''],
-  })), { vide: 'Aucun accessoire.' });
+    { titre: 'Accessoire' }, { titre: 'En stock', n: 1 }, { titre: 'Part avec', classe: 'pc' }, { titre: 'À savoir', classe: 'pc' },
+  ], accessoiresAPrevoir().sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => {
+    const alerte = a.manque ? `il en manque ${a.manque} pour les envois` : a.bas ? 'stock bas' : null;
+    return {
+      onclick: () => ouvrirAccessoire(a.id),
+      cellules: [nomEtDetail(a.nom, donnees.envoisAccessoire[a.parEnvoi || ''], alerte ? h('span', { class: 'texte-ko' }, alerte) : null),
+        h('strong', {}, String(a.quantite || 0)), donnees.envoisAccessoire[a.parEnvoi || ''] || '',
+        alerte ? h('span', { class: 'texte-ko' }, alerte) : h('span', { class: 'muted' }, a.retour ? 'revient avec la tablette' : 'consommé')],
+    };
+  }), { vide: 'Aucun accessoire.' });
 }
 
 // Page d'un accessoire : chaque information se modifie avec son crayon ; la livraison reçue et la suppression
@@ -2374,23 +2531,34 @@ function remplirPageAccessoire(id) {
       if (await sauverAccessoire({ action: 'supprimer', id: a.id }, 'Accessoire supprimé', 'Suppression de l\'accessoire…')) location.hash = '#stock/accessoires';
     } },
   ], `Actions pour ${a.nom}`);
-  zone.replaceChildren(h('div', { class: 'card' },
-    h('div', { class: 'tete-fiche' }, h('h2', {}, a.nom), h('div', { class: 'tete-actions no-print' }, menu)),
-    a.manque ? h('p', { class: 'small' }, badge(`il en manque ${a.manque} pour les envois`, 'ko')) : a.bas ? h('p', { class: 'small' }, badge('stock bas', 'ko')) : null,
-    h('dl', { class: 'fiche' },
-      ...modif('Nom', a.nom, 'nom', { valeur: a.nom }),
+  zone.replaceChildren(
+    h('div', { class: 'tete-fiche' }, h('h2', {}, a.nom),
+      a.manque ? badge(`il en manque ${a.manque}`, 'ko') : a.bas ? badge('stock bas', 'ko') : null,
+      h('span', { class: 'espace' }), h('div', { class: 'tete-actions no-print' }, menu)),
+    h('p', { class: 'sous-fiche muted' }, [donnees.envoisAccessoire[a.parEnvoi || ''], a.retour ? 'revient et repart chez le client suivant' : 'consommé à chaque envoi'].filter(Boolean).join(' · ')),
+    h('div', { class: 'card' }, h('div', { class: 'tuiles trois' },
+      stat(String(a.quantite || 0), 'en stock', a.seuil != null ? `alerte sous ${a.seuil}` : 'pas d\'alerte réglée', a.manque || a.bas ? 'neg' : null),
+      stat(String(a.besoin || 0), 'à prévoir pour les envois', a.manque ? `il en manque ${a.manque}` : null, a.manque ? 'neg' : null),
+      stat(a.prixAchat != null ? euros(a.prixAchat) : 'pas noté', 'prix unitaire', a.prixAchat != null && a.quantite ? `valeur du stock : ${euros(a.prixAchat * a.quantite)}` : null))),
+    livraison,
+    h('div', { class: 'deux-colonnes egales' },
+      h('div', {}, h('div', { class: 'card' }, h('h2', {}, 'Le stock'),
+        h('dl', { class: 'fiche kv' },
       ...modif('En stock', String(a.quantite || 0), 'quantite', { valeur: a.quantite || 0, mode: 'numeric', convertir: (v) => nombre(v) }),
       ...(a.besoin ? [h('dt', {}, 'Pour les envois'), h('dd', {}, `${a.besoin} à prévoir pour les commandes à envoyer`)] : []),
       ...modif('Alerte sous', a.seuil != null ? String(a.seuil) : null, 'seuil', { valeur: a.seuil ?? '', mode: 'numeric', vide: 'pas d\'alerte', convertir: (v) => nombre(v, true) }),
       ...modif('Prix unitaire', a.prixAchat != null ? euros(a.prixAchat) : null, 'prixAchat', { valeur: enEuros(a.prixAchat), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
-      // Une dépense par livraison : la liste s'allonge (« Ajouter un achat »), une livraison saisie avec son montant s'y ajoute seule.
       ...modif('Achats', (a.depenses || []).length ? h('span', {}, ...a.depenses.flatMap((x, i) => [i ? ', ' : null, lienAchat(x)])) : badge('aucun achat lié', 'neutre'),
         'depenses', { valeur: '', options: optionsAchats('Choisir l\'achat à ajouter'), convertir: (v) => (v ? [...(a.depenses || []), v] : (a.depenses || [])) }),
+        ))),
+      h('div', {}, h('div', { class: 'card' }, h('h2', {}, 'L\'accessoire'),
+        h('dl', { class: 'fiche kv' },
+      ...modif('Nom', a.nom, 'nom', { valeur: a.nom }),
       ...modif('Part avec', donnees.envoisAccessoire[a.parEnvoi || ''], 'parEnvoi', { valeur: a.parEnvoi || '', options: Object.entries(donnees.envoisAccessoire) }),
       ...modif('Au retour', a.retour ? 'Revient et repart chez le client suivant' : 'Consommé à chaque envoi', 'retour', {
         valeur: a.retour ? 'oui' : '', options: [['oui', 'Revient et repart chez le client suivant'], ['', 'Consommé à chaque envoi']], convertir: (v) => v === 'oui' }),
-      ...modif('Note', a.note || null, 'note', { valeur: a.note || '', long: true, vide: 'aucune' })),
-    livraison));
+      ...modif('Note', a.note || null, 'note', { valeur: a.note || '', long: true, vide: 'aucune' }),
+        )))));
 }
 
 async function sauverAccessoire(donneesAppel, fait = 'Enregistré', attente) {
@@ -2449,8 +2617,9 @@ const ilYA = (le) => {
 function afficherBatterie(t) {
   const b = t.batterie;
   const zone = $('dt-batterie');
-  zone.hidden = !b;
-  if (!b) return;
+  // Le niveau et l'heure sont déjà dans « Derniers relevés » : cette carte ne sert que s'il y a plus à dire.
+  zone.hidden = !b || !(b.sante || b.cycles != null || b.temperature != null || t.usure || (b.fuseau && b.fuseau !== 'Europe/Paris'));
+  if (zone.hidden) return;
   const infos = [
     b.niveau != null ? `${b.niveau} %${b.enCharge ? ', en charge' : ''}` : null,
     b.sante ? `santé ${SANTES[b.sante] || b.sante}` : null,
@@ -2462,11 +2631,11 @@ function afficherBatterie(t) {
   // Fuseau horaire relevé par la tablette : tout sauf Europe/Paris décale la veille et les rappels.
   const fuseau = b.fuseau ? h('p', { class: 'small' }, h('strong', {}, 'Fuseau horaire '), b.fuseau, ' ',
     b.fuseau === 'Europe/Paris' ? null : badge('pas Europe/Paris : veille et rappels décalés', 'ko')) : null;
-  zone.replaceChildren(
+  zone.replaceChildren(...[
     h('p', { class: 'small' }, h('strong', {}, 'Batterie '), infos || 'pas encore de relevé', t.usure ? ' ' : null, t.usure ? badge(t.usure, 'ko') : null),
     vues ? h('p', { class: 'small muted' }, vues) : null,
     fuseau,
-  );
+  ].filter(Boolean));
 }
 
 // Alertes envoyées aux proches (journal du serveur, 90 derniers jours) : un chiffre par sorte d'alerte, qui ouvre
@@ -2484,7 +2653,7 @@ function blocAlertes(zone, liste, { titre, avecTablette }) {
   const montrer = (genre) => {
     ouvert = ouvert === genre ? null : genre;
     detail.hidden = !ouvert;
-    zone.querySelectorAll('.stat').forEach((s) => s.classList.toggle('actif', s.dataset.genre === ouvert));
+    zone.querySelectorAll('[data-genre]').forEach((s) => { s.classList.toggle('actif', s.dataset.genre === ouvert); s.setAttribute('aria-pressed', String(s.dataset.genre === ouvert)); });
     if (!ouvert) return;
     detail.replaceChildren(...(ouvert === '*' ? liste : parGenre.get(ouvert)).map((a) => {
       const morceaux = [
@@ -2498,16 +2667,15 @@ function blocAlertes(zone, liste, { titre, avecTablette }) {
         ...morceaux.flatMap((m, i) => [i ? ' · ' : ' ', m]));
     }));
   };
-  const chiffre = (genre, n, texte) => {
-    const el = cliquable(stat(String(n), texte), () => montrer(genre));
-    el.dataset.genre = genre;
-    return el;
-  };
+  // Une ligne par sorte (« Tablette débranchée · 1 ») : touchée, elle déplie la liste datée en dessous.
+  const chiffre = (genre, n, texte) => h('button', { type: 'button', class: 'ligne-kv', 'data-genre': genre, 'aria-pressed': 'false', onclick: () => montrer(genre) },
+    h('span', {}, texte === 'en tout' ? 'En tout' : String(texte).replace(/^./, (x) => x.toUpperCase())), h('span', { class: 'n' }, String(n)));
   zone.replaceChildren(
-    h('h2', {}, `${titre} (${jours} derniers jours)`),
+    h('div', { class: 'carte-tete' }, h('h2', {}, titre), h('span', { class: 'muted small' }, `${jours} jours`)),
     liste.length
-      ? h('div', { class: 'stats compact' }, chiffre('*', liste.length, 'en tout'),
-        ...[...parGenre.entries()].sort((x, y) => y[1].length - x[1].length).map(([g, l]) => chiffre(g, l.length, genres[g] || g)))
+      ? h('div', { class: 'lignes-kv', role: 'group' },
+        ...[...parGenre.entries()].sort((x, y) => y[1].length - x[1].length).map(([g, l]) => chiffre(g, l.length, genres[g] || g)),
+        chiffre('*', liste.length, 'en tout'))
       : h('p', { class: 'muted small' }, 'Aucune alerte.'),
     detail,
   );
@@ -2528,21 +2696,19 @@ function blocGardeFous(zone, t) {
   const montrer = (genre) => {
     ouvert = ouvert === genre ? null : genre;
     detail.hidden = !ouvert;
-    zone.querySelectorAll('.stat').forEach((s) => s.classList.toggle('actif', s.dataset.genre === ouvert));
+    zone.querySelectorAll('[data-genre]').forEach((s) => { s.classList.toggle('actif', s.dataset.genre === ouvert); s.setAttribute('aria-pressed', String(s.dataset.genre === ouvert)); });
     if (!ouvert) return;
     detail.replaceChildren(...(ouvert === '*' ? liste : parGenre.get(ouvert)).map((g) => h('li', {},
       h('span', { class: 'quand' }, new Date(g.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ',
       ouvert === '*' ? `${genres[g.genre] || g.genre} · ` : '', h('span', { class: 'muted' }, g.texte))));
   };
-  const chiffre = (genre, n, texte) => {
-    const el = cliquable(stat(String(n), texte), () => montrer(genre));
-    el.dataset.genre = genre;
-    return el;
-  };
+  // Une pastille par sorte (« Tablette débranchée 1 ») : touchée, elle déplie la liste datée en dessous.
+  const chiffre = (genre, n, texte) => h('button', { type: 'button', 'data-genre': genre, 'aria-pressed': 'false', onclick: () => montrer(genre) },
+    texte === 'en tout' ? 'En tout' : String(texte).replace(/^./, (x) => x.toUpperCase()), h('span', { class: 'n' }, String(n)));
   zone.replaceChildren(
     h('h2', {}, 'Garde-fous de la tablette'),
     liste.length
-      ? h('div', { class: 'stats compact' }, chiffre('*', liste.length, 'en tout'),
+      ? h('div', { class: 'filtres', role: 'group' }, chiffre('*', liste.length, 'en tout'),
         ...Object.keys(genres).filter((g) => parGenre.has(g)).map((g) => chiffre(g, parGenre.get(g).length, genres[g])))
       : h('p', { class: 'muted small' }, 'Aucun dans son journal.'),
     h('p', { class: 'muted small' }, 'Comptés dans le journal de la tablette (ses 200 dernières lignes).'),
@@ -2677,8 +2843,9 @@ function blocReleves(zone, t) {
   membreTablette = null;
   familleTablette = null;
   zone.hidden = !relieeAUneFamille(t);
+  $('dt-pli-reseau').hidden = true;
   if (zone.hidden) return;
-  zone.replaceChildren(h('h2', {}, 'Derniers relevés'), h('p', { class: 'muted small' }, 'Lecture de la fiche de la tablette…'));
+  zone.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'muted small' }, 'Lecture de la fiche de la tablette…')));
   const dessiner = () => {
     const m = membreTablette || {};
     const b = m.battery || {};
@@ -2686,18 +2853,36 @@ function blocReleves(zone, t) {
     const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v || null);
     const enLigne = ms(m.lastOnline);
     const signal = sim && sim.signal >= 0 ? `${sim.signal} / 4` : null;
-    const mo = sim && sim.dataMoisMo >= 0 ? `${sim.dataMoisMo} Mo ce mois` : null;
-    zone.replaceChildren(
-      h('h2', {}, 'Derniers relevés ', h('span', { class: 'muted small' }, '· envoyés par la tablette avec son signal « en ligne », rien de plus')),
-      h('div', { class: 'stats compact' },
-        stat(enLigne ? ilYA(enLigne) : '—', 'En ligne', enLigne && Date.now() - enLigne > 70 * 60_000 ? 'ne répond plus ?' : null, enLigne && Date.now() - enLigne > 70 * 60_000 ? 'warn' : null),
-        stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
-        sim && sim.bloquee ? stat('Carte SIM', texteBloquee(sim).replace('Carte SIM ', ''), null, 'warn') : stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM', mo),
-        stat(m.appVersion || '—', 'Version de Papote')),
-      lignePush(modePush(sim)),
-      blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid }),
-      h('p', { class: 'muted small' }, 'Fiche de la tablette lue en direct : la page se met à jour toute seule quand elle donne de ses nouvelles.'),
-    );
+    const mo = sim && sim.dataMoisMo >= 0 ? sim.dataMoisMo : null;
+    // Forfait de la ligne notée dans le stock (1 Go sinon) : la data du mois se lit par rapport à lui.
+    const ligne = donnees.sims.find((x) => x.id === t.simId);
+    const go = ligne && ligne.go != null ? ligne.go : 1;
+    const part = mo != null && go ? Math.round((mo / (go * 1024)) * 100) : null;
+    // Une ligne absente (null) ne doit pas s'écrire « null » : replaceChildren écrit tout ce qu'on lui donne.
+    // Le souci de réseau en bandeau tout en haut, puis les quatre chiffres ; le détail des antennes est une ligne repliée plus bas.
+    const reseau = blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid });
+    const souci = reseau && reseau.querySelector('p.error');
+    if (souci) souci.className = 'bandeau rouge';
+    const retard = enLigne && Date.now() - enLigne > 70 * 60_000;
+    zone.replaceChildren(...[
+      souci,
+      h('h2', { class: 'sr-only' }, 'En ce moment'),
+      h('div', { class: 'card' }, h('div', { class: 'tuiles quatre' },
+        stat(enLigne ? ilYA(enLigne) : '—', 'dernier signe de vie', retard ? 'ne répond plus ?' : 'en ligne', retard ? 'warn' : null),
+        stat(b.level != null ? `${b.level} %` : '—', 'batterie', b.charging ? 'sur le chargeur' : 'débranchée', b.charging === false ? 'warn' : null),
+        sim && sim.bloquee ? stat('Carte SIM', texteBloquee(sim).replace('Carte SIM ', ''), null, 'warn') : stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM'),
+        sim && mo != null
+          ? stat(mo >= 1024 ? `${String(Math.round(mo / 102.4) / 10).replace('.', ',')} Go` : `${mo} Mo`, `utilisés sur ${String(go).replace('.', ',')} Go ce mois`, part != null ? `${part} % du forfait` : null, part >= 88 ? 'warn' : null)
+          : stat(m.appVersion || '—', 'version de Papote')),
+      sim && mo != null ? h('p', { class: 'muted small ligne-version' }, `Version de Papote : ${m.appVersion || 'inconnue'}`) : null,
+      lignePush(modePush(sim))),
+    ].filter(Boolean));
+    const antennes = reseau ? reseau.querySelectorAll('li').length : 0;
+    $('dt-pli-reseau').hidden = !reseau;
+    if (reseau) {
+      $('dt-n-reseau').textContent = antennes ? pluriel(antennes, 'antenne') : 'détail';
+      $('dt-reseau').replaceChildren(reseau, h('p', { class: 'muted small' }, 'Envoyés par la tablette quand elle est en ligne ; la page se met à jour toute seule.'));
+    }
     rafraichirSousTitres();
   };
   bdd().then((d) => {
@@ -2707,7 +2892,7 @@ function blocReleves(zone, t) {
       dessiner();
     }, (err) => {
       console.warn('Fiche de la tablette illisible', err);
-      zone.replaceChildren(h('h2', {}, 'Derniers relevés'), h('p', { class: 'muted small' }, `Fiche de la tablette illisible (${messageErreur(err)}).`));
+      zone.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'muted small' }, `Fiche de la tablette illisible (${messageErreur(err)}).`)));
     });
     getDoc(doc(d, 'families', t.fid)).then((snap) => { familleTablette = snap.exists() ? snap.data() : {}; rafraichirSousTitres(); }).catch(() => null);
   });
@@ -2715,10 +2900,10 @@ function blocReleves(zone, t) {
 
 // Les sous-titres des boutons (version installée, volumes) suivent les relevés.
 function rafraichirSousTitres() {
-  const zone = $('dt-agir');
+  const zone = $('dt-agir-menu');
   const t = donnees && donnees.stock.find((x) => x.id === tabletteOuverte);
-  if (!t || zone.hidden) return;
-  zone.querySelectorAll('button[data-ordre] small').forEach((el) => {
+  if (!t) return;
+  zone.querySelectorAll('button[data-ordre]:not(:disabled) small').forEach((el) => {
     const o = ORDRES.find((x) => x.type === el.parentElement.dataset.ordre);
     if (o) el.textContent = o.sous(t, membreTablette, familleTablette);
   });
@@ -2727,25 +2912,25 @@ function rafraichirSousTitres() {
 // Boutons d'action, chacun avec son retour visible : « Un instant… » puis le résultat daté (ou « pas de réponse »).
 function blocAgir(zone, t) {
   if (stopOrdre) { stopOrdre(); stopOrdre = null; }
-  zone.hidden = false;
-  if (!relieeAUneFamille(t)) {
-    zone.replaceChildren(h('h2', {}, 'Agir sur la tablette'),
-      h('p', { class: 'muted small' }, 'Cette tablette n\'est pas reliée à une famille : les actions à distance (redémarrer, état, mise à jour…) seront possibles dès qu\'elle sera jumelée.'));
-    return;
-  }
+  // Les ordres à distance sont rangés dans le menu « Actions » en haut de la page ; cette carte n'apparaît que
+  // pour montrer leur réponse (ou la saisie des volumes, ou le journal).
+  zone.hidden = true;
+  $('dt-agir-menu').replaceChildren();
+  if (!relieeAUneFamille(t)) return;
   const retour = h('div', { class: 'retour-ordre', hidden: true, role: 'status' });
   const detail = h('div', { hidden: true });
   const choix = h('div', { class: 'choix-ordre', hidden: true });
-  const grille = h('div', { class: 'agir' });
   const boutons = new Map();
   const occuper = (actif) => boutons.forEach((b) => { b.disabled = actif; });
   const montrer = (texte, classe) => {
+    zone.hidden = false;
     retour.hidden = false;
     retour.className = `retour-ordre ${classe || ''}`;
     retour.textContent = texte;
   };
-  for (const o of ORDRES) {
-    const b = h('button', { type: 'button', class: `secondary${o.danger ? ' danger' : ''}`, 'data-ordre': o.type },
+  const RARES = ['verrouiller', 'usine'];
+  const bouton = (o) => {
+    const b = h('button', { type: 'button', class: o.danger ? 'danger' : null, 'data-ordre': o.type },
       o.titre, h('small', {}, o.sous(t, membreTablette, familleTablette)));
     if (o.type === 'usine' && !['revenue', 'perdue', 'a-reparer', 'hors-service'].includes(t.etat)) {
       b.disabled = true;
@@ -2753,19 +2938,22 @@ function blocAgir(zone, t) {
     }
     b.addEventListener('click', () => lancerOrdre(o, b));
     boutons.set(o.type, b);
-    grille.append(b);
-  }
+    return b;
+  };
   // Tablette volée : un seul geste coupe son identité (fonction tabletteVolee, functions/tablette-volee.js).
-  const volee = h('button', { type: 'button', class: 'secondary danger', 'data-volee': '' },
+  const volee = h('button', { type: 'button', class: 'danger', 'data-volee': '' },
     'Tablette volée : tout couper', h('small', {}, 'Verrouille (ou efface), sort de la famille, désactive ses comptes'));
   volee.addEventListener('click', () => couperTablette(volee));
   boutons.set('volee', volee);
-  grille.append(volee);
-  zone.replaceChildren(
-    h('h2', {}, 'Agir sur la tablette'),
-    h('p', { class: 'muted small' }, 'La tablette est réveillée tout de suite par notification et répond en général en moins d\'une minute. Chaque action lui coûte quelques Ko.'),
-    grille, retour, detail,
-  );
+  const menu = h('div', { class: 'menu-actions', 'data-texte': 'Actions', 'data-titre': 'Actions à distance sur la tablette' },
+    h('p', { 'data-section': '' }, 'À distance (réponse en moins d\'une minute)'),
+    ...ORDRES.filter((o) => !RARES.includes(o.type)).map(bouton),
+    h('p', { 'data-section': '' }, 'Perdue ou volée'),
+    ...ORDRES.filter((o) => RARES.includes(o.type)).map(bouton),
+    volee);
+  $('dt-agir-menu').append(menu);
+  menusDansLaPage($('dt-agir-menu'));
+  zone.replaceChildren(h('h2', {}, 'Action à distance'), choix, retour, detail);
 
   async function lancerOrdre(o, b) {
     detail.hidden = true;
@@ -2867,6 +3055,7 @@ function blocAgir(zone, t) {
       const lignes = snap.exists() ? snap.get('lines') || '' : '';
       const quand = snap.exists() && snap.get('updatedAt') && snap.get('updatedAt').toDate ? snap.get('updatedAt').toDate() : null;
       detail.hidden = false;
+      zone.hidden = false;
       detail.replaceChildren(
         h('p', { class: 'small muted' }, `Journal de la tablette${quand ? ` (envoyé le ${quand.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })})` : ''} · ${lignes ? lignes.split('\n').length : 0} lignes, la plus récente en bas.`),
         h('pre', { class: 'journal-tablette' }, lignes || 'Journal vide.'));
@@ -2886,7 +3075,6 @@ function blocAgir(zone, t) {
     const [lg, ig] = champ('volume', f.volume, 'Général');
     const [la, ia] = champ('volumeAppel', f.volumeAppel ?? 100, 'Appel');
     const [ls, is] = champ('volumeSonnerie', f.volumeSonnerie ?? 100, 'Sonnerie');
-    const b = boutons.get('volumes');
     const appliquer = h('button', { type: 'button', class: 'primary small-btn' }, 'Appliquer');
     appliquer.addEventListener('click', async () => {
       const champs = { rev: increment(1) };
@@ -2903,18 +3091,18 @@ function blocAgir(zone, t) {
         familleTablette = { ...f, ...champs, rev: undefined };
         rafraichirSousTitres();
         montrer(`✓ ${heure()} · Volumes enregistrés : la tablette les applique à son réveil (notification envoyée).`, 'ok');
-        choix.replaceWith(b);
+        choix.hidden = true;
       } catch (err) {
         montrer(`Volumes non enregistrés (${messageErreur(err)}).`, 'ko');
       } finally {
         boutonCharge(appliquer, false);
       }
     });
-    const annuler = h('button', { type: 'button', class: 'secondary small-btn', onclick: () => { choix.replaceWith(b); b.focus(); } }, 'Annuler');
+    const annuler = h('button', { type: 'button', class: 'secondary small-btn', onclick: () => { choix.hidden = true; if (retour.hidden) zone.hidden = true; } }, 'Annuler');
     choix.hidden = false;
+    zone.hidden = false;
     choix.replaceChildren(h('strong', {}, 'Volumes'), lg, la, ls, h('span', { class: 'choix-boutons' }, appliquer, annuler));
-    // La saisie remplace le bouton « Volumes » dans la grille, à sa taille ; le bouton revient après.
-    b.replaceWith(choix);
+    ig.focus();
   }
 }
 
@@ -2923,11 +3111,17 @@ let tabletteOuverte = null;
 function ouvrirTablette(id) {
   location.hash = `#tablette/${encodeURIComponent(id)}`;
 }
+// Lien vers la page d'une famille (son nom), ou rien si la famille n'est pas connue.
+function lienFamille(fid) {
+  const f = fid && (donnees.familles || []).find((x) => x.id === fid);
+  return f ? h('a', { href: `#clients/familles/${encodeURIComponent(fid)}` }, f.nom || f.name || 'Famille') : null;
+}
+
 function remplirTablette(id) {
   const t = donnees.stock.find((x) => x.id === id);
   if (!t) {
     $('dt-titre').textContent = 'Tablette introuvable';
-    $('dt-infos').replaceChildren(h('dt', {}, 'Tablette'), h('dd', {}, 'Elle a peut-être été supprimée.'));
+    $('dt-infos').replaceChildren(h('p', {}, 'Elle a peut-être été supprimée.'));
     return;
   }
   // Même tablette déjà affichée : ne pas effacer ce qui est en cours de saisie.
@@ -2935,7 +3129,9 @@ function remplirTablette(id) {
   tabletteOuverte = t.id;
   f.dataset.charge = t.id;
   const nom = [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'sans nom';
-  $('dt-titre').textContent = `Tablette ${nom}`;
+  $('dt-titre').textContent = t.ref ? `Tablette ${t.ref}` : `Tablette ${nom}`;
+  const etatAffiche = etatTablette(t);
+  $('dt-etat').replaceChildren(badge(donnees.etats[etatAffiche] || etatAffiche, classeEtat(etatAffiche)));
   document.title = `Papote · Tablette ${t.ref || ''}`.trim();
   const c = t.commande && donnees.commandes.find((x) => x.id === t.commande);
   // Chaque information se modifie seule (petit crayon) ; l'état change par les boutons d'action.
@@ -2949,13 +3145,18 @@ function remplirTablette(id) {
   const infos = $('dt-infos');
   if (!(infos.dataset.id === t.id && saisieEnCours(infos))) {
     infos.dataset.id = t.id;
-    infos.replaceChildren(
-      ...ligne('Où est-elle ?', friseTablette(t, actions.bouton)),
+    // Deux cartes côte à côte : chez qui elle est, ce qu'elle est (maquette du 20/11). La frise est au-dessus.
+    const groupe = (titre, ...lignes) => (lignes.flat().length
+      ? h('section', { class: 'card fiche-groupe' }, h('h2', {}, titre), h('dl', { class: 'fiche kv' }, ...lignes)) : null);
+    infos.replaceChildren(...[
+      groupe('Chez qui',
       // Jumelée sans commande (tablette de test) : elle reste dans sa famille, hors du stock à vendre, rien à faire.
-      ...ligne('Famille', DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? badge(pasAVendre(t), 'info') : null),
+      ...ligne('Famille', DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? badge(pasAVendre(t), 'info') : lienFamille(t.fid)),
       // Attribuée à une commande par « Préparer l'envoi » (SIM, accessoires, étiquette), pas à la main.
       ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : dansUneFamille(t) ? null : h('span', { class: 'muted' }, 'pas encore attribuée')),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
+      ),
+      groupe('La tablette',
       ...(fichesAchetees(t).length
         // Fiche créée à l'installation faute d'achat « En stock » : on choisit la tablette achetée qu'elle est
         // vraiment (la fiche de l'achat prend le T-0… et le n° de série, celle-ci disparaît).
@@ -2984,8 +3185,10 @@ function remplirTablette(id) {
       }),
       ...ligne('Accessoires', (t.accessoires || []).join(', ')),
       ...ligne('Installation', ligneInstallation(t)),
-      ...modif('Notes', t.notes, 'notes', { valeur: t.notes, long: true, vide: 'aucune' }));
+      ...modif('Notes', t.notes, 'notes', { valeur: t.notes, long: true, vide: 'aucune' })),
+    ].filter(Boolean));
   }
+  $('dt-frise').replaceChildren(friseTablette(t, actions.bouton));
   afficherDocumentsTablette(t);
   // Relevés en direct et actions à distance : redessinés seulement si on change de tablette (un ordre en
   // cours garde son retour affiché quand les données se relisent).
@@ -2996,10 +3199,17 @@ function remplirTablette(id) {
     blocAgir($('dt-agir'), t);
   }
   afficherBatterie(t);
-  blocAlertes($('dt-alertes'), (donnees.alertes || []).filter((a) => a.fiche === t.id), { titre: 'Alertes de cette tablette' });
+  const alertesTablette = (donnees.alertes || []).filter((a) => a.fiche === t.id);
+  blocAlertes($('dt-alertes'), alertesTablette, { titre: 'Alertes' });
   blocGardeFous($('dt-gardefous'), t);
+  // Lignes repliées : le nombre se lit sans ouvrir.
+  $('dt-pli-alertes').hidden = $('dt-alertes').hidden;
+  $('dt-n-alertes').textContent = alertesTablette.length ? `${alertesTablette.length} en ${donnees.alertesJours || 90} jours` : 'aucune';
+  $('dt-pli-gardefous').hidden = $('dt-gardefous').hidden;
+  $('dt-n-gardefous').textContent = (t.gardeFous || []).length ? String(t.gardeFous.length) : 'aucun';
   $('dt-historique').replaceChildren(...historiqueLisible(t).reverse().map(([le, texte]) => h('li', {},
     h('span', { class: 'quand' }, new Date(le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ', texte)));
+  $('dt-n-historique').textContent = $('dt-historique').children.length ? pluriel($('dt-historique').children.length, 'ligne') : 'vide';
   if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
   $('dt-actions').replaceChildren(actions.menu);
   f.querySelector('.f-msg').hidden = true;
@@ -3036,8 +3246,8 @@ function friseTablette(t, bouton) {
   const etat = etatTablette(t);
   const i = PARCOURS_TABLETTE.findIndex(([k]) => k === etat);
   if (i < 0) {
-    return h('div', { class: 'frise-tablette' },
-      badge(donnees.etats[etat] || etat, ['perdue', 'hors-service', 'a-reparer'].includes(etat) ? 'ko' : 'info'), bouton);
+    // L'état est déjà écrit à côté du nom (en-tête de la page) : ici, seulement l'action.
+    return h('div', { class: 'frise-tablette' }, bouton);
   }
   // Étapes en ronds reliés (✓ pour les étapes passées), l'action suivante en dessous.
   return h('div', { class: 'etapes-tablette' },
@@ -3118,6 +3328,7 @@ function afficherDocumentsTablette(t) {
   $('dt-pieces').replaceChildren(...docs.map(([p, collection, id, deLAchat]) => h('li', {},
     h('span', { class: 'muted' }, `${genre(p, deLAchat)} : `), lienPiece(p),
     h('button', { type: 'button', class: 'crayon no-print', title: `Retirer « ${p.nom} »`, 'aria-label': `Retirer « ${p.nom} »`, onclick: () => retirerPiece(collection, id, p) }, '✕'))));
+  $('dt-n-pieces').textContent = docs.length ? String(docs.length) : 'aucun';
   if (!$('dt-pieces').children.length) $('dt-pieces').append(h('li', { class: 'muted small' }, 'Aucun document pour l\'instant.'));
 }
 
@@ -3288,26 +3499,37 @@ function afficherFactures() {
   const liste = toutes.filter((f) => !filtre || f.statut === filtre);
   const somme = (l, k) => l.reduce((s, f) => s + (f[k] || 0), 0);
   const ouvertes = toutes.filter((f) => f.statut === 'open');
+  const nb = (st) => toutes.filter((f) => f.statut === st).length;
+  filtresPastilles($('filtres-factures'), [
+    { valeur: '', libelle: 'Toutes', n: toutes.length },
+    { valeur: 'open', libelle: 'À payer', n: nb('open') },
+    { valeur: 'paid', libelle: 'Payées', n: nb('paid') },
+    { valeur: 'uncollectible', libelle: 'Irrécouvrables', n: nb('uncollectible') },
+    { valeur: 'void', libelle: 'Annulées', n: nb('void') },
+  ], filtre, (v) => { $('filtre-factures').value = v; afficherFactures(); });
+  // Les chiffres en une ligne sous la liste (au lieu de trois grosses cases).
+  const emises = toutes.filter((f) => f.statut !== 'draft' && f.statut !== 'void').length;
   $('kpi-factures').replaceChildren(
-    stat(String(toutes.filter((f) => f.statut !== 'draft' && f.statut !== 'void').length), 'factures émises'),
-    stat(euros(somme(toutes.filter((f) => f.statut === 'paid'), 'total')), 'facturé et payé'),
-    stat(euros(somme(ouvertes, 'du')), 'reste à encaisser', pluriel(ouvertes.length, 'facture'), ouvertes.length ? 'neg' : null),
+    stat(String(emises), `facture${emises > 1 ? 's' : ''} émise${emises > 1 ? 's' : ''}`),
+    stat(euros(somme(toutes.filter((f) => f.statut === 'paid'), 'total')), 'payés'),
+    stat(ouvertes.length ? euros(somme(ouvertes, 'du')) : '0,00 €', 'à encaisser', ouvertes.length ? pluriel(ouvertes.length, 'facture') : 'rien en attente'),
   );
   const parAbonnement = new Map(donnees ? donnees.commandes.map((c) => [c.id, c]) : []);
   remplirTable($('t-factures'), [
-    { titre: 'N°' }, { titre: 'Date' }, { titre: 'Client' }, { titre: 'Détail' }, { titre: 'HT', n: 1 },
-    { titre: 'TVA', n: 1 }, { titre: 'TTC', n: 1 }, { titre: 'Statut' }, { titre: '' },
+    { titre: 'Client' }, { titre: 'Statut' }, { titre: 'N°', classe: 'pc' }, { titre: 'Date', classe: 'pc' },
+    { titre: 'TTC', n: 1 }, { titre: 'PDF', classe: 'pc' },
   ], liste.map((f) => {
     const [texte, classe] = STATUTS_FACTURE[f.statut] || [f.statut, ''];
     const c = parAbonnement.get(f.abonnement);
     return {
       onclick: c ? () => ouvrirCommande(c) : null,
-      cellules: [f.numero || '—', jour(f.le), h('div', {}, f.client || '', h('div', { class: 'muted' }, f.email || '')),
-        f.lignes, euros(f.ht), euros(f.tva), euros(f.total), badge(texte, classe),
+      cellules: [nomEtDetail(f.client || f.email || '—', f.numero, jour(f.le), euros(f.total)), badge(texte, classe),
+        f.numero || '—', jour(f.le), euros(f.total),
         f.lienPdf ? h('a', { href: f.lienPdf, target: '_blank', rel: 'noopener', onclick: (e) => e.stopPropagation() }, 'PDF') : ''],
     };
   }), {
-    total: liste.length ? ['Total', '', '', '', euros(somme(liste, 'ht')), euros(somme(liste, 'tva')), euros(somme(liste, 'total')), '', ''] : null,
+    total: liste.length ? ['Total', '', '', '', euros(somme(liste, 'total')), ''] : null,
+    vide: 'Aucune facture.',
   });
 }
 $('filtre-factures').addEventListener('change', afficherFactures);
@@ -3324,32 +3546,46 @@ $('x-factures').addEventListener('click', exporterFactures);
 
 function afficherBilan() {
   const t = totaux(stripe.mouvements, depensesPeriode());
-  $('kpi-argent').replaceChildren(
-    stat(euros(t.encaisse), 'encaissé', pluriel(stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature)).length, 'paiement')),
-    stat(euros(t.rembourse), 'remboursé'),
-    stat(euros(t.frais), 'frais Stripe'),
-    stat(euros(t.depenses), 'dépenses'),
-    stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null),
-  );
   const abos = stripe.abonnements;
   const enCours = abos.filter((a) => ['active', 'trialing', 'past_due'].includes(a.statut));
   const mrr = enCours.filter((a) => a.statut !== 'trialing').reduce((s, a) => s + a.mensuel, 0);
   const commandes = donnees.commandes.filter((c) => dansPeriode(c.creeLe));
-  $('kpi-activite').replaceChildren(
-    stat(String(enCours.length), 'abonnements en cours',
-      `${enCours.filter((a) => a.statut === 'trialing').length} au premier mois · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
+  // Quatre chiffres en haut (ce qui compte), le reste en lignes sur le côté.
+  $('kpi-argent').replaceChildren(
+    stat(euros(t.encaisse), 'encaissé', pluriel(stripe.mouvements.filter((m) => ENCAISSEMENTS.includes(m.nature)).length, 'paiement')),
+    stat(euros(t.depenses), 'dépenses'),
+    stat(euros(t.resultat), 'résultat', null, t.resultat < 0 ? 'neg' : null),
     stat(euros(mrr), 'revenu mensuel', 'abonnements payants'),
-    stat(String(commandes.length), 'commandes', `${commandes.filter((c) => c.formule === 'sim').length} tout compris`),
-    stat(String(abos.filter((a) => dansPeriode(a.finLe)).length), 'abonnements terminés'),
+  );
+  const detail = (texte, valeur, precision) => h('div', { class: 'ligne-kv' },
+    h('span', {}, texte, precision ? h('small', {}, precision) : null), h('span', { class: 'n' }, valeur));
+  $('kpi-activite').replaceChildren(
+    detail('Remboursé', euros(t.rembourse)),
+    detail('Frais Stripe', euros(t.frais)),
+    detail('Net encaissé', euros(t.net)),
+    detail('Abonnements en cours', String(enCours.length),
+      `${enCours.filter((a) => a.statut === 'trialing').length} au premier mois · ${enCours.filter((a) => a.statut === 'past_due').length} impayé(s)`),
+    detail('Commandes', String(commandes.length), `${commandes.filter((c) => c.formule === 'sim').length} tout compris`),
+    detail('Abonnements terminés', String(abos.filter((a) => dansPeriode(a.finLe)).length)),
   );
   const montant = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
+  const mois = bilanMensuel();
+  const sansMouvement = (l) => !l.encaisse && !l.rembourse && !l.frais && !l.depenses;
   remplirTable($('t-bilan'), [
     { titre: 'Mois' }, { titre: 'Encaissé', n: 1 }, { titre: 'Remboursé', n: 1 }, { titre: 'Frais Stripe', n: 1 },
     { titre: 'Net', n: 1 }, { titre: 'Dépenses', n: 1 }, { titre: 'Résultat', n: 1 },
-  ], bilanMensuel().map((l) => [moisNom(l.cle), euros(l.encaisse), euros(l.rembourse), euros(l.frais), euros(l.net),
-    euros(l.depenses), montant(l.resultat)]),
+  ], mois.map((l) => ({ classe: sansMouvement(l) ? 'mois-vide' : null, cellules: [moisNom(l.cle), euros(l.encaisse), euros(l.rembourse), euros(l.frais), euros(l.net),
+    euros(l.depenses), montant(l.resultat)] })),
   { total: ['Total', euros(t.encaisse), euros(t.rembourse), euros(t.frais), euros(t.net), euros(t.depenses), montant(t.resultat)] });
+  // Les mois sans aucun mouvement sont repliés (ils restent dans l'export et à l'impression).
+  const vides = mois.filter(sansMouvement).length;
+  const montrer = vides === mois.length || bilanVidesOuverts;
+  $('t-bilan').classList.toggle('vides-caches', !montrer);
+  $('bilan-vides').hidden = !vides || vides === mois.length;
+  $('btn-bilan-vides').textContent = montrer ? 'Cacher les mois sans mouvement' : `Voir ${vides > 1 ? `les ${vides} mois` : 'le mois'} sans mouvement`;
 }
+let bilanVidesOuverts = false;
+$('btn-bilan-vides').addEventListener('click', () => { bilanVidesOuverts = !bilanVidesOuverts; afficherBilan(); });
 
 const NATURES = {
   abonnement: 'Abonnement Papote',
@@ -3390,25 +3626,53 @@ choixFichier.addEventListener('change', async () => {
   }
 });
 
+// Dépenses : filtre « Matériel » = les achats chez les vendeurs (ancien Stock > Achats). filtreDepenses : plus haut.
+const estAchat = (d) => ['tablettes', 'materiel'].includes(d.categorie) || (d.materiel || []).length > 0;
+const FILTRES_DEPENSES = {
+  materiel: estAchat,
+  verifier: (d) => d.aVerifier,
+  'sans-piece': (d) => !(d.pieces || []).length && !d.justificatif,
+};
+
 function afficherCompta() {
   // La plus récente en haut (Tanguy, 19/11). Les exports (registre des achats) restent dans l'ordre des dates.
-  const deps = depensesPeriode().sort((a, b) => (b.date || 0) - (a.date || 0));
+  const toutes = depensesPeriode().sort((a, b) => (b.date || 0) - (a.date || 0));
+  if (filtreDepenses && !FILTRES_DEPENSES[filtreDepenses]) filtreDepenses = '';
+  const deps = filtreDepenses ? toutes.filter(FILTRES_DEPENSES[filtreDepenses]) : toutes;
+  const nb = (k) => toutes.filter(FILTRES_DEPENSES[k]).length;
+  filtresPastilles($('filtres-depenses'), [
+    { valeur: '', libelle: 'Toutes', n: toutes.length },
+    { valeur: 'materiel', libelle: 'Matériel', n: nb('materiel') },
+    { valeur: 'verifier', libelle: 'À vérifier', n: nb('verifier') },
+    { valeur: 'sans-piece', libelle: 'Sans justificatif', n: nb('sans-piece') },
+  ], filtreDepenses, (v) => { filtreDepenses = v; afficherCompta(); });
+  const etat = (d) => {
+    if (d.aVerifier) return badge('à vérifier', 'ko');
+    if (estAchat(d) && d.confirmation) return badge('pas encore reçu', 'info');
+    if (!(d.pieces || []).length && !d.justificatif) return badge('sans justificatif', 'warn');
+    return null;
+  };
   remplirTable($('t-achats'), [
-    { titre: 'Date' }, { titre: 'Fournisseur' }, { titre: 'Libellé' }, { titre: 'Catégorie' }, { titre: 'TTC', n: 1 },
-    { titre: 'dont TVA', n: 1 }, { titre: 'Justificatifs' }, { titre: '' },
-  ], deps.map((d) => ({ onclick: ouvrirDepense(d), cellules: [jour(d.date), d.fournisseur || '', libelleDepense(d), donnees.categories[d.categorie] || d.categorie,
-    euros(d.montant), euros(d.tva),
-    h('div', { class: 'pieces-liste' }, (d.pieces || []).map(lienPiece),
-      d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null),
-    h('div', { class: 'no-print' }, menuPoints([
-      { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
-      d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
-      { libelle: 'Supprimer la dépense', danger: true, faire: () => supprimerDepense(d) },
-    ], `Actions pour « ${d.libelle} »`))] })),
+    { titre: 'Dépense' }, { titre: 'État' }, { titre: 'Date', classe: 'pc' }, { titre: 'Catégorie', classe: 'pc' },
+    { titre: 'TTC', n: 1 }, { titre: '', classe: 'pc' },
+  ], deps.map((d) => {
+    const tablettes = estAchat(d) ? donnees.stock.filter((t) => t.depense === d.id).length : 0;
+    return { onclick: ouvrirDepense(d), cellules: [
+      (() => { const c = nomEtDetail(d.libelle || d.fournisseur || 'Dépense', d.fournisseur, jour(d.date), euros(d.montant));
+        c.append(h('small', { class: 'categorie' }, [d.fournisseur, donnees.categories[d.categorie] || d.categorie].filter(Boolean).join(' · '))); return c; })(),
+      etat(d) || '', jour(d.date),
+      h('span', {}, donnees.categories[d.categorie] || d.categorie || '',
+        tablettes ? h('small', { class: 'muted' }, ` · ${pluriel(tablettes, 'tablette')}`) : null),
+      euros(d.montant),
+      h('div', { class: 'no-print' }, menuPoints([
+        { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
+        d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
+        { libelle: 'Supprimer la dépense', danger: true, faire: () => supprimerDepense(d) },
+      ], `Actions pour « ${d.libelle} »`))] };
+  }),
   {
-    total: deps.length ? ['Total', '', '', '', euros(deps.reduce((s, d) => s + d.montant, 0)),
-      euros(deps.reduce((s, d) => s + (d.tva || 0), 0)), '', ''] : null,
-    vide: 'Aucune dépense sur cette période.',
+    total: deps.length ? ['Total', '', '', '', euros(deps.reduce((s, d) => s + d.montant, 0)), ''] : null,
+    vide: filtreDepenses ? 'Aucune dépense de ce genre sur cette période.' : 'Aucune dépense sur cette période.',
   });
 
   const parCat = {};
@@ -3420,6 +3684,7 @@ function afficherCompta() {
   } else {
     $('t-categories').replaceChildren();
   }
+  $('carte-categories').hidden = !cats.length;
 
   const lignes = recettes().sort((a, b) => a.le - b.le);
   const somme = (k) => lignes.reduce((s, m) => s + m[k], 0);
@@ -3435,25 +3700,6 @@ function afficherCompta() {
   remplirTable($('t-virements'), [{ titre: 'Date' }, { titre: 'Arrivée prévue' }, { titre: 'Montant', n: 1 }],
     virements.map((m) => [jour(m.le), jour(m.disponibleLe), euros(-m.montant)]),
     { vide: 'Aucun virement sur cette période.' });
-}
-
-// Stock > Achats : les commandes passées chez les vendeurs (tablettes et matériel), séparées des tablettes.
-function afficherAchats() {
-  const achats = donnees.depenses.filter((d) => ['tablettes', 'materiel'].includes(d.categorie) || (d.materiel || []).length)
-    .sort((a, b) => (b.date || 0) - (a.date || 0));
-  remplirTable($('t-achats-vendeurs'), [
-    { titre: 'Date' }, { titre: 'Vendeur' }, { titre: 'Ce qui a été acheté' }, { titre: 'N° de commande' },
-    { titre: 'Montant', n: 1 }, { titre: 'Facture' }, { titre: 'Tablettes' },
-  ], achats.map((d) => {
-    const tablettes = donnees.stock.filter((t) => t.depense === d.id);
-    return { onclick: ouvrirDepense(d), cellules: [
-      jour(d.date), d.fournisseur || '', d.libelle || '', d.numero || '', euros(d.montant),
-      h('div', {}, d.confirmation ? badge('pas encore reçue', 'info') : badge('reçue', 'ok'),
-        ...((d.pieces || []).map((p) => h('div', {}, lienPiece(p))))),
-      h('div', {}, ...tablettes.map((t) => h('div', {}, h('a', { href: `#tablette/${encodeURIComponent(t.id)}` },
-        t.ref || t.numero || 'tablette')))),
-    ] };
-  }), { vide: 'Aucun achat enregistré.' });
 }
 
 // Ligne de tableau → page de la dépense (sauf un clic sur un lien, un bouton ou le ⋮ de la ligne).
@@ -3485,17 +3731,28 @@ function remplirPageDepense(id) {
   const pieces = [...(d.pieces || []).map(lienPiece),
     d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null].filter(Boolean);
   const valider = d.aVerifier ? h('button', { type: 'button', class: 'primary small-btn no-print', onclick: () => verifierDepense(d) }, 'Valider') : null;
+  const facture = d.confirmation ? ['Pas reçue', 'facture', 'seule la confirmation de commande est arrivée', 'neg']
+    : pieces.length ? ['Reçue', 'facture', pieces.length > 1 ? `${pieces.length} documents joints` : '1 document joint', 'pos']
+      : ['Aucun', 'justificatif', 'à ajouter pour la comptabilité', 'neg'];
   zone.replaceChildren(...[
-    h('div', { class: 'card' },
-      h('div', { class: 'tete-fiche' }, h('h2', {}, titre),
-        h('div', { class: 'tete-actions' }, valider, h('div', { class: 'no-print' }, menuPoints([
+    h('div', { class: 'tete-fiche' }, h('h2', {}, titre), d.aVerifier ? badge('à vérifier', 'ko') : null, h('span', { class: 'espace' }),
+      h('div', { class: 'tete-actions' }, valider, h('div', { class: 'no-print' }, menuPoints([
           { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
           d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
           { libelle: 'Supprimer la dépense', danger: true, faire: async () => { if (await supprimerDepense(d)) location.hash = '#compta/depenses'; } },
         ], `Actions pour « ${d.libelle} »`)))),
-      d.aVerifier ? h('p', { class: 'small a-verifier' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d), ' : vérifiez le montant, la date et le vendeur, puis validez.') : null,
-      d.aVerifier && d.remarque ? h('p', { class: 'small a-verifier' }, d.remarque) : null,
-      h('dl', { class: 'fiche' },
+    h('p', { class: 'sous-fiche muted' }, [achat ? d.libelle : d.fournisseur, jour(d.date), donnees.categories[d.categorie] || d.categorie].filter(Boolean).join(' · ')),
+    d.aVerifier ? h('div', { class: 'bandeau a-verifier' }, h('ul', { class: 'bandeau-liste' },
+      h('li', {}, sourceDepense(d), ' : vérifiez le montant, la date et le vendeur, puis validez.'),
+      d.remarque ? h('li', {}, d.remarque) : null)) : null,
+    h('div', { class: 'card' }, h('div', { class: 'tuiles trois' },
+      stat(euros(d.montant), 'montant TTC', d.recurrence ? 'chaque mois' : null),
+      stat(d.tva != null ? euros(d.tva) : 'Aucune', 'TVA', d.tva != null && d.montant ? `hors taxes : ${euros(d.montant - d.tva)}` : null),
+      stat(...facture))),
+    h('div', { class: 'deux-colonnes egales' },
+      h('div', {},
+        h('div', { class: 'card' }, h('h2', {}, achat ? 'L\'achat' : 'La dépense'),
+          h('dl', { class: 'fiche kv' },
         // Chaque information se corrige avec son crayon (facture mal lue, faute de frappe).
         ...modif('Date', jour(d.date), 'date', { valeur: dateChamp(d.date), type: 'date', convertir: (v) => {
           if (!v) throw new Error('Date manquante.');
@@ -3512,15 +3769,18 @@ function remplirPageDepense(id) {
         } }),
         ...modif('dont TVA', d.tva != null ? euros(d.tva) : null, 'tva', { valeur: enEuros(d.tva), mode: 'decimal', suffixe: '€', vide: 'aucune',
           convertir: (v) => (String(v).trim() ? convertirEuros(v) : null) }),
-        // Facture ajoutée d'ici avec le crayon, comme les autres lignes (Tanguy, 30/10) : roue pendant l'envoi, puis résultat.
-        ...ligneFacture(d, pieces),
-        ligne('Justificatifs', pieces.length ? h('div', { class: 'pieces-liste' }, pieces) : null),
+        ligne('Chaque mois', d.recurrence ? 'oui, ajoutée automatiquement chaque mois' : null),
+        ligne('Entré au stock', (d.materiel || []).length ? d.materiel.join(', ') : null)))),
+      h('div', {}, ...[
+        h('div', { class: 'card carte-facture' }, h('h2', {}, 'La facture'),
+          h('dl', { class: 'fiche kv' },
+            ...ligneFacture(d, pieces),
+            ligne('Documents', pieces.length ? h('div', { class: 'pieces-liste' }, pieces) : null),
         ...(d.categorie === 'sim' && !sims.length ? modif('Carte SIM rechargée', simDe(d.sim), 'sim', { valeur: d.sim || '', vide: 'aucune',
           options: [['', 'Aucune'], ...donnees.sims.filter((l) => l.statut !== 'resiliee' || l.id === d.sim)
             .map((l) => [l.id, [l.operateur, l.numero || fin4(l.iccid)].filter(Boolean).join(' · ') || 'Carte SIM'])],
           convertir: (v) => v || null }) : []),
-        ligne('Chaque mois', d.recurrence ? 'oui, ajoutée automatiquement chaque mois' : null),
-        ligne('Entré au stock', (d.materiel || []).length ? d.materiel.join(', ') : null))),
+          )),
     // Ce que l'achat a fait entrer : les tablettes (achat de tablettes) ou les cartes SIM, chacune vers sa page.
     sims.length ? h('div', { class: 'card' }, h('h2', {}, sims.length > 1 ? `Les ${sims.length} cartes SIM de cet achat` : 'La carte SIM de cet achat'),
       h('ul', { class: 'liste-liens' }, ...sims.map((l) => h('li', {}, h('span', { class: 'll-quoi' }, 'Carte SIM'),
@@ -3531,6 +3791,7 @@ function remplirPageDepense(id) {
         h('a', { href: `#tablette/${encodeURIComponent(t.id)}` }, [t.ref, t.numero || t.modele].filter(Boolean).join(' · ') || 'Tablette'),
         h('span', { class: 'muted small' }, donnees.etats[etatTablette(t)] || t.etat))))
         : h('p', { class: 'muted small' }, 'Aucune tablette rattachée à cet achat.')) : null,
+      ].filter(Boolean))),
   ].filter(Boolean));
 }
 
@@ -3547,7 +3808,7 @@ function ligneFacture(d, pieces) {
   crayon.addEventListener('click', ouvrir);
   const dd = h('dd', { class: 'modifiable' },
     h('span', { class: 'valeur' }, d.confirmation
-      ? [badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'seule la confirmation de commande est arrivée : touchez le crayon pour ajouter la facture, ou transférez-la à factures@mapapote.fr')]
+      ? [badge('pas encore reçue', 'info'), ' ', h('span', { class: 'muted small' }, 'Seule la confirmation de commande est arrivée. Touchez le crayon pour ajouter la facture, ou transférez-la à factures@mapapote.fr.')]
       : pieces.length ? [badge('reçue', 'ok'), ...(d.source ? [' ', boutonPasLaFacture(d)] : [])]
         : h('span', { class: 'muted' }, 'aucun justificatif : touchez le crayon pour en ajouter un')),
     crayon);
@@ -3583,20 +3844,6 @@ function boutonPasLaFacture(d) {
 function simDe(id) {
   const l = id && donnees.sims.find((x) => x.id === id);
   return l ? h('a', { href: `#sim/${encodeURIComponent(l.id)}` }, [l.operateur, l.numero || fin4(l.iccid)].filter(Boolean).join(' · ') || 'Carte SIM') : null;
-}
-
-function libelleDepense(d) {
-  return h('div', {}, d.libelle,
-    d.numero ? h('span', { class: 'muted' }, ` · n° ${d.numero}`) : null,
-    d.recurrence ? h('div', {}, badge('chaque mois', 'info')) : null,
-    d.depuis ? h('div', { class: 'muted small' }, 'ajoutée automatiquement') : null,
-    (d.materiel || []).length ? h('div', { class: 'muted small' }, `Entré au stock : ${d.materiel.join(', ')}`) : null,
-    d.confirmation ? h('div', { class: 'muted small' }, 'Facture pas encore reçue (seule la confirmation de commande est arrivée)') : null,
-    d.aVerifier ? h('div', { class: 'a-verifier' },
-      h('p', { class: 'small' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d),
-        ' : vérifiez le montant, la date et le vendeur, puis validez.'),
-      d.remarque ? h('p', { class: 'small' }, d.remarque) : null,
-      h('button', { type: 'button', class: 'secondary small-btn no-print', onclick: () => verifierDepense(d) }, 'Valider cette dépense')) : null);
 }
 
 // « e-mail de "Tanguy Reynaud" <adresse> » → « Lue dans l'e-mail de Tanguy Reynaud ».
@@ -4081,7 +4328,7 @@ function rechercher(q) {
   }
   for (const f of donnees.familles) {
     if (trouve(f.nom) && !donnees.commandes.some((c) => c.fid === f.id)) {
-      res.push({ texte: f.nom, detail: 'Famille', ouvrir: () => { location.hash = '#clients/familles'; } });
+      res.push({ texte: f.nom, detail: 'Famille', ouvrir: () => { location.hash = `#clients/familles/${encodeURIComponent(f.id)}`; } });
     }
   }
   for (const d of donnees.depenses) {
@@ -4408,6 +4655,7 @@ function afficherRentabilite() {
     total: ['Total', String(lignes.reduce((s, l) => s + l.n, 0)), '', '', '', '', '', '',
       signe(lignes.reduce((s, l) => s + l.amorti * l.n, 0))],
   });
+  $('rentabilite-resume').textContent = `${euros(lignes.reduce((x, l) => x + l.amorti * l.n, 0))} par mois`;
   const accessoires = (donnees.accessoires || []).filter((a) => a.parEnvoi);
   const ligne = (nom, prix, note) => h('li', null, `${nom} : ${euros(prix)}`, note ? h('span', { class: 'muted' }, ` (${note})`) : null);
   $('rentabilite-colis').replaceChildren(
@@ -4419,8 +4667,8 @@ function afficherRentabilite() {
       ].filter(Boolean).join(', '))),
       ligne('Envoi', r.fraisEnvoi), ligne('Retour', r.fraisRetour), ligne('Mise en service (en moins)', r.miseEnService)),
     h('p', { class: 'muted small' }, accessoires.length
-      ? 'Modifier le contenu : Stock, Accessoires. Chaque envoi sort ces articles du stock et prévient quand il en manque.'
-      : 'Aucun article de colis : ajoutez-les dans Stock, Accessoires (carton, housse, chargeur, câble, papier, fiche…), « Part avec : Chaque envoi ».'),
+      ? 'Modifier le contenu : Matériel, Accessoires. Chaque envoi sort ces articles du stock et prévient quand il en manque.'
+      : 'Aucun article de colis : ajoutez-les dans Matériel, Accessoires (carton, housse, chargeur, câble, papier, fiche…), « Part avec : Chaque envoi ».'),
   );
   afficherReglagesCalculs();
 }
@@ -4668,23 +4916,32 @@ function afficherClients() {
   if (!clients) return;
   const tous = clients.contacts;
   const compte = (f) => tous.filter(f).length;
-  $('kpi-clients').replaceChildren(
-    stat(String(compte((c) => c.type === 'client')), 'abonnés'),
-    stat(String(compte((c) => c.type === 'ancien')), 'anciens clients'),
-    stat(String(compte((c) => c.type === 'panier')), 'paniers abandonnés'),
-    stat(String(compte((c) => c.type === 'attente')), 'en liste d\'attente'),
-    stat(String(compte((c) => c.type === 'chat')), 'contacts du chat'),
-    stat(String(compte((c) => c.consentement && !c.desinscrit)), 'acceptent les e-mails', `${compte((c) => c.desinscrit)} désinscrits`),
-  );
+  const filtre = $('filtre-clients').value;
+  filtresPastilles($('kpi-clients'), [
+    { valeur: '', libelle: 'Tout le monde', n: tous.length },
+    { valeur: 'client', libelle: 'Abonnés', n: compte((c) => c.type === 'client') },
+    { valeur: 'attente', libelle: 'Liste d\'attente', n: compte((c) => c.type === 'attente') },
+    { valeur: 'panier', libelle: 'Paniers abandonnés', n: compte((c) => c.type === 'panier') },
+    { valeur: 'chat', libelle: 'Contacts du chat', n: compte((c) => c.type === 'chat') },
+    { valeur: 'ancien', libelle: 'Anciens clients', n: compte((c) => c.type === 'ancien') },
+    { valeur: 'accord', libelle: 'Acceptent les e-mails', n: compte((c) => c.consentement && !c.desinscrit) },
+  ], filtre, (v) => { $('filtre-clients').value = v; afficherClients(); });
+  const desinscrits = compte((c) => c.desinscrit);
+  $('clients-suite').textContent = desinscrits ? `${pluriel(desinscrits, 'personne')} désinscrite${desinscrits > 1 ? 's' : ''} des e-mails.` : '';
   const liste = clientsAffiches();
+  const COULEURS = { client: 'ok', panier: 'warn', attente: 'info' };
   remplirTable($('t-clients'), [
-    { titre: 'Nom' }, { titre: 'E-mail' }, { titre: 'Téléphone' }, { titre: 'Situation' }, { titre: 'Depuis' }, { titre: 'E-mails' },
+    { titre: 'Contact' }, { titre: 'Situation' }, { titre: 'E-mail', classe: 'pc' }, { titre: 'Téléphone', classe: 'pc' },
+    { titre: 'Depuis', classe: 'pc' }, { titre: 'E-mails', classe: 'pc' },
   ], liste.map((c) => ({
     cellules: [
-      c.nom || '', c.email,
+      nomEtDetail(c.nom || c.email, c.nom ? c.email : null),
+      // « Abonné (impayé) » en rouge ; pas de parenthèse pour un ancien client (« Ancien client (annulée) » était faux).
+      badge([TYPES_CLIENT[c.type] || c.type || '', c.type === 'client' && c.statut && c.statut !== 'actif' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : ''].join(''),
+        c.type === 'client' && ['impaye', 'suspendu'].includes(c.statut) ? 'ko' : COULEURS[c.type]),
+      c.email,
       // Toucher le numéro appelle (sans ouvrir la fiche).
       c.telephone ? h('a', { href: `tel:${c.telephone.replace(/\s/g, '')}`, onclick: (e) => e.stopPropagation() }, c.telephone) : '',
-      [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : '', c.formule === 'wifi' ? ' · Wi-Fi (ancienne formule)' : ''].join(''),
       jour(c.depuis), accordTexte(c),
     ],
     onclick: () => { location.hash = `#client/${encodeURIComponent(c.email)}`; },
@@ -4766,7 +5023,7 @@ async function remplirClient(email) {
   const paiements = h('div', {}, h('p', { class: 'muted small' }, commandes.length ? 'Lecture des paiements…' : 'Aucune commande, donc aucun paiement.'));
   zone.replaceChildren(
     h('div', { class: 'card' },
-      h('h2', {}, c.nom || c.email),
+      h('div', { class: 'tete-fiche' }, h('h2', {}, c.nom || c.email)),
       h('dl', { class: 'fiche' },
         ligne('Situation', [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : ''].join('')),
         ligne('E-mail', h('a', { href: `mailto:${c.email}` }, c.email)),
@@ -4796,6 +5053,9 @@ async function remplirClient(email) {
         h('p', { class: 'muted small' }, 'Aucune tablette rattachée.')),
     h('div', { class: 'card' }, h('h2', {}, 'Paiements'), paiements),
   );
+  // Coordonnées et paiements à gauche ; commandes, famille et tablette à droite.
+  zone.insertBefore(zone.lastElementChild, zone.children[1]);
+  miseEnFiche(zone, 'Coordonnées', 2);
   const payantes = commandes.filter((x) => !x.offerte);
   if (!payantes.length) {
     if (commandes.length) paiements.replaceChildren(h('p', { class: 'muted small' }, 'Commande offerte : aucun paiement.'));
@@ -4811,7 +5071,15 @@ async function remplirClient(email) {
         p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']),
       { vide: 'Aucun paiement pour l\'instant.' });
     const total = lignes.filter((p) => p.statut === 'succeeded').reduce((s, p) => s + p.montant - (p.rembourse || 0), 0);
-    paiements.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(total)}`), h('div', { class: 'table' }, table));
+    // Beaucoup de paiements (un par mois) : les 5 derniers d'abord, le reste à la demande.
+    const suite = [...table.querySelectorAll('tbody tr')].slice(5);
+    suite.forEach((tr) => { tr.hidden = true; });
+    const voir = suite.length ? h('button', { type: 'button', class: 'link small voir-suite', onclick: () => {
+      suite.forEach((tr) => { tr.hidden = false; });
+      voir.remove();
+    } }, `Voir les ${suite.length} paiement${suite.length > 1 ? 's' : ''} plus ancien${suite.length > 1 ? 's' : ''}`) : null;
+    paiements.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(total)}${lignes.length > 1 ? ` en ${lignes.length} paiements` : ''}`),
+      h('div', { class: 'table cartes paiements-courts' }, table), voir);
   } catch (e) {
     paiements.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
   }

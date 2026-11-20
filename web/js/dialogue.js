@@ -85,14 +85,16 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermerMenu
 window.addEventListener('scroll', fermerMenu, true);
 window.addEventListener('resize', fermerMenu);
 
-// actions : [{ libelle, faire(bouton), danger }] ; les valeurs vides sont ignorées.
-export function menuPoints(actions, titre = 'Plus d\'actions') {
+// actions : [{ libelle, faire(bouton), danger, detail }] ; les valeurs vides sont ignorées.
+// Un élément { section: 'Titre' } ouvre un groupe (trait + petit titre), pour ranger les actions rares ou dangereuses.
+// options.texte : bouton nommé (« + Ajouter », « Actions ») au lieu de « ⋮ » ; options.classe : sa classe en plus.
+export function menuPoints(actions, titre = 'Plus d\'actions', options = {}) {
   const boite = document.createElement('div');
   boite.className = 'menu-points';
   const bouton = document.createElement('button');
   bouton.type = 'button';
-  bouton.className = 'menu-points-bouton';
-  bouton.textContent = '⋮';
+  bouton.className = `menu-points-bouton${options.texte ? ' menu-points-nomme' : ''}${options.classe ? ` ${options.classe}` : ''}`;
+  bouton.textContent = options.texte || '⋮';
   bouton.title = titre;
   bouton.setAttribute('aria-label', titre);
   bouton.setAttribute('aria-haspopup', 'menu');
@@ -101,15 +103,32 @@ export function menuPoints(actions, titre = 'Plus d\'actions') {
   liste.className = 'menu-points-liste';
   liste.setAttribute('role', 'menu');
   liste.hidden = true;
-  for (const a of actions.filter(Boolean)) {
+  const elements = actions.filter(Boolean);
+  elements.forEach((a, i) => {
+    if (a.section) {
+      // Un titre de groupe seulement s'il est suivi d'au moins une action.
+      if (!elements[i + 1] || elements[i + 1].section) return;
+      const titreGroupe = document.createElement('p');
+      titreGroupe.className = 'menu-points-section';
+      titreGroupe.setAttribute('role', 'presentation');
+      titreGroupe.textContent = a.section;
+      liste.append(titreGroupe);
+      return;
+    }
     const item = document.createElement('button');
     item.type = 'button';
     item.className = `menu-points-item${a.danger ? ' danger' : ''}`;
     item.setAttribute('role', 'menuitem');
     item.textContent = a.libelle;
+    if (a.detail) {
+      const d = document.createElement('small');
+      d.textContent = a.detail;
+      item.append(d);
+    }
+    if (a.id) item.id = a.id;
     item.addEventListener('click', () => { fermerMenu(); a.faire(bouton); });
     liste.append(item);
-  }
+  });
   // Un clic dans le menu n'ouvre pas la ligne (de tableau) qui le contient.
   boite.addEventListener('click', (e) => e.stopPropagation());
   boite.addEventListener('keydown', (e) => e.stopPropagation());
@@ -221,4 +240,34 @@ export function ligneModifiable(libelle, affiche, opts) {
   };
   lecture();
   return [dt, dd];
+}
+
+// Même menu, écrit dans la page : <div class="menu-actions" data-texte="+ Ajouter" data-titre="…"> avec ses boutons
+// dedans (leurs id et leurs écouteurs ne changent pas) ; <p data-section>Titre</p> ouvre un groupe ; data-detail sur
+// un bouton ajoute une ligne d'explication. Les boutons cachés (hidden) restent cachés dans le menu.
+export function menusDansLaPage(racine = document) {
+  for (const zone of racine.querySelectorAll('.menu-actions:not([data-pret])')) {
+    zone.dataset.pret = '1';
+    const titre = zone.dataset.titre || zone.dataset.texte || 'Plus d\'actions';
+    const boite = menuPoints([], titre, { texte: zone.dataset.texte, classe: zone.dataset.classe });
+    const liste = boite.querySelector('.menu-points-liste');
+    for (const enfant of [...zone.children]) {
+      if (enfant.matches('[data-section]')) {
+        enfant.className = 'menu-points-section';
+        enfant.setAttribute('role', 'presentation');
+      } else if (enfant.matches('button')) {
+        enfant.classList.remove('primary', 'secondary', 'small-btn');
+        enfant.classList.add('menu-points-item');
+        enfant.setAttribute('role', 'menuitem');
+        if (enfant.dataset.detail) {
+          const d = document.createElement('small');
+          d.textContent = enfant.dataset.detail;
+          enfant.append(d);
+        }
+      }
+      liste.append(enfant);
+    }
+    liste.addEventListener('click', (e) => { if (e.target.closest('button')) fermerMenu(); });
+    zone.append(boite);
+  }
 }
