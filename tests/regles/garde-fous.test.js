@@ -178,6 +178,42 @@ test('invitation par e-mail : pour l\'adresse du document et pour cette famille'
   await assertSucceeds(inviter({}));
 });
 
+// Tanguy, 20/11 : une invitation par e-mail vaut 30 jours.
+test('invitation par e-mail : 30 jours, date du serveur seulement, renvoyée par un responsable, jamais périmée pour la famille préparée', async () => {
+  await famille();
+  const JOUR = 24 * 3600 * 1000;
+  const ilYA = (jours) => Timestamp.fromMillis(Date.now() - jours * JOUR);
+  const chemin = (email) => `families/${FID}/invitations/${email}`;
+  const poser = (email, extra) => sansRegles((db) => setDoc(doc(db, chemin(email)), { email, fid: FID, familyName: 'Mamie Emma', invitedBy: 'julie', ...extra }));
+  const entrer = (uid) => {
+    const db = proche(uid);
+    const lot = writeBatch(db);
+    lot.set(doc(db, `families/${FID}/members/${uid}`), fiche(uid, { status: 'active' }));
+    lot.delete(doc(db, chemin(`${uid}@exemple.fr`)));
+    return lot.commit();
+  };
+  // 31 jours : n'entre plus. 29 jours : entre. Sans date : n'entre pas.
+  await poser('vieux@exemple.fr', { createdAt: ilYA(31) });
+  await assertFails(entrer('vieux'));
+  await poser('recent@exemple.fr', { createdAt: ilYA(29) });
+  await assertSucceeds(entrer('recent'));
+  await poser('sansdate@exemple.fr', {});
+  await assertFails(entrer('sansdate'));
+  // Celle de la famille préparée à la commande (écrite par le serveur) n'expire pas.
+  await poser('payeur@exemple.fr', { createdAt: ilYA(200), invitedBy: 'Papote', preparee: true });
+  await assertSucceeds(entrer('payeur'));
+  // Un responsable ne choisit pas la date (ni ancienne, ni dans un an) et ne pose pas « preparee ».
+  const inviter = (extra) => setDoc(doc(proche('julie'), chemin('vieux@exemple.fr')), {
+    email: 'vieux@exemple.fr', fid: FID, familyName: 'Mamie Emma', invitedBy: 'julie', createdAt: serverTimestamp(), ...extra,
+  });
+  await assertFails(inviter({ createdAt: Timestamp.fromMillis(Date.now() + 365 * JOUR) }));
+  await assertFails(inviter({ createdAt: ilYA(1) }));
+  await assertFails(inviter({ preparee: true }));
+  // « Renvoyer » : la même invitation réécrite avec la date du jour ; elle fait de nouveau entrer.
+  await assertSucceeds(inviter({}));
+  await assertSucceeds(entrer('vieux'));
+});
+
 test('envois : « vu » et bisous seulement ; fichier ajouté par l\'auteur de l\'envoi', async () => {
   await famille();
   await sansRegles((db) => setDoc(doc(db, `families/${FID}/posts/p1`), { type: 'message', text: 'Bonjour', authorUid: 'julie', authorName: 'Julie', seenAt: null, hearts: 0 }));

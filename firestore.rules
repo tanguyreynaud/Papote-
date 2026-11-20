@@ -129,6 +129,13 @@ service cloud.firestore {
       allow read: if signedIn() && resource.data.get('uid', '') == request.auth.uid;
     }
 
+    // Invitation par e-mail encore valable : moins de 30 jours (Tanguy, 20/11). Celle de la famille préparée à la
+    // commande (preparee, écrite par le serveur seulement) n'expire pas : celui qui a payé doit toujours pouvoir entrer.
+    function invitationValable(inv) {
+      return inv.get('preparee', false) == true
+        || inv.createdAt > request.time - duration.value(30, 'd');
+    }
+
     // Mes invitations : celles adressées à mon adresse e-mail vérifiée. La liste (requête de l'app
     // sur le champ email) se vérifie sur le champ : l'identifiant du document n'est pas connu d'avance.
     match /{path=**}/invitations/{email} {
@@ -496,8 +503,11 @@ service cloud.firestore {
               && (
                 // Créateur de la famille, ou invité par e-mail : actif tout de suite. L'invitation est consommée
                 // dans la même écriture (effacée) : retiré de la famille, le proche ne revient pas tout seul avec elle.
+                // Une invitation de plus de 30 jours ne fait plus entrer (Tanguy, 20/11) : le responsable la renvoie,
+                // ou le proche passe par le code famille et attend d'être accepté.
                 ((isCreatorAfter(fid)
                     || (exists(/databases/$(database)/documents/families/$(fid)/invitations/$(myEmail()))
+                      && invitationValable(get(/databases/$(database)/documents/families/$(fid)/invitations/$(myEmail())).data)
                       && !existsAfter(/databases/$(database)/documents/families/$(fid)/invitations/$(myEmail()))))
                   && request.resource.data.status == 'active')
                 // Arrivé avec le code famille : en attente d'un responsable.
@@ -590,13 +600,16 @@ service cloud.firestore {
       }
 
       // Invitations par e-mail : créées par un responsable, effacées par lui ou par l'invité qui a rejoint.
+      // Valables 30 jours (invitationValable) : la date est celle du serveur, jamais une date choisie.
+      // « update » = renvoyer : la même invitation réécrite en entier, avec la date du jour.
       match /invitations/{email} {
         allow read: if isFamilyAdmin(fid);
-        allow create: if isFamilyAdmin(fid)
+        allow create, update: if isFamilyAdmin(fid)
           && request.resource.data.keys().hasOnly(['email', 'fid', 'familyName', 'invitedBy', 'createdAt'])
           && email == email.lower()
           && request.resource.data.email == email
-          && request.resource.data.fid == fid;
+          && request.resource.data.fid == fid
+          && request.resource.data.createdAt == request.time;
         allow delete: if isFamilyAdmin(fid) || (isRealAccount() && email == myEmail());
       }
 

@@ -95,7 +95,7 @@ test('un proche arrivé avec le code famille attend l\'accord d\'un responsable'
 test('un proche invité par e-mail entre directement, en consommant son invitation', async () => {
   await famille();
   await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}/invitations/paul@exemple.fr`), {
-    email: 'paul@exemple.fr', fid: FID, familyName: 'Mamie Emma',
+    email: 'paul@exemple.fr', fid: FID, familyName: 'Mamie Emma', createdAt: serverTimestamp(),
   }));
   const paul = proche('paul');
   // L'invitation doit disparaître dans la même écriture (compte.js acceptInvitation, firebase.js joinFamily).
@@ -129,7 +129,7 @@ test('le propriétaire met un proche en tête des appels ; un autre responsable 
 test('31e proche refusé : ni par invitation, ni par le code, ni accepté par un responsable', async () => {
   await famille({ nbProches: 30 });
   await env.withSecurityRulesDisabled(async (ctx) => {
-    await setDoc(doc(ctx.firestore(), `families/${FID}/invitations/paul@exemple.fr`), { email: 'paul@exemple.fr', fid: FID });
+    await setDoc(doc(ctx.firestore(), `families/${FID}/invitations/paul@exemple.fr`), { email: 'paul@exemple.fr', fid: FID, createdAt: serverTimestamp() });
     await setDoc(doc(ctx.firestore(), `families/${FID}/members/marc`), fiche('marc', { status: 'pending' }));
   });
   await assertFails(setDoc(doc(proche('paul'), `families/${FID}/members/paul`), fiche('paul', { status: 'active' })));
@@ -1012,6 +1012,10 @@ test('S4 : famille résiliée, suspendue ou jamais abonnée : plus aucun dépôt
   await famille();
   await assertSucceeds(uploadString(ref(procheStockage('julie'), `families/${FID}/media/d.mp4`), 'x'.repeat(29 * 1024 * 1024), 'raw', { contentType: 'video/mp4' }));
   await assertFails(uploadString(ref(procheStockage('julie'), `families/${FID}/media/e.mp4`), 'x'.repeat(31 * 1024 * 1024), 'raw', { contentType: 'video/mp4' }));
+  // Image : 5 Mo au plus (Tanguy, 20/11 ; l'appli n'envoie jamais plus de 3,2 Mo).
+  await assertSucceeds(uploadString(ref(procheStockage('julie'), `families/${FID}/media/f.jpg`), 'x'.repeat(4 * 1024 * 1024), 'raw', { contentType: 'image/jpeg' }));
+  await assertFails(uploadString(ref(procheStockage('julie'), `families/${FID}/media/g.jpg`), 'x'.repeat(6 * 1024 * 1024), 'raw', { contentType: 'image/jpeg' }));
+  await assertSucceeds(uploadString(ref(procheStockage('julie'), `families/${FID}/media/h.m4a`), 'x'.repeat(6 * 1024 * 1024), 'raw', { contentType: 'audio/mp4' }));
 });
 
 test('R-F2 : installation jamais finie passée « aucun » par le serveur : plus d\'envoi ni d\'appel', async () => {
@@ -1066,7 +1070,7 @@ test('R1 : aucune appli ne crée de famille, même un compte Google vérifié ; 
     const db = ctx.firestore();
     await setDoc(doc(db, 'families/preparee'), { name: 'Votre proche', nomAChoisir: true, code: 'PREP2345', createdBy: null, installation: { preparee: true, etape: 'photo' }, abonnement: { statut: 'installation' } });
     await setDoc(doc(db, 'invites/PREP2345'), { fid: 'preparee', createdBy: null });
-    await setDoc(doc(db, 'families/preparee/invitations/paul@exemple.fr'), { email: 'paul@exemple.fr', fid: 'preparee', familyName: 'Votre proche' });
+    await setDoc(doc(db, 'families/preparee/invitations/paul@exemple.fr'), { email: 'paul@exemple.fr', fid: 'preparee', familyName: 'Votre proche', invitedBy: 'Papote', preparee: true });
   });
   const entree = writeBatch(paul);
   entree.set(doc(paul, 'families/preparee/members/paul'), fiche('paul', { code: 'PREP2345', status: 'active' }));

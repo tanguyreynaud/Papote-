@@ -31,7 +31,7 @@ import { startAgenda, stopAgenda, limiteDuJour } from './agenda.js';
 import {
   isRealAccount, myEmail, signInGoogle, finishRedirect, sendEmailLink, isEmailLink, completeEmailLink, pendingEmail, logOut,
   myMemberships, familyName, tagLegacyMember, myInvitations, acceptInvitation,
-  inviteByEmail, cancelInvitation, acceptMember, changeFamilyCode,
+  inviteByEmail, cancelInvitation, invitationExpiree, acceptMember, changeFamilyCode,
 } from './compte.js';
 import {
   startNotifs, stopNotifs, markNotifsRead, setNotifMembers, setNotifReminders,
@@ -3302,7 +3302,22 @@ function watchInvitations() {
       cancel.className = 'link small';
       cancel.textContent = 'Annuler';
       cancel.addEventListener('click', () => cancelInvitation(session.fid, inv.email).catch(console.error));
-      li.append(rond, name, cancel);
+      // Plus de 30 jours : elle ne fait plus entrer (firestore.rules). On le dit, avec « Renvoyer » (Tanguy, 20/11).
+      if (!invitationExpiree(inv)) { li.append(rond, name, cancel); return li; }
+      li.classList.add('invitation-expiree');
+      const etat = document.createElement('span');
+      etat.className = 'invitation-etat';
+      etat.textContent = 'Invitation expirée';
+      name.append(etat);
+      const renvoyer = document.createElement('button');
+      renvoyer.type = 'button';
+      renvoyer.className = 'link small';
+      renvoyer.textContent = 'Renvoyer';
+      renvoyer.addEventListener('click', async () => {
+        renvoyer.disabled = true;
+        try { await envoyerInvitation(inv.email); } finally { renvoyer.disabled = false; }
+      });
+      li.append(rond, name, renvoyer, cancel);
       return li;
     }));
   }, (err) => console.warn('Invitations illisibles', err));

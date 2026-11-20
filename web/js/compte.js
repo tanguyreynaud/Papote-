@@ -144,12 +144,25 @@ export async function tagLegacyMember(fid) {
   }
 }
 
+/**
+ * Invitation par e-mail de plus de 30 jours : elle ne fait plus entrer (même règle que firestore.rules,
+ * invitationValable). Celle de la famille préparée à la commande n'expire pas. Date pas encore connue
+ * (écriture en cours) : pas expirée.
+ */
+export const INVITATION_JOURS = 30;
+export function invitationExpiree(inv, maintenant = Date.now()) {
+  if (!inv || inv.preparee) return false;
+  const creee = inv.createdAt?.toMillis?.();
+  return typeof creee === 'number' && maintenant - creee >= INVITATION_JOURS * 24 * 3600 * 1000;
+}
+
 export async function myInvitations() {
   const email = myEmail();
   if (!email) return [];
   try {
     const snap = await getDocs(query(collectionGroup(db, 'invitations'), where('email', '==', email)));
-    return snap.docs.map((d) => d.data());
+    // Une invitation expirée ne fait plus entrer (firestore.rules) : on ne la propose pas.
+    return snap.docs.map((d) => d.data()).filter((inv) => !invitationExpiree(inv));
   } catch (err) {
     console.warn('Invitations illisibles', err);
     return [];

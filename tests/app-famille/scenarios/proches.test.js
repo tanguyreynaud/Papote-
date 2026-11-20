@@ -132,3 +132,47 @@ test('Code faux, puis responsable désigné, membre retiré, départ d\'un proch
   assert.strictEqual(await paul.page.evaluate(() => localStorage.getItem('papote.fid')), null);
   await g.attendreBase(async () => !((await g.lire(`families/${fid}`)).admins || []).includes(uidPaul), 'rôle de Paul retiré');
 });
+
+// Tanguy, 20/11 : une invitation par e-mail vaut 30 jours. Passé ce délai, le responsable la voit « expirée »
+// et peut la renvoyer ; le proche ne la voit plus, et ne peut plus entrer avec.
+test('Invitation par e-mail de plus de 30 jours : « Invitation expirée » chez le responsable, « Renvoyer » la remet en route', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await julie.page.click('#btn-invite');
+  await g.attendreVue(julie, 'view-invite');
+  await julie.page.locator('#invite-email-card').waitFor({ state: 'visible' });
+  await julie.page.fill('#invite-email', 'paul@exemple.fr');
+  await julie.page.click('#form-invite button[type=submit]');
+  await g.toast(julie, 'Invitation envoyée à');
+  const ligne = julie.page.locator('#invitations-sent li', { hasText: 'paul@exemple.fr' });
+  await ligne.waitFor();
+  assert.doesNotMatch(await ligne.innerText(), /expirée/);
+  assert.strictEqual(await ligne.locator('button', { hasText: 'Renvoyer' }).count(), 0);
+
+  // 31 jours plus tard.
+  const invitation = banc.s.db.doc(`families/${fid}/invitations/paul@exemple.fr`);
+  await invitation.update({ createdAt: new Date(Date.now() - 31 * 24 * 3600 * 1000) });
+  await julie.page.locator('#invitations-sent li.invitation-expiree', { hasText: 'Invitation expirée' }).waitFor();
+  await g.verifierLargeur(julie, 'invitation expirée');
+
+  // Paul se connecte : l'invitation périmée ne lui est pas proposée.
+  const paul = await banc.telephone('Paul');
+  await g.inscrire(paul, 'paul@exemple.fr', 'Paul', { genre: 'homme' });
+  await paul.page.waitForTimeout(1500);
+  assert.strictEqual(await paul.page.locator('#invitations form').count(), 0, 'pas de carte d\'invitation périmée');
+  assert.ok(!(await g.liste(`families/${fid}/members`)).some((m) => m.email === 'paul@exemple.fr'), 'Paul n\'est pas entré');
+
+  // Julie touche « Renvoyer » : un nouvel e-mail part, l'invitation repart pour 30 jours.
+  const avant = g.dernierMail('paul@exemple.fr');
+  await julie.page.locator('#invitations-sent li', { hasText: 'paul@exemple.fr' }).locator('button', { hasText: 'Renvoyer' }).click();
+  await g.toast(julie, 'Invitation envoyée à');
+  await julie.page.locator('#invitations-sent li.invitation-expiree').waitFor({ state: 'detached' });
+  await g.attendreBase(async () => Date.now() - (await invitation.get()).get('createdAt').toMillis() < 60_000, 'date de l\'invitation remise à aujourd\'hui');
+  assert.notStrictEqual(g.dernierMail('paul@exemple.fr'), avant, 'un nouvel e-mail d\'invitation est parti');
+
+  // Paul rouvre l'appli : l'invitation l'attend, il entre directement.
+  await g.ouvrir(paul);
+  await g.attendreVue(paul, 'view-invited');
+  await paul.page.click('#invitations button[type=submit]');
+  await g.attendreVue(paul, 'view-home');
+});

@@ -1565,6 +1565,8 @@ a { text-decoration: none; }
 .invitations li { gap: 12px; flex-wrap: nowrap; }
 .invitation-rond { width: 36px; height: 36px; font-weight: 700; font-size: 15px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
 .invitation-email { display: block; min-width: 0; overflow-wrap: anywhere; }
+.invitation-etat { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
+.invitation-expiree .invitation-rond { opacity: .55; }
 #form-invite button[disabled] { opacity: 1; }
 
 /* Annuler ma commande / Résilier : un lien gris discret en bas de la carte, pas un bouton mis en avant. */
