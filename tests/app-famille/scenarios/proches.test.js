@@ -110,7 +110,7 @@ test('Code faux, puis responsable désigné, membre retiré, départ d\'un proch
   const uidPaul = (await g.liste(`families/${fid}/members`)).find((m) => m.name === 'Paul').id;
 
   // Julie rend Paul responsable (Réglages > membres, menu ⋮).
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirFamille(julie);
   await julie.page.click('button[aria-label="Actions pour Paul"]');
   await g.repondre(julie, 'Rendre responsable');
   await g.repondre(julie, 'Rendre responsable');
@@ -118,7 +118,7 @@ test('Code faux, puis responsable désigné, membre retiré, départ d\'un proch
   await julie.page.locator('#members li', { hasText: 'Paul' }).locator('.badge').waitFor();
 
   // Paul, responsable, ne peut pas retirer Julie (propriétaire) : pas de menu ⋮ pour elle.
-  await g.ouvrirTuile(paul, 'settings');
+  await g.ouvrirFamille(paul);
   await paul.page.locator('#members li', { hasText: 'Julie' }).waitFor();
   assert.strictEqual(await paul.page.locator('button[aria-label="Actions pour Julie"]').count(), 0);
 

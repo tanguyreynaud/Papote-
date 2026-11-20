@@ -48,7 +48,7 @@ test('Ordre d\'appel SOS : ↑/↓, double appui, enregistré, relu après actua
   // Par défaut : la responsable (Julie) d'abord, puis les prénoms par ordre alphabétique.
   await g.ouvrirTuile(julie, 'settings');
   await julie.page.locator(CARTE).waitFor({ state: 'visible' });
-  assert.strictEqual(await julie.page.locator(`${CARTE} h2`).innerText(), 'Ordre d\'appel SOS');
+  assert.strictEqual(await julie.page.locator(`${CARTE} h2`).innerText(), 'SOS famille');
   await attendreResume(julie, ['Julie', 'Léa', 'Paul'], 'ordre par défaut');
   await julie.page.locator('#sos-ordre-value', { hasText: 'Ordre par défaut' }).waitFor();
 
@@ -104,7 +104,7 @@ test('Ordre d\'appel SOS : ↑/↓, double appui, enregistré, relu après actua
   await julie.page.click(`${CARTE} .setting-cancel`);
 
   // Paul n'est pas responsable : pas de carte.
-  await g.ouvrirTuile(paul, 'settings');
+  await g.ouvrirFamille(paul);
   await paul.page.locator('#tablet-owner-note').waitFor({ state: 'visible' });
   assert.strictEqual(await paul.page.locator(CARTE).isVisible(), false, 'carte cachée pour un proche');
 

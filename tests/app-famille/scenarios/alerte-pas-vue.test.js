@@ -86,7 +86,7 @@ test('Alerte « pas vue » : un proche (pas responsable) ne voit pas le réglage
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   const paul = await banc.telephone('Paul');
   await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
-  await g.ouvrirTuile(paul, 'settings');
+  await g.ouvrirFamille(paul);
   await paul.page.locator('#tablet-owner-note').waitFor();
   assert.strictEqual(await paul.page.locator(`#${CARTE}`).isVisible(), false, 'carte cachée pour un proche');
 

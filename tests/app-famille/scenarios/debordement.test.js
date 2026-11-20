@@ -73,8 +73,11 @@ test('Textes longs : nom de la tablette, prénoms, e-mails, Wi-Fi, communes pass
   await julie.page.fill('#family-name', NOM_TABLETTE);
   await julie.page.click('#family-name-card .setting-edit button[type=submit]');
   await g.toast(julie, 'Nom enregistré');
+  await debordements(julie, 'Réglages, La tablette');
+  await g.panneau(julie, 'famille');
   await julie.page.locator('#members li', { hasText: PRENOM_LONG }).waitFor();
-  await debordements(julie, 'Réglages');
+  await debordements(julie, 'Réglages, La famille');
+  await g.panneau(julie, 'tablette');
 
   // Météo : le nom entier, à la ligne, dans la liste comme une fois choisi.
   await julie.page.click('#meteo-card .setting-modify');

@@ -19,9 +19,24 @@ const enregistrer = (t, carte) => t.page.click(`#${carte} .setting-edit button[t
 test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, photo de Mamie, dépannage', async () => {
   const julie = await banc.telephone('Julie');
   const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  // Trois choix en haut de Réglages (Tanguy, 20/11) : un responsable arrive sur « La tablette » ; les membres et
+  // « Inviter un proche » sont dans « La famille ».
   await g.ouvrirTuile(julie, 'settings');
+  assert.deepStrictEqual(await julie.page.locator('#view-settings [data-reglages-choix]:visible').allInnerTexts(), ['La tablette', 'La famille', 'Mon profil']);
+  await julie.page.locator('#rg-tablette').waitFor({ state: 'visible' });
+  assert.strictEqual(await julie.page.locator('#members').isVisible(), false, 'les membres ne sont plus sous « La tablette »');
+  await julie.page.locator('#tablette-etat', { hasText: /En ligne|Hors ligne/ }).waitFor();
+  await g.panneau(julie, 'famille');
   await julie.page.locator('#members li', { hasText: 'Tablette de Mamie Emma' }).waitFor();
   await julie.page.locator('#members li', { hasText: 'Julie' }).locator('.badge', { hasText: 'Responsable' }).waitFor();
+  assert.strictEqual(await julie.page.locator('#volume-card').isVisible(), false, 'les réglages de la tablette ne sont pas sous « La famille »');
+  await julie.page.click('#btn-invite-famille');
+  await g.attendreVue(julie, 'view-invite');
+  // Retour : on revient sur Réglages, toujours sur « La famille ».
+  await julie.page.click('#view-invite .back');
+  await g.attendreVue(julie, 'view-settings');
+  await julie.page.locator('#rg-famille').waitFor({ state: 'visible' });
+  await g.panneau(julie, 'tablette');
   // Météo de la ville du point relais (commande), donnée par le serveur à l'installation.
   assert.strictEqual(await julie.page.locator('#meteo-current').innerText(), 'Saint-Martin-de-Valamas');
 
@@ -34,25 +49,64 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await julie.page.locator('#family-name-value', { hasText: 'Mamie Jeanne' }).waitFor();
   assert.strictEqual((await g.lire(`families/${fid}`)).name, 'Mamie Jeanne');
 
-  // Options : sans lecture à voix haute, radio FIP.
-  await modifier(julie, 'options-card');
-  assert.strictEqual(await julie.page.isChecked('#opt-sos'), true, 'SOS activé à l\'installation');
-  await julie.page.locator('#opt-lecture').setChecked(false);
-  await julie.page.locator('#opt-radio').setChecked(true);
-  await julie.page.selectOption('#opt-radio-station', { label: 'FIP' });
-  // Durée d'affichage d'un envoi ou d'un rappel pas encore vu : 3 minutes sans réglage, 1 à 5 au choix.
+  // Les anciennes « Options de la tablette », rangées par sujet (Tanguy, 20/11).
+  // Son : la lecture à voix haute se coupe d'un toucher, sans « Enregistrer » ; double appui = une seule écriture.
+  const rev0 = (await g.lire(`families/${fid}`)).rev || 0;
+  assert.strictEqual(await julie.page.isChecked('#opt-lecture'), true, 'lecture activée au départ');
+  await julie.page.locator('#opt-lecture-ligne').scrollIntoViewIfNeeded();
+  await g.doubleAppui(julie, '#opt-lecture-ligne .toggle-text');
+  await g.toast(julie, 'Lecture à voix haute coupée');
+  await g.attendreBase(async () => (await g.lire(`families/${fid}`)).options.lecture === false, 'lecture coupée');
+  await julie.page.waitForTimeout(600);
+  assert.strictEqual((await g.lire(`families/${fid}`)).rev, rev0 + 1, 'double appui : une seule écriture');
+  assert.strictEqual(await julie.page.isChecked('#opt-lecture'), false);
+  // Écran : durée d'affichage d'un envoi ou d'un rappel pas encore vu, 3 minutes sans réglage, 1 à 5 au choix.
+  await modifier(julie, 'duree-card');
   assert.strictEqual(await julie.page.inputValue('#opt-duree-affichage'), '3', '3 minutes sans réglage');
   assert.deepStrictEqual(await julie.page.locator('#opt-duree-affichage option').allInnerTexts(), ['1 minute', '2 minutes', '3 minutes', '4 minutes', '5 minutes']);
   await julie.page.selectOption('#opt-duree-affichage', '5');
-  await enregistrer(julie, 'options-card');
-  await g.toast(julie, 'Options envoyées à la tablette');
-  const options = (await g.lire(`families/${fid}`)).options;
+  await enregistrer(julie, 'duree-card');
+  await g.toast(julie, 'Durée envoyée à la tablette');
+  await julie.page.locator('#duree-value', { hasText: '5 minutes' }).waitFor();
+  // Accueil de la tablette : radio FIP ; prochain rappel enlevé d'un toucher.
+  await modifier(julie, 'radio-card');
+  await julie.page.locator('#opt-radio').setChecked(true);
+  await julie.page.selectOption('#opt-radio-station', { label: 'FIP' });
+  await enregistrer(julie, 'radio-card');
+  await g.toast(julie, 'Radio envoyée à la tablette');
+  await julie.page.locator('#radio-value', { hasText: 'FIP' }).waitFor();
+  await julie.page.waitForTimeout(2800); // le toast précédent s'en va
+  await julie.page.click('#opt-rappels-accueil-ligne .toggle-text');
+  await g.toast(julie, 'Prochain rappel enlevé de l\'accueil');
+  // Météo : l'interrupteur seul, sans changer de ville.
+  await modifier(julie, 'meteo-card');
+  assert.strictEqual(await julie.page.isChecked('#opt-meteo'), true);
+  await julie.page.locator('#opt-meteo').setChecked(false);
+  await enregistrer(julie, 'meteo-card');
+  await g.toast(julie, 'Météo enlevée de l\'accueil');
+  await julie.page.locator('#meteo-current', { hasText: 'Enlevée de l\'accueil · Saint-Martin-de-Valamas' }).waitFor();
+  // Sécurité : le bouton SOS est sur la même ligne que l'ordre d'appel. Le couper n'enregistre pas d'ordre.
+  await modifier(julie, 'sos-ordre-card');
+  assert.strictEqual(await julie.page.isChecked('#opt-sos'), true, 'SOS activé à l\'installation');
+  await julie.page.locator('#opt-sos').setChecked(false);
+  await enregistrer(julie, 'sos-ordre-card');
+  await g.toast(julie, 'SOS famille enlevé de la tablette');
+  await julie.page.locator('#sos-ordre-value', { hasText: 'Désactivé' }).waitFor();
+  let fam0 = await g.lire(`families/${fid}`);
+  assert.strictEqual(fam0.sosOrdre, undefined, 'aucun ordre figé en coupant le bouton');
+  await modifier(julie, 'sos-ordre-card');
+  await julie.page.locator('#opt-sos').setChecked(true);
+  await enregistrer(julie, 'sos-ordre-card');
+  await g.toast(julie, 'SOS famille activé sur la tablette');
+  // Chaque réglage n'a changé que le sien : rien n'a été écrasé par un autre.
+  fam0 = await g.lire(`families/${fid}`);
+  const options = fam0.options;
   assert.strictEqual(options.dureeAffichage, 5, 'durée d\'affichage enregistrée pour la tablette');
-  assert.match(await julie.page.locator('#options-value').innerText(), /5 minutes/);
   assert.strictEqual(options.lecture, false);
   assert.strictEqual(options.sos, true);
+  assert.strictEqual(options.meteo, false);
+  assert.strictEqual(options.rappelsAccueil, false);
   assert.deepStrictEqual([options.radio.active, options.radio.nom], [true, 'FIP']);
-  assert.match(await julie.page.locator('#options-value').innerText(), /FIP/);
 
   // Volumes : sonnerie, vidéos et messages lus, appels. Glisser une barre ne fait rien sonner : la tablette ne
   // joue un son que sur « Écouter », une seule demande même au double appui (Tanguy, 19/11). Pas de
@@ -120,13 +174,17 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 22, a: 6, aMin: 30 });
   await julie.page.locator('#sleep-value', { hasText: 'De 22 h à 6 h 30' }).waitFor();
 
-  // Météo : code postal puis commune.
+  // Météo : code postal puis commune, et la météo remise sur l'accueil du même coup.
   await modifier(julie, 'meteo-card');
+  await julie.page.locator('#opt-meteo').setChecked(true);
   await julie.page.fill('#meteo-cp', '07310');
   await julie.page.locator('#meteo-commune-wrap').waitFor({ state: 'visible' });
   await enregistrer(julie, 'meteo-card');
   await g.toast(julie, 'Ville envoyée à la tablette');
-  assert.strictEqual((await g.lire(`families/${fid}`)).meteoVille.nom, 'Saint-Martin-de-Valamas');
+  const apresMeteo = await g.lire(`families/${fid}`);
+  assert.strictEqual(apresMeteo.meteoVille.nom, 'Saint-Martin-de-Valamas');
+  assert.strictEqual(apresMeteo.options.meteo, true);
+  assert.strictEqual(apresMeteo.options.dureeAffichage, 5, 'les autres options gardées');
 
   // Photo de Mamie (affichée quand elle appelle) : sur les deux fiches de la tablette.
   await julie.page.locator('#tablet-face-card').waitFor({ state: 'visible' });
@@ -161,9 +219,12 @@ test('Un proche (pas propriétaire) : réglages de la tablette réservés, profi
   const paul = await banc.telephone('Paul');
   const uid = await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
 
+  // Un proche n'a que deux choix : « La famille » (où il arrive) et « Mon profil ».
   await g.ouvrirTuile(paul, 'settings');
+  assert.deepStrictEqual(await paul.page.locator('#view-settings [data-reglages-choix]:visible').allInnerTexts(), ['La famille', 'Mon profil']);
   await paul.page.locator('#tablet-owner-note', { hasText: 'depuis le téléphone de Julie' }).waitFor();
-  for (const carte of ['options-card', 'volume-card', 'sleep-card', 'meteo-card', 'family-name-card', 'remote-card']) {
+  await paul.page.locator('#btn-invite-famille').waitFor({ state: 'visible' });
+  for (const carte of ['duree-card', 'radio-card', 'sos-ordre-card', 'opt-lecture-ligne', 'volume-card', 'sleep-card', 'meteo-card', 'family-name-card', 'remote-card']) {
     assert.strictEqual(await paul.page.locator(`#${carte}`).isVisible(), false, `${carte} caché pour un proche`);
   }
   await paul.page.click('#view-settings .back');
@@ -191,7 +252,7 @@ test('Un proche (pas propriétaire) : réglages de la tablette réservés, profi
   await g.attendreVue(paul, 'view-home');
   assert.strictEqual(await paul.page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'thème gardé');
   // Le nouveau prénom apparaît chez Julie.
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirFamille(julie);
   await julie.page.locator('#members li', { hasText: 'Paulo' }).waitFor();
 
   // Julie (propriétaire et responsable) ne peut pas quitter sa famille ; Paul si.

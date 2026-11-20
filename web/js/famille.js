@@ -193,7 +193,11 @@ function show(view) {
   $('nav').hidden = !$(view).classList.contains('tab-page');
   const reglages = view === 'view-settings' || view === 'view-profile';
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view || (reglages && b.id === 'nav-reglages')));
-  document.querySelectorAll('[data-reglages-choix]').forEach((b) => b.classList.toggle('active', (b.dataset.reglagesChoix === 'profil') === (view === 'view-profile')));
+  // De retour sur l'accueil : Réglages rouvrira sur son premier choix (toujours le même écran au même bouton).
+  if (view === 'view-home') reglagesPanneau = 'tablette';
+  if (reglages) majReglagesChoix(view);
+  // « Ce téléphone » (notifications, petits rappels) est dans « Mon profil » : à jour à chaque ouverture.
+  if (view === 'view-profile' && session?.family) { renderPhoneCard(); renderRappelsPhotos(); }
   if (view === 'view-notifs') markNotifsRead();
   window.scrollTo(0, 0);
   // Retour sur l'accueil : la file repart à neuf (la carte du moment tout de suite, à sa taille).
@@ -309,7 +313,7 @@ const PAGES = {
   messages: () => { verifierLimiteMessages(); return watchType(['message', 'reply'], 60, renderMessages); },
   agenda: () => null,
   pair: () => { resetPairing(); return () => { stopPair?.(); stopPair = null; }; },
-  settings: () => { renderSettings(); return null; },
+  settings: () => { renderSettings(); majReglagesChoix('view-settings'); return null; },
   invite: () => { renderSettings(); return null; },
   abonnement: () => { renderFactures(); return null; },
 };
@@ -423,12 +427,37 @@ function ouvrirOnglet(nom) {
   show(`view-${nom}`);
 }
 
-// Réglages (barre du bas, Tanguy 20/11) : « La tablette » (page Réglages) ou « Mon profil » (onglet Profil), choisis
-// en haut des deux pages. La barre ouvre toujours « La tablette » : toujours le même écran au même bouton.
+// Réglages (barre du bas, Tanguy 20/11) : trois choix en haut des deux pages. « La tablette » (réglages de la tablette,
+// responsables seulement) et « La famille » (membres, demandes, inviter) sont deux panneaux de la page Réglages ;
+// « Mon profil » est l'onglet Profil. La barre ouvre toujours le premier choix : « La tablette » pour un responsable,
+// « La famille » pour un proche (il n'a rien à régler sur la tablette).
+let reglagesPanneau = 'tablette';
+const panneauReglages = () => (reglagesPanneau === 'tablette' && !amFamilyAdmin() ? 'famille' : reglagesPanneau);
+function majReglagesChoix(view = $('view-profile').hidden ? 'view-settings' : 'view-profile') {
+  // Page ouverte : le panneau montré reste le même si mes droits changent sous mes yeux (un proche sur « La famille »
+  // nommé responsable ne saute pas sur « La tablette » ; le choix apparaît, c'est tout).
+  if (!$('view-settings').hidden) reglagesPanneau = panneauReglages();
+  const actif = view === 'view-profile' ? 'profil' : panneauReglages();
+  const admin = amFamilyAdmin();
+  document.querySelectorAll('[data-reglages-choix]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.reglagesChoix === actif);
+    b.setAttribute('aria-pressed', String(b.dataset.reglagesChoix === actif));
+    if (b.dataset.reglagesChoix === 'tablette') b.hidden = !admin;
+  });
+  document.querySelectorAll('[data-reglages-panneau]').forEach((p) => { p.hidden = p.dataset.reglagesPanneau !== panneauReglages(); });
+}
 function ouvrirReglages(choix = 'tablette') {
   if (choix === 'profil') { ouvrirOnglet('profile'); return; }
+  reglagesPanneau = choix === 'famille' ? 'famille' : 'tablette';
+  // Déjà sur la page Réglages : on change de panneau sur place, sans toucher à l'historique.
+  if (!$('view-settings').hidden) { majReglagesChoix('view-settings'); window.scrollTo(0, 0); return; }
   if (!surUnOnglet()) goHome();
   openPage('settings', true, true);
+}
+// Une carte de Réglages à montrer (assistant, raccourcis) : son panneau d'abord.
+function montrerPanneauDe(el) {
+  const p = el?.closest?.('[data-reglages-panneau]');
+  if (p) { reglagesPanneau = p.dataset.reglagesPanneau; majReglagesChoix('view-settings'); }
 }
 document.querySelectorAll('[data-reglages-choix]').forEach((b) => b.addEventListener('click', () => {
   if (!b.classList.contains('active')) ouvrirReglages(b.dataset.reglagesChoix);
@@ -447,6 +476,7 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 });
 
 $('btn-invite').addEventListener('click', () => openPage('invite'));
+$('btn-invite-famille').addEventListener('click', () => openPage('invite'));
 
 document.querySelectorAll('.tile[data-page]').forEach((tile) => {
   tile.addEventListener('click', () => openPage(tile.dataset.page));
@@ -3809,6 +3839,7 @@ const carteReglages = (id) => () => {
   const carte = $(id);
   // Carte réservée aux responsables (cachée) : la page Réglages, avec sa note « Réglages de la tablette » si elle est là.
   const cible = carte && !carte.hidden ? carte : (!$('tablet-owner-note').hidden ? $('tablet-owner-note') : $('view-settings'));
+  montrerPanneauDe(cible);
   cible.scrollIntoView({ block: 'start' });
 };
 const ALLER_PAGE = (nom, apres) => ({ etat: { page: nom, onglet: false }, montrer: () => openPage(nom, false), apres });
@@ -3820,10 +3851,10 @@ const ALLER_ONGLET = (vue, carte) => ({
 const ECRANS_ALLER = {
   depanner: ALLER_PAGE('settings', carteReglages('remote-card')),
   wifi: ALLER_PAGE('settings', carteReglages('wifi-card')),
-  membres: ALLER_PAGE('settings', () => (!$('requests-card').hidden ? $('requests-card') : $('members').closest('.card')).scrollIntoView({ block: 'start' })),
+  membres: ALLER_PAGE('settings', () => { reglagesPanneau = 'famille'; majReglagesChoix('view-settings'); (!$('requests-card').hidden ? $('requests-card') : $('members').closest('.card')).scrollIntoView({ block: 'start' }); }),
   volumes: ALLER_PAGE('settings', carteReglages('volume-card')),
   nuit: ALLER_PAGE('settings', carteReglages('sleep-card')),
-  options: ALLER_PAGE('settings', carteReglages('options-card')),
+  options: ALLER_PAGE('settings', carteReglages('group-tablet')),
   inviter: ALLER_PAGE('invite'),
   abonnement: ALLER_ONGLET('profile', 'abo-card'),
   profil: ALLER_ONGLET('profile'),
@@ -4413,7 +4444,7 @@ function ouvrirWifi() {
 }
 $('wifi-modify').addEventListener('click', ouvrirWifi);
 // Le titre ou le réseau actuel touchés : comme « Modifier » ; tablette hors ligne : le mot reste affiché, un rappel en bas.
-document.querySelectorAll('#wifi-card h2, #wifi-current').forEach((el) => el.addEventListener('click', () => {
+document.querySelectorAll('#wifi-card .rg-ico, #wifi-card h2, #wifi-current').forEach((el) => el.addEventListener('click', () => {
   if (!$('wifi-modify').hidden) ouvrirWifi();
   else toast('Tablette hors ligne : le Wi-Fi se change directement sur la tablette.');
 }));
@@ -4671,6 +4702,12 @@ function renderRemote() {
   $('wifi-card').hidden = !admin || !tablet;
   renderWifi();
   $('group-tablet').hidden = !admin;
+  $('group-connexion').hidden = !tablet;
+  const vue = tablet?.lastOnline ? toDate(tablet.lastOnline) : null;
+  $('tablette-etat').className = `rg-etat${tablet && tabletteEnLigne() ? ' en-ligne' : ''}`;
+  $('tablette-etat').textContent = !tablet ? 'Pas encore de tablette reliée'
+    : tabletteEnLigne() ? `En ligne${vue ? `, vue ${ago(vue.getTime())}` : ''}`
+      : `Hors ligne${vue ? `, vue ${ago(vue.getTime())}` : ''}`;
   renderLogsButton();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
@@ -4707,11 +4744,11 @@ function closeSetting(card) {
 }
 
 document.querySelectorAll('.setting').forEach((card) => {
-  card.querySelector('.setting-modify').addEventListener('click', () => openSetting(card));
-  // Le titre ou la valeur touchés : comme « Modifier » (audit des touchers, 17/11 : rien ne se passait).
-  card.querySelectorAll('.setting-head h2, .setting-value').forEach((el) => el.addEventListener('click', () => {
-    if (!card.classList.contains('editing')) openSetting(card);
-  }));
+  // Toute la ligne (icône, titre, valeur, chevron) ouvre le réglage ; ouverte, seuls ses champs répondent.
+  card.addEventListener('click', (e) => {
+    if (card.classList.contains('editing') || e.target.closest('.setting-edit')) return;
+    openSetting(card);
+  });
   card.querySelector('.setting-cancel').addEventListener('click', () => closeSetting(card));
   card.querySelector('.setting-edit').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -5058,27 +5095,43 @@ function sansVocal(options) {
   return reste;
 }
 
+// Les anciennes « Options de la tablette » (une seule carte, six réglages sans rapport) sont rangées par sujet
+// (Tanguy, 20/11) : lecture à voix haute avec le son, durée d'un envoi avec l'écran, météo, prochain rappel et radio
+// avec l'accueil de la tablette, SOS avec son ordre d'appel. Tout reste écrit dans families/{fid}.options.
 function renderOptions() {
   const o = optionsActuelles();
-  const lignes = [
-    ['Lecture à voix haute', o.lecture !== false ? 'Activée' : 'Désactivée', o.lecture !== false],
-    ['Météo sur l\'accueil', o.meteo !== false ? 'Affichée' : 'Enlevée', o.meteo !== false],
-    ['Prochain rappel sur l\'accueil', o.rappelsAccueil !== false ? 'Affiché' : 'Enlevé', o.rappelsAccueil !== false],
-    ['Affichage d\'un envoi ou d\'un rappel', `${dureeAffichage(o)} minute${dureeAffichage(o) > 1 ? 's' : ''}`, true],
-    ['SOS famille', o.sos ? 'Activé' : 'Désactivé', !!o.sos],
-    ['Radio', o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée', !!o.radio?.active],
-  ];
-  $('options-value').replaceChildren(...lignes.map(([nom, etat, on]) => {
-    const li = document.createElement('span');
-    li.className = 'option-line';
-    const a = document.createElement('span');
-    a.textContent = nom;
-    const b = document.createElement('span');
-    b.className = `option-state${on ? ' on' : ''}`;
-    b.textContent = etat;
-    li.append(a, b);
-    return li;
-  }));
+  const admin = amFamilyAdmin();
+  $('duree-card').hidden = !admin;
+  $('radio-card').hidden = !admin;
+  const m = dureeAffichage(o);
+  $('duree-value').textContent = `${m} minute${m > 1 ? 's' : ''}`;
+  $('radio-value').textContent = o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée';
+  // Interrupteurs à effet immédiat : ils suivent la base, sauf pendant leur propre envoi.
+  for (const [id, on] of [['opt-lecture', o.lecture !== false], ['opt-rappels-accueil', o.rappelsAccueil !== false]]) {
+    if (!$(id).disabled) $(id).checked = on;
+  }
+}
+const saveOptions = (patch, message) => saveFamily({ options: { ...sansVocal(optionsActuelles()), ...patch } }, message);
+// Lecture à voix haute, prochain rappel : un toucher, c'est envoyé (comme « Notifications » dans Mon profil).
+// Pendant l'envoi l'interrupteur ne répond plus (double appui) ; en cas d'échec il revient à sa place.
+for (const [id, champ, oui, non] of [
+  ['opt-lecture', 'lecture', 'Lecture à voix haute activée', 'Lecture à voix haute coupée'],
+  ['opt-rappels-accueil', 'rappelsAccueil', 'Prochain rappel affiché sur l\'accueil', 'Prochain rappel enlevé de l\'accueil'],
+]) {
+  $(id).addEventListener('change', async () => {
+    const el = $(id);
+    const on = el.checked;
+    el.disabled = true;
+    try {
+      await saveOptions({ [champ]: on }, on ? oui : non);
+    } catch (err) {
+      console.error(err);
+      el.checked = !on;
+      notice("Le réglage n'a pas pu être enregistré. Vérifiez la connexion.");
+    } finally {
+      el.disabled = false;
+    }
+  });
 }
 
 $('opt-radio').addEventListener('change', () => { $('opt-radio-wrap').hidden = !$('opt-radio').checked; });
@@ -5099,15 +5152,10 @@ $('opt-radio-test').addEventListener('click', () => {
   ecouteRadio.play().catch(() => { arreterEcoute(); notice(`${r.nom} ne répond pas pour le moment.`); });
 });
 $('opt-radio-station').addEventListener('change', () => { if (ecouteRadio) arreterEcoute(); });
-document.querySelectorAll('#options-card .setting-cancel, #form-options').forEach((el) => el.addEventListener(el.tagName === 'FORM' ? 'submit' : 'click', arreterEcoute));
-SETTINGS['options-card'] = {
+document.querySelectorAll('#radio-card .setting-cancel, #form-radio').forEach((el) => el.addEventListener(el.tagName === 'FORM' ? 'submit' : 'click', arreterEcoute));
+SETTINGS['radio-card'] = {
   fill() {
     const o = optionsActuelles();
-    $('opt-lecture').checked = o.lecture !== false;
-    $('opt-sos').checked = !!o.sos;
-    $('opt-meteo').checked = o.meteo !== false;
-    $('opt-rappels-accueil').checked = o.rappelsAccueil !== false;
-    $('opt-duree-affichage').value = String(dureeAffichage(o));
     $('opt-radio').checked = !!o.radio?.active;
     const i = RADIOS.findIndex((r) => r.url === o.radio?.url);
     $('opt-radio-station').value = String(i >= 0 ? i : 0);
@@ -5116,16 +5164,15 @@ SETTINGS['options-card'] = {
   async save() {
     const r = RADIOS[Number($('opt-radio-station').value)] || RADIOS[0];
     const o = optionsActuelles();
-    const options = {
-      ...sansVocal(o),
-      lecture: $('opt-lecture').checked,
-      sos: $('opt-sos').checked,
-      meteo: $('opt-meteo').checked,
-      rappelsAccueil: $('opt-rappels-accueil').checked,
-      dureeAffichage: dureeAffichage({ dureeAffichage: $('opt-duree-affichage').value }),
-      radio: { ...(o.radio || {}), active: $('opt-radio').checked, nom: r.nom, url: r.url },
-    };
-    await saveFamily({ options }, 'Options envoyées à la tablette');
+    const active = $('opt-radio').checked;
+    await saveOptions({ radio: { ...(o.radio || {}), active, nom: r.nom, url: r.url } }, active ? 'Radio envoyée à la tablette' : 'Radio enlevée de la tablette');
+    return true;
+  },
+};
+SETTINGS['duree-card'] = {
+  fill() { $('opt-duree-affichage').value = String(dureeAffichage(optionsActuelles())); },
+  async save() {
+    await saveOptions({ dureeAffichage: dureeAffichage({ dureeAffichage: $('opt-duree-affichage').value }) }, 'Durée envoyée à la tablette');
     return true;
   },
 };
@@ -5174,6 +5221,14 @@ function renderSosOrdre() {
   if (carte.hidden) return;
   const proches = ordreSos(prochesAppelables());
   const val = $('sos-ordre-value');
+  const actif = !!optionsActuelles().sos;
+  if (!actif) {
+    const p = document.createElement('p');
+    p.className = 'sos-etat';
+    p.textContent = 'Désactivé';
+    val.replaceChildren(p);
+    return;
+  }
   if (!proches.length) {
     const p = document.createElement('p');
     p.className = 'muted';
@@ -5191,11 +5246,15 @@ function renderSosOrdre() {
   const note = document.createElement('p');
   note.className = 'muted small';
   note.textContent = Array.isArray(session.family.sosOrdre) ? 'Ordre choisi par la famille.' : 'Ordre par défaut : les responsables d\'abord.';
-  val.replaceChildren(ol, note);
+  const etat = document.createElement('p');
+  etat.className = 'sos-etat';
+  etat.textContent = 'Activé · ordre d\'appel :';
+  val.replaceChildren(etat, ol, note);
 }
 
 let sosOrdreEdit = []; // uids dans l'ordre affiché pendant la modification
 let sosOrdreDefautDemande = false;
+let sosOrdreTouche = false; // une flèche a été touchée depuis l'ouverture
 let sosOrdreDernierAppui = 0;
 let sosOrdreBouge = null; // uid du proche qui vient de changer de place (mis en valeur)
 
@@ -5252,6 +5311,7 @@ function deplacerSos(uid, sens) {
   sosOrdreDernierAppui = Date.now();
   [sosOrdreEdit[i], sosOrdreEdit[j]] = [sosOrdreEdit[j], sosOrdreEdit[i]];
   sosOrdreDefautDemande = false;
+  sosOrdreTouche = true;
   sosOrdreBouge = uid;
   dessinerSosOrdre({ uid, haut: sens < 0 });
   const m = allMembers.find((x) => x.id === uid);
@@ -5269,7 +5329,9 @@ $('sos-ordre-defaut').addEventListener('click', () => {
 SETTINGS['sos-ordre-card'] = {
   fill() {
     const proches = prochesAppelables();
+    $('opt-sos').checked = !!optionsActuelles().sos;
     sosOrdreEdit = ordreSos(proches).map((m) => m.id);
+    sosOrdreTouche = false;
     sosOrdreDefautDemande = false;
     sosOrdreBouge = null;
     sosOrdreDernierAppui = 0;
@@ -5283,8 +5345,17 @@ SETTINGS['sos-ordre-card'] = {
     dessinerSosOrdre();
   },
   async save() {
-    if (sosOrdreDefautDemande) await saveFamily({ sosOrdre: deleteField() }, 'Ordre par défaut envoyé à la tablette');
-    else await saveFamily({ sosOrdre: [...sosOrdreEdit] }, 'Ordre d\'appel SOS envoyé à la tablette');
+    // Le bouton SOS et l'ordre d'appel partent ensemble. L'ordre n'est écrit que s'il a été touché : ouvrir la
+    // ligne pour couper ou remettre le bouton ne fige pas l'ordre par défaut.
+    const sos = $('opt-sos').checked;
+    const data = {};
+    if (sos !== !!optionsActuelles().sos) data.options = { ...sansVocal(optionsActuelles()), sos };
+    if (sosOrdreDefautDemande) data.sosOrdre = deleteField();
+    else if (sosOrdreTouche) data.sosOrdre = [...sosOrdreEdit];
+    if (!Object.keys(data).length) return true;
+    await saveFamily(data, data.options && !('sosOrdre' in data)
+      ? (sos ? 'SOS famille activé sur la tablette' : 'SOS famille enlevé de la tablette')
+      : sosOrdreDefautDemande ? 'Ordre par défaut envoyé à la tablette' : 'Ordre d\'appel SOS envoyé à la tablette');
     return true;
   },
 };
@@ -5393,8 +5464,9 @@ let communes = [];
 function renderMeteo() {
   const famille = session.family.meteoVille;
   const tablette = tabletMembers.map((m) => m.meteoVille).find(Boolean);
-  $('meteo-current').textContent = famille?.nom
-    || (tablette?.nom ? `${tablette.nom} (choisie sur la tablette)` : 'Pas encore choisie');
+  const ville = famille?.nom
+    || (tablette?.nom ? `${tablette.nom} (choisie sur la tablette)` : 'Ville pas encore choisie');
+  $('meteo-current').textContent = optionsActuelles().meteo === false ? `Enlevée de l'accueil · ${ville}` : ville;
 }
 
 async function chercherCommunes() {
@@ -5436,6 +5508,7 @@ $('meteo-cp').addEventListener('input', () => {
 });
 SETTINGS['meteo-card'] = {
   fill() {
+    $('opt-meteo').checked = optionsActuelles().meteo !== false;
     $('meteo-cp').value = '';
     communes = [];
     $('meteo-commune-wrap').hidden = true;
@@ -5444,9 +5517,18 @@ SETTINGS['meteo-card'] = {
   async save() {
     const choisie = document.querySelector('#meteo-commune input:checked');
     const c = choisie ? communes[Number(choisie.value)] : null;
+    const meteo = $('opt-meteo').checked;
+    const bascule = meteo !== (optionsActuelles().meteo !== false);
+    // Seulement l'interrupteur touché (aucun code postal tapé) : il part seul, la ville ne change pas.
+    if (!c && bascule && !$('meteo-cp').value.trim()) {
+      await saveOptions({ meteo }, meteo ? 'Météo affichée sur l\'accueil' : 'Météo enlevée de l\'accueil');
+      return true;
+    }
     if (!c) { showError($('meteo-error'), communes.length ? 'Touchez la commune de la tablette dans la liste.' : 'Tapez le code postal puis choisissez la commune.'); return false; }
     const [lon, lat] = c.centre.coordinates;
-    await saveFamily({ meteoVille: { nom: c.nom.slice(0, 80), lat, lon } }, 'Ville envoyée à la tablette');
+    const data = { meteoVille: { nom: c.nom.slice(0, 80), lat, lon } };
+    if (bascule) data.options = { ...sansVocal(optionsActuelles()), meteo };
+    await saveFamily(data, 'Ville envoyée à la tablette');
     return true;
   },
 };
@@ -5486,8 +5568,8 @@ function applyFamily() {
   renderVolume();
   $('luminosite-card').hidden = !amFamilyAdmin();
   renderLuminosite();
-  $('options-card').hidden = !amFamilyAdmin();
   renderOptions();
+  majReglagesChoix();
   renderSosOrdre();
   $('meteo-card').hidden = !amFamilyAdmin();
   renderMeteo();
@@ -6763,7 +6845,7 @@ async function enterApp() {
   chargerJetonNatif();
   if (appelerPending) { appelerPending = false; appelerDesQuePossible(); }
   else if (rappelerPending) { rappelerPending = false; const sos = sosPending; sosPending = null; offerCallBack(sos); }
-  else if (reglagesPending) { reglagesPending = false; openPage('settings'); }
+  else if (reglagesPending) { reglagesPending = false; ouvrirReglages('profil'); } // « Arrière-plan » est dans Mon profil
   else if (abonnementPending) { abonnementPending = false; ouvrirAbonnement(); }
   else if (envoyerPending) { envoyerPending = false; if (!sansAbonnement()) openAdd('photo'); }
 }

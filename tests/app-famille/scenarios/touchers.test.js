@@ -44,8 +44,8 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   const { julie } = await famille();
   const p = julie.page;
 
-  // Réglages > Membres : chaque ligne répond.
-  await g.ouvrirTuile(julie, 'settings');
+  // Réglages > La famille > Membres : chaque ligne répond.
+  await g.ouvrirFamille(julie);
   await p.locator('#members li', { hasText: 'Paul' }).locator('.member-email').click();
   assert.match(await g.texteFenetre(julie), /Paul/);
   await g.repondre(julie, 'Annuler');
@@ -53,6 +53,7 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   assert.match(await g.texteFenetre(julie), /En ligne par le Wi-Fi « Livebox-Emma »/);
   await g.repondre(julie, 'OK');
   // La photo de Mamie, ronde et vide : « Choisir une photo ».
+  await g.panneau(julie, 'tablette');
   assert.ok((await effet(julie, '#tface-empty')).fichier, 'photo de Mamie : choix d\'une photo');
   // Le titre et la valeur d'un réglage : comme « Modifier ».
   await p.click('#sleep-value');
@@ -66,6 +67,7 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await p.click('#wifi-close');
   await p.locator('#sheet-wifi').waitFor({ state: 'hidden' });
   // Sa propre ligne (son badge « Responsable ») : où changer ses informations.
+  await g.panneau(julie, 'famille');
   await p.locator('#members li', { hasText: 'Julie' }).locator('.badge', { hasText: 'Responsable' }).click();
   await g.toast(julie, 'C\'est vous : votre prénom, votre photo et votre numéro se changent dans Réglages, « Mon profil ».');
   await p.click('#view-settings .back');
@@ -129,13 +131,16 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
   await verifier(['#tablet-chip']);
   // Réglages : les réglages de la tablette (titre, valeur, Modifier), la ligne d'un membre, « Obtenir l'état ».
   await g.ouvrirTuile(julie, 'settings');
-  for (const carte of ['family-name-card', 'meteo-card', 'options-card', 'volume-card', 'sleep-card']) {
+  for (const carte of ['family-name-card', 'meteo-card', 'duree-card', 'radio-card', 'sos-ordre-card', 'volume-card', 'sleep-card']) {
     for (const cible of ['h2', '.setting-value', '.setting-modify']) {
       await verifier([`#${carte} ${cible}`]);
       await p.click(`#${carte} .setting-cancel`);
     }
   }
-  await verifier(['#members li:has-text("Paul") .member-name', '#tface-camera', '#tface-gallery', '#remote-card [data-cmd="status"]']);
+  await verifier(['#tface-camera', '#tface-gallery', '#remote-card [data-cmd="status"]']);
+  await g.panneau(julie, 'famille');
+  await verifier(['#members li:has-text("Paul") .member-name']);
+  await g.panneau(julie, 'tablette');
   // Volumes : chaque « Écouter » (sonnerie, vidéos et messages, appels) dit en bas que la tablette joue ;
   // plus de récapitulatif.
   await p.click('#volume-card .setting-modify');

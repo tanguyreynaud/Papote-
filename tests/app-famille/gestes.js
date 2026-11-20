@@ -368,6 +368,18 @@ async function ouvrirTuile(t, pageNom) {
   await attendreVue(t, `view-${pageNom}`);
 }
 
+// Réglages ouverts : « La tablette » ou « La famille » (deux panneaux de la même page ; Tanguy, 20/11).
+async function panneau(t, choix) {
+  const b = t.page.locator(`#view-settings [data-reglages-choix="${choix}"]`);
+  if (!/\bactive\b/.test(await b.getAttribute('class'))) await b.click();
+  await t.page.locator(`#rg-${choix}`).waitFor({ state: 'visible' });
+}
+// Réglages, « La famille » : membres, demandes pour rejoindre, « Inviter un proche ».
+async function ouvrirFamille(t) {
+  await ouvrirTuile(t, 'settings');
+  await panneau(t, 'famille');
+}
+
 // Profil : dans Réglages, « Mon profil » (barre du bas Accueil, Photos, Aide, Réglages ; Tanguy, 20/11).
 async function ouvrirProfil(t) {
   await t.page.click('#nav-reglages');
@@ -646,5 +658,5 @@ module.exports = {
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
   ouvrir, ouvrirParApp, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, entrerFamillePreparee, familleRelieeParPapote, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
-  ouvrirTuile, ouvrirProfil, retourAccueil, lire, liste, attendreBase, codesEmail, telDe, pageAtelier,
+  ouvrirTuile, ouvrirProfil, ouvrirFamille, panneau, retourAccueil, lire, liste, attendreBase, codesEmail, telDe, pageAtelier,
 };

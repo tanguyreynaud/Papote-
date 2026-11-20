@@ -85,7 +85,7 @@ test('Profil : prénom, genre, numéro, photo (changée puis retirée) enregistr
   assert.deepStrictEqual(local, { p: 'Paulo', g: 'femme', t: '07 11 22 33 44', v: photo });
 
   // Julie le voit sans actualiser.
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirFamille(julie);
   await julie.page.locator('#members li', { hasText: 'Paulo' }).locator('img').waitFor();
 
   // Photo retirée.
@@ -129,7 +129,7 @@ test('Numéro ajouté dans l\'app puis par l\'admin : compteur, tuile « Appeler
   assert.ok(!(await g.lire(`families/${fid}/members/${uid}`)).telephone, 'Paul sans numéro');
 
   const compteur = (t) => t.page.locator('#appels-telephones').textContent();
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirFamille(julie);
   await julie.page.waitForFunction(() => /La tablette peut appeler 1 proche : celui dont le numéro de portable est enregistré\. 1 proche n'a pas encore de numéro\./
     .test(document.querySelector('#appels-telephones').textContent));
   await paul.page.waitForFunction(() => document.querySelector('#tile-phone').classList.contains('tile-off'));
@@ -161,7 +161,7 @@ test('Numéro ajouté dans l\'app puis par l\'admin : compteur, tuile « Appeler
   await paul.page.locator('#my-tel-value', { hasText: '07 55 44 33 22' }).waitFor();
   // Et la liste des membres chez Paul aussi (compteur).
   await g.retourAccueil(paul);
-  await g.ouvrirTuile(paul, 'settings');
+  await g.ouvrirFamille(paul);
   await paul.page.waitForFunction(() => /La tablette peut appeler 2 proches/.test(document.querySelector('#appels-telephones').textContent));
 });
 

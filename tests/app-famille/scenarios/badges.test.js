@@ -344,7 +344,7 @@ test('Réglages > Ce téléphone : chaque toucher sur Notifications et Arrière-
   // Navigateur sans notifications possibles (le banc les coupe) : l'interrupteur grisé dit pourquoi au toucher.
   await julie.page.reload();
   await g.attendreVue(julie, 'view-home', 30_000);
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirProfil(julie); // « Ce téléphone » est dans Réglages, « Mon profil » (20/11)
   // (au doigt sur le texte de la ligne : Playwright refuse de cliquer une ligne dont l'interrupteur est grisé)
   // « Besoin d'aide ? » et « La tablette / Mon profil » en haut de Réglages (20/11) : sur un iPhone SE, la ligne est
   // sous le bas de l'écran ; on la fait venir comme le ferait le doigt, avant de la toucher à ses coordonnées.
@@ -358,7 +358,8 @@ test('Réglages > Ce téléphone : chaque toucher sur Notifications et Arrière-
   const intents = liensAndroid(julie);
   await g.ouvrirParApp(julie, `?natif=${JETON}&pause=0`);
   await g.attendreVue(julie, 'view-home', 30_000);
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirProfil(julie);
+  await julie.page.locator('#phone-pause').waitFor({ state: 'visible' });
   assert.strictEqual(await julie.page.locator('#phone-push').isChecked(), true);
   assert.strictEqual(await julie.page.locator('#phone-pause-toggle').isChecked(), true);
   await g.doubleAppui(julie, '#phone-push');
@@ -373,7 +374,8 @@ test('Réglages > Ce téléphone : chaque toucher sur Notifications et Arrière-
   // Android peut encore la mettre en pause : le toucher ouvre son réglage, une seule fois au double appui.
   await g.ouvrirParApp(julie, `?natif=${JETON}&pause=1`);
   await g.attendreVue(julie, 'view-home', 30_000);
-  await g.ouvrirTuile(julie, 'settings');
+  await g.ouvrirProfil(julie);
+  await julie.page.locator('#phone-pause').waitFor({ state: 'visible' });
   assert.strictEqual(await julie.page.locator('#phone-pause-toggle').isChecked(), false);
   await g.doubleAppui(julie, '#phone-pause-toggle');
   await julie.page.waitForTimeout(800);
