@@ -439,7 +439,9 @@ service cloud.firestore {
           allow create, update: if signedIn() && uid == request.auth.uid
             && name == 'push'
             && exists(/databases/$(database)/documents/families/$(fid)/members/$(request.auth.uid))
-            && request.resource.data.keys().hasOnly(['tokens', 'natifs', 'natifsV', 'majLe', 'tablette', 'pingDemande'])
+            && request.resource.data.keys().hasOnly(['tokens', 'natifs', 'natifsV', 'majLe', 'tablette', 'pingDemande', 'rappelsPhotos'])
+            // « Petits rappels » (relances-photos.js, 20/11) : oui ou non, rien d'autre.
+            && (!('rappelsPhotos' in request.resource.data) || request.resource.data.rappelsPhotos is bool)
             && (!('tokens' in request.resource.data) || (request.resource.data.tokens is list && request.resource.data.tokens.size() <= 20))
             && (!('natifs' in request.resource.data) || (request.resource.data.natifs is list && request.resource.data.natifs.size() <= 5))
             && (!('tablette' in request.resource.data) || (request.resource.data.tablette is list && request.resource.data.tablette.size() <= 5)

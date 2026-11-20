@@ -1030,6 +1030,9 @@ test('R7 : jeton privé seulement « push », dans sa propre famille, champs con
   await assertSucceeds(setDoc(doc(julie, `families/${FID}/members/julie/private/push`), { natifs: ['n'], natifsV: 2, majLe: serverTimestamp() }, { merge: true }));
   await assertSucceeds(setDoc(doc(tablette('tab'), `families/${FID}/members/tab/private/push`), { tablette: ['t'], pingDemande: serverTimestamp() }, { merge: true }));
   await assertFails(setDoc(doc(julie, `families/${FID}/members/julie/private/nimporte`), { tokens: ['a'] }));
+  // « Petits rappels » (20/11) : oui ou non, sur sa propre fiche seulement.
+  await assertSucceeds(setDoc(doc(julie, `families/${FID}/members/julie/private/push`), { rappelsPhotos: false, majLe: serverTimestamp() }, { merge: true }));
+  await assertFails(setDoc(doc(julie, `families/${FID}/members/julie/private/push`), { rappelsPhotos: 'non' }, { merge: true }));
   await assertFails(setDoc(doc(julie, `families/${FID}/members/julie/private/push`), { gros: 'z'.repeat(1000) }, { merge: true }));
   await assertFails(setDoc(doc(julie, `families/${FID}/members/julie/private/push`), { tokens: Array.from({ length: 21 }, (_, i) => `j${i}`) }, { merge: true }));
   // Compte sans fiche dans la famille, ou famille qui n'existe pas : refusé.
