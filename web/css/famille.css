@@ -475,7 +475,7 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
    la fenêtre gagne une ligne. Le rond du bouton radio est masqué, la case choisie est pleine. */
 .choice-ligne { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .choice-ligne label { position: relative; justify-content: center; text-align: center; padding: 12px 6px; min-height: 48px; font-size: 16px; font-weight: 600; }
-.choice-ligne input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.choice-ligne input { position: absolute; inset: 0; width: 100% !important; height: 100%; margin: 0; opacity: 0; cursor: pointer; } /* invisible mais couvre la case : un toucher n'importe où la choisit */
 .choice-ligne label:has(input:checked) { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .choice-ligne label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
 /* Délai de l'alerte « pas vue » : cinq choix de la même taille, trois par ligne sur un petit écran. */
