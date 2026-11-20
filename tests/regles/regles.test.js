@@ -9,7 +9,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, collection, collectionGroup, query, where, writeBatch, serverTimestamp, deleteField, Timestamp, setLogLevel } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, deleteDoc, getDoc, getDocs, collection, collectionGroup, query, where, writeBatch, serverTimestamp, deleteField, increment, Timestamp, setLogLevel } = require('firebase/firestore');
 const { ref, uploadString, getBytes, deleteObject } = require('firebase/storage');
 
 // Les refus attendus (assertFails) ne sont pas des erreurs : pas de journal.
@@ -1378,4 +1378,33 @@ test('nom de la tablette : un prénom (accents, trait d\'union, apostrophe), jam
   const nom = (name) => updateDoc(doc(proche('julie'), `families/${FID}`), { name });
   for (const n of ['Mamie Jeanne', 'Pépé d\'Émile-André 2', 'Mamie 75']) await assertSucceeds(nom(n));
   for (const n of ['06 12 34 56 78', '0612345678', '+33 6 12 34 56 78', 'Mamie 0612', '1234', '---', '', 'M'.repeat(41), 'Mamie 🙂', '🙂🙂', 'Mamie <b>Rose</b>', 'Mamie ♥', 'Mamie_Rose', 'Mamie\nRose']) await assertFails(nom(n)).catch((e) => { throw new Error(`« ${n} » : ${e.message}`); });
+});
+
+// Tanguy, 20/11 : luminosité de l'écran en journée (families/{fid}.luminosite), entier de 40 à 100 %, réglée par un
+// responsable seulement (lue par la tablette, Luminosite.java).
+test('luminosité de jour : entier de 40 à 100, par un responsable ; tout le reste refusé', async () => {
+  await famille();
+  const julie = proche('julie');
+  const regler = (v, extra = {}) => updateDoc(doc(julie, `families/${FID}`), { luminosite: v, ...extra });
+  await assertSucceeds(regler(70));
+  await assertSucceeds(regler(40));
+  await assertSucceeds(regler(100));
+  await assertSucceeds(regler(85, { rev: 8 }));
+  // Écriture du curseur de l'app famille : saveFamily({ luminosite }) avec rev: increment(1).
+  await assertSucceeds(regler(60, { rev: increment(1) }));
+  await assertFails(regler(101, { rev: increment(1) }));
+  for (const v of [39, 101, 70.5, '70', 0, -1, true, null, [70], { jour: 70 }]) {
+    await assertFails(regler(v)).catch((e) => { throw new Error(`${JSON.stringify(v)} : ${e.message}`); });
+  }
+  await assertFails(regler(70, { name: 'Mamie Rose' })); // jamais avec un autre champ
+  await assertFails(updateDoc(doc(julie, `families/${FID}`), { luminosite: deleteField() }));
+  // Un proche (pas responsable) ne la change pas, même dans les bornes (valeur actuelle : 60) ; la tablette non plus.
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}/members/paul`), fiche('paul', { status: 'active' })));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { luminosite: 70 }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { luminosite: 50, rev: 9 }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { luminosite: 50, rev: increment(1) }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}`), { luminosite: 70 }));
+  // Un responsable désigné (admins) la règle aussi.
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}`), { admins: ['paul'] }, { merge: true }));
+  await assertSucceeds(updateDoc(doc(proche('paul'), `families/${FID}`), { luminosite: 55, rev: 10 }));
 });

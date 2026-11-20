@@ -1139,6 +1139,11 @@ function el(tag, classe, texte) {
   if (texte != null) e.textContent = texte;
   return e;
 }
+// Luminosité de l'écran en journée (families/{fid}.luminosite, 40 à 100 %, réglée par un responsable dans l'app) :
+// affichée seulement. Absente ou hors bornes : « 70 % (par défaut) ».
+function luminositeTexte(v) {
+  return Number.isInteger(v) && v >= 40 && v <= 100 ? `${v} %` : '70 % (par défaut)';
+}
 function carteFamille(f) {
   const s = state(f);
   const tete = el('li', `family card ${s.cls}`);
@@ -1170,6 +1175,7 @@ function carteFamille(f) {
     ['Code de la famille', f.code ? `${f.code.slice(0, 4)}-${f.code.slice(4)}` : '–'],
     ['Tablette utilisée', ago(f.active)],
     ['Version', f.version || '–'],
+    ['Luminosité de jour', luminositeTexte(f.luminosite)],
     ['Abonnement', ABONNEMENT_FAMILLE[f.abonnement?.statut] || 'Aucun'],
     ['Proches', f.people ?? '–'],
     ['Photos et messages', f.posts ?? '–'],
