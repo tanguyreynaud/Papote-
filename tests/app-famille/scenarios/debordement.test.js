@@ -114,7 +114,7 @@ test('Textes longs : nom de la tablette, prénoms, e-mails, Wi-Fi, communes pass
   await julie.page.locator('#wifi-list .wifi-choice').first().click();
   await julie.page.locator('#wifi-list .wifi-info').waitFor();
   await julie.page.waitForTimeout(400);
-  await debordements(julie, 'Wi-Fi de la tablette');
+  await debordements(julie, 'Wi-Fi');
   await julie.page.click('#wifi-close');
   await julie.page.locator('#sheet-wifi').waitFor({ state: 'hidden' });
 

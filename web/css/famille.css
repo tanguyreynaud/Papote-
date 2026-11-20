@@ -1762,12 +1762,18 @@ a { text-decoration: none; }
 .page-head .aide-pastille { margin-left: auto; margin-right: 8px; }
 .aide-pastille { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--accent); font-weight: 700; font-size: 16px; white-space: nowrap; }
 .aide-pastille svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-/* Trois choix : l'icône au-dessus du mot, pour tenir sur un petit téléphone. */
-.reglages-choix .seg { flex-direction: column; gap: 2px; min-height: 58px; padding: 6px 4px; font-size: 16px; line-height: 1.2; }
+/* Trois choix sur fond blanc, seul le choix en cours est indigo (Tanguy, 20/11 : « tout bleu, je ne suis pas fan »). */
+.reglages-choix, #apparence-card .segmented { background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.reglages-choix .seg, #apparence-card .seg { color: var(--text); }
+.reglages-choix .seg.active, #apparence-card .seg.active { color: var(--accent-text); }
+.reglages-choix { margin-bottom: 16px; }
+.reglages-choix .seg { min-height: 48px; padding: 6px 4px; font-size: 16px; line-height: 1.2; }
+#apparence-card .segmented { box-shadow: none; margin: 0; }
 .reglages-choix .seg[hidden] { display: none; }
 
 .rg-liste { margin: 0 0 16px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
-.rg-liste:not(:has(> :not([hidden]))) { display: none; }
+/* Liste dont toutes les lignes sont cachées : classe posée par famille.js (pas de :has(), Safari ne le recalcule pas toujours). */
+.rg-liste.rg-vide { display: none; }
 .rg-liste > * { border-top: 1px solid var(--line); }
 .rg-liste > :first-child, .rg-liste > [hidden] + :not([hidden]):not(:nth-child(n + 3)) { border-top: none; }
 .rg-liste > .card { margin: 0; border-radius: 0; box-shadow: none; background: transparent; }
@@ -1841,7 +1847,6 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .rg-qui-photo .face-buttons .secondary { flex: 1 1 0; min-width: 0; padding: 8px 6px; gap: 6px; font-size: 15px; }
 @media (max-width: 359px) { .rg-qui-photo .face-buttons .secondary { flex-basis: 100%; } }
 
-/* ================= Fenêtres et pages, revue du 20/11 (fil « Sublimer les fenêtres et pages ») =================
    Une touche d'indigo plutôt que du tout indigo, des boutons plus petits, le même dessin partout. */
 
 /* ---------- Fenêtres de confirmation : dessin, question en gras, explication discrète, deux petits boutons ---------- */
@@ -1985,3 +1990,35 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 /* Tablette muette : le fait en rouge, la piste en dessous en texte normal. */
 .activity-piste { display: block; margin-top: 2px; color: var(--muted); font-weight: 400; }
 .activity:has(.activity-piste)::before { top: 18px; margin-top: 0; }
+=======
+/* Fidèle à la maquette (Tanguy, 20/11) : la personne ou moi en tête avec « Modifier » ; Apparence, Dépanner et
+   l'abonnement sur une ligne. */
+.rg-texte { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.rg-valeur { font-size: 16px; color: var(--muted); font-weight: 400; }
+.rg-corps { padding: 0 14px 14px; }
+.rg-corps > :first-child { margin-top: 0; }
+.rg-fixe { cursor: default !important; }
+.rg-fixe .rg-titre { overflow-wrap: anywhere; }
+.card.rg.rg-qui.setting { display: block; padding: 16px; min-height: 0; }
+.card.rg.rg-qui .setting-head { display: flex; align-items: center; gap: 14px; }
+.card.rg.rg-qui .setting-head h2 { margin: 0; font-size: 21px; overflow-wrap: anywhere; }
+.card.rg.rg-qui .setting-modify { flex: none; min-height: 44px; min-width: 44px; padding: 0 2px; font-weight: 700; }
+.card.rg.rg-qui .setting-edit { margin-top: 14px; }
+.rg-qui-sous { margin: 2px 0 0; font-size: 16px; color: var(--muted); }
+.rg-qui .rg-qui-photo { margin: 0 0 14px; }
+.rg-qui .rg-qui-photo .muted { margin: 0 0 8px; }
+.rg-qui .setting-edit label.choice-titre { display: block; }
+.rg-abo .abo-status { margin: 0; font-family: var(--display); font-size: 17px; }
+.rg-abo-tete { cursor: default !important; }
+.rg-abo-corps { padding-top: 12px; }
+.rg-abo-corps.rg-vide { display: none; }
+#btn-abo-page svg.rg-chev { margin-left: auto; }
+@media (max-width: 359px) {
+  .reglages-choix .seg { font-size: 15px; padding: 6px 2px; white-space: nowrap; }
+  .card.rg.rg-qui.setting { padding: 14px 12px; }
+  .card.rg.rg-qui .setting-head { gap: 10px; }
+  .card.rg.rg-qui .setting-head h2 { font-size: 19px; }
+  .rg-qui .avatar-qui { width: 52px; height: 52px; }
+}
+
+/* ================= Fenêtres et pages, revue du 20/11 (fil « Sublimer les fenêtres et pages ») ==========

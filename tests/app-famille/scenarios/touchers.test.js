@@ -54,7 +54,11 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await g.repondre(julie, 'OK');
   // La photo de Mamie, ronde et vide : « Choisir une photo ».
   await g.panneau(julie, 'tablette');
+  // La photo de Mamie touchée ouvre « Modifier » ; ouverte, elle propose de choisir une photo.
+  await p.click('#tface-empty');
+  await p.locator('#form-family-name').waitFor();
   assert.ok((await effet(julie, '#tface-empty')).fichier, 'photo de Mamie : choix d\'une photo');
+  await p.click('#family-name-card .setting-cancel');
   // Le titre et la valeur d'un réglage : comme « Modifier ».
   await p.click('#sleep-value');
   await p.locator('#form-sleep').waitFor();
@@ -74,7 +78,11 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await g.attendreVue(julie, 'view-home');
   await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
+  // Ma photo touchée ouvre « Modifier » ; ouverte, elle propose de choisir une photo.
+  await p.locator('#face-img, #face-empty').filter({ visible: true }).first().click();
+  await p.locator('#form-my-name').waitFor();
   assert.ok((await effet(julie, '#face-img, #face-empty')).fichier, 'ma photo : choix d\'une photo');
+  await p.click('#my-name-card .setting-cancel');
 
   // Photos : « Envoyé ✓ » (pas encore vue) dit que Mamie ne l'a pas encore vue.
   await g.retourAccueil(julie);
@@ -132,12 +140,15 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
   // Réglages : les réglages de la tablette (titre, valeur, Modifier), la ligne d'un membre, « Obtenir l'état ».
   await g.ouvrirTuile(julie, 'settings');
   for (const carte of ['family-name-card', 'meteo-card', 'duree-card', 'radio-card', 'sos-ordre-card', 'volume-card', 'sleep-card']) {
-    for (const cible of ['h2', '.setting-value', '.setting-modify']) {
+    for (const cible of carte === 'family-name-card' ? ['h2', '.setting-modify'] : ['h2', '.setting-value', '.setting-modify']) {
       await verifier([`#${carte} ${cible}`]);
       await p.click(`#${carte} .setting-cancel`);
     }
   }
-  await verifier(['#tface-camera', '#tface-gallery', '#remote-card [data-cmd="status"]']);
+  await p.click('#family-name-card .setting-modify');
+  await verifier(['#tface-camera', '#tface-gallery']);
+  await p.click('#family-name-card .setting-cancel');
+  await verifier(['#remote-card summary', '#remote-card [data-cmd="status"]']);
   await g.panneau(julie, 'famille');
   await verifier(['#members li:has-text("Paul") .member-name']);
   await g.panneau(julie, 'tablette');
@@ -157,12 +168,14 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
   await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   for (const carte of ['my-name-card', 'my-genre-card']) {
-    for (const cible of ['h2', '.setting-value']) {
+    for (const cible of carte === 'my-name-card' ? ['h2', '.setting-modify'] : ['h2', '.setting-value']) {
       await verifier([`#${carte} ${cible}`]);
       await p.click(`#${carte} .setting-cancel`);
     }
   }
-  await verifier(['#view-profile [data-theme-choice]:not(.active)', '#face-camera', '#face-gallery']);
+  await verifier(['#apparence-card summary', '#view-profile [data-theme-choice]:not(.active)']);
+  await p.click('#my-name-card .setting-modify');
+  await verifier(['#face-camera', '#face-gallery']);
 });
 
 // V14 (testeur, 17/11) : « Tout télécharger » sur une page Photos vide ne servait à rien. Caché tant qu'il n'y a

@@ -295,7 +295,7 @@ test('Petits rappels : interrupteur dans Réglages (Mon profil), allumé au dép
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await g.ouvrirProfil(julie);
   await julie.page.locator('#rappels-photos-row').waitFor({ state: 'visible' });
-  await julie.page.locator('#rappels-photos-text', { hasText: 'une notification vous propose une photo' }).waitFor();
+  await julie.page.locator('#rappels-photos-text', { hasText: 'Une idée de photo après une semaine sans envoi' }).waitFor();
   assert.ok(await julie.page.locator('#rappels-photos').isChecked(), 'allumé au départ');
   await julie.page.click('#rappels-photos-row');
   await g.toast(julie, 'Petits rappels coupés');
