@@ -26,14 +26,14 @@ test('Retour : chaque écran ramène à celui d\'avant, une fenêtre se ferme sa
   await retour(julie, 'view-home');
 
   // Profil, puis Aide depuis le Profil : les onglets partagent une étape, retour = accueil.
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   await julie.page.click('#view-profile .aide-card');
   await g.attendreVue(julie, 'view-support');
   await retour(julie, 'view-home');
 
   // Abonnement et paiement : retour au Profil.
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   if (await julie.page.locator('#btn-abo-page').isVisible()) {
     await julie.page.click('#btn-abo-page');
@@ -50,15 +50,15 @@ test('Retour : chaque écran ramène à celui d\'avant, une fenêtre se ferme sa
   // L'étape du Profil est toujours là : retour ramène à l'accueil.
   await retour(julie, 'view-home');
 
-  // Photos puis Messages par la barre du bas : retour = accueil.
+  // Photos puis Réglages par la barre du bas : retour = accueil.
   await julie.page.click('.nav-item[data-page="photos"]');
   await g.attendreVue(julie, 'view-photos');
-  await julie.page.click('.nav-item[data-page="messages"]');
-  await g.attendreVue(julie, 'view-messages');
+  await julie.page.click('#nav-reglages');
+  await g.attendreVue(julie, 'view-settings');
   await retour(julie, 'view-home');
 
   // Profil puis « Accueil » de la barre : l'accueil, et retour ne revient pas sur le Profil.
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   await g.retourAccueil(julie);
   await julie.page.click('#btn-bell');
@@ -76,7 +76,7 @@ test('Retour : chaque écran ramène à celui d\'avant, une fenêtre se ferme sa
 
   // « Rejoindre une autre famille » depuis le Profil : retour = son bouton Retour, l'accueil ;
   // ensuite, retour depuis une page ramène à l'accueil, pas au Profil quitté.
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await julie.page.click('#view-profile [data-action="other-family"]');
   await g.attendreVue(julie, 'view-join');
   await retour(julie, 'view-home');

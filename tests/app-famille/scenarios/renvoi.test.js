@@ -24,7 +24,7 @@ async function preparer(t) {
 }
 
 async function profil(t) {
-  await t.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(t);
   await g.attendreVue(t, 'view-profile');
   await t.page.locator('#abo-card').waitFor({ state: 'visible' });
 }

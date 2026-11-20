@@ -757,6 +757,9 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 }
 .nav-item svg { width: 26px; height: 26px; }
 .nav-item.active { color: var(--accent); }
+.nav-item svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Réglages : « La tablette » ou « Mon profil » (Tanguy, 20/11), en haut des deux pages. */
+.reglages-choix { margin: 0 0 14px; }
 .nav-icon { position: relative; display: flex; }
 .nav-badge {
   position: absolute;
@@ -1084,9 +1087,6 @@ h1, h2, h3, .brand, .tile, .splash-name { font-family: var(--display); letter-sp
 .bell-btn { position: absolute; right: 108px; top: 4px; width: 40px; height: 40px; border-radius: 50%; background: var(--surface); color: var(--accent); box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center; }
 .bell-btn svg { width: 22px; height: 22px; }
 .bell-btn .nav-badge { right: -8px; top: -6px; }
-/* La roue dentée des Réglages, à gauche de la cloche (même rond, même écart). */
-.gear-btn { right: 156px; }
-.gear-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .aide-card { width: 100%; text-align: left; }
 
 /* Appel à l'horizontale même quand le téléphone ne tourne pas l'écran */
@@ -1136,6 +1136,7 @@ body:has(#hors-ligne-bandeau:not([hidden])) .install-fab { display: none; }
 .depuis-barre .fab { bottom: calc(var(--barre-bas) + 16px + env(safe-area-inset-bottom)); }
 .depuis-barre .chat-bar { padding-bottom: 10px; }
 .depuis-barre #view-photos, .depuis-barre #view-videos { padding-bottom: calc(var(--barre-bas) + 96px + env(safe-area-inset-bottom)); }
+.depuis-barre #view-settings { padding-bottom: calc(var(--barre-bas) + 24px + env(safe-area-inset-bottom)); }
 .depuis-barre #view-messages { padding-bottom: calc(var(--barre-bas) + 160px + env(safe-area-inset-bottom)); }
 
 .switch-row { display: flex; align-items: center; gap: 10px; font-weight: 600; }
@@ -1708,7 +1709,6 @@ a { text-decoration: none; }
   .home-head .brand { font-size: 26px; }
   .invite-btn { padding: 8px 10px; }
   .bell-btn { right: 98px; }
-  .gear-btn { right: 144px; }
 }
 /* « Vouliez-vous dire … ? » sous l'adresse e-mail (js/email-correcteur.js, copie du site ; Tanguy 20/11). */
 .mel-suggestion { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 1rem; color: var(--text); }

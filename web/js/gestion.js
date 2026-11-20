@@ -4728,7 +4728,7 @@ function remplirLiensFamille(fid) {
   const doubles = (donnees.telDoubles || []).filter((d) => d.fid === fid);
   $('famille-liens').replaceChildren(...[
     ...doubles.map((d) => h('p', { class: 'tel-double' }, `Numéro en double : ${d.numero} (${d.prenoms.join(', ')}). `
-      + 'Chaque proche doit avoir son propre numéro : demandez à l\'un d\'eux de corriger le sien dans Profil.')),
+      + 'Chaque proche doit avoir son propre numéro : demandez à l\'un d\'eux de corriger le sien dans Réglages, « Mon profil » (appli famille).')),
     h('h2', {}, 'Commande, client et tablette'),
     ...enCours.map((c) => h('ul', { class: 'liste-liens groupe-commande' }, ...blocCommande(c))),
     seules.length ? h('ul', { class: 'liste-liens groupe-commande' }, ...seules.map((t) => ligneLien('Tablette', `#tablette/${encodeURIComponent(t.id)}`,

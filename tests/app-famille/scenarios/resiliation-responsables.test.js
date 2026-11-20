@@ -15,7 +15,7 @@ const famille = (fid) => g.lire(`families/${fid}`);
 const avantDePartir = (t) => t.page.locator('.dialog-back:not(.closing) .dialog', { hasText: 'Avant de partir' });
 
 async function profil(t) {
-  await t.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(t);
   await g.attendreVue(t, 'view-profile');
   await t.page.locator('#abo-card').waitFor({ state: 'visible' });
 }

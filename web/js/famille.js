@@ -191,7 +191,9 @@ function show(view) {
   document.body.classList.toggle('on-support', view === 'view-support');
   // La barre du bas n'apparaît que sur Accueil, Notifications et Support.
   $('nav').hidden = !$(view).classList.contains('tab-page');
-  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view));
+  const reglages = view === 'view-settings' || view === 'view-profile';
+  document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view || (reglages && b.id === 'nav-reglages')));
+  document.querySelectorAll('[data-reglages-choix]').forEach((b) => b.classList.toggle('active', (b.dataset.reglagesChoix === 'profil') === (view === 'view-profile')));
   if (view === 'view-notifs') markNotifsRead();
   window.scrollTo(0, 0);
   // Retour sur l'accueil : la file repart à neuf (la carte du moment tout de suite, à sa taille).
@@ -325,7 +327,7 @@ function openPage(name, push = true, onglet = false) {
   document.body.classList.toggle('depuis-barre', onglet);
   if (onglet) {
     $('nav').hidden = false;
-    document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.page === name));
+    document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.page === name || (name === 'settings' && b.id === 'nav-reglages')));
   }
 }
 
@@ -405,20 +407,33 @@ function ouvrirOnglet(nom) {
   show(`view-${nom}`);
 }
 
+// Réglages (barre du bas, Tanguy 20/11) : « La tablette » (page Réglages) ou « Mon profil » (onglet Profil), choisis
+// en haut des deux pages. La barre ouvre toujours « La tablette » : toujours le même écran au même bouton.
+function ouvrirReglages(choix = 'tablette') {
+  if (choix === 'profil') { ouvrirOnglet('profile'); return; }
+  if (!surUnOnglet()) goHome();
+  openPage('settings', true, true);
+}
+document.querySelectorAll('[data-reglages-choix]').forEach((b) => b.addEventListener('click', () => {
+  if (!b.classList.contains('active')) ouvrirReglages(b.dataset.reglagesChoix);
+}));
+
 // Barre du bas : on change d'onglet sans empiler l'historique.
 document.querySelectorAll('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => {
     const surOnglet = surUnOnglet();
+    if (btn.id === 'nav-reglages') { ouvrirReglages(); return; }
     if (btn.dataset.page) { if (!surOnglet) goHome(); openPage(btn.dataset.page, true, true); return; }
     // Accueil depuis un onglet : comme « retour », l'entrée de l'onglet est juste au-dessus de l'accueil.
     if (btn.dataset.tab === 'home') { if (surOnglet) history.back(); else goHome(); return; }
     ouvrirOnglet(btn.dataset.tab);
+    // Aide : la page des questions fréquentes, avec l'assistant ouvert tout de suite (Tanguy, 20/11). Sans le chat
+    // (pas de réseau, script pas chargé), les questions fréquentes restent.
+    if (btn.id === 'nav-aide') { try { window.papoteChat?.ouvrir(); } catch (e) { /* questions fréquentes seules */ } }
   });
 });
 
 $('btn-invite').addEventListener('click', () => openPage('invite'));
-// Roue dentée en haut de l'accueil, à gauche de la cloche : les Réglages sans descendre jusqu'à la tuile (Tanguy, 19/11).
-$('btn-gear').addEventListener('click', () => openPage('settings'));
 
 document.querySelectorAll('.tile[data-page]').forEach((tile) => {
   tile.addEventListener('click', () => openPage(tile.dataset.page));
@@ -2060,7 +2075,7 @@ $('face-remove').addEventListener('click', async () => {
 $('face-nudge').addEventListener('click', () => {
   document.documentElement.classList.add('sans-appui');
   setTimeout(() => document.documentElement.classList.remove('sans-appui'), 400);
-  document.querySelector('.nav-item[data-tab="profile"]').click();
+  ouvrirReglages('profil');
 });
 
 // ---------- Nettoyage : rester dans le quota gratuit de Firebase ----------
@@ -2981,7 +2996,7 @@ function renderTelephonesAppels(members) {
   const pluriel = (k, un, plusieurs) => (k > 1 ? plusieurs : un);
   el.textContent = [
     n ? `La tablette peut appeler ${n} proche${pluriel(n, '', 's')} : ${pluriel(n, 'celui', 'ceux')} dont le numéro de portable est enregistré.`
-      : 'La tablette ne peut encore appeler personne : chacun ajoute son numéro de portable dans Profil.',
+      : 'La tablette ne peut encore appeler personne : chacun ajoute son numéro de portable dans Réglages, « Mon profil ».',
     n && sans ? `${sans} proche${pluriel(sans, " n'a", "s n'ont")} pas encore de numéro.` : '',
     proches.some((m) => typeof m.recoitAppels === 'boolean')
       ? `Notifications de Papote activées sur ${notifs} téléphone${pluriel(notifs, '', 's')}.` : '',
@@ -3138,7 +3153,7 @@ $('members').addEventListener('click', (e) => {
   if (more) { more.click(); return; }
   const m = allMembers.find((x) => x.id === li.dataset.uid);
   if (!m) return;
-  if (m.id === session.uid) { toast('C\'est vous : votre prénom, votre photo et votre numéro se changent dans Profil.'); return; }
+  if (m.id === session.uid) { toast('C\'est vous : votre prénom, votre photo et votre numéro se changent dans Réglages, « Mon profil ».'); return; }
   if (m.role === 'tablette') {
     if (!$('tablet-chip').hidden) $('tablet-chip').click();
     else toast(`La tablette de ${session.family.name} n'a pas encore donné de nouvelles.`);
@@ -3411,7 +3426,7 @@ function paused() {
   // Abonnement arrêté (résiliation voulue, décès, EHPAD) : rien n'est à régler (audit « mauvais jours », 5/11).
   if (session?.family?.abonnement?.statut === 'resilie') { notice(TEXTE_ARRETE); return true; }
   notice(amFamilyAdmin()
-    ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Profil en bas de l'écran, puis Abonnement."
+    ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Réglages en bas de l'écran, puis « Mon profil », puis Abonnement."
     : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
   return true;
 }
@@ -3534,7 +3549,7 @@ document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventLi
 
 // L'abonnement est dans Profil.
 function ouvrirAbonnement() {
-  document.querySelector('.nav-item[data-tab="profile"]').click();
+  ouvrirReglages('profil');
   requestAnimationFrame(() => $('abo-card').scrollIntoView({ behavior: 'smooth', block: 'start' }));
 }
 
@@ -4012,7 +4027,7 @@ function renderAbonnement() {
   // Sans abonnement en cours : un responsable peut relier une commande déjà payée sur le site.
   const sansAbo = ['aucun', 'resilie', 'suspendu', 'installation'].includes(statut) && admin;
   // Fin d'installation sans commande reliée : dire quoi faire, pas seulement « en attente ».
-  if (statut === 'aucun' && admin) text = "Aucune commande n'est reliée à cette tablette. Vous l'avez commandée sur le site ? Entrez le code de commande ci-dessous. Sinon, choisissez un abonnement dans Profil.";
+  if (statut === 'aucun' && admin) text = "Aucune commande n'est reliée à cette tablette. Vous l'avez commandée sur le site ? Entrez le code de commande ci-dessous. Sinon, choisissez un abonnement dans Réglages, « Mon profil ».";
   // Installation finie sans commande reliée (B3) : tout fonctionne 48 h, le temps d'entrer le code.
   if (statut === 'installation' && admin) {
     text = `Entrez le code de votre commande (dans l'e-mail de confirmation) pour la relier à cette tablette.${abo.toleranceJusqua ? ` Papote fonctionne en attendant, jusqu'au ${dateLongue(abo.toleranceJusqua)}.` : ''}`;
@@ -4916,7 +4931,7 @@ function renderSosOrdre() {
   if (!proches.length) {
     const p = document.createElement('p');
     p.className = 'muted';
-    p.textContent = 'Personne n\'a encore de numéro de portable enregistré : chacun l\'ajoute dans Profil.';
+    p.textContent = 'Personne n\'a encore de numéro de portable enregistré : chacun l\'ajoute dans Réglages, « Mon profil ».';
     val.replaceChildren(p);
     return;
   }
@@ -5016,7 +5031,7 @@ SETTINGS['sos-ordre-card'] = {
     const sans = allMembers.filter((m) => m.role !== 'tablette' && (!m.status || m.status === 'active') && !telPropre(m.telephone));
     $('sos-ordre-sans').hidden = !sans.length;
     $('sos-ordre-sans').textContent = sans.length
-      ? `Sans numéro de portable, pas appelé${sans.length > 1 ? 's' : ''} par la tablette : ${sans.map((m) => m.name || 'Proche').join(', ')}. Chacun ajoute son numéro dans Profil.`
+      ? `Sans numéro de portable, pas appelé${sans.length > 1 ? 's' : ''} par la tablette : ${sans.map((m) => m.name || 'Proche').join(', ')}. Chacun ajoute son numéro dans Réglages, « Mon profil ».`
       : '';
     $('sos-ordre-defaut').hidden = proches.length < 2;
     dessinerSosOrdre();
@@ -5557,7 +5572,7 @@ $('tile-phone').addEventListener('click', (e) => {
   if (!$('tile-phone').classList.contains('tile-off')) return;
   e.preventDefault();
   toast(`Ajoutez votre numéro de portable : la tablette de ${session?.family?.name || 'votre proche'} ne répond qu'aux numéros de la famille.`);
-  document.querySelector('.nav-item[data-tab="profile"]').click();
+  ouvrirReglages('profil');
   setTimeout(() => { const carte = $('my-tel-card'); if (carte && !carte.classList.contains('editing')) openSetting(carte); }, 300);
 });
 

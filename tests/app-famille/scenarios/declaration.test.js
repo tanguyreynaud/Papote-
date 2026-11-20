@@ -101,7 +101,7 @@ async function familleAvecTablette(email, reglage = {}) {
 }
 
 async function ouvrirChat(t, question) {
-  await t.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(t);
   await g.attendreVue(t, 'view-profile');
   await t.page.click('.aide-card[data-tab="support"]');
   await g.attendreVue(t, 'view-support');

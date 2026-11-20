@@ -60,6 +60,6 @@ test('L3 : lien #connexion= dans un navigateur : jeton ignoré, ni connexion à 
   await g.ouvrir(julie, `#connexion=${encodeURIComponent(jeton)}`);
   await g.attendreVue(julie, 'view-home', 30_000);
   assert.strictEqual(await julie.page.evaluate(() => localStorage.getItem('papote.fid')), fid);
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await julie.page.locator('#account-email', { hasText: 'julie.l3@exemple.fr' }).waitFor();
 });

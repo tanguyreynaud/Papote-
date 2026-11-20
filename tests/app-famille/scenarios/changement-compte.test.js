@@ -20,7 +20,7 @@ async function marcAvecSaFamille() {
 }
 
 async function julieSeDeconnecte(julie) {
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   await julie.page.click('#view-profile [data-action="logout"]');
   await g.repondre(julie, 'Se déconnecter');
@@ -80,7 +80,7 @@ async function accueilDeMarc(t, page) {
   const fid = await page.evaluate(() => localStorage.getItem('papote.fid'));
   const familles = await g.liste('families');
   assert.strictEqual(familles.find((f) => f.id === fid)?.name, 'Papi Jean', 'la famille de Marc est ouverte');
-  await page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil({ ...t, page });
   await g.attendreVue({ ...t, page }, 'view-profile');
   assert.match(await page.locator('#account-email').innerText(), /marc@exemple\.fr/);
   await rienDeJulie(page);
@@ -253,7 +253,7 @@ test('Tanguy 17/11 : 2e compte Google invité dans la famille, même numéro, pu
   // Après actualisation : Profil de Marc.
   await julie.page.reload();
   await g.attendreVue(julie, 'view-home');
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   assert.strictEqual(await julie.page.locator('#my-name-value').innerText(), 'Marc');
   assert.strictEqual(await julie.page.locator('#my-tel-value').innerText(), espaces(g.telDe('Marc')));
@@ -302,7 +302,7 @@ test('Retour du premier compte après un autre : accueil direct, ses information
   await g.seConnecter(julie, 'marc@exemple.fr');
   await g.attendreVue(julie, 'view-home', 30_000);
   await g.fermerAccueil(julie);
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   await julie.page.click('#view-profile [data-action="logout"]');
   await g.repondre(julie, 'Se déconnecter');

@@ -63,7 +63,7 @@ test('Profil : le numéro de Julie refusé, le sien gardé sans refus, double ap
   // La tablette porte un autre numéro que personne n'a : elle ne compte pas parmi les proches.
   await s.db.doc(`families/${fid}/members/${tab.tabletUid}`).update({ telephone: '07 11 22 33 44' });
 
-  await paul.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(paul);
   await g.attendreVue(paul, 'view-profile');
 
   // Numéro de Julie (avec des espaces) : refusé, la carte reste ouverte, rien n'est écrit.

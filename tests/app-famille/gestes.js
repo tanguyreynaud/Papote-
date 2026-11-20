@@ -368,6 +368,14 @@ async function ouvrirTuile(t, pageNom) {
   await attendreVue(t, `view-${pageNom}`);
 }
 
+// Profil : dans Réglages, « Mon profil » (barre du bas Accueil, Photos, Aide, Réglages ; Tanguy, 20/11).
+async function ouvrirProfil(t) {
+  await t.page.click('#nav-reglages');
+  await t.page.locator('#view-settings:not([hidden]), #view-profile:not([hidden])').first().waitFor();
+  if (await t.page.locator('#view-profile').isHidden()) await t.page.click('#view-settings [data-reglages-choix="profil"]');
+  await attendreVue(t, 'view-profile');
+}
+
 async function retourAccueil(t) {
   await t.page.click('.nav-item[data-tab="home"]');
   await attendreVue(t, 'view-home');
@@ -638,5 +646,5 @@ module.exports = {
   verifierLargeur,
   vue, attendreVue, visible, repondre, texteFenetre, photo, video,
   ouvrir, ouvrirParApp, seConnecter, remplirMoi, inscrire, tabletteAllumee, installer, entrerFamillePreparee, familleRelieeParPapote, fermerAccueil, familleInstallee, rejoindre, dernierMail, toast,
-  ouvrirTuile, retourAccueil, lire, liste, attendreBase, codesEmail, telDe, pageAtelier,
+  ouvrirTuile, ouvrirProfil, retourAccueil, lire, liste, attendreBase, codesEmail, telDe, pageAtelier,
 };

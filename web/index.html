@@ -280,7 +280,6 @@
     <section id="view-home" class="page-pad tab-page" hidden>
       <header class="home-head">
         <button type="button" id="btn-invite" class="invite-btn" data-page="invite"><svg><use href="#i-user-plus"/></svg>Inviter</button>
-        <button type="button" id="btn-gear" class="bell-btn gear-btn" data-page="settings"><span class="sr-only">Réglages</span><svg aria-hidden="true"><use href="#i-gear"/></svg></button>
         <button type="button" id="btn-bell" class="bell-btn" data-tab="notifs"><span class="sr-only">Notifications</span><span class="nav-icon"><svg><use href="#i-bell"/></svg><span id="nav-badge" class="nav-badge" hidden></span></span></button>
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
@@ -457,6 +456,10 @@
         <h1>Réglages</h1>
       </header>
       <div class="page-pad">
+        <div class="segmented reglages-choix" role="group" aria-label="Réglages">
+          <button type="button" class="seg" data-reglages-choix="tablette">La tablette</button>
+          <button type="button" class="seg" data-reglages-choix="profil">Mon profil</button>
+        </div>
         <h3 class="settings-group">La famille</h3>
         <div id="requests-card" class="card" hidden>
           <h2>Demandes pour rejoindre</h2>
@@ -737,8 +740,12 @@
 
     <!-- Profil : pour chaque membre -->
     <section id="view-profile" class="page tab-page" hidden>
-      <header class="page-head"><h1>Profil</h1></header>
+      <header class="page-head"><h1>Réglages</h1></header>
       <div class="page-pad">
+        <div class="segmented reglages-choix" role="group" aria-label="Réglages">
+          <button type="button" class="seg" data-reglages-choix="tablette">La tablette</button>
+          <button type="button" class="seg" data-reglages-choix="profil">Mon profil</button>
+        </div>
         <button type="button" class="card nudge aide-card" data-tab="support"><span class="avatar avatar-empty"><svg><use href="#i-help"/></svg></span><span><strong>Aide et support</strong><br><span class="muted small">Questions fréquentes, assistant Papote</span></span></button>
         <div class="card">
           <h2>Ma photo</h2>
@@ -875,7 +882,7 @@
 
     <!-- Support -->
     <section id="view-support" class="page tab-page" hidden>
-      <header class="page-head"><h1>Support</h1></header>
+      <header class="page-head"><h1>Aide</h1></header>
       <div class="page-pad support-pad">
         <p id="support-status" class="activity" hidden></p>
         <div class="faq">
@@ -920,8 +927,8 @@
   <nav id="nav" class="nav" hidden>
     <button type="button" class="nav-item active" data-tab="home"><svg><use href="#i-home"/></svg><span>Accueil</span></button>
     <button type="button" class="nav-item" data-page="photos"><svg><use href="#i-photo"/></svg><span>Photos</span></button>
-    <button type="button" class="nav-item" data-page="messages"><svg><use href="#i-message"/></svg><span>Messages</span></button>
-    <button type="button" class="nav-item" data-tab="profile"><svg><use href="#i-user"/></svg><span>Profil</span></button>
+    <button type="button" class="nav-item" id="nav-aide" data-tab="support"><svg><use href="#i-help"/></svg><span>Aide</span></button>
+    <button type="button" class="nav-item" id="nav-reglages" data-reglages><svg><use href="#i-gear"/></svg><span>Réglages</span></button>
   </nav>
 
   <!-- Wi-Fi de la tablette : les réseaux qu'elle voit, comme sur un téléphone -->

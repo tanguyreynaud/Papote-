@@ -170,7 +170,7 @@ test('Un proche (pas propriétaire) : réglages de la tablette réservés, profi
   await g.attendreVue(paul, 'view-home');
 
   // Profil : prénom, genre, photo, apparence sombre.
-  await paul.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(paul);
   await g.attendreVue(paul, 'view-profile');
   assert.match(await paul.page.locator('#account-email').innerText(), /paul@exemple\.fr/);
   await modifier(paul, 'my-name-card');
@@ -197,9 +197,9 @@ test('Un proche (pas propriétaire) : réglages de la tablette réservés, profi
   // Julie (propriétaire et responsable) ne peut pas quitter sa famille ; Paul si.
   await julie.page.click('#view-settings .back');
   await g.attendreVue(julie, 'view-home');
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   assert.strictEqual(await julie.page.locator('#btn-leave').isVisible(), false);
-  await paul.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(paul);
   await paul.page.click('#btn-leave');
   assert.match(await g.texteFenetre(paul), /Quitter la famille de Mamie Emma/);
   await g.repondre(paul, 'Quitter');
@@ -211,7 +211,7 @@ test('Deux familles : changer de famille depuis l\'accueil ; déconnexion puis r
   // Julie installe la tablette de Mamie Emma, puis celle de Papi Jean.
   const julie = await banc.telephone('Julie');
   const { fid: emma } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await julie.page.click('#view-profile [data-action="other-family"]');
   await g.attendreVue(julie, 'view-join');
   const tab2 = await g.tabletteAllumee({ commande: { email: 'julie@exemple.fr' } });
@@ -238,7 +238,7 @@ test('Deux familles : changer de famille depuis l\'accueil ; déconnexion puis r
   await julie.page.locator('#family-switch', { hasText: 'Pour Mamie Emma' }).waitFor();
 
   // Déconnexion, puis reconnexion : pas de nouvelles questions, retour direct à l'accueil.
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await julie.page.click('#view-profile [data-action="logout"]');
   await g.repondre(julie, 'Se déconnecter');
   await g.attendreVue(julie, 'view-login');

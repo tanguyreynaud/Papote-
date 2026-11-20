@@ -26,7 +26,7 @@ async function julieDansLApp(email) {
   await g.ouvrirParApp(julie, `?natif=${NATIF}`);
   await julie.page.locator('#tile-call').waitFor();
   await g.attendreBase(async () => ((await jetons(fid, uid)).natifs || []).includes(NATIF), 'jeton de l\'app rangé');
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   return { julie, fid, uid };
 }
@@ -55,7 +55,7 @@ test('Se déconnecter retire le jeton du téléphone ; un double appui ne fait q
   await g.seConnecter(julie, 'julie.deco@exemple.fr');
   await g.attendreVue(julie, 'view-home');
   await g.attendreBase(async () => ((await jetons(fid, uid)).natifs || []).includes(NATIF), 'jeton rangé à nouveau');
-  await julie.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(julie);
   await julie.page.click('#view-profile [data-action="logout"]');
   await g.repondre(julie, 'Annuler');
   await julie.page.waitForTimeout(500);

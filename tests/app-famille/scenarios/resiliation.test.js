@@ -16,7 +16,7 @@ banc.brancher();
 const RESEAU = /ERR_INTERNET_DISCONNECTED|ERR_CONNECTION|ERR_FAILED|net::|Failed to fetch|FirebaseError|internal|unavailable|503|Could not reach|WebChannel|Backend/;
 
 async function profil(t) {
-  await t.page.click('.nav-item[data-tab="profile"]');
+  await g.ouvrirProfil(t);
   await g.attendreVue(t, 'view-profile');
   await t.page.locator('#abo-card').waitFor({ state: 'visible' });
 }
