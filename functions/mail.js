@@ -27,6 +27,8 @@ const lienDesinscription = (c, j) => `${DESINSCRIPTION}?c=${encodeURIComponent(c
 // Les seuls e-mails qui portent un lien et un en-tête de désinscription : ceux envoyés avec l'accord de la personne
 // (rappels de commande, « Être prévenu », ouverture des commandes, nouvelles de l'admin). Jamais un e-mail de service
 // (commande, livraison, facture, paiement, SOS…) : se désinscrire ne doit pas couper ceux-là (Tanguy 12/11/2026).
+// Qui est Papote, mot pour mot comme vitrine/mentions.html (mentions légales) : pour un courrier formel.
+const IDENTITE = 'Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel (EI), SIRET 882 988 942 00034, 111 avenue Thiers, 69006 Lyon';
 const MARKETING = ['relancePanier', 'listeAttenteConfirmee', 'lancement', 'information'];
 
 function echapper(t) {
@@ -106,6 +108,7 @@ function apercuDe(blocs, options) {
 
 // options.interne : e-mail pour Papote (pied « message automatique », lien vers l'admin), sans « Une question ? » ;
 // options.desinscription (lien) + options.pourquoi : e-mail envoyé avec l'accord de la personne (relances, nouvelles) ;
+// options.formel : courrier formel (mise en demeure) : ni « Une question ? » ni pied amical, l'identité de Papote à la place ;
 // options.apercu : texte d'aperçu dans la boîte de réception (sinon le premier paragraphe).
 // Pour Outlook bureau seulement ([if mso]) : 96 dpi (sinon tout grossit sur les écrans à 120 dpi) et Arial
 // partout (sans police installée, Word peut passer en Times New Roman au lieu de suivre la liste de repli).
@@ -119,12 +122,13 @@ function page(titre, blocs, bouton, options = {}) {
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 10px;border-collapse:separate">
 <tr><td align="center" style="background:${C.indigo};border-radius:999px;mso-padding-alt:15px 28px"><a href="${echapper(bouton.lien)}" style="display:inline-block;padding:15px 28px;font-family:${POLICE};font-size:17px;font-weight:bold;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:999px">${insecables(echapper(bouton.texte))}&nbsp;→</a></td></tr></table>`
     : '';
-  const question = options.interne ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? Répondez simplement à cet e&#8209;mail, nous vous répondons personnellement.</p>`;
+  const question = options.interne || options.formel ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? Répondez simplement à cet e&#8209;mail, nous vous répondons personnellement.</p>`;
   const pourquoi = options.desinscription
     ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:${C.doux}">${insecables(echapper(options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'))} <a href="${echapper(options.desinscription)}" style="color:${C.doux}">Se désinscrire des e-mails d'information</a>.</p>`
     : '';
   const pied = options.interne
     ? `Message automatique de Papote pour l'administrateur · <a href="${ADMIN}" style="color:${C.doux}">Espace admin</a>`
+    : options.formel ? insecables(echapper(IDENTITE))
     : `Papote · <a href="${SITE}" style="color:${C.doux};text-decoration:none">mapapote.fr</a> · la tablette qui relie les familles`;
   const apercu = apercuDe(blocs, options);
   return `<!doctype html>
@@ -178,7 +182,7 @@ ${question}
 function texteBrut(titre, blocs, bouton, options = {}) {
   return [titre, '', ...blocs.map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`), bouton ? `${bouton.texte} : ${bouton.lien}` : '', '',
     ...(options.apres || []).map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`),
-    ...(options.interne ? [`Espace admin : ${ADMIN}`] : ['Une question ? Répondez simplement à cet e-mail.']),
+    ...(options.interne ? [`Espace admin : ${ADMIN}`] : options.formel ? [IDENTITE] : ['Une question ? Répondez simplement à cet e-mail.']),
     ...(options.desinscription ? ['', `${options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'}`, `Se désinscrire des e-mails d'information : ${options.desinscription}`] : [])]
     .join('\n').replace(/\n{3,}/g, '\n\n');
 }
@@ -494,26 +498,34 @@ function appelSansTelephone({ nom, sos, lien }) {
 }
 
 // SOS alors que personne n'est encore entré dans l'appli (M6, Tanguy 12/11) : à celui qui a payé.
-function sosSansProche({ nom, lien }) {
+// L'heure du SOS et « 15 ou 112 » tout en haut (Tanguy 20/11). le : moment du SOS (ms) ; par défaut maintenant,
+// l'e-mail part dans la seconde qui suit le SOS (appelsSonnerie).
+function sosSansProche({ nom, lien, le = Date.now() }) {
   const qui = echapper(nom || 'Votre proche');
-  return message(`SOS : ${nom || 'votre proche'} a appuyé sur SOS, personne n'a pu être appelé`, [
+  const d = new Date(le);
+  const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).replace(':', ' h ');
+  const jour = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+  return message(`SOS : ${nom || 'votre proche'} a appuyé sur SOS à ${heure}, personne n'a pu être appelé`, [
     'Bonjour,',
-    { encadre: `<b>${qui} a appuyé sur le bouton SOS</b> de sa tablette. Personne de la famille n'est encore entré dans l'appli Papote : personne n'a donc été appelé. Appelez votre proche dès que possible. En cas d'urgence : 15 ou 112.` },
+    { encadre: `<b>${qui} a appuyé sur le bouton SOS</b> de sa tablette, ${jour} à <b>${heure}</b>. Appelez votre proche dès que possible.<br><b>S'il y a un danger, appelez tout de suite le 15 (Samu) ou le 112.</b>` },
+    'Personne de la famille n\'est encore entré dans l\'appli Papote : la tablette n\'a donc pu appeler personne.',
     'Pour que la tablette puisse vous appeler la prochaine fois, ouvrez l\'appli Papote et entrez dans la famille avec l\'adresse e-mail de la commande.',
   ], { texte: 'Ouvrir l\'appli Papote', lien });
 }
 
 // Tablette entrée dans sa famille, toujours personne dans l'appli 2 jours plus tard (M7, Tanguy 12/11) : à celui qui a payé.
-function tabletteSansProche({ nom, lien }) {
+// client : nom de la commande (« Bonjour Julie », comme les autres e-mails) ; on propose aussi d'inviter la famille (20/11).
+function tabletteSansProche({ nom, lien, client }) {
   const qui = nom && nom !== 'Votre proche' ? echapper(nom) : 'votre proche';
   return message('La tablette est branchée : envoyez la première photo', [
-    'Bonjour,',
+    bonjour(client),
     `La tablette de ${qui} est branchée et attend la famille, mais personne n'est encore entré dans l'appli Papote. Tant que personne n'y est, aucune photo n'arrive et la tablette ne peut appeler personne.`,
     { etapes: [
       'Ouvrez l\'appli Papote avec le bouton ci-dessous.',
       'Connectez-vous avec l\'adresse e-mail de la commande.',
       'Envoyez une première photo : elle s\'affiche tout de suite sur la tablette.',
     ] },
+    `Pensez aussi à inviter le reste de la famille : bouton « Inviter », en haut de l'accueil de l'appli. Chacun reçoit un lien et utilise l'appli Papote sur son téléphone : plus vous êtes nombreux, plus ${qui} reçoit de photos et d'appels.`,
   ], { texte: 'Ouvrir l\'appli Papote', lien });
 }
 
@@ -789,6 +801,7 @@ function rappelRestitution({ nom, avant, lien, qr, montant, deces }) {
 function avantEffacement({ nom, famille, le, deces }) {
   return message(deces ? 'Les photos de la famille, à garder' : 'Vos photos Papote seront effacées le ' + dateEnClair(le), [
     bonjour(nom),
+    deces ? 'Nous pensons toujours bien à vous et à votre famille, et vous renouvelons nos sincères condoléances.' : null,
     `Comme prévu après l'arrêt de Papote, les photos, les vidéos et les messages de la famille${famille ? ` de <b>${echapper(famille)}</b>` : ''} seront effacés de nos serveurs le <b>${dateEnClair(le)}</b>.`,
     'Pour les garder sur votre téléphone ou votre ordinateur :',
     { etapes: [
@@ -829,14 +842,27 @@ function materielNonRendu({ nom, montant, avant }) {
 
 // Prélèvement du matériel non rendu refusé par la banque (Tanguy, 11/11) : mise en demeure de rendre la tablette
 // ou de régler sous 8 jours. impaye : l'abonnement avait été arrêté pour impayé (les mois dus sont rappelés).
+// Courrier formel (Tanguy 20/11) : qui l'envoie (IDENTITE, comme les mentions légales), comment payer (la page Abonnement
+// de l'appli, comme « Le paiement de Papote n'a pas abouti »), formule de politesse sobre et pas de pied amical.
+// Le matériel n'est pas une facture de l'abonnement : après un changement de carte, Papote refait le prélèvement à la main.
 function miseEnDemeure({ nom, montant, impaye }) {
   return message('Mise en demeure : tablette Papote non rendue', [
     bonjour(nom),
+    { fiche: [
+      ['De la part de', 'Papote, nom commercial de Tanguy Reynaud, entrepreneur individuel (EI)<br>SIRET 882 988 942 00034<br>111 avenue Thiers, 69006 Lyon'],
+      ['Objet', 'Mise en demeure de rendre la tablette prêtée ou d\'en régler le prix'],
+      ['Somme due', `${euros(montant)}${impaye ? ', et les mois d\'abonnement restés impayés' : ''}`],
+    ] },
     `Malgré nos e-mails, la tablette Papote prêtée ne nous a pas été rendue, et le prélèvement de <b>${euros(montant)}</b> pour le matériel a été refusé par votre banque.`,
-    { encadre: `Nous vous mettons en demeure, <b>sous 8 jours</b> à compter de cet e-mail :<br>• soit de nous renvoyer la tablette : dans l'appli Papote, onglet Profil, « Je renvoie la tablette » (QR code prépayé, rien à imprimer) ;<br>• soit de régler <b>${euros(montant)}</b>${impaye ? ', ainsi que les mois d\'abonnement restés impayés' : ''}, en répondant à cet e-mail.` },
+    { encadre: `Nous vous mettons en demeure, <b>sous 8 jours</b> à compter de cet e-mail :<br>• soit de nous renvoyer la tablette : dans l'appli Papote, onglet Profil, « Je renvoie la tablette » (QR code prépayé, rien à imprimer) ;<br>• soit de régler <b>${euros(montant)}</b>${impaye ? ', ainsi que les mois d\'abonnement restés impayés' : ''}.` },
     'Sans retour ni règlement dans ce délai, nous engagerons le recouvrement de ces sommes.',
     'Si le colis est déjà en route ou si vous pensez qu\'il y a une erreur, répondez à cet e-mail : nous regardons tout de suite.',
-  ]);
+    'Pour régler : touchez le bouton ci-dessous (appli Papote, page Abonnement), puis « Gérer le paiement et les factures » et « Changer de moyen de paiement ». Répondez ensuite à cet e-mail : nous refaisons le prélèvement.',
+  ], { texte: 'Régler le paiement', lien: LIEN_ABONNEMENT }, {
+    formel: true,
+    apercu: `Tablette non rendue et prélèvement refusé : merci de la renvoyer ou de régler ${euros(montant)} sous 8 jours.`,
+    apres: ['Veuillez agréer nos salutations distinguées.', '<b>Papote</b>'],
+  });
 }
 
 // Tablette remplacée chez le client (casse, perte ou vol) : ce qui a été prélevé et pourquoi (Tanguy, 11/11).
@@ -846,7 +872,8 @@ function remplacementPreleve({ nom, montant, raison }) {
     raison === 'perte'
       ? 'Une nouvelle tablette Papote part chez vous pour remplacer celle qui a été perdue ou volée.'
       : 'Une nouvelle tablette Papote part chez vous pour remplacer celle qui est cassée.',
-    { encadre: `Comme prévu dans nos conditions, <b>${euros(montant)}</b> ont été prélevés sur votre compte pour ${raison === 'perte' ? 'le matériel prêté' : 'la tablette cassée'}.` },
+    // Vrai que la banque ait déjà payé ou non (prélèvement SEPA « en attente de la banque ») : jamais « ont été prélevés ».
+    { encadre: `Comme prévu dans nos conditions, le prélèvement de <b>${euros(montant)}</b> pour ${raison === 'perte' ? 'le matériel prêté' : 'la tablette cassée'} est lancé sur votre compte. Selon votre banque, il peut mettre quelques jours à apparaître.` },
     raison === 'perte' ? null : 'Vous recevrez aussi un e-mail pour nous renvoyer l\'ancienne tablette, sans frais.',
   ].filter(Boolean));
 }

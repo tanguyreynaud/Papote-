@@ -2868,7 +2868,7 @@ async function relancerSansProche(snap, c, maintenant) {
   }
   if (!c.relanceSansProche && c.email) {
     const fam = (await db.doc(`families/${c.fid}`).get()).data() || {};
-    await envoyerMail(c.email, mail.tabletteSansProche({ nom: fam.nomAChoisir ? null : fam.name, lien: 'https://app.mapapote.fr/' }));
+    await envoyerMail(c.email, mail.tabletteSansProche({ nom: fam.nomAChoisir ? null : fam.name, client: c.nom, lien: 'https://app.mapapote.fr/' }));
     await snap.ref.update({ relanceSansProche: true });
   }
   if (depuis >= 5 * JOUR_MS && !c.alerteSansProche) await snap.ref.update({ alerteSansProche: true });
