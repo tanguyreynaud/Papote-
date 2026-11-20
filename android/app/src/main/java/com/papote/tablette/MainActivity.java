@@ -68,7 +68,6 @@ public class MainActivity extends Activity implements Sync.Listener {
     private static final long SOS_LEVEE_MS = 30 * 60_000L;
     private CallAudio callAudio;
     /** Luminosité le soir (0 à 1) ; vrai pendant les heures du soir. */
-    private static final float EVENING_BRIGHTNESS = 0.55f;
     private boolean dimmed;
     private VoicePlayer voicePlayer;
     private VideoView videoView;
@@ -486,8 +485,8 @@ public class MainActivity extends Activity implements Sync.Listener {
             Journal.log(MainActivity.this, asleep ? "Veille de nuit : écran noir" : "Fin de la veille de nuit");
             handler.post(() -> {
                 WindowManager.LayoutParams lp = getWindow().getAttributes();
-                float brightness = asleep ? 0.01f
-                        : dimmed ? EVENING_BRIGHTNESS : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                int reglage = Luminosite.reglage(MainActivity.this);
+                float brightness = asleep ? 0.01f : dimmed ? Luminosite.soir(reglage) : Luminosite.jour(reglage);
                 lp.screenBrightness = brightness;
                 getWindow().setAttributes(lp);
             });
@@ -500,7 +499,8 @@ public class MainActivity extends Activity implements Sync.Listener {
                 dimmed = on;
                 WindowManager.LayoutParams lp = getWindow().getAttributes();
                 if (lp.screenBrightness >= 0 && lp.screenBrightness < 0.05f) return; // veille de nuit en cours
-                lp.screenBrightness = on ? EVENING_BRIGHTNESS : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                int reglage = Luminosite.reglage(MainActivity.this);
+                lp.screenBrightness = on ? Luminosite.soir(reglage) : Luminosite.jour(reglage);
                 getWindow().setAttributes(lp);
             });
         }
@@ -1676,8 +1676,11 @@ public class MainActivity extends Activity implements Sync.Listener {
                     wl.acquire(10_000);
                 }
                 WindowManager.LayoutParams lp = getWindow().getAttributes();
-                if (lp.screenBrightness >= 0 && lp.screenBrightness < 0.05f) {
-                    lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                // Luminosité réglée par la famille : appliquée ici aussi, un changement prend donc une minute au plus.
+                int reglage = Luminosite.reglage(MainActivity.this);
+                float voulue = dimmed ? Luminosite.soir(reglage) : Luminosite.jour(reglage);
+                if (Math.abs(lp.screenBrightness - voulue) > 0.005f) {
+                    lp.screenBrightness = voulue;
                     getWindow().setAttributes(lp);
                 }
             } catch (Exception e) {

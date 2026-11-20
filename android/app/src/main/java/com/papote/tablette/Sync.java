@@ -633,7 +633,7 @@ final class Sync {
         try {
             // Une seule lecture : le marqueur « rev » ne bouge que si la famille a envoyé ou supprimé
             // quelque chose (ou modifié les rappels). Sinon, rien d'autre à lire.
-            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "volume", "volumeSonnerie", "volumeAppel", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim", "sosOrdre", "reglagesAppel");
+            JSONObject family = firebase.get("families/" + fid, "name", "rev", "code", "textSize", "abonnement", "veille", "luminosite", "volume", "volumeSonnerie", "volumeAppel", "meteoVille", "options", "installation", "createdBy", "admins", "forfaitSim", "sosOrdre", "reglagesAppel");
             long rev = 0;
             JSONObject ff = family == null ? null : family.optJSONObject("fields");
             if (ff != null) {
@@ -653,6 +653,11 @@ final class Sync {
                     publishPosts();
                 }
                 readVeille(ff);
+                // Luminosité de jour choisie par un responsable (40 à 100 %) ; absente : celle de la tablette.
+                if (Luminosite.save(context, Luminosite.borner(Firebase.integer(ff, "luminosite")))) {
+                    Journal.log(context, "Luminosité de jour : " + (Luminosite.reglage(context) == 0
+                            ? "celle de la tablette" : Luminosite.reglage(context) + " %"));
+                }
                 readVolume(ff);
                 readOptions(ff);
                 readInstallation(ff);
