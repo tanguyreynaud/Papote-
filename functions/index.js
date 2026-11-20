@@ -12,6 +12,7 @@
 //   annulerResiliation appel depuis l'appli famille : garde l'abonnement
 //   rattacherCommande  appel depuis l'appli famille : relie une commande du site à la famille
 //                      (par l'e-mail du compte, ou par le code de commande XXXX-XXXX)
+//   lienConnexion      appel depuis l'appli famille, sans compte : envoie le lien de connexion en français (connexion.js)
 //   codeCommande       GET depuis merci.html : code de commande à noter après le paiement
 //   stripeWebhook      Stripe prévient ici de chaque paiement ou changement d'abonnement
 //   finDeGrace         chaque heure : suspend les familles dont le délai de grâce est dépassé
@@ -437,6 +438,18 @@ exports.inviterParEmail = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2
   }));
   return { ok: true };
 });
+
+// Lien de connexion de l'appli famille, envoyé par Papote en français (connexion.js) au lieu de l'e-mail anglais de
+// Firebase. Envoi direct (mail.expedier) : compté pour le quota Brevo, mais jamais gardé pour un nouvel essai une
+// heure plus tard (courriels-perdus.js) : un lien de connexion qui arrive en retard ne sert plus, et il ne doit pas
+// dormir dans la base. L'appli dit tout de suite que l'e-mail n'est pas parti, la personne réessaie.
+exports.lienConnexion = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }, require('./connexion').creer({
+  db, auth: { generateSignInWithEmailLink: (email, reglages) => admin.auth().generateSignInWithEmailLink(email, reglages) },
+  envoyerMail: (a, contenu) => mail.expedier({
+    smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(), a, contenu,
+  }),
+  mail, logger,
+}));
 
 // Résiliation et annulation : les responsables de la famille, ou l'administrateur de Papote (badge admin).
 async function familleGeree(fid, request) {

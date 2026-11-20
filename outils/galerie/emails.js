@@ -57,6 +57,7 @@ function scenes(mail) {
     { titre: 'Commande annulée avant l\'envoi (rien prélevé)', groupe: G1, fonction: 'commandeAnnulee', contenu: si('commandeAnnulee', { nom: 'Julie', rembourse: 0 }) },
     { titre: 'Colis jamais retiré, revenu chez Papote (remboursé)', groupe: G1, fonction: 'colisRevenu', note: 'Nouveau (A4, 12/11) : avant, « la tablette ne partira pas ».', contenu: si('colisRevenu', { nom: 'Julie', rembourse: 6000 }) },
 
+    { titre: 'Lien de connexion à l\'appli', groupe: G2, fonction: 'lienConnexion', note: 'Nouveau (20/11) : remplace l\'e-mail anglais de Firebase.', contenu: si('lienConnexion', { email: 'julie@exemple.fr', lien: 'https://papote-famille.firebaseapp.com/__/auth/action?apiKey=cle&mode=signIn&oobCode=EXEMPLE123&continueUrl=https%3A%2F%2Fapp.mapapote.fr%2F%3Flien%3D1&lang=fr' }) },
     { titre: 'Invitation d\'un proche', groupe: G2, fonction: 'invitation', contenu: si('invitation', { prenom: 'Julie', tablette: 'Mamie Jeanne', lien: `${APPLI}?famille=abc`, email: 'thomas.martin@gmail.com' }) },
     { titre: 'Quelqu\'un veut rejoindre la famille (aux responsables)', groupe: G2, fonction: 'demandeRejoindre', contenu: si('demandeRejoindre', { prenom: 'Anne', email: 'anne.durand@gmail.com', famille: 'Mamie Jeanne' }) },
     { titre: 'Demande acceptée (à la personne)', groupe: G2, fonction: 'demandeAcceptee', note: 'Nouveau : rien ne partait avant.', contenu: si('demandeAcceptee', { prenom: 'Anne', famille: 'Mamie Jeanne', lien: APPLI }) },

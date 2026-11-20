@@ -109,8 +109,10 @@ function apercuDe(blocs, options) {
 // options.apercu : texte d'aperçu dans la boîte de réception (sinon le premier paragraphe).
 // Pour Outlook bureau seulement ([if mso]) : 96 dpi (sinon tout grossit sur les écrans à 120 dpi) et Arial
 // partout (sans police installée, Word peut passer en Times New Roman au lieu de suivre la liste de repli).
+// options.apres : blocs placés sous le bouton (lien de secours, « si vous n'avez rien demandé »).
 function page(titre, blocs, bouton, options = {}) {
   const corps = blocs.map(blocHtml).join('\n');
+  const apres = (options.apres || []).filter((x) => x != null && x !== '').map(blocHtml).join('\n');
   // Bouton « à toute épreuve » : cellule colorée ; Outlook (Word) ignore le padding du lien, mso-padding-alt le
   // remet sur la cellule pour lui seul (sinon le bouton se réduit à son texte).
   const btn = bouton
@@ -161,6 +163,7 @@ a { color:${C.indigo}; }
 <h1 class="titre" style="margin:0 0 20px;font-family:${POLICE_TITRE};font-size:27px;line-height:1.2;color:${C.texte}">${insecables(echapper(titre))}</h1>
 ${corps}
 ${btn}
+${apres}
 ${question}
 </td></tr>
 <tr><td style="padding:18px 6px 0;font-family:${POLICE};font-size:13px;line-height:1.5;color:${C.doux};word-break:break-word;overflow-wrap:anywhere">${pied}${pourquoi}</td></tr>
@@ -174,6 +177,7 @@ ${question}
 
 function texteBrut(titre, blocs, bouton, options = {}) {
   return [titre, '', ...blocs.map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`), bouton ? `${bouton.texte} : ${bouton.lien}` : '', '',
+    ...(options.apres || []).map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`),
     ...(options.interne ? [`Espace admin : ${ADMIN}`] : ['Une question ? Répondez simplement à cet e-mail.']),
     ...(options.desinscription ? ['', `${options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'}`, `Se désinscrire des e-mails d'information : ${options.desinscription}`] : [])]
     .join('\n').replace(/\n{3,}/g, '\n\n');
@@ -418,6 +422,22 @@ function invitation({ prenom, tablette, lien, email }) {
     ] },
     { petit: 'L\'appli Papote s\'ouvre directement dans le navigateur de votre téléphone.' },
   ], { texte: 'Rejoindre la famille', lien });
+}
+
+// Lien de connexion à l'appli famille (connexion.js, lienConnexion) : remplace l'e-mail anglais de Firebase
+// (Tanguy 20/11 : « moche et pas travaillé »). Urgent, jamais retenu : sans lui, personne n'entre dans l'appli.
+function lienConnexion({ email, lien }) {
+  return message('Votre lien pour ouvrir Papote', [
+    'Bonjour,',
+    `Vous avez demandé à ouvrir Papote avec l'adresse <b>${echapper(email)}</b>. Touchez le bouton ci-dessous : pas de mot de passe à retenir.`,
+    { encadre: 'Ce lien marche une seule fois, pendant 1 heure, sur ce téléphone.' },
+  ], { texte: 'Ouvrir Papote', lien }, {
+    apercu: 'Touchez le bouton pour ouvrir Papote : pas de mot de passe à retenir.',
+    apres: [
+      { petit: `Le bouton ne marche pas ? Copiez cette adresse dans votre navigateur : ${lienHtml(lien, echapper(lien))}` },
+      { petit: 'Si vous n\'avez rien demandé, ignorez cet e-mail : personne n\'aura accès à votre compte.' },
+    ],
+  });
 }
 
 // Demande pour rejoindre la famille, envoyée aux responsables (nouveauMembre).
@@ -1115,7 +1135,7 @@ module.exports = {
   // commande et livraison
   colisParti, tabletteRemise, commandeConfirmee, nouvelleCommande, relancePanier, listeAttenteConfirmee, lancement, rappelJumelage, sepaRefuse,
   // famille
-  invitation, demandeRejoindre, demandeAcceptee, installationFinie, appelSansTelephone, sosSansProche, tabletteSansProche, forfaitPresqueEpuise,
+  invitation, lienConnexion, demandeRejoindre, demandeAcceptee, installationFinie, appelSansTelephone, sosSansProche, tabletteSansProche, forfaitPresqueEpuise,
   // abonnement
   paiementEchoue, papoteEnPause, passerAuSepa, pausePrelevements, reprisePrelevements,
   // fin de contrat
