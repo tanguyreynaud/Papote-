@@ -1136,7 +1136,10 @@ async function remplirCommande(id) {
       ligne('Formule', formuleTexte(c)),
       ligne('Livraison', livraisonTexte(c)),
       ligne('Suivi', c.suivi ? `${c.suivi}${c.envoyeeLe ? `, envoyée le ${jour(c.envoyeeLe)}` : ''}` : null),
-      ligne('Famille', c.famille ? `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}` : null),
+      // Famille : un lien vers sa page (proches, code, photos), pour tout avoir depuis le client.
+      ligne('Famille', c.famille ? (c.fid
+        ? h('a', { href: `#clients/familles/${encodeURIComponent(c.fid)}` }, `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}`)
+        : `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}`) : null),
       ligne('Tablette', t ? h('button', { type: 'button', class: 'link', onclick: () => ouvrirTablette(t.id) },
         [t.ref, t.numero || (t.ref ? null : 'sans n° de série'), t.modele, donnees.etats[etatTablette(t)]].filter(Boolean).join(' · ')) : null),
       ligne('Carte SIM', simDuKit(t)),
@@ -4133,7 +4136,7 @@ function rechercher(q) {
   }
   for (const f of donnees.familles) {
     if (trouve(f.nom) && !donnees.commandes.some((c) => c.fid === f.id)) {
-      res.push({ texte: f.nom, detail: 'Famille', ouvrir: () => { location.hash = '#clients/familles'; } });
+      res.push({ texte: f.nom, detail: 'Famille', ouvrir: () => { location.hash = `#clients/familles/${encodeURIComponent(f.id)}`; } });
     }
   }
   for (const d of donnees.depenses) {
