@@ -309,9 +309,9 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
   align-items: center;
   gap: 6px;
   padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* Fond plein (Tanguy, 20/11) : avant, 88 % d'opacité + flou, les photos se devinaient à travers en défilant. */
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 .page-head h1 { margin: 0; font-size: 22px; font-weight: 800; min-width: 0; overflow-wrap: anywhere; }
 .page-head svg { width: 26px; height: 26px; }
@@ -471,6 +471,13 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .choice input, .days input { width: auto; margin: 0; display: inline; accent-color: var(--accent); }
+/* Type de rappel (Médicament, Rendez-vous, Autre) sur une seule ligne, trois cases égales (Tanguy, 20/11) :
+   la fenêtre gagne une ligne. Le rond du bouton radio est masqué, la case choisie est pleine. */
+.choice-ligne { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.choice-ligne label { position: relative; justify-content: center; text-align: center; padding: 12px 6px; min-height: 48px; font-size: 16px; font-weight: 600; }
+.choice-ligne input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.choice-ligne label:has(input:checked) { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.choice-ligne label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
 /* Délai de l'alerte « pas vue » : cinq choix de la même taille, trois par ligne sur un petit écran. */
 .choice-titre { margin: 14px 0 0; font-weight: 600; }
 .choice-jours { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); margin-top: 8px; }
@@ -506,6 +513,8 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; margin: 0 -8px 8px 0; }
 .sheet-head h2 { margin: 0; font-size: 20px; }
+/* Le bouton qui valide une fenêtre reste toujours visible en bas, même si le contenu défile (Tanguy, 20/11). */
+.sheet-valider { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -10px 14px 2px var(--surface); }
 
 .pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .picker {
@@ -730,9 +739,7 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
   display: flex;
   justify-content: center;
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--surface); /* plein, comme l'en-tête (Tanguy, 20/11) */
   border-top: 1px solid var(--line);
 }
 /* Clavier ouvert (la page rétrécit, interactive-widget=resizes-content) : la barre du bas et « Installer l'app »
@@ -758,8 +765,12 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 .nav-item svg { width: 26px; height: 26px; }
 .nav-item.active { color: var(--accent); }
 .nav-item svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-/* Réglages : « La tablette » ou « Mon profil » (Tanguy, 20/11), en haut des deux pages. */
-.reglages-choix { margin: 0 0 14px; }
+/* Réglages : « La tablette » ou « Mon profil » (Tanguy, 20/11), en haut des deux pages.
+   Le rail est teinté et bordé, le choix actif est plein (indigo) : on voit tout de suite que ce sont deux boutons
+   et lequel est ouvert (avant, le rail avait la couleur du fond de page et ne se voyait pas). */
+.reglages-choix { margin: 0 0 18px; }
+.reglages-choix .seg { min-height: 48px; font-size: 16px; }
+.seg svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nav-icon { position: relative; display: flex; }
 .nav-badge {
   position: absolute;
@@ -898,9 +909,11 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 
 .list-title { font-size: 15px; color: var(--muted); margin: 16px 20px 8px; text-transform: uppercase; letter-spacing: .05em; }
 .k-anniv { color: var(--accent); }
-.segmented { display: flex; gap: 4px; padding: 4px; margin: 4px 0 8px; border-radius: 14px; background: var(--bg); }
-.seg { flex: 1; padding: 10px; border-radius: 10px; color: var(--muted); }
-.seg.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+/* Sélecteurs à deux ou trois choix (Rappel / Anniversaire, Apparence, Réglages…) : même dessin partout (Tanguy, 20/11).
+   Rail teinté et bordé, choix actif en indigo plein : avant, le rail avait la couleur du fond et ne se voyait pas. */
+.segmented { display: flex; gap: 6px; padding: 5px; margin: 4px 0 10px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border: 1.5px solid color-mix(in srgb, var(--accent) 26%, transparent); }
+.seg { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 8px 10px; border-radius: 12px; color: var(--accent); font-weight: 700; transition: background-color .15s, color .15s; }
+.seg.active { background: var(--accent); color: var(--accent-text); box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent); }
 .bday-date { display: grid; grid-template-columns: 1fr 1.6fr 1.4fr; gap: 10px; }
 .bday-date label { margin: 14px 0 0; }
 
@@ -929,7 +942,7 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 .inline-field input { margin: 0; flex: 1; min-width: 0; }
 .inline-field button { min-height: 0; }
 .members li { flex-wrap: wrap; }
-.member-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.member-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px 8px; flex-wrap: wrap; } /* e-mail collé au prénom, pas à 8 px */
 .member-tel { font-size: .9em; color: var(--indigo, #4f46e5); text-decoration: none; }
 .member-vcard { display: block; margin-top: 4px; padding: 0; font-size: .85em; }
 /* Adresse e-mail d'un proche, vue des responsables seulement (A43) : pour retirer un doublon. */
@@ -1315,7 +1328,8 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .call.audio video, .call.sonne video { display: none; }
 .call-timer { margin: 8px 0 0; font-size: 18px; font-variant-numeric: tabular-nums; opacity: .8; min-height: 1.3em; }
 
-.agenda-edit { padding: 0; margin-top: 6px; font-weight: 700; color: var(--accent); }
+.agenda-edit { padding: 0 2px; margin-top: 6px; font-weight: 700; color: var(--accent); border-radius: 8px; -webkit-tap-highlight-color: transparent; }
+.agenda-edit:active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 
 /* Messages rapides, au-dessus du champ d'écriture. */
 #form-message { flex-wrap: wrap; }
@@ -1357,7 +1371,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .toggle-row + .toggle-row, .toggle-list .station { border-top: 1px solid var(--line); }
 .toggle-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .toggle-text strong { font-size: 17px; }
-.toggle-text span { font-size: 14px; color: var(--muted); }
+.toggle-text span { font-size: 14px; font-weight: 400; color: var(--muted); }
 .toggle { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 52px !important; height: 32px; margin: 0 !important; padding: 0 !important; border: none !important; border-radius: 999px; background: var(--line); transition: background .2s; cursor: pointer; }
 .toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .2s; }
 .toggle:checked { background: var(--accent); }
@@ -1367,7 +1381,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .toggle-list .station select { width: 100%; margin: 6px 0 0 !important; }
 .option-line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 16px; }
 .option-line + .option-line { border-top: 1px solid var(--line); }
-.option-state { color: var(--muted); }
+.option-state { flex: none; color: var(--muted); white-space: nowrap; text-align: right; } /* « 3 minutes » ne se coupe plus en deux lignes */
 .option-state.on { color: var(--accent); font-weight: 600; }
 .options-value { gap: 0; margin-top: 8px; }
 
@@ -1678,7 +1692,9 @@ a { text-decoration: none; }
 /* Audit des touchers (Tanguy, 17/11) : ce qui se touche réagit tout de suite, ce qui ne se touche pas n'en a pas l'air. */
 .ligne-touchable, .member-row, .notif[data-page], .read-badge, .setting-head h2, .setting-value, #wifi-card h2, #wifi-current,
 #face-img, #face-empty, #tface-img, #tface-empty { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.ligne-touchable:active, .member-row:active, .notif[data-page]:active { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+/* La ligne entière ne s'allume pas quand c'est un de ses boutons qu'on touche (« Modifier », « Mettre en pause »…) :
+   sinon on croit avoir touché toute la carte (Tanguy, 20/11). Le bouton réagit seul. */
+.ligne-touchable:active:not(:has(button:active, a:active)), .member-row:active:not(:has(button:active, a:active)), .notif[data-page]:active { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .read-badge:active, #face-img:active, #face-empty:active, #tface-img:active, #tface-empty:active { transform: scale(.96); }
 
 /* ---------- Ordre d'appel SOS (Réglages) ----------
