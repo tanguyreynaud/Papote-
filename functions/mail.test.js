@@ -304,3 +304,9 @@ test('résiliation par un responsable qui ne paie pas : le payeur sait qui l\'a 
   assert.doesNotMatch(deuil.text, /plus aucune nouvelle/);
   for (const m of [payeur, copie, garde, gardeCopie, deuil]) assert.doesNotMatch(`${m.subject} ${m.text}`, /Linote|undefined|null/);
 });
+
+test('invitation : l\'e-mail dit qu\'elle est valable 30 jours (firestore.rules, Tanguy 20/11)', () => {
+  const m = mail.invitation({ prenom: 'Julie', tablette: 'Mamie Emma', lien: 'https://x', email: 'paul@exemple.fr' });
+  assert.match(m.html, /valable 30 jours/);
+  assert.match(m.text, /valable 30 jours/);
+});

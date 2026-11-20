@@ -416,7 +416,8 @@ function invitation({ prenom, tablette, lien, email }) {
       `Connectez-vous avec cette adresse e-mail : <b>${echapper(email)}</b>.`,
       'Donnez votre prénom, une photo de vous, votre numéro et votre anniversaire : c\'est tout.',
     ] },
-    { petit: 'L\'appli Papote s\'ouvre directement dans le navigateur de votre téléphone.' },
+    // 30 jours : firestore.rules (invitationValable) et l'appli (compte.js INVITATION_JOURS), Tanguy 20/11.
+    { petit: 'L\'appli Papote s\'ouvre directement dans le navigateur de votre téléphone. Cette invitation est valable 30 jours.' },
   ], { texte: 'Rejoindre la famille', lien });
 }
 
