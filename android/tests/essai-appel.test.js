@@ -205,14 +205,12 @@ test('A49 : visio réelle (appels.js) : sonnerie sans réponse → carte ; Mamie
   } finally { await b.fermer(); }
 });
 
-test('A49 : « Pas maintenant » sur l’appel de Julie : pas de carte (Mamie a vu qui appelait)', async () => {
+test('A49 : l’appel de Julie n’a plus que « Décrocher » (pas de « Pas maintenant », Tanguy 20/11)', async () => {
   const b = await tablette();
   try {
     await b.android('onGsm', { etat: 'sonne', sortant: false, ...JULIE });
-    await b.toucher('.call-decline');
-    await b.android('onGsm', { etat: 'fin', cause: 'raccroche', sortant: false, ...JULIE });
-    await b.avancer(5000);
-    assert.strictEqual(await carte(b), '');
+    assert.strictEqual(await b.page.locator('.call-out button:visible').count(), 1);
+    assert.doesNotMatch(await b.texte('.call-out'), /Pas maintenant/);
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
