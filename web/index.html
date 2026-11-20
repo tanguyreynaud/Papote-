@@ -483,6 +483,7 @@
         <div class="card">
           <div class="toggle-list">
             <label class="toggle-row"><span class="toggle-text"><strong>Notifications</strong><span id="phone-push-text"></span></span><input type="checkbox" class="toggle" id="phone-push"></label>
+            <label class="toggle-row" id="rappels-photos-row" hidden><span class="toggle-text"><strong>Petits rappels</strong><span id="rappels-photos-text"></span></span><input type="checkbox" class="toggle" id="rappels-photos" checked></label>
             <label class="toggle-row" id="phone-pause" hidden><span class="toggle-text"><strong>Arrière-plan</strong><span id="phone-pause-text"></span></span><input type="checkbox" class="toggle" id="phone-pause-toggle"></label>
           </div>
         </div>
@@ -619,6 +620,26 @@
               <div class="setup-son-ctrl">
                 <input id="volume-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
                 <button type="button" class="setup-essai volume-essai" data-essai="appel" aria-label="Écouter la voix d'un appel"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
+              </div>
+            </div>
+            <div class="setting-actions">
+              <button type="button" class="secondary setting-cancel">Annuler</button>
+              <button type="submit" class="primary">Enregistrer</button>
+            </div>
+          </form>
+        </div>
+        <div id="luminosite-card" class="card setting" hidden>
+          <div class="setting-head"><h2>Luminosité de l'écran</h2><button type="button" class="link setting-modify">Modifier</button></div>
+          <p id="luminosite-value" class="setting-value"></p>
+          <form id="form-luminosite" class="setting-edit" hidden>
+            <p class="muted small">La journée. Le soir, la tablette baisse d'elle-même à 55 % au plus, pour ne pas éblouir. Plus lumineux, la batterie dure moins longtemps.</p>
+            <div class="setup-son-ligne">
+              <div class="setup-son-tete">
+                <strong>Le jour</strong>
+                <span id="luminosite-val" class="setup-son-val"></span>
+              </div>
+              <div class="setup-son-ctrl">
+                <input id="luminosite" type="range" min="40" max="100" step="5" aria-label="Luminosité de l'écran le jour">
               </div>
             </div>
             <div class="setting-actions">

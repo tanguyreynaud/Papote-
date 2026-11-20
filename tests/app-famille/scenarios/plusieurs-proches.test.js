@@ -286,3 +286,28 @@ test('Aide : « Besoin d\'aide ? » en haut de Réglages et sous une erreur de c
   await paul.page.click('#view-login .lien-aide');
   assert.match(await g.texteFenetre(paul), /contact@mapapote\.fr/);
 });
+
+// « Petits rappels » (Tanguy, 20/11) : le serveur propose une photo au proche qui n'a rien envoyé depuis 7 jours
+// (functions/relances-photos.js). Ici : l'interrupteur (allumé au départ, coupé = noté dans sa fiche privée) et la
+// notification, qui ouvre l'envoi d'une photo.
+test('Petits rappels : interrupteur dans Réglages, allumé au départ ; la notification ouvre l\'envoi d\'une photo', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await julie.page.click('#nav-reglages');
+  await g.attendreVue(julie, 'view-settings');
+  await julie.page.locator('#rappels-photos-row').waitFor({ state: 'visible' });
+  await julie.page.locator('#rappels-photos-text', { hasText: 'une notification vous propose une photo' }).waitFor();
+  assert.ok(await julie.page.locator('#rappels-photos').isChecked(), 'allumé au départ');
+  await julie.page.click('#rappels-photos-row');
+  await g.toast(julie, 'Petits rappels coupés');
+  const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.role === 'famille').id;
+  await g.attendreBase(async () => (await g.lire(`families/${fid}/members/${uid}/private/push`))?.rappelsPhotos === false, 'rappelsPhotos: false');
+  await julie.page.reload();
+  await julie.page.click('#nav-reglages');
+  await g.attendreVue(julie, 'view-settings');
+  await julie.page.locator('#rappels-photos-row').waitFor({ state: 'visible' });
+  await julie.page.waitForFunction(() => !document.getElementById('rappels-photos').checked);
+  // Toucher la notification : l'appli s'ouvre sur l'envoi d'une photo.
+  await g.ouvrir(julie, `?famille=${fid}&envoyer=photo`);
+  await julie.page.locator('#sheet-post').waitFor({ state: 'visible' });
+});

@@ -2192,8 +2192,37 @@ $('phone-pause').addEventListener('click', (e) => {
   else ouvrirReglagePause('reglages');
 });
 
+// « Petits rappels » (Tanguy, 20/11) : « Une photo pour Mamie ? » quand je n'ai rien envoyé depuis 7 jours (serveur,
+// relances-photos.js). Allumé au départ ; coupé, c'est noté dans ma fiche privée de cette famille (private/push,
+// lisible de moi seul), là où le serveur lit déjà mes jetons de notification.
+const prefsPush = () => doc(db, 'families', session.fid, 'members', session.uid, 'private', 'push');
+async function renderRappelsPhotos() {
+  const row = $('rappels-photos-row');
+  row.hidden = !session || session.member?.role !== 'famille';
+  if (row.hidden) return;
+  const nom = session.family.name;
+  let actif = true;
+  try { actif = (await getDoc(prefsPush())).data()?.rappelsPhotos !== false; } catch (e) { /* hors ligne : allumé par défaut */ }
+  $('rappels-photos').checked = actif;
+  $('rappels-photos-text').textContent = actif
+    ? `Si vous n'avez rien envoyé depuis une semaine, une notification vous propose une photo pour ${nom}.`
+    : `Coupés : aucune notification pour vous proposer une photo pour ${nom}.`;
+}
+$('rappels-photos').addEventListener('change', async () => {
+  const actif = $('rappels-photos').checked;
+  try {
+    await setDoc(prefsPush(), { rappelsPhotos: actif, majLe: serverTimestamp() }, { merge: true });
+    toast(actif ? 'Petits rappels activés' : 'Petits rappels coupés');
+  } catch (e) {
+    $('rappels-photos').checked = !actif;
+    notice("Le réglage n'a pas pu être enregistré. Vérifiez la connexion et réessayez.");
+  }
+  renderRappelsPhotos();
+});
+
 async function renderSettings() {
   renderPhoneCard();
+  renderRappelsPhotos();
   $('settings-code').textContent = formatCode(session.family.code);
   // QR code du lien d'invitation : l'appareil photo du téléphone ouvre l'app avec le code déjà rempli.
   try {
@@ -2885,12 +2914,14 @@ navigator.serviceWorker?.addEventListener('message', (e) => {
   if (famille && session && famille !== session.fid && myFamilies.some((f) => f.fid === famille)) {
     reglagesPending = url.includes('reglages');
     abonnementPending = url.includes('abonnement=1');
+    envoyerPending = url.includes('envoyer=photo');
     saveFamilyId(famille);
     enterApp();
     return;
   }
   if (url.includes('rappeler=1') && session) offerCallBack();
   if (url.includes('abonnement=1') && session) ouvrirAbonnement();
+  if (url.includes('envoyer=photo') && session && !sansAbonnement()) openAdd('photo');
   const cid = url && new URL(url, location.origin).searchParams.get('appel');
   if (cid && session) answerOnArrival(cid);
 });
@@ -5147,6 +5178,34 @@ SETTINGS['volume-card'] = {
   },
 };
 
+// Luminosité de l'écran le jour (Tanguy, 20/11) : families/{fid}.luminosite, entier de 40 à 100 (%), réglé par un
+// responsable (firestore.rules). La tablette l'applique le jour et la limite à 55 % le soir ; sans réglage, elle garde
+// la sienne. 70 % proposé par défaut.
+const LUMINOSITE_DEFAUT = 70;
+function luminositeReglee() {
+  const v = session.family?.luminosite;
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(100, Math.max(40, Math.round(v))) : null;
+}
+function renderLuminosite() {
+  const v = luminositeReglee();
+  $('luminosite-value').textContent = v == null ? 'Pas encore réglée : la tablette garde la sienne' : `${v} % le jour, 55 % au plus le soir`;
+}
+const majLuminositeVal = () => { $('luminosite-val').textContent = `${$('luminosite').value} %`; };
+$('luminosite').addEventListener('input', majLuminositeVal);
+SETTINGS['luminosite-card'] = {
+  fill() {
+    $('luminosite').value = String(luminositeReglee() ?? LUMINOSITE_DEFAUT);
+    majLuminositeVal();
+  },
+  async save() {
+    const v = Number($('luminosite').value);
+    if (!Number.isInteger(v) || v < 40 || v > 100) return false;
+    if (v === session.family?.luminosite) { toast(`Luminosité : ${v} %`); return true; }
+    await saveFamily({ luminosite: v }, `Luminosité envoyée à la tablette : ${v} %`);
+    return true;
+  },
+};
+
 // Ville de la météo : families/{fid}.meteoVille = { nom, lat, lon }, choisie par code postal ;
 // la tablette publie la sienne sur sa fiche membre, celle de la famille l'emporte.
 let communes = [];
@@ -5245,6 +5304,8 @@ function applyFamily() {
   renderAlertePasVue();
   $('volume-card').hidden = !amFamilyAdmin();
   renderVolume();
+  $('luminosite-card').hidden = !amFamilyAdmin();
+  renderLuminosite();
   $('options-card').hidden = !amFamilyAdmin();
   renderOptions();
   renderSosOrdre();
@@ -6118,6 +6179,7 @@ let sharedPending = false;
 let rappelerPending = false; // ouvert par « Rappeler » sur une notification d'appel manqué
 let appelerPending = false; // écran d'appel de l'app Android : l'appel vidéo part dès l'arrivée
 let reglagesPending = false; // rouvert par l'app Android après le réglage de mise en pause
+let envoyerPending = false; // notification « Une photo pour Mamie ? » : ouvre l'envoi d'une photo
 let abonnementPending = false; // notification d'abonnement (paiement en retard, pause) : ouvre l'abonnement
 let sepaOkPending = false; // retour de la page du mandat SEPA (?sepa=ok)
 
@@ -6510,6 +6572,7 @@ async function enterApp() {
   else if (rappelerPending) { rappelerPending = false; offerCallBack(); }
   else if (reglagesPending) { reglagesPending = false; openPage('settings'); }
   else if (abonnementPending) { abonnementPending = false; ouvrirAbonnement(); }
+  else if (envoyerPending) { envoyerPending = false; if (!sansAbonnement()) openAdd('photo'); }
 }
 
 function annoncerDemande() {
@@ -6563,6 +6626,7 @@ async function start() {
   reglagesPending = params.has('reglages');
   appelerPending = params.get('appeler') === 'video';
   abonnementPending = params.get('abonnement') === '1';
+  envoyerPending = params.get('envoyer') === 'photo';
   // Retour de la page du mandat SEPA : merci, et l'encart reste caché le temps que le serveur note le compte.
   sepaOkPending = params.get('sepa') === 'ok';
   if (params.get('appel')) answerOnArrival(params.get('appel'));
