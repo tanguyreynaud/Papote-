@@ -263,19 +263,19 @@ const REFUS = /\s*Je ne peux vous aider que pour Papote\s*[.:,]?\s*(Avez-vous|av
 // l'argent) : le bouton ouvre seulement le bon écran, c'est la personne qui appuie ensuite.
 const ACTIONS = {
   appli: {
-    depanner: 'Réglages, « Dépanner la tablette »',
+    depanner: 'Réglages, « La tablette », « Dépanner »',
     abonnement: 'Profil, partie Abonnement (paiement, factures, résiliation, renvoi de la tablette)',
-    wifi: 'Réglages, « Changer le Wi-Fi »',
+    wifi: 'Réglages, « La tablette », « Wi-Fi »',
     inviter: 'page « Inviter »',
-    membres: 'Réglages, « Membres » et « Demandes pour rejoindre »',
-    volumes: 'Réglages, « Volumes »',
-    nuit: 'Réglages, « Écran éteint la nuit »',
-    options: 'Réglages, « Options de la tablette » (lecture à voix haute, météo, SOS, radio)',
+    membres: 'Réglages, « La famille » (membres et demandes pour rejoindre)',
+    volumes: 'Réglages, « La tablette », « Volumes »',
+    nuit: 'Réglages, « La tablette », « Nuit »',
+    options: 'Réglages, « La tablette » (lecture à voix haute, durée d\u2019un envoi, météo, prochain rappel, radio, SOS)',
     notifications: 'page Notifications',
     photos: 'page Photos',
     messages: 'page Messages',
     agenda: 'page Agenda',
-    profil: 'onglet Profil',
+    profil: 'Réglages, « Mon profil »',
   },
   site: {
     commander: 'page de commande',
@@ -317,8 +317,8 @@ const BALISE_ACTION = /\[ALLER\s*:\s*([a-z]+)\s*\]/gi;
 // Filet : l'IA cite souvent le bon chemin (« Dépanner la tablette ») en oubliant la balise. Dans l'appli,
 // quand elle n'a mis aucun bouton, on le déduit du libellé exact de l'écran qu'elle a cité.
 const LIBELLES_ECRANS = [
-  [/Dépanner la tablette/i, 'depanner'], [/Changer le Wi-?Fi/i, 'wifi'], [/«\s*Volumes\s*»/i, 'volumes'],
-  [/Écran éteint la nuit/i, 'nuit'], [/Options de la tablette/i, 'options'],
+  [/Dépanner la tablette|«\s*Dépanner\s*»/i, 'depanner'], [/Changer le Wi-?Fi|«\s*Wi-?Fi\s*»/i, 'wifi'], [/«\s*Volumes\s*»/i, 'volumes'],
+  [/Écran éteint la nuit|«\s*Nuit\s*»/i, 'nuit'], [/Options de la tablette|Sur l[’']accueil de la tablette|«\s*Lecture à voix haute\s*»|«\s*Durée d[’']un envoi/i, 'options'],
   [/Gérer le paiement et les factures|Abonnement et paiement|Changer de moyen de paiement|Régler le paiement|Résilier l[’']abonnement|Je renvoie la tablette|Annuler ma commande|Garder mon abonnement/i, 'abonnement'],
   [/«\s*Membres\s*»|Demandes pour rejoindre/i, 'membres'], [/Inviter par e-mail/i, 'inviter'],
 ];

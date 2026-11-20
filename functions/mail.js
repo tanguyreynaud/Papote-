@@ -635,7 +635,7 @@ function sepaRefuse({ nom, email, papote, commande }) {
 const CARTON = 'Mettez la tablette, son support, son chargeur et son câble (et l\'enceinte si vous l\'avez reçue) dans un carton';
 const CARTON_ETAPE = `${CARTON}. Inutile d'effacer la tablette : nous nous en chargeons.`;
 const ETAPES_RETOUR_QR = [
-  'Dans l\'appli Papote, onglet Profil, touchez « Je renvoie la tablette » : un QR code prépayé s\'affiche.',
+  'Dans l\'appli Papote, Réglages, « Mon profil », Abonnement, touchez « Je renvoie la tablette » : un QR code prépayé s\'affiche.',
   CARTON_ETAPE,
   'Déposez le colis dans n\'importe quel point relais Mondial Relay en montrant le QR code sur votre téléphone. Rien à payer, rien à imprimer.',
 ];
@@ -684,7 +684,7 @@ function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, d
       `Le paiement de l'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} n'a pas pu être fait, et Papote est en pause depuis plus de 30 jours. Nous arrêtons donc l'abonnement : il prend fin le <b>${dateEnClair(le)}</b>, et aucun nouveau mois ne sera prélevé.`,
       'Les mois déjà dus restent à régler.',
       tablettePretee
-        ? { encadre: `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Dans l'appli Papote, onglet Profil, touchez « Je renvoie la tablette ». Sans retour dans les 30 jours qui suivent la fin de l'abonnement, le matériel prêté (${euros(montant)}) sera prélevé.` }
+        ? { encadre: `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Dans l'appli Papote, Réglages, « Mon profil », Abonnement, touchez « Je renvoie la tablette ». Sans retour dans les 30 jours qui suivent la fin de l'abonnement, le matériel prêté (${euros(montant)}) sera prélevé.` }
         : null,
     ].filter(Boolean), APPLI_RETOUR);
   }
@@ -710,9 +710,9 @@ function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, d
     copie && !parPapote ? copieAuPayeur(payeur) : null,
     `Tout continue de fonctionner jusqu'au <b>${dateEnClair(le)}</b>. Ce dernier mois est prélevé à l'arrêt, puis plus rien.`,
     tablettePretee
-      ? `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez la renvoyer dès maintenant : dans l'appli Papote, onglet Profil, touchez « Je renvoie la tablette ». Sinon, nous enverrons le mode d'emploi par e-mail ${copie ? 'à la personne qui paie l\'abonnement' : 'à cette adresse'} le ${dateEnClair(le)}.`
+      ? `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez la renvoyer dès maintenant : dans l'appli Papote, Réglages, « Mon profil », Abonnement, touchez « Je renvoie la tablette ». Sinon, nous enverrons le mode d'emploi par e-mail ${copie ? 'à la personne qui paie l\'abonnement' : 'à cette adresse'} le ${dateEnClair(le)}.`
       : 'La tablette est à vous : vous n\'avez rien à renvoyer.',
-    parPapote ? '' : 'Vous changez d\'avis d\'ici là ? Dans l\'appli Papote, onglet Profil, touchez « Garder mon abonnement ».',
+    parPapote ? '' : 'Vous changez d\'avis d\'ici là ? Dans l\'appli Papote, Réglages, « Mon profil », Abonnement, touchez « Garder mon abonnement ».',
   ].filter(Boolean), APPLI_RETOUR);
 }
 
@@ -745,7 +745,7 @@ function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant, pre
   if (qr) {
     return message('Votre QR code pour nous rendre la tablette', [
       bonjour(nom),
-      'Voici le QR code prépayé pour nous renvoyer la tablette : vous n\'avez rien à payer. Il est aussi dans l\'appli Papote, onglet Profil.',
+      'Voici le QR code prépayé pour nous renvoyer la tablette : vous n\'avez rien à payer. Il est aussi dans l\'appli Papote, Réglages, « Mon profil », Abonnement.',
       { etapes: [
         CARTON_ETAPE,
         'Déposez le colis dans n\'importe quel point relais Mondial Relay en montrant ce QR code sur votre téléphone (pas besoin d\'imprimer).',
@@ -855,7 +855,7 @@ function miseEnDemeure({ nom, montant, impaye }) {
       ['Somme due', `${euros(montant)}${impaye ? ', et les mois d\'abonnement restés impayés' : ''}`],
     ] },
     `Malgré nos e-mails, la tablette Papote prêtée ne nous a pas été rendue, et le prélèvement de <b>${euros(montant)}</b> pour le matériel a été refusé par votre banque.`,
-    { encadre: `Nous vous mettons en demeure, <b>sous 8 jours</b> à compter de cet e-mail :<br>• soit de nous renvoyer la tablette : dans l'appli Papote, onglet Profil, « Je renvoie la tablette » (QR code prépayé, rien à imprimer) ;<br>• soit de régler <b>${euros(montant)}</b>${impaye ? ', ainsi que les mois d\'abonnement restés impayés' : ''}.` },
+    { encadre: `Nous vous mettons en demeure, <b>sous 8 jours</b> à compter de cet e-mail :<br>• soit de nous renvoyer la tablette : dans l'appli Papote, Réglages, « Mon profil », Abonnement, « Je renvoie la tablette » (QR code prépayé, rien à imprimer) ;<br>• soit de régler <b>${euros(montant)}</b>${impaye ? ', ainsi que les mois d\'abonnement restés impayés' : ''}.` },
     'Sans retour ni règlement dans ce délai, nous engagerons le recouvrement de ces sommes.',
     'Si le colis est déjà en route ou si vous pensez qu\'il y a une erreur, répondez à cet e-mail : nous regardons tout de suite.',
     'Pour régler : touchez le bouton ci-dessous (appli Papote, page Abonnement), puis « Gérer le paiement et les factures » et « Changer de moyen de paiement ». Répondez ensuite à cet e-mail : nous refaisons le prélèvement.',

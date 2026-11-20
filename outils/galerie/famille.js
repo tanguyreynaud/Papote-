@@ -116,6 +116,8 @@ const PROFIL = [
 // Cloche des notifications en haut de l'accueil (ou l'ancien onglet, selon la version de l'app).
 const cloche = '#btn-bell, .nav-item[data-tab="notifs"]';
 const modifier = (carte) => `#${carte} .setting-modify`;
+// Réglages, « La famille » (membres, demandes, inviter) : 2e des trois choix en haut de la page (20/11).
+const FAMILLE = '#view-settings [data-reglages-choix="famille"]';
 const sansFamille = (docs = {}) => ({ user: MOI, docs: { 'config/base': {}, ...docs }, local: { ...TELEPHONE_CONNU, 'papote.fid': '' } });
 // Famille préparée à la commande, la tablette pas encore arrivée ; nomDonne : le faux serveur enregistre le nom.
 const preparee = (o = {}) => {
@@ -398,16 +400,16 @@ const SCENES = [
 
   { groupe: 'Réglages', titre: 'Réglages (propriétaire)', plein: true, donnees: () => connecte(), faire: toucher(page('settings')) },
   { groupe: 'Réglages', titre: 'Réglages : tablette sur la carte SIM (son numéro)', plein: true, donnees: () => sousTablette(), faire: toucher(page('settings')) },
-  { groupe: 'Réglages', titre: 'Réglages : famille de 20 proches', plein: true, donnees: () => connecte({ nombreux: true }), faire: toucher(page('settings')) },
-  { groupe: 'Réglages', titre: 'Réglages : un proche mis en tête', plein: true, donnees: () => connecte({ enTete: true }), faire: toucher(page('settings')) },
-  { groupe: 'Réglages', titre: 'Réglages : une demande pour rejoindre', plein: true, donnees: () => connecte({ enAttente: true }), faire: toucher(page('settings')) },
+  { groupe: 'Réglages', titre: 'Réglages : famille de 20 proches', plein: true, donnees: () => connecte({ nombreux: true }), faire: toucher(page('settings'), FAMILLE) },
+  { groupe: 'Réglages', titre: 'Réglages : un proche mis en tête', plein: true, donnees: () => connecte({ enTete: true }), faire: toucher(page('settings'), FAMILLE) },
+  { groupe: 'Réglages', titre: 'Réglages : une demande pour rejoindre', plein: true, donnees: () => connecte({ enAttente: true }), faire: toucher(page('settings'), FAMILLE) },
   { groupe: 'Réglages', titre: 'Réglages (proche)', plein: true, donnees: () => connecte({ proprietaire: false }), faire: toucher(page('settings')) },
-  { groupe: 'Réglages', titre: 'Menu d’un membre (⋮)', donnees: () => connecte(), faire: toucher(page('settings'), '#view-settings .member-more') },
-  { groupe: 'Réglages', titre: 'Mettre en tête ? (confirmation)', donnees: () => connecte(), faire: suite(toucher(page('settings'), '#view-settings .member-more'), bouton('Mettre en tête')) },
-  { groupe: 'Réglages', titre: 'Rendre responsable ? (confirmation)', donnees: () => connecte(), faire: suite(toucher(page('settings'), '#view-settings .member-more'), bouton('Rendre responsable')) },
-  { groupe: 'Réglages', titre: 'Retirer de la famille ? (confirmation)', donnees: () => connecte(), faire: suite(toucher(page('settings'), '#view-settings .member-more'), bouton('Retirer de la famille')) },
+  { groupe: 'Réglages', titre: 'Menu d’un membre (⋮)', donnees: () => connecte(), faire: toucher(page('settings'), FAMILLE, '#view-settings .member-more') },
+  { groupe: 'Réglages', titre: 'Mettre en tête ? (confirmation)', donnees: () => connecte(), faire: suite(toucher(page('settings'), FAMILLE, '#view-settings .member-more'), bouton('Mettre en tête')) },
+  { groupe: 'Réglages', titre: 'Rendre responsable ? (confirmation)', donnees: () => connecte(), faire: suite(toucher(page('settings'), FAMILLE, '#view-settings .member-more'), bouton('Rendre responsable')) },
+  { groupe: 'Réglages', titre: 'Retirer de la famille ? (confirmation)', donnees: () => connecte(), faire: suite(toucher(page('settings'), FAMILLE, '#view-settings .member-more'), bouton('Retirer de la famille')) },
   { groupe: 'Réglages', titre: 'Modifier : nom de la tablette', donnees: () => connecte(), faire: toucher(page('settings'), modifier('family-name-card')) },
-  { groupe: 'Réglages', titre: 'Modifier : photo de la tablette', donnees: () => connecte(), faire: toucher(page('settings'), '#tablet-face-card') },
+  { groupe: 'Réglages', titre: 'Modifier : photo de la tablette', donnees: () => connecte(), faire: toucher(page('settings'), modifier('family-name-card'), '#tablet-face-card') },
   { groupe: 'Réglages', titre: 'Modifier : ville de la météo', donnees: () => connecte(), faire: toucher(page('settings'), modifier('meteo-card')) },
   { groupe: 'Réglages', titre: 'Ville de la météo : communes du code postal', donnees: () => connecte(), faire: async (p) => {
     await toucher(page('settings'), modifier('meteo-card'))(p); await p.locator('#meteo-cp').pressSequentially('07160'); await pause(p, 800);
@@ -415,9 +417,9 @@ const SCENES = [
   { groupe: 'Réglages', titre: 'Ville de la météo : aucune commune', donnees: () => connecte(), faire: async (p) => {
     await toucher(page('settings'), modifier('meteo-card'))(p); await p.locator('#meteo-cp').pressSequentially('99999'); await pause(p, 800);
   } },
-  { groupe: 'Réglages', titre: 'Modifier : options de la tablette', plein: true, donnees: () => connecte(), faire: toucher(page('settings'), modifier('options-card')) },
-  { groupe: 'Réglages', titre: 'Modifier : options, radio activée', plein: true, donnees: () => connecte(), faire: async (p) => {
-    await toucher(page('settings'), modifier('options-card'))(p); await p.check('#opt-radio').catch(() => {}); await p.dispatchEvent('#opt-radio', 'change'); await pause(p);
+  { groupe: 'Réglages', titre: 'Modifier : durée d’un envoi à l’écran', plein: true, donnees: () => connecte(), faire: toucher(page('settings'), modifier('duree-card')) },
+  { groupe: 'Réglages', titre: 'Modifier : radio activée', plein: true, donnees: () => connecte(), faire: async (p) => {
+    await toucher(page('settings'), modifier('radio-card'))(p); await p.check('#opt-radio').catch(() => {}); await p.dispatchEvent('#opt-radio', 'change'); await pause(p);
   } },
   { groupe: 'Réglages', titre: 'Modifier : volumes (sonnerie, vidéos et messages)', donnees: () => connecte(), faire: toucher(page('settings'), modifier('volume-card')) },
   { groupe: 'Réglages', titre: 'Modifier : veille la nuit (23 h - 5 h par défaut)', donnees: () => connecte(), faire: toucher(page('settings'), modifier('sleep-card')) },
@@ -457,8 +459,10 @@ const SCENES = [
     });
     await pause(p, 800);
   } },
-  { groupe: 'Réglages', titre: 'Dépanner : redémarrer la tablette ?', donnees: () => connecte(), faire: toucher(page('settings'), '[data-cmd="restart"]') },
-  { groupe: 'Réglages', titre: 'Dépanner : obtenir l’état (en attente de la tablette)', plein: true, donnees: () => connecte(), faire: toucher(page('settings'), '[data-cmd="status"]') },
+  { groupe: 'Réglages', titre: 'Dépanner : redémarrer la tablette ?', donnees: () => connecte(), faire: toucher(page('settings'), '#remote-card summary', '[data-cmd="restart"]') },
+  { groupe: 'Réglages', titre: 'Dépanner : obtenir l’état (en attente de la tablette)', plein: true, donnees: () => connecte(), faire: toucher(page('settings'), '#remote-card summary', '[data-cmd="status"]') },
+  { groupe: 'Réglages', titre: 'Modifier : SOS famille (bouton et ordre d’appel)', plein: true, donnees: () => connecte(), faire: toucher(page('settings'), modifier('sos-ordre-card')) },
+  { groupe: 'Réglages', titre: 'Réglages : La famille (responsable)', plein: true, donnees: () => connecte(), faire: toucher(page('settings'), FAMILLE) },
   { groupe: 'Réglages', titre: 'Inviter un proche', plein: true, donnees: () => connecte(), faire: toucher('#btn-invite') },
   { groupe: 'Réglages', titre: 'Inviter : invitations en attente', plein: true, donnees: () => connecte({ docs: {
     [`families/${FID}/invitations/paul@exemple.fr`]: { email: 'paul@exemple.fr', fid: FID, familyName: 'Mamie Jeanne', invitedBy: 'Julie', createdAt: ilYa(1) },
@@ -505,7 +509,7 @@ const SCENES = [
   // Depuis la barre du bas Accueil / Photos / Messages / Profil (27/10) : la cloche est en haut, le support dans le Profil.
   { groupe: 'Profil', titre: 'Notifications', plein: true, donnees: () => connecte(), faire: toucher(cloche) },
   { groupe: 'Profil', titre: 'Notifications : rien d’autre que les arrivées', plein: true, donnees: () => connecte({ vide: true }), faire: toucher(cloche) },
-  { groupe: 'Profil', titre: 'Support', plein: true, donnees: () => connecte(), faire: toucher(...PROFIL, '#view-profile .aide-card') },
+  { groupe: 'Profil', titre: 'Support', plein: true, donnees: () => connecte(), faire: toucher(...PROFIL, '#view-profile .aide-pastille') },
 ];
 
 const SDK = fs.readFileSync(path.join(__dirname, 'faux-firebase.js'), 'utf8');
