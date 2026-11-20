@@ -155,6 +155,8 @@ final class Gardien {
         Repondeur.peutEtre(app, p != null && p.maintenance());
         // Secours du push sous verrou : 24 h d'écoute directe au plus, comptées ici (voir SecoursPush).
         SecoursPush.tic(app);
+        // Limite de charge à 80 % qui ne reprend pas toute seule : Papote relance la charge (voir Charge).
+        Charge.tic(app);
         long maintenant = SystemClock.uptimeMillis();
         Geste g = decider(maintenant, p == null || p.maintenance(), dernierTic, premierPlanDepuis != 0,
                 premierPlanDepuis, dernierPouls, dernierRechargement, rechargements, AppelGsm.enCours());
