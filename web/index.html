@@ -85,6 +85,7 @@
     <symbol id="i-gallery" viewBox="0 0 24 24"><rect x="7" y="7" width="14" height="14" rx="2"/><path d="M3 17V5a2 2 0 0 1 2-2h12"/></symbol>
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5M5 9v11h5v-6h4v6h5V9"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 8 2.5 8h-17S6 15 6 9M10 20.5a2 2 0 0 0 4 0"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1.9-1.1 1.6v.3M12 17h.01"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -277,6 +278,7 @@
     <section id="view-home" class="page-pad tab-page" hidden>
       <header class="home-head">
         <button type="button" id="btn-invite" class="invite-btn" data-page="invite"><svg><use href="#i-user-plus"/></svg>Inviter</button>
+        <button type="button" id="btn-gear" class="bell-btn gear-btn" data-page="settings"><span class="sr-only">Réglages</span><svg aria-hidden="true"><use href="#i-gear"/></svg></button>
         <button type="button" id="btn-bell" class="bell-btn" data-tab="notifs"><span class="sr-only">Notifications</span><span class="nav-icon"><svg><use href="#i-bell"/></svg><span id="nav-badge" class="nav-badge" hidden></span></span></button>
         <h1 class="brand">Papote</h1>
         <p id="family-title" class="muted"></p>
@@ -301,7 +303,7 @@
         <h2>Comment appelez-vous la personne ?</h2>
         <p class="muted">Le nom que toute la famille utilise, par exemple « Mamie Emma ». Il s'affichera sur la tablette, pour les appels et les alertes.</p>
         <label>Son nom
-          <input id="nom-prepare-input" maxlength="40" placeholder="Mamie Emma" required aria-describedby="nom-prepare-error">
+          <input id="nom-prepare-input" maxlength="40" placeholder="Écrivez son nom ici" required aria-describedby="nom-prepare-error">
         </label>
         <p id="nom-prepare-error" class="error" hidden></p>
         <button type="submit" class="primary wide" id="nom-prepare-btn">Enregistrer</button>
@@ -686,7 +688,7 @@
         <p id="invite-full" class="card error" hidden>La famille est complète : 30 proches au maximum. Pour inviter quelqu'un, un responsable doit d'abord retirer un membre.</p>
         <div id="invite-email-card" class="card" hidden>
           <h2>Inviter par e-mail</h2>
-          <p class="muted small">La personne entre directement dans la famille en se connectant avec cette adresse.</p>
+          <p class="muted small">Papote lui envoie un e-mail avec un lien. Elle entre directement dans la famille en se connectant avec cette adresse.</p>
           <form id="form-invite" class="inline-field">
             <input id="invite-email" type="email" autocomplete="off" placeholder="adresse@exemple.fr" required>
             <button type="submit" class="primary">Inviter</button>

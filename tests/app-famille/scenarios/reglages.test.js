@@ -116,7 +116,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await julie.page.selectOption('#sleep-from', '22:0');
   await julie.page.selectOption('#sleep-to', '6:30');
   await enregistrer(julie, 'sleep-card');
-  await g.toast(julie, 'Mise en veille enregistrée');
+  await g.toast(julie, 'Écran éteint la nuit : enregistré');
   assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 22, a: 6, aMin: 30 });
   await julie.page.locator('#sleep-value', { hasText: 'De 22 h à 6 h 30' }).waitFor();
 
@@ -139,7 +139,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   // Dépannage : « Obtenir l'état », la tablette répond.
   await julie.page.locator('#remote-card').waitFor({ state: 'visible' });
   await julie.page.click('#remote-card [data-cmd="status"]');
-  await julie.page.locator('#remote-result', { hasText: 'en attente de la tablette' }).waitFor();
+  await julie.page.locator('#remote-result', { hasText: /en attente de la tablette|elle la recevra dès qu'elle sera de nouveau connectée/ }).waitFor();
   const [cmd] = await g.attendreBase(async () => { const l = await g.liste(`families/${fid}/commands`); return l.filter((c) => c.type === 'status').length && l.filter((c) => c.type === 'status'); }, 'commande écrite');
   assert.strictEqual(cmd.state, 'pending');
   assert.ok([tab.tabletUid, tab.callsUid].includes(cmd.target));
@@ -304,7 +304,7 @@ test('Nom de la tablette : jamais un numéro (message sous le champ) ; nuit : he
   assert.deepStrictEqual([await julie.page.inputValue('#sleep-from'), await julie.page.inputValue('#sleep-to')], ['19:0', '10:0']);
   await julie.page.selectOption('#sleep-to', '7:0');
   await enregistrer(julie, 'sleep-card');
-  await g.toast(julie, 'Mise en veille enregistrée');
+  await g.toast(julie, 'Écran éteint la nuit : enregistré');
   assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 19, a: 7 });
   await julie.page.locator('#sleep-value', { hasText: 'De 19 h à 7 h' }).waitFor();
 });

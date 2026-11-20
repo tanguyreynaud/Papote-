@@ -201,6 +201,9 @@ function show(view) {
 function showError(el, message) {
   el.textContent = message;
   el.hidden = !message;
+  // Message sous le bouton, hors de l'écran sur un petit téléphone : on l'amène sous les yeux (banc utilisateurs
+  // du 19/11 : « l'écran est presque pareil », la personne croyait que rien ne s'était passé).
+  if (message) requestAnimationFrame(() => el.scrollIntoView?.({ block: 'nearest' }));
 }
 
 function icon(name) {
@@ -211,18 +214,19 @@ function icon(name) {
   return svg;
 }
 
-function toast(text) {
+function toast(text, duree = 2500) {
   $('toast').textContent = text;
   $('toast').hidden = false;
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { $('toast').hidden = true; }, 2500);
+  toast.timer = setTimeout(() => { $('toast').hidden = true; }, duree);
 }
 
 // ---------- Rejoindre / créer ----------
 
 // Seul le code famille fait entrer ici (le numéro de commande ne sert plus à entrer : A53, Tanguy 16/11 ; celui qui a
 // payé entre par son invitation ou le lien de l'e-mail de confirmation). Un seul appel à la fois (double appui).
-const CODE_INCONNU = 'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à un responsable de vous inviter.';
+let dernierCodeRefuse = null;
+const CODE_INCONNU = 'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à la personne qui vous l’a envoyé de vous inviter.';
 $('form-join').addEventListener('submit', async (e) => {
   e.preventDefault();
   const button = e.target.querySelector('button[type=submit]');
@@ -230,6 +234,7 @@ $('form-join').addEventListener('submit', async (e) => {
   button.disabled = true;
   const libelle = button.textContent;
   button.textContent = 'Un instant…';
+  const debutJoin = Date.now();
   showError($('join-error'), '');
   const code = normalizeCode($('join-code').value);
   const pour = inviteCode() ? invitePour() : null;
@@ -242,19 +247,27 @@ $('form-join').addEventListener('submit', async (e) => {
     demandeEnvoyee = { fid: fidRejoint, pour };
     await enterApp();
   } catch (err) {
+    // Réponse immédiate (code refusé) : « Un instant… » restait invisible et un 2e appui semblait ne rien faire
+    // (banc d'utilisateurs du 19/11). Il reste au moins 0,6 s avant que le message revienne.
+    await new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - debutJoin))));
     if (err instanceof CodeInconnuError) {
       console.warn('Code refusé');
       // Code venu d'un lien : il était caché ; on le montre pour qu'il puisse être corrigé.
       forgetInviteCode();
       $('join-code-wrap').hidden = false;
     } else console.error(err);
-    showError($('join-error'), err instanceof CodeInconnuError ? CODE_INCONNU
+    // Même code refusé une 2e fois : le message change pour montrer que l'app a bien réessayé (banc du 19/11).
+    const encore = err instanceof CodeInconnuError && dernierCodeRefuse === code;
+    if (err instanceof CodeInconnuError) dernierCodeRefuse = code;
+    showError($('join-error'), encore ? `Toujours refusé : ${CODE_INCONNU}` : err instanceof CodeInconnuError ? CODE_INCONNU
       : 'Impossible de rejoindre pour le moment. Vérifiez la connexion internet.');
   } finally {
     button.disabled = false;
     button.textContent = libelle;
   }
 });
+// Le code est retouché : l'ancien message d'erreur s'en va.
+$('join-code').addEventListener('input', () => { if (!$('join-error').hidden) showError($('join-error'), ''); });
 
 // ---------- Navigation : l'accueil et une page par type d'envoi ----------
 // Chaque page ouverte ajoute une entrée d'historique : le bouton retour d'Android ramène à l'écran
@@ -404,6 +417,8 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 });
 
 $('btn-invite').addEventListener('click', () => openPage('invite'));
+// Roue dentée en haut de l'accueil, à gauche de la cloche : les Réglages sans descendre jusqu'à la tuile (Tanguy, 19/11).
+$('btn-gear').addEventListener('click', () => openPage('settings'));
 
 document.querySelectorAll('.tile[data-page]').forEach((tile) => {
   tile.addEventListener('click', () => openPage(tile.dataset.page));
@@ -655,8 +670,8 @@ function galleryItem(post, what, onOpen) {
   meta.append(info);
   const badge = document.createElement('span');
   badge.className = `read-badge ${post.seenAt ? 'read' : 'unread'}`;
-  badge.textContent = post.seenAt ? 'Lu' : 'Non lu';
-  // « Lu » / « Non lu » touché : il dit quand (audit des touchers, 17/11 : il ne faisait rien).
+  badge.textContent = post.seenAt ? 'Lu' : 'Envoyé ✓'; // « Envoyé ✓ » puis « Lu » (Tanguy, 19/11 : « Non lu » ne disait pas que c'était bien parti)
+  // « Lu » / « Envoyé ✓ » touché : il dit quand (audit des touchers, 17/11 : il ne faisait rien).
   badge.setAttribute('role', 'button');
   badge.tabIndex = 0;
   badge.addEventListener('click', () => toast(post.seenAt
@@ -1099,9 +1114,16 @@ function showIntroTablette() {
   $i('#intro-veille').addEventListener('change', () => { $i('#intro-heures').hidden = !$i('#intro-veille').checked; });
   $i('#intro-radio').addEventListener('change', () => { $i('#intro-station-wrap').hidden = !$i('#intro-radio').checked; });
 
+  // Étape plus haute que la fenêtre (téléphone couché) : un fondu en bas montre qu'il y a une suite à faire défiler.
+  const suite = () => steps.forEach((s) => s.classList.toggle('suite', !s.hidden && s.scrollTop + s.clientHeight < s.scrollHeight - 4));
+  steps.forEach((s) => s.addEventListener('scroll', suite, { passive: true }));
+  addEventListener('resize', suite);
+  $i('#intro-veille').addEventListener('change', () => requestAnimationFrame(suite));
+  $i('#intro-radio').addEventListener('change', () => requestAnimationFrame(suite));
   let i = 0;
   const render = () => {
     steps.forEach((s, k) => { s.hidden = k !== i; });
+    requestAnimationFrame(suite);
     back.querySelectorAll('.guide-dots span').forEach((d, k) => d.classList.toggle('on', k === i));
     $i('.intro-next').textContent = i === 0 ? 'Commencer' : i === steps.length - 1 ? 'Inviter la famille' : 'Suivant';
     $i('.intro-prev').textContent = i === 0 ? 'Plus tard' : i === steps.length - 1 ? 'Terminer' : 'Retour';
@@ -1118,7 +1140,7 @@ function showIntroTablette() {
   };
   // Une seule fenêtre au démarrage (testeur, V8 du 17/11 : 5 écrans de réglages puis 3 de guide) : après les
   // réglages, pas de petit guide ; l'accueil le remplace (« Envoyer une photo », les tuiles).
-  const close = () => { introVue(); guideVu(); back.remove(); };
+  const close = () => { introVue(); guideVu(); back.remove(); removeEventListener('resize', suite); };
 
   async function enregistrer() {
     choix.veille = veilleChoisie($i('#intro-veille').checked, $i('#intro-de'), $i('#intro-a'));
@@ -1551,7 +1573,8 @@ async function addVideoFile(file) {
   $('video-hint').hidden = false;
   try {
     const result = await prepareVideo(file, (done, total) => {
-      setStatus(`Préparation de la vidéo… ${Math.round(done)} / ${Math.round(total)} s. Restez sur cet écran.`);
+      // « 1 / 3 s » ne parlait pas (banc du 19/11) : on dit ce qui se passe et que rien n'est encore parti.
+      setStatus(`Préparation de la vidéo avant l'envoi (${Math.round(done)} s sur ${Math.round(total)}). Restez sur cet écran.`);
     }, MAX_VIDEO_SECONDS, demanderToucherVideo);
     pendingVideo = { blob: result.blob, mime: result.mime, thumb: result.thumb, duration: result.duration };
     oublierApercuVideo();
@@ -1633,7 +1656,10 @@ $('form-post').addEventListener('submit', async (e) => {
     }
     setBusy('');
     history.back();
-    toast('Envoyé');
+    // Dit quoi et à qui, et reste 5 s : en 2,5 s, une personne qui lit lentement ou voit mal le ratait et croyait
+    // que rien n'était parti (banc utilisateurs du 19/11).
+    const qui = session?.family?.name || 'la tablette';
+    toast(kind === 'video' ? `Vidéo envoyée à ${qui}` : (items[0]?.photos?.length || 0) > 1 ? `Photos envoyées à ${qui}` : `Photo envoyée à ${qui}`, 4000);
     pruneOld(kind);
   } catch (err) {
     setBusy('');
@@ -2833,7 +2859,8 @@ async function offerVideoMessage(reason) {
   const name = session.family.name;
   const quoi = reason === 'declined' ? 'ne peut pas répondre pour le moment' : "n'a pas répondu";
   if (!await askConfirm(`${name} ${quoi}. Lui laisser un message vidéo ?`, 'Filmer')) return;
-  openPage('videos');
+  // La feuille d'envoi s'ouvre là où l'on était (l'accueil) : « Fermer » y ramène, au lieu d'une page Vidéos
+  // jamais demandée (banc utilisateurs du 19/11).
   openAdd('video');
   $('in-video-camera').click();
 }
@@ -3288,14 +3315,14 @@ async function envoyerInvitation(email) {
   try {
     await inviterParEmail(session.fid, email);
     $('invite-email').value = '';
-    toast(`Invitation envoyée à ${email}`);
+    toast(`Invitation envoyée à ${email}`, 4000);
   } catch (err) {
     console.warn('E-mail d\'invitation non envoyé', err);
     const code = err.code || '';
     if (code.endsWith('invalid-argument')) { notice("Cette adresse e-mail ne semble pas correcte."); return; }
     if (code.endsWith('resource-exhausted')) { notice("Trop d'invitations aujourd'hui. Réessayez demain."); return; }
     $('invite-email').value = '';
-    toast(`Invitation prête : ${email} peut se connecter à Papote`);
+    toast(`Invitation prête : ${email} peut se connecter à Papote`, 4000);
     if (navigator.share) {
       navigator.share({
         title: 'Papote',
@@ -3996,6 +4023,8 @@ function showRemote(text, cls = '') {
   $('remote-result').textContent = text;
   $('remote-result').className = `remote-result ${cls}`;
   $('remote-result-box').hidden = !text;
+  // Le résultat est sous les boutons, parfois hors de l'écran : on l'amène sous les yeux (banc du 19/11).
+  if (text) requestAnimationFrame(() => $('remote-result-box').scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }));
 }
 
 async function sendCommand(type, extra = {}) {
@@ -4014,7 +4043,9 @@ async function sendCommand(type, extra = {}) {
     showRemote("La commande n'a pas pu être envoyée.", 'warn');
     return;
   }
-  showRemote('Envoyé, en attente de la tablette…');
+  // Hors ligne : ce n'est pas une erreur, la demande attend la tablette (banc du 19/11 : en rouge, elle inquiétait).
+  showRemote(tabletteEnLigne() ? 'Envoyé, en attente de la tablette…'
+    : "Demande envoyée. La tablette est hors ligne : elle la recevra dès qu'elle sera de nouveau connectée.");
   stopCommand?.();
   let timer = setTimeout(() => showRemote("La tablette n'a pas encore répondu. Elle exécutera la commande dès qu'elle sera connectée.", 'warn'), 90_000);
   stopCommand = onSnapshot(ref2, (snap) => {
@@ -4324,7 +4355,8 @@ function renderWifi() {
   $('wifi-modify').hidden = !enLigne;
   $('wifi-current').textContent = enLigne
     ? (wifiCourant() || 'Réseau actuel pas encore connu')
-    : 'Tablette hors ligne : changez le Wi-Fi directement sur la tablette, dans ses réglages.';
+    // Même diagnostic que le bandeau de l'accueil (banc du 19/11 : les deux messages se contredisaient).
+    : 'Tablette hors ligne : le Wi-Fi se change ici quand elle est connectée. Si la box ou son code a changé, réglez-le directement sur la tablette, dans ses réglages.';
 }
 
 
@@ -4349,7 +4381,10 @@ function renderRemote() {
   renderLogsButton();
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
-    $('remote-tablet').textContent = online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
+    // Hors ligne : dit que les actions attendront son retour (banc du 19/11 : on croyait qu'elles agissaient tout de suite).
+    $('remote-tablet').textContent = !tabletteEnLigne()
+      ? `Tablette hors ligne${online ? ` (vue ${ago(online.getTime())})` : ''} : ces actions partiront dès qu'elle sera de nouveau connectée.`
+      : online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
   }
 }
 
@@ -4607,7 +4642,7 @@ SETTINGS['sleep-card'] = {
   },
   async save() {
     const veille = veilleChoisie($('sleep-on').checked, $('sleep-from'), $('sleep-to'));
-    await saveFamily({ veille }, 'Mise en veille enregistrée');
+    await saveFamily({ veille }, 'Écran éteint la nuit : enregistré');
     return true;
   },
 };
@@ -5427,7 +5462,8 @@ $('tablet-chip').addEventListener('click', () => {
   const b = t.battery || {};
   const lignes = [];
   if (tabletteEnLigne()) lignes.push(t.wifi?.ssid ? `En ligne par le Wi-Fi « ${t.wifi.ssid} ».` : t.sim ? 'En ligne par la carte SIM.' : 'En ligne.');
-  else lignes.push(`Hors ligne depuis ${ago(toDate(t.lastOnline).getTime()).replace('il y a ', '')}.`);
+  else lignes.push(`Hors ligne depuis ${ago(toDate(t.lastOnline).getTime()).replace('il y a ', '')}.`
+    + (b.charging === true ? ' Le réseau a sans doute coupé : elle se reconnecte toute seule.' : ' Elle est peut-être éteinte : il faut la brancher.'));
   if (b.charging === true) lignes.push('Branchée sur son chargeur.');
   else if (b.charging === false) lignes.push('Débranchée.');
   if (Number.isFinite(b.level)) lignes.push(`Batterie : ${b.level} %.`);
@@ -5558,8 +5594,19 @@ function renderActivity() {
     el.classList.add('calme');
     el.textContent = `La tablette de ${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au wifi si vous pouvez.`;
   } else if (now - online > EN_LIGNE_MS) {
+    // Une marche à suivre, pas une question (banc utilisateurs du 19/11 : « l'appli ne me dit pas quoi faire ») ;
+    // toutes les tablettes ont une carte SIM : pas de « wifi » ici. Ce que l'app sait déjà (branchée) est utilisé.
     el.classList.add('warn');
-    el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. Est-elle branchée et connectée au wifi ?`;
+    el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. `
+      + (battery?.charging === true
+        ? 'Elle était branchée : le réseau a sans doute coupé, elle se reconnecte toute seule dès qu’il revient.'
+        : `Elle est peut-être éteinte : demandez à ${name} de la brancher.`);
+    const quoi = document.createElement('button');
+    quoi.type = 'button';
+    quoi.className = 'link';
+    quoi.textContent = 'Que faire ?';
+    quoi.addEventListener('click', () => { if (!papoteAller('depanner')) openPage('settings', false); });
+    el.append(' ', quoi);
   } else if (battery && battery.charging === false && battery.unpluggedAt) {
     // Débranchée (tablette 2.50+) : unpluggedAt est posé dès que le chargeur est retiré.
     el.classList.add('warn');
