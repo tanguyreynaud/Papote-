@@ -408,7 +408,9 @@ function fermerChargement() {
   setTimeout(() => { e.hidden = true; }, 300);
 }
 
-onAuthStateChanged(getAuth(getApp('admin')), (user) => {
+onAuthStateChanged(getAuth(getApp('admin')), async (user) => {
+  // Compte sans le badge administrateur : rien n'est chargé (admin.js le déconnecte et l'explique).
+  if (user && (await user.getIdTokenResult().catch(() => null))?.claims?.admin !== true) user = null;
   connecte = !!user;
   if (!user) { fermerChargement(); return; }
   // La page apparaît tout de suite (menu, titres, cartes fantômes) ; les chiffres arrivent dedans,

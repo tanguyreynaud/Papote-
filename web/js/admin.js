@@ -99,7 +99,20 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-onAuthStateChanged(auth, (user) => {
+// Seul un compte avec le badge administrateur (claim admin, posé côté serveur) entre dans l'admin. Un autre compte
+// Google est déconnecté tout de suite et revient à l'écran de connexion avec une phrase claire (Tanguy, 20/11),
+// au lieu d'arriver sur un tableau de bord vide. Les fonctions du serveur refusent de toute façon ses demandes.
+const estAdmin = async (user) => !!user && (await user.getIdTokenResult().catch(() => null))?.claims?.admin === true;
+onAuthStateChanged(auth, async (user) => {
+  if (user && !(await estAdmin(user))) {
+    $('dashboard').hidden = true;
+    $('signin').hidden = false;
+    $('signin-error').textContent = `Le compte ${user.email || ''} n'a pas accès à l'administration. Connectez-vous avec le compte administrateur.`;
+    $('signin-error').hidden = false;
+    await signOut(auth);
+    return;
+  }
+  if (user) $('signin-error').hidden = true;
   $('signin').hidden = !!user;
   $('dashboard').hidden = !user;
   $('who').textContent = user ? user.email : '';
