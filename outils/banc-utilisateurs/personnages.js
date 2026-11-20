@@ -105,6 +105,14 @@ const LOTS = {
     p('tablette', 'rene', 'appelerJulie'), p('tablette', 'rene', 'rappel'), p('tablette', 'rene', 'perdue'), p('tablette', 'simone', 'appelEntrant'),
     p('tablette', 'simone', 'nuit'), p('tablette', 'marcel', 'message'), p('tablette', 'marcel', 'perdue'), p('tablette', 'lucienne', 'rappel'),
   ],
+  // Après publication du lot (Tanguy, 20/11) : vérifier les corrections en vrai code publié, sans rejouer les
+  // problèmes déjà notés. ~12 parcours, ~0,50 $. Sources : BANC_REF_FAMILLE=origin/main ou la branche publiée.
+  'apres-publication': [
+    p('famille', 'thomas', 'reglages'), p('famille', 'paul', 'photo'), p('famille', 'sylvie', 'etat'), p('famille', 'ines', 'rejoindre'),
+    p('famille', 'marc', 'video'), p('famille', 'lea', 'inviter'), p('famille', 'nadia', 'nom'),
+    p('tablette', 'rene', 'appelEntrant'), p('tablette', 'simone', 'sosErreur'), p('tablette', 'marcel', 'appelerJulie'),
+    p('tablette', 'odette', 'photo'), p('tablette', 'lucienne', 'appelEntrant'),
+  ],
   'famille-2': [
     p('famille', 'thomas', 'video'), p('famille', 'marc', 'message'), p('famille', 'ines', 'video', { reseau: 'lent' }), p('famille', 'nadia', 'photo'),
     p('famille', 'paul', 'rappel'), p('famille', 'lea', 'appeler'), p('famille', 'sylvie', 'video'), p('famille', 'julie', 'rappel'),
