@@ -53,6 +53,7 @@ function scenes(mail) {
     { titre: 'Tablette remise en main propre', groupe: G1, fonction: 'tabletteRemise', contenu: si('tabletteRemise', { nom: 'Julie', code: 'ABCD-1234' }) },
     { titre: 'Rappel de jumelage 1 (J+5)', groupe: G1, fonction: 'rappelJumelage', contenu: si('rappelJumelage', { nom: 'Julie', numero: 1, code: 'ABCD-1234' }) },
     { titre: 'Rappel de jumelage 2 (J+12)', groupe: G1, fonction: 'rappelJumelage', contenu: si('rappelJumelage', { nom: 'Julie', numero: 2, code: 'ABCD-1234' }) },
+    { titre: 'Tablette branchée, personne dans l\'appli 2 jours après (à celui qui a payé)', groupe: G1, fonction: 'tabletteSansProche', note: 'Ajouté (20/11) : envoyé mais absent de la galerie.', contenu: si('tabletteSansProche', { nom: 'Mamie Jeanne', lien: APPLI }) },
     { titre: 'Commande annulée avant l\'envoi (remboursée)', groupe: G1, fonction: 'commandeAnnulee', contenu: si('commandeAnnulee', { nom: 'Julie', rembourse: 6000 }) },
     { titre: 'Commande annulée avant l\'envoi (rien prélevé)', groupe: G1, fonction: 'commandeAnnulee', contenu: si('commandeAnnulee', { nom: 'Julie', rembourse: 0 }) },
     { titre: 'Colis jamais retiré, revenu chez Papote (remboursé)', groupe: G1, fonction: 'colisRevenu', note: 'Nouveau (A4, 12/11) : avant, « la tablette ne partira pas ».', contenu: si('colisRevenu', { nom: 'Julie', rembourse: 6000 }) },
@@ -64,6 +65,8 @@ function scenes(mail) {
     { titre: 'Installation terminée : la tablette est prête', groupe: G2, fonction: 'installationFinie', note: 'Nouveau : le mode d\'emploi en quatre lignes, à garder.', contenu: si('installationFinie', { prenom: 'Julie', famille: 'Mamie Jeanne', lien: APPLI }) },
     { titre: 'Appel sans aucun téléphone qui sonne', groupe: G2, fonction: 'appelSansTelephone', contenu: si('appelSansTelephone', { nom: 'Mamie Jeanne', sos: false, lien: APPLI }) },
     { titre: 'SOS sans aucun téléphone qui sonne', groupe: G2, fonction: 'appelSansTelephone', contenu: si('appelSansTelephone', { nom: 'Mamie Jeanne', sos: true, lien: APPLI }) },
+    { titre: 'SOS alors que personne n\'est dans l\'appli (à celui qui a payé)', groupe: G2, fonction: 'sosSansProche', note: 'Ajouté (20/11) : envoyé mais absent de la galerie.', contenu: si('sosSansProche', { nom: 'Mamie Jeanne', lien: APPLI }) },
+    { titre: 'SOS alors que personne n\'est dans l\'appli (nom de la famille pas encore choisi)', groupe: G2, fonction: 'sosSansProche', note: 'Ajouté (20/11) : envoyé mais absent de la galerie.', contenu: si('sosSansProche', { nom: null, lien: APPLI }) },
     { titre: 'Forfait internet presque épuisé : débit réduit ensuite (aux responsables, 95 %)', groupe: G2, fonction: 'forfaitPresqueEpuise', note: 'Nouveau (5/11).', contenu: si('forfaitPresqueEpuise', { nom: 'Mamie Jeanne', type: 'reduit', fin: dans(16), lien: APPLI }) },
     { titre: 'Forfait internet presque épuisé : internet coupé ensuite (aux responsables, 95 %)', groupe: G2, fonction: 'forfaitPresqueEpuise', note: 'Nouveau (5/11).', contenu: si('forfaitPresqueEpuise', { nom: 'Mamie Jeanne', type: 'bloque', fin: dans(16), lien: APPLI }) },
 
@@ -76,6 +79,8 @@ function scenes(mail) {
     { titre: '« Garder mon abonnement » : l\'abonnement continue', groupe: G3, fonction: 'resiliationAnnulee', note: 'Ajouté par le fil Gestion.', contenu: si('resiliationAnnulee', { nom: 'Julie', famille: 'Mamie Jeanne' }) },
     { titre: 'Hospitalisation : prélèvements en pause', groupe: G3, fonction: 'pausePrelevements', note: 'Nouveau : rien ne partait avant.', contenu: si('pausePrelevements', { nom: 'Julie', famille: 'Mamie Jeanne', jusqua: dans(60) }) },
     { titre: 'Hospitalisation : les prélèvements reprennent', groupe: G3, fonction: 'reprisePrelevements', note: 'Nouveau : rien ne partait avant.', contenu: si('reprisePrelevements', { nom: 'Julie', famille: 'Mamie Jeanne' }) },
+    { titre: 'Tablette cassée remplacée : 130 € prélevés', groupe: G3, fonction: 'remplacementPreleve', note: 'Ajouté (20/11) : envoyé mais absent de la galerie.', contenu: si('remplacementPreleve', { nom: 'Julie', montant: 13000, raison: 'casse' }) },
+    { titre: 'Tablette perdue ou volée remplacée : matériel prélevé', groupe: G3, fonction: 'remplacementPreleve', note: 'Ajouté (20/11) : envoyé mais absent de la galerie.', contenu: si('remplacementPreleve', { nom: 'Julie', montant: 14000, raison: 'perte' }) },
 
     { titre: 'Abonnement terminé : comment rendre la tablette', groupe: G4, fonction: 'retourTablette', contenu: si('retourTablette', { nom: 'Julie', avant: dans(30), retractation: null, montant: 15000 }) },
     { titre: 'Commande annulée après l\'envoi : rendre la tablette, remboursement au retour', groupe: G4, fonction: 'retourTablette', contenu: si('retourTablette', { nom: 'Julie', avant: dans(30), retractation: 6000, montant: 15000 }) },
@@ -90,6 +95,10 @@ function scenes(mail) {
     { titre: 'Tablette reçue, chargeur manquant prélevé', groupe: G4, fonction: 'tabletteRecue', note: 'Avant, l\'e-mail disait « plus rien ne sera prélevé » même avec un élément manquant.', contenu: si('tabletteRecue', { nom: 'Julie', rembourse: 0, manquants: ['chargeur et câble'], montant: 1000 }) },
     { titre: 'Tablette reçue, élément manquant mais prélèvement refusé', groupe: G4, fonction: 'tabletteRecue', note: 'Nouveau : rien ne partait avant.', contenu: si('tabletteRecue', { nom: 'Julie', rembourse: 0, manquants: ['chargeur et câble', 'enceinte'], montant: 2000, echec: true }) },
     { titre: 'Tablette jamais rendue : matériel prélevé', groupe: G4, fonction: 'materielNonRendu', note: 'Nouveau : rien ne partait avant.', contenu: si('materielNonRendu', { nom: 'Julie', montant: 15000, avant: dans(-1) }) },
+    { titre: 'Mise en demeure : tablette non rendue, prélèvement refusé', groupe: G4, fonction: 'miseEnDemeure', note: 'Ajouté (20/11) : envoyé mais absent de la galerie.', contenu: si('miseEnDemeure', { nom: 'Julie', montant: 14000, impaye: false }) },
+    { titre: 'Mise en demeure : idem, abonnement arrêté pour impayé', groupe: G4, fonction: 'miseEnDemeure', note: 'Ajouté (20/11) : envoyé mais absent de la galerie.', contenu: si('miseEnDemeure', { nom: 'Julie', montant: 14000, impaye: true }) },
+    { titre: 'Photos bientôt effacées (3 mois après l\'arrêt)', groupe: G4, fonction: 'avantEffacement', note: 'Ajouté (20/11) : envoyé mais absent de la galerie.', contenu: si('avantEffacement', { nom: 'Julie', famille: 'Mamie Jeanne', le: dans(30), deces: false }) },
+    { titre: 'Photos bientôt effacées (arrêt après un décès)', groupe: G4, fonction: 'avantEffacement', note: 'Ajouté (20/11) : envoyé mais absent de la galerie.', contenu: si('avantEffacement', { nom: 'Julie', famille: 'Mamie Jeanne', le: dans(30), deces: true }) },
 
     { titre: 'Demande de rappel : bien reçu (au visiteur)', groupe: G5, fonction: 'rappelConfirme', note: 'Nouveau : rien ne partait avant.', contenu: si('rappelConfirme', { nom: 'Julie Martin', telephone: '06 12 34 56 78' }) },
 
