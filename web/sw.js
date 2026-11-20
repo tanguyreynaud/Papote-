@@ -111,6 +111,7 @@ self.addEventListener('fetch', (event) => {
 // Notifications push (voir js/push.js et la fonction serveur appelsPush) :
 //   { type: 'appel', cid, nom }  la tablette appelle : notification qui sonne, « Répondre »
 //   { type: 'manque', cid, nom } personne n'a répondu : la sonnerie devient « Appel manqué »
+//   { type: 'alerte', urgence: 'sos', fid, quand } SOS sans réponse : ouvre « Rappeler » (?rappeler=1&sos=1)
 self.addEventListener('push', (event) => {
   let data = {};
   try { data = (event.data && event.data.json()) || {}; } catch (e) { /* message illisible */ }
@@ -143,6 +144,21 @@ self.addEventListener('push', (event) => {
       actions: [{ action: 'rappeler', title: 'Rappeler' }],
       // « Rappeler » ne vaut que 24 h ; après, la notification ouvre simplement l'app.
       data: { url: '/?rappeler=1', rappelJusqua: Date.now() + 24 * 3600_000 },
+    });
+  } else if (data.type === 'alerte' && data.urgence === 'sos') {
+    // SOS resté sans réponse : { type: 'alerte', urgence: 'sos', fid, quand, titre, texte } (functions/appels.js).
+    // Toucher la notification ouvre la fenêtre « <Prénom> a appuyé sur SOS » et « Rappeler » (Tanguy, 20/11 : avant,
+    // on arrivait juste sur l'accueil). Étiquette à part : une autre alerte de la tablette ne la remplace pas.
+    const quand = /^\d{1,15}$/.test(String(data.quand || '')) ? String(data.quand) : String(Date.now());
+    const famille = data.fid ? `famille=${encodeURIComponent(data.fid)}&` : '';
+    shown = self.registration.showNotification(data.titre || `${nom} a appuyé sur SOS`, {
+      body: data.texte || 'Personne n\'a pu répondre. Rappelez dès que possible.',
+      tag: 'alerte-sos',
+      renotify: true,
+      requireInteraction: true,
+      icon: 'icons/icon-192.png',
+      badge: 'icons/icon-192.png',
+      data: { url: `/?${famille}rappeler=1&sos=1&quand=${quand}` },
     });
   } else {
     // Alerte sur la tablette (débranchée, hors ligne…) : { type: 'alerte', titre, texte }.

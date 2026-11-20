@@ -20,7 +20,7 @@ const MORCEAUX = [
   [
     'admin-colis-en-route.test.js', 'admin-remplacement.test.js', 'admin-sim-installation.test.js',
     'changement-compte.test.js', 'deux-proches.test.js', 'envois.test.js', 'limites.test.js', 'natif.test.js',
-    'proches.test.js', 'reglages.test.js', 'reseau.test.js', 'resiliation-responsables.test.js', 'sos-ordre.test.js',
+    'proches.test.js', 'reglages.test.js', 'reseau.test.js', 'resiliation-responsables.test.js', 'sos-ordre.test.js', 'sos-rappel.test.js', 'sos-fin.test.js',
     'sos.test.js', 'tel-unique.test.js', 'webkit-liste.test.js',
   ],
   [

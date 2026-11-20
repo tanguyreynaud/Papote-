@@ -19,7 +19,7 @@ function dialog(message, buttons, extra = null) {
     const back = document.createElement('div');
     back.className = 'dialog-back';
     const box = document.createElement('div');
-    box.className = 'dialog';
+    box.className = extra?.cls ? `dialog ${extra.cls}` : 'dialog';
     box.setAttribute('role', 'alertdialog');
     const text = document.createElement('p');
     text.textContent = message;
@@ -41,21 +41,44 @@ function dialog(message, buttons, extra = null) {
       setTimeout(() => back.remove(), 150);
       resolve(value);
     };
-    for (const { label, value, cls } of buttons) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = cls;
-      b.textContent = label;
-      b.addEventListener('click', (e) => { if (!doublon(e)) close(value); });
-      row.append(b);
-    }
+    // Boutons changés juste après un toucher (api.boutons) : le 2e toucher d'un double appui sur l'ancien bouton
+    // tomberait sur le nouveau au même endroit ; ignoré pendant une demi-seconde. Un changement venu d'ailleurs (le
+    // serveur, longtemps après le dernier toucher) ne bloque rien.
+    let nouveauxDepuis = -Infinity;
+    // action(bouton) : le bouton agit sans fermer la fenêtre (elle change ensuite par l'api) ; sinon il la ferme.
+    const poserBoutons = (liste) => {
+      row.replaceChildren();
+      for (const { label, value, cls, action, disabled } of liste) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = cls;
+        b.disabled = !!disabled;
+        b.textContent = label;
+        b.addEventListener('click', (e) => {
+          if (doublon(e) || e.timeStamp - nouveauxDepuis < DOUBLE_MS || b.disabled) return;
+          if (action) action(b); else close(value);
+        });
+        row.append(b);
+      }
+    };
+    poserBoutons(buttons);
     back.addEventListener('click', (e) => { if (e.target === back && !doublon(e)) close(false); });
-    if (extra?.title) {
-      const h = document.createElement('h2');
-      h.className = 'dialog-title';
-      h.textContent = extra.title;
-      box.append(h);
-    }
+    const h = document.createElement('h2');
+    h.className = 'dialog-title';
+    h.textContent = extra?.title || '';
+    if (extra?.title) box.append(h);
+    // Fenêtre qui change en restant ouverte (SOS : en cours, puis comment il s'est terminé) : titre, texte, boutons.
+    extra?.api?.({
+      titre: (t) => { h.textContent = t; if (!h.isConnected) box.prepend(h); },
+      texte: (t) => { text.textContent = t; text.hidden = !t; },
+      boutons: (liste) => {
+        poserBoutons(liste);
+        if (dernierToucher && performance.now() - dernierToucher.t < DOUBLE_MS) nouveauxDepuis = performance.now();
+        row.firstChild?.focus();
+      },
+      fermer: (v) => close(v),
+      ouverte: () => !back.classList.contains('closing'),
+    });
     box.append(text);
     if (extra?.list) {
       const ul = document.createElement('ul');
@@ -101,6 +124,38 @@ export function avantDePartir({ intro, perdu, suite }) {
     { label: 'Garder Papote', value: false, cls: 'primary' },
     { label: 'Résilier quand même', value: true, cls: 'secondary' },
   ], { title: 'Avant de partir', list: perdu, after: suite, stack: true });
+}
+
+/**
+ * SOS resté sans réponse (notification « <Prénom> a appuyé sur SOS ») : le nom, l'heure, et « Rappeler <Prénom> » en
+ * premier, « Plus tard » dessous, même taille. true si « Rappeler » est touché (Tanguy, 20/11 : « Oui avec une popup »).
+ */
+export function fenetreSos(nom, quand) {
+  return dialog(quand ? `${quand}. Personne n'a pu répondre.` : 'Personne n\'a pu répondre.', [
+    { label: `Rappeler ${nom}`, value: true, cls: 'primary' },
+    { label: 'Plus tard', value: false, cls: 'secondary' },
+  ], { title: `${nom} a appuyé sur SOS`, stack: true, cls: 'dialog-sos' });
+}
+
+/**
+ * SOS suivi en direct (fiche de la tablette, members/{uid}.sos) : la même fenêtre, qui change en restant ouverte.
+ * etat : { titre, texte, boutons } ; boutons : [{ label, value, cls, action, disabled }] (action : ne ferme pas).
+ * Renvoie { fin: Promise (valeur du bouton qui ferme, false pour le fond), maj(etat) }.
+ */
+export function fenetreSosSuivie(etat) {
+  let api = null;
+  const fin = dialog(etat.texte, etat.boutons, {
+    title: etat.titre, stack: true, cls: 'dialog-sos', api: (a) => { api = a; },
+  });
+  return {
+    fin,
+    maj(e) {
+      if (!api?.ouverte()) return;
+      api.titre(e.titre);
+      api.texte(e.texte);
+      if (e.boutons) api.boutons(e.boutons);
+    },
+  };
 }
 
 /** Menu d'actions (bouton « ⋯ ») : renvoie la valeur choisie, ou false si annulé. */

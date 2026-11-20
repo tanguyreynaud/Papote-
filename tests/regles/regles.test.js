@@ -431,6 +431,51 @@ test('appels SOS : seule la tablette en crée ; un proche ne relance pas un SOS 
   await assertSucceeds(updateDoc(doc(proche('julie'), `families/${FID}/calls/s5`), { state: 'ringing' }));
 });
 
+test('SOS sur la fiche de la tablette (members/{uid}.sos) : la tablette seule, sur sa fiche, forme fixe ; sosPris jamais écrit par une appli', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `families/${FID}/members/paul`), { name: 'Paul', role: 'famille', uid: 'paul', email: 'paul@exemple.fr', status: 'active' });
+    await setDoc(doc(ctx.firestore(), `families/${FID}/members/tab-appels`), { name: 'Tablette', role: 'tablette', pairing: PAIRING });
+  });
+  const debut = Date.now();
+  const sos = (extra = {}) => ({ debut, fin: '', uid: '', nom: '', ...extra });
+  const tab = doc(tablette('tab'), `families/${FID}/members/tab`);
+  // La tablette : SOS parti, puis chacune des trois fins.
+  await assertSucceeds(updateDoc(tab, { sos: sos() }));
+  await assertSucceeds(updateDoc(tab, { sos: sos({ fin: 'repondu', uid: 'julie', nom: 'Julie' }) }));
+  await assertSucceeds(updateDoc(tab, { sos: sos({ fin: 'arrete' }) }));
+  await assertSucceeds(updateDoc(tab, { sos: sos({ fin: 'pris', uid: 'paul', nom: 'Paul' }) }));
+  // Forme refusée : fin inconnue, debut pas entier, champ en trop ou manquant, nom trop long, pas une fiche.
+  await assertFails(updateDoc(tab, { sos: sos({ fin: 'fini' }) }));
+  await assertFails(updateDoc(tab, { sos: sos({ debut: String(debut) }) }));
+  await assertFails(updateDoc(tab, { sos: sos({ debut: 0 }) }));
+  await assertFails(updateDoc(tab, { sos: { ...sos(), tel: '0612345678' } }));
+  await assertFails(updateDoc(tab, { sos: { debut, fin: '', uid: '' } }));
+  await assertFails(updateDoc(tab, { sos: sos({ nom: 'x'.repeat(41) }) }));
+  await assertFails(updateDoc(tab, { sos: 'en cours' }));
+  // sos avec un autre champ que la tablette ne peut pas écrire (role) : refusé.
+  await assertFails(updateDoc(tab, { sos: sos(), role: 'famille' }));
+  // Personne d'autre : un proche (même responsable) sur la fiche de la tablette, ni sur la sienne ; l'autre compte de la
+  // tablette sur la fiche principale.
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/tab`), { sos: sos() }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}/members/tab`), { sos: sos({ fin: 'pris', uid: 'paul', nom: 'Paul' }) }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/julie`), { sos: sos() }));
+  await assertFails(updateDoc(doc(tablette('tab-appels'), `families/${FID}/members/tab`), { sos: sos() }));
+  // Les proches lisent le SOS de la tablette.
+  await assertSucceeds(getDoc(doc(proche('paul'), `families/${FID}/members/tab`)));
+  // « Je m'en occupe » (families/{fid}.sosPris) : écrit par le serveur seulement, lu par les membres.
+  const pris = { uid: 'julie', nom: 'Julie', le: serverTimestamp(), debut };
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosPris: pris }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}`), { sosPris: pris, rev: 2 }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { sosPris: pris }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}`), { sosPris: pris }));
+  await assertFails(updateDoc(doc(admin(), `families/${FID}`), { sosPris: pris }));
+  await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), `families/${FID}`), { sosPris: { ...pris, le: Timestamp.now() } }));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { sosPris: deleteField() }));
+  assert.strictEqual((await getDoc(doc(proche('paul'), `families/${FID}`))).get('sosPris.nom'), 'Julie');
+  assert.strictEqual((await getDoc(doc(tablette('tab'), `families/${FID}`))).get('sosPris.uid'), 'julie');
+});
+
 // Tableau de bord (badge admin) : ordres à la tablette, fiche de membre, journal, volumes.
 const admin = (uid = 'tanguy') => env.authenticatedContext(uid, {
   email: `${uid}@exemple.fr`, email_verified: true, admin: true, firebase: { sign_in_provider: 'google.com' },
