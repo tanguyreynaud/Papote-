@@ -22,8 +22,23 @@ function dialog(message, buttons, extra = null) {
     box.className = extra?.cls ? `dialog ${extra.cls}` : 'dialog';
     box.setAttribute('role', 'alertdialog');
     const text = document.createElement('p');
-    text.textContent = message;
-    text.hidden = !message;
+    // Sans titre : la première phrase, si elle est courte, est la question (en gras), la suite l'explique (plus
+    // discrète). Le texte complet reste dans le même paragraphe, mot pour mot.
+    const poserTexte = (t) => {
+      const m = !extra?.title && /^(.{1,64}?[?!.…])\s+(\S[\s\S]*)$/.exec(t || '');
+      text.className = extra?.title ? '' : 'dialog-msg';
+      if (!m) { text.textContent = t; text.classList.toggle('seul', !extra?.title); } else {
+        const q = document.createElement('span');
+        q.className = 'dialog-q';
+        q.textContent = m[1];
+        const d = document.createElement('span');
+        d.className = 'dialog-d';
+        d.textContent = m[2];
+        text.replaceChildren(q, ' ', d);
+      }
+      text.hidden = !t;
+    };
+    poserTexte(message);
     const row = document.createElement('div');
     row.className = extra?.stack ? 'dialog-buttons stack' : 'dialog-buttons';
     // Le toucher qui ouvre cette fenêtre (fenêtre ouverte pendant ce clic) : son double est ignoré.
@@ -50,12 +65,19 @@ function dialog(message, buttons, extra = null) {
     // action(bouton) : le bouton agit sans fermer la fenêtre (elle change ensuite par l'api) ; sinon il la ferme.
     const poserBoutons = (liste) => {
       row.replaceChildren();
-      for (const { label, value, cls, action, disabled } of liste) {
+      for (const { label, value, cls, action, disabled, icone } of liste) {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = cls;
         b.disabled = !!disabled;
         b.textContent = label;
+        if (icone) {
+          const rond = document.createElement('span');
+          rond.className = 'menu-icone';
+          rond.setAttribute('aria-hidden', 'true');
+          rond.innerHTML = `<svg><use href="#i-${icone}"/></svg>`;
+          b.prepend(rond);
+        }
         b.addEventListener('click', (e) => {
           if (doublon(e) || e.timeStamp - nouveauxDepuis < DOUBLE_MS || b.disabled) return;
           toucherIci = e.timeStamp;
@@ -70,10 +92,23 @@ function dialog(message, buttons, extra = null) {
     h.className = 'dialog-title';
     h.textContent = extra?.title || '';
     if (extra?.title) box.append(h);
+    // Menu d'une personne : sa photo (ou son initiale), son prénom et son adresse en tête de la fenêtre.
+    if (extra?.title && extra.tete) {
+      const tete = document.createElement('div');
+      tete.className = 'dialog-tete';
+      const rond = document.createElement(extra.tete.photo ? 'img' : 'span');
+      rond.className = 'dialog-tete-photo';
+      if (extra.tete.photo) { rond.src = extra.tete.photo; rond.alt = ''; } else { rond.textContent = (extra.title.trim()[0] || '?').toUpperCase(); rond.setAttribute('aria-hidden', 'true'); }
+      const qui = document.createElement('div');
+      h.replaceWith(tete);
+      qui.append(h);
+      if (extra.tete.sous) { const s = document.createElement('p'); s.className = 'dialog-tete-sous'; s.textContent = extra.tete.sous; qui.append(s); }
+      tete.append(rond, qui);
+    }
     // Fenêtre qui change en restant ouverte (SOS : en cours, puis comment il s'est terminé) : titre, texte, boutons.
     extra?.api?.({
       titre: (t) => { h.textContent = t; if (!h.isConnected) box.prepend(h); },
-      texte: (t) => { text.textContent = t; text.hidden = !t; },
+      texte: (t) => poserTexte(t),
       boutons: (liste) => {
         poserBoutons(liste);
         if (performance.now() - toucherIci < DOUBLE_MS) nouveauxDepuis = performance.now();
@@ -82,7 +117,35 @@ function dialog(message, buttons, extra = null) {
       fermer: (v) => close(v),
       ouverte: () => !back.classList.contains('closing'),
     });
+    // Petit dessin en haut de la fenêtre (corbeille rouge pour supprimer, caméra pour appeler…) : on reconnaît la
+    // question d'un coup d'œil.
+    if (extra?.icone) {
+      const rond = document.createElement('span');
+      rond.className = extra.danger ? 'dialog-icone danger' : 'dialog-icone';
+      rond.setAttribute('aria-hidden', 'true');
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', `#i-${extra.icone}`);
+      svg.append(use);
+      rond.append(svg);
+      box.append(rond);
+      box.classList.add('avec-icone');
+    }
     box.append(text);
+    // Étapes numérotées (« Que faire ? ») : numéro, dessin du sprite de la page, phrase en gras, détail.
+    if (extra?.etapes) {
+      const ol = document.createElement('ol');
+      ol.className = 'dialog-etapes';
+      extra.etapes.forEach((e, i) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="etape-num">${i + 1}</span><svg class="etape-icone" aria-hidden="true"><use href="#${e.icone}"/></svg>`
+          + '<span class="etape-texte"><strong></strong><span></span></span>';
+        li.querySelector('strong').textContent = e.titre;
+        li.querySelector('.etape-texte span').textContent = e.texte;
+        ol.append(li);
+      });
+      box.append(ol);
+    }
     if (extra?.list) {
       const ul = document.createElement('ul');
       ul.className = 'dialog-list';
@@ -113,12 +176,22 @@ function actionLabel(message) {
   return /^[A-ZÉ][a-zéèêàç]+er$/.test(word) ? word : 'Confirmer';
 }
 
+// Le dessin de la fenêtre, d'après le premier mot de la question.
+function iconeDe(message) {
+  const m = [
+    [/^Supprimer|^Effacer/, 'trash'], [/^Appeler/, 'video'], [/^Redémarrer/, 'tablette'],
+    [/^Quitter|^Se déconnecter/, 'sortie'], [/^Retirer|^Refuser|^Rendre|^Mettre|^Accepter/, 'user'],
+    [/^Changer le code|^Inviter/, 'famille'],
+  ].find(([r]) => r.test(message));
+  return m ? m[1] : 'help';
+}
+
 export function askConfirm(message, okLabel = actionLabel(message)) {
   const danger = /^(Supprimer|Quitter|Retirer|Refuser|Se déconnecter|Changer)/.test(message);
   return dialog(message, [
     { label: 'Annuler', value: false, cls: 'secondary' },
     { label: okLabel, value: true, cls: danger ? 'primary danger-btn' : 'primary' },
-  ]);
+  ], { icone: iconeDe(message), danger });
 }
 
 /** Étape « Avant de partir » avant une résiliation : garder (principal) ou résilier quand même. */
@@ -162,11 +235,11 @@ export function fenetreSosSuivie(etat) {
 }
 
 /** Menu d'actions (bouton « ⋯ ») : renvoie la valeur choisie, ou false si annulé. */
-export function chooseAction(title, options) {
+export function chooseAction(title, options, tete = null) {
   return dialog('', [
-    ...options.map((o) => ({ label: o.label, value: o.value, cls: o.danger ? 'secondary action-danger' : 'secondary' })),
+    ...options.map((o) => ({ label: o.label, value: o.value, icone: o.icone, cls: o.danger ? 'secondary action-danger' : 'secondary' })),
     { label: 'Annuler', value: false, cls: 'link' },
-  ], { title, stack: true });
+  ], { title, stack: true, cls: 'dialog-menu', tete });
 }
 
 export function notice(message) {
@@ -174,19 +247,22 @@ export function notice(message) {
 }
 
 /**
- * « Que faire ? » quand la tablette ne répond plus (Tanguy, 20/11) : 3 étapes concrètes, puis le lien vers
- * « Dépanner la tablette » (banc du 19/11 : Julie et Sylvie arrivaient dans Dépanner sans consigne). Rend 'depanner'
- * si la personne touche ce lien.
+ * « Que faire ? » quand la tablette ne répond plus (Tanguy, 20/11) : 3 étapes concrètes, chacune avec son numéro,
+ * son dessin et une phrase courte en gras, puis « Dépanner la tablette » en dessous (banc du 19/11 : Julie et Sylvie
+ * arrivaient dans Dépanner sans consigne). depuis : « 2 h »… Rend 'depanner' si la personne touche ce lien.
  */
-export function queFaireTablette(nom) {
-  return dialog([
-    `1. Demandez à ${nom} si l'écran de la tablette est allumé.`,
-    "2. S'il est noir : branchez le chargeur, puis appuyez 3 secondes sur le bouton marche/arrêt, sur le côté.",
-    '3. La tablette se reconnecte ensuite toute seule, en quelques minutes.',
-  ].join('\n'), [
-    { label: 'Dépanner la tablette', value: 'depanner', cls: 'secondary' },
-    { label: 'OK', value: true, cls: 'primary' },
-  ], { title: 'Que faire ?', cls: 'dialog-etapes' });
+export function queFaireTablette(nom, depuis) {
+  return dialog(depuis ? `Aucune nouvelle de la tablette depuis ${depuis}.` : '', [
+    { label: 'Compris', value: true, cls: 'primary' },
+    { label: 'Plus d\'aide : dépanner la tablette', value: 'depanner', cls: 'link' },
+  ], {
+    title: 'Que faire ?', stack: true, cls: 'dialog-que-faire',
+    etapes: [
+      { icone: 'i-tablette', titre: 'Son écran est-il allumé ?', texte: `Demandez-le à ${nom}, ou à quelqu'un près d'elle.` },
+      { icone: 'i-plug', titre: 'Écran noir : rallumez-la', texte: 'Branchez le chargeur, puis appuyez 3 secondes sur le bouton marche/arrêt, sur le côté.' },
+      { icone: 'i-wifi', titre: 'Elle revient toute seule', texte: 'En quelques minutes. Ce message disparaît dès qu\'elle est reconnectée.' },
+    ],
+  });
 }
 
 /** Message d'échec avec « Besoin d'aide ? » : rend 'aide' si la personne le touche. */
@@ -210,5 +286,5 @@ export function demanderQuitter() {
   return dialog('Voulez-vous quitter Papote ?', [
     { label: 'Rester', value: false, cls: 'secondary' },
     { label: 'Quitter', value: true, cls: 'primary' },
-  ]);
+  ], { icone: 'sortie' });
 }

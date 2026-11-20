@@ -22,9 +22,13 @@ test('Tablette muette : « Que faire ? » donne 3 étapes, puis mène à « Dép
   await julie.page.locator('#activity button', { hasText: 'Que faire ?' }).click();
   const fenetre = await g.texteFenetre(julie);
   assert.match(fenetre, /Que faire \?/);
-  assert.match(fenetre, /1\. Demandez à Mamie Emma si l'écran de la tablette est allumé\./);
-  assert.match(fenetre, /2\. S'il est noir : branchez le chargeur, puis appuyez 3 secondes sur le bouton marche\/arrêt/);
-  assert.match(fenetre, /3\. La tablette se reconnecte ensuite toute seule/);
-  await g.repondre(julie, 'Dépanner la tablette');
+  assert.match(fenetre, /Aucune nouvelle de la tablette depuis 2 h/);
+  assert.match(fenetre, /Son écran est-il allumé \?.*Demandez-le à Mamie Emma/s);
+  assert.match(fenetre, /Écran noir : rallumez-la.*appuyez 3 secondes sur le bouton marche\/arrêt/s);
+  assert.match(fenetre, /Elle revient toute seule/);
+  assert.strictEqual(await julie.page.locator('.dialog-etapes li').count(), 3);
+  await julie.page.waitForTimeout(400);
+  if (process.env.CAPTURE) await julie.page.screenshot({ path: process.env.CAPTURE });
+  await g.repondre(julie, 'Plus d\'aide : dépanner la tablette');
   await julie.page.locator('#remote-card').waitFor({ state: 'visible' });
 });

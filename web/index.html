@@ -100,6 +100,7 @@
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></symbol>
     <symbol id="i-flip" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h2l1.5-2h5L16 5h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M9 11.5a3 3 0 0 1 5.2-1.6M15 13.5a3 3 0 0 1-5.2 1.6M14.5 8.5v1.6h-1.6M9.5 16.5v-1.6h1.6"/></symbol>
     <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-haut" viewBox="0 0 24 24"><path d="M5 4h14M12 20V9M7 13l5-5 5 5"/></symbol>
     <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
     <symbol id="i-famille" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.500 6.500 0 0 1 13 0"/><circle cx="17.500" cy="9" r="2.500"/><path d="M17 14.200a5 5 0 0 1 4.500 5"/></symbol>
     <symbol id="i-son" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.500 8.500a5 5 0 0 1 0 7M19 6a8.500 8.500 0 0 1 0 12"/></symbol>
@@ -413,7 +414,7 @@
       <p class="outbox" hidden></p>
       <ul id="photos" class="gallery"></ul>
       <div id="photos-more" class="feed-more"></div>
-      <p id="photos-empty" class="empty" hidden>Aucune photo pour l'instant.<br>Touchez + pour en envoyer une.</p>
+      <div id="photos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-photo"/></svg></span><p class="vide-titre">Aucune photo pour l'instant.</p><p>Touchez + pour en envoyer une.</p></div>
       <button type="button" class="fab" data-add="photo" aria-label="Ajouter une photo"><svg><use href="#i-plus"/></svg></button>
     </section>
 
@@ -426,7 +427,7 @@
       <p class="outbox" hidden></p>
       <ul id="videos" class="gallery"></ul>
       <div id="videos-more" class="feed-more"></div>
-      <p id="videos-empty" class="empty" hidden>Aucune vidéo pour l'instant.<br>Touchez + pour en envoyer une.</p>
+      <div id="videos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-video"/></svg></span><p class="vide-titre">Aucune vidéo pour l'instant.</p><p>Touchez + pour en envoyer une.</p></div>
       <button type="button" class="fab" data-add="video" aria-label="Ajouter une vidéo"><svg><use href="#i-plus"/></svg></button>
     </section>
 
@@ -438,7 +439,7 @@
       </header>
       <p class="outbox" hidden></p>
       <ul id="messages" class="chat"></ul>
-      <p id="messages-empty" class="empty" hidden>Aucun message pour l'instant.</p>
+      <div id="messages-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-message"/></svg></span><p class="vide-titre">Aucun message pour l'instant.</p></div>
       <form id="form-message" class="chat-bar">
         <p id="messages-limite" class="limite-note" role="status" hidden></p>
         <div id="quick-messages" class="quick-messages" role="group" aria-label="Messages rapides">
@@ -465,7 +466,7 @@
       <ul id="birthdays" class="list"></ul>
       <h2 class="list-title" id="reminders-title" hidden>Rappels</h2>
       <ul id="reminders" class="list"></ul>
-      <p id="reminders-empty" class="empty" hidden>Aucun rappel ni anniversaire pour l'instant.<br>Touchez + pour en ajouter un.</p>
+      <div id="reminders-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-agenda"/></svg></span><p class="vide-titre">Aucun rappel ni anniversaire pour l'instant.</p><p>Touchez + pour en ajouter un.</p></div>
       <button type="button" class="fab" id="add-reminder" aria-label="Ajouter un rappel"><svg><use href="#i-plus"/></svg></button>
     </section>
 
@@ -779,9 +780,13 @@
         <div class="card">
           <h2>Inviter avec le code famille</h2>
           <p class="muted">Faites scanner ce QR code avec l'appareil photo de la personne, ou envoyez-lui le lien. Un responsable devra accepter son arrivée.</p>
-          <div id="invite-qr" class="qr" role="img" aria-label="QR code pour rejoindre la famille"></div>
-          <p class="code" id="settings-code"></p>
-          <button id="btn-share" class="primary wide">Partager le lien</button>
+          <div class="invite-code">
+            <div id="invite-qr" class="qr" role="img" aria-label="QR code pour rejoindre la famille"></div>
+            <div class="invite-code-cote">
+              <p class="code" id="settings-code"></p>
+              <button id="btn-share" class="primary">Partager le lien</button>
+            </div>
+          </div>
           <button id="btn-new-code" class="link wide" hidden>Changer le code famille</button>
         </div>
       </div>
@@ -1160,7 +1165,7 @@
       <label>Heure
         <input id="rem-time" type="time" value="09:00">
       </label>
-      <label>Prévenir avant
+      <label>Prévenir
         <select id="rem-avance">
           <option value="0">Seulement à l'heure</option>
           <option value="5">5 minutes avant</option>

@@ -723,11 +723,23 @@ function galleryItem(post, what, onOpen) {
     caption.textContent = post.text;
     info.append(caption);
   }
+  // Qui a envoyé et quand, en tête de la carte : sa photo (ou son initiale), son prénom, puis la date dessous.
   const who = document.createElement('p');
-  who.className = 'muted small';
-  who.textContent = `${post.authorName} · ${timeLabel(toDate(post.createdAt))}`;
+  who.className = 'muted small shot-qui';
+  const prenom = document.createElement('strong');
+  prenom.textContent = post.authorName;
+  const sep = document.createElement('span');
+  sep.className = 'shot-sep';
+  sep.textContent = ' · ';
+  const quand = document.createElement('span');
+  quand.className = 'shot-quand';
+  quand.textContent = timeLabel(toDate(post.createdAt));
+  who.append(prenom, sep, quand);
   info.append(who);
-  meta.append(info);
+  const tete = faces[post.authorUid] ? avatar(faces[post.authorUid]) : document.createElement('span');
+  tete.classList.add('shot-tete');
+  if (!faces[post.authorUid]) { tete.textContent = (post.authorName || '?').trim().charAt(0).toUpperCase(); tete.setAttribute('aria-hidden', 'true'); }
+  meta.append(tete, info);
   const badge = document.createElement('span');
   badge.className = `read-badge ${post.seenAt ? 'read' : 'unread'}`;
   badge.textContent = post.seenAt ? 'Lu' : 'Envoyé ✓'; // « Envoyé ✓ » puis « Lu » (Tanguy, 19/11 : « Non lu » ne disait pas que c'était bien parti)
@@ -747,7 +759,10 @@ function galleryItem(post, what, onOpen) {
     del.addEventListener('click', () => confirmDelete(post, what));
     meta.append(del);
   }
-  li.append(meta);
+  // La carte : qui et quand en haut, l'image, puis la légende dessous s'il y en a une.
+  li.prepend(meta);
+  const legende = info.querySelector('.shot-caption');
+  if (legende) li.append(legende);
   return li;
 }
 
@@ -1142,8 +1157,12 @@ function showIntroTablette() {
       </div>
       <div class="intro-step" data-step="3" hidden>
         <h2>Le son</h2>
-        <p class="muted">Volume du son : <strong id="intro-volume-val"></strong></p>
-        <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume">
+        <p class="muted">Le son des vidéos, les messages lus à voix haute, la radio.</p>
+        <div class="intro-son">
+          <div class="intro-son-tete"><strong>Volume du son</strong><span id="intro-volume-val" class="setup-son-val"></span></div>
+          <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume">
+        </div>
+        <p class="muted small">La sonnerie et le volume des appels se règlent ensuite dans Réglages.</p>
       </div>
       <div class="intro-step" data-step="4" hidden>
         <h2>Les options</h2>
@@ -3399,10 +3418,10 @@ function renderMembers(all) {
         more.textContent = '⋮';
         more.addEventListener('click', async () => {
           const options = [];
-          if (f.createdBy === session.uid) options.push({ label: m.enTete ? 'Retirer de la tête' : 'Mettre en tête', value: 'tete' });
-          options.push({ label: isAdmin ? 'Retirer le rôle de responsable' : 'Rendre responsable', value: 'admin' });
-          options.push({ label: 'Retirer de la famille', value: 'remove', danger: true });
-          const choix = await chooseAction(m.name, options);
+          if (f.createdBy === session.uid) options.push({ label: m.enTete ? 'Retirer de la tête' : 'Mettre en tête', value: 'tete', icone: 'haut' });
+          options.push({ label: isAdmin ? 'Retirer le rôle de responsable' : 'Rendre responsable', value: 'admin', icone: 'bouclier' });
+          options.push({ label: 'Retirer de la famille', value: 'remove', danger: true, icone: 'sortie' });
+          const choix = await chooseAction(m.name, options, { photo: faces[m.id] || '', sous: m.email || '' });
           if (choix === 'admin') {
             const msg = isAdmin
               ? `Retirer le rôle de responsable à ${m.name} ? Cette personne ne pourra plus accepter de membres, changer les réglages ni gérer l'abonnement.`
@@ -6021,17 +6040,24 @@ function renderActivity() {
     el.classList.add('calme');
     el.textContent = `La tablette de ${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au wifi si vous pouvez.`;
   } else if (now - online > EN_LIGNE_MS) {
-    // Court (Tanguy, 20/11 : le bloc rouge était long) : la marche à suivre est dans « Que faire ? ».
     // Ce que l'app sait déjà (branchée) est utilisé.
     el.classList.add('warn');
-    el.textContent = `La tablette ne répond plus depuis ${ago(online).replace('il y a ', '')}`
-      + (battery?.charging === true ? ' : sans doute une coupure de réseau.' : '.');
+    // Court (Tanguy, 20/11 : « le bloc de texte rouge est un peu long ») : le fait en rouge, la piste en dessous en
+    // texte normal ; le détail est dans « Que faire ? ».
+    el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. `;
+    const piste = document.createElement('span');
+    piste.className = 'activity-piste';
+    piste.textContent = battery?.charging === true
+      ? 'Elle était branchée : elle se reconnecte toute seule.'
+      : `Peut-être éteinte : demandez à ${name} de la brancher.`;
+    el.append(piste);
     const quoi = document.createElement('button');
     quoi.type = 'button';
-    quoi.className = 'link';
-    quoi.textContent = 'Que faire ?';
+    quoi.className = 'que-faire-btn';
+    quoi.innerHTML = '<svg aria-hidden="true"><use href="#i-help"/></svg>';
+    quoi.append('Que faire ?');
     quoi.addEventListener('click', async () => {
-      if (await queFaireTablette(name) === 'depanner' && !papoteAller('depanner')) openPage('settings', false);
+      if (await queFaireTablette(name, ago(online).replace('il y a ', '')) === 'depanner' && !papoteAller('depanner')) openPage('settings', false);
     });
     el.append(' ', quoi);
   } else if (battery && battery.charging === false && battery.unpluggedAt) {
