@@ -6029,10 +6029,15 @@ function renderActivity() {
     // Une marche à suivre, pas une question (banc utilisateurs du 19/11 : « l'appli ne me dit pas quoi faire ») ;
     // toutes les tablettes ont une carte SIM : pas de « wifi » ici. Ce que l'app sait déjà (branchée) est utilisé.
     el.classList.add('warn');
-    el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. `
-      + (battery?.charging === true
-        ? 'Elle était branchée : le réseau a sans doute coupé, elle se reconnecte toute seule dès qu’il revient.'
-        : `Elle est peut-être éteinte : demandez à ${name} de la brancher.`);
+    // Court (Tanguy, 20/11 : « le bloc de texte rouge est un peu long ») : le fait en rouge, la piste en dessous en
+    // texte normal ; le détail est dans « Que faire ? ».
+    el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. `;
+    const piste = document.createElement('span');
+    piste.className = 'activity-piste';
+    piste.textContent = battery?.charging === true
+      ? 'Elle était branchée : elle se reconnecte toute seule.'
+      : `Peut-être éteinte : demandez à ${name} de la brancher.`;
+    el.append(piste);
     const quoi = document.createElement('button');
     quoi.type = 'button';
     quoi.className = 'que-faire-btn';
