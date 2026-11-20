@@ -20,11 +20,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Papote">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Les polices n'empêchent plus l'affichage : la page apparaît avec la police du téléphone et change
-       dès qu'elles arrivent (sinon, écran blanc tant que Google Fonts ne répond pas, 6 s en 4G faible). -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" media="print" onload="this.media='all'">
+  <!-- Polices servies par Papote (mêmes fichiers que le site) : plus aucune demande à Google à l'ouverture de l'appli
+       (Tanguy, 20/11). font-display: swap : la page apparaît avec la police du téléphone et change dès qu'elles arrivent. -->
+  <style>
+    @font-face { font-family: "Bricolage Grotesque"; src: url(polices/bricolage.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+    @font-face { font-family: "Atkinson Hyperlegible"; src: url(polices/atkinson-400.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+    @font-face { font-family: "Atkinson Hyperlegible"; src: url(polices/atkinson-700.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+  </style>
   <!-- Écran de démarrage écrit ici même : fond crème et logo dès le premier dessin, avant la feuille de
        style et les scripts (un écran blanc attendait sinon jusqu'à 6 s en 4G faible). -->
   <style>

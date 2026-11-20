@@ -240,7 +240,7 @@ if [ "$SECRETS_SEULS" = 0 ]; then
 
   if [ "$GENRE" = admin ]; then
     if touche '^web/'; then
-      etape "App : tests sans dépendance (réseau, promesses)" node --test tests/reseau.test.mjs tests/promesses-app.test.js tests/entetes-securite.test.js
+      etape "App : tests sans dépendance (réseau, promesses)" node --test tests/reseau.test.mjs tests/promesses-app.test.js tests/entetes-securite.test.js tests/polices.test.js
       # Admin seulement si ses fichiers bougent ; famille.css sert aux deux.
       ADMIN='^web/(admin\.html|js/(admin|gestion|gestion-api|statistiques|validation|validation-donnees)\.js|css/(admin|gestion|validation|famille)\.css)$'
       FAMILLE=0; ADMIN_TOUCHE=0
