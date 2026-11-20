@@ -711,11 +711,12 @@ async function loadShipped() {
       if (c.alerteJumelage) li.classList.add('alert');
       li.innerHTML = '<strong></strong><span class="muted small"></span><span class="small"></span><a target="_blank" rel="noopener" class="small"></a>';
       titreCommande(li, c.id, orderHead(c));
-      const infos = [c.email, `envoyée ${ago(toDate(c.envoyeeLe))}`, `${c.rappels || 0} rappel(s) envoyé(s)`];
+      const infos = [c.email, `envoyée ${ago(toDate(c.envoyeeLe))}`, (c.rappels ? `${c.rappels} rappel${c.rappels > 1 ? 's' : ''} envoyé${c.rappels > 1 ? 's' : ''}` : 'aucun rappel envoyé')];
       if (c.alerteJumelage) infos.push('pas jumelée après 20 jours : appeler le client');
       li.querySelector('.muted').textContent = infos.join(' · ');
       li.querySelector('span.small:not(.muted)').textContent = c.mailErreur ? `E-mail non parti : ${c.mailErreur}` : livraisonTexte(c);
-      const a = li.querySelector('a');
+      // a.small (le lien de suivi) : querySelector('a') prenait le titre (nom du client), qui disparaissait.
+      const a = li.querySelector('a.small');
       a.href = lienSuivi(c);
       a.textContent = `Suivre le colis ${c.suivi || ''}`;
       // Suite de l'envoi : déposé, reçu par le client (à cocher d'après le suivi), mis en route (jumelage, automatique).
