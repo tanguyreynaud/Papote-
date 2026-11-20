@@ -308,3 +308,28 @@ test('Nom de la tablette : jamais un numéro (message sous le champ) ; nuit : he
   assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 19, a: 7 });
   await julie.page.locator('#sleep-value', { hasText: 'De 19 h à 7 h' }).waitFor();
 });
+
+// Luminosité de l'écran le jour (Tanguy, 20/11) : families/{fid}.luminosite de 40 à 100, par un responsable ; la tablette
+// la limite à 55 % le soir. Pas réglée : la tablette garde la sienne, le curseur propose 70 %.
+test('Luminosité : curseur à 70 % proposé, réglée à 85 % par Julie ; Paul (pas responsable) ne voit pas la carte', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await g.ouvrirTuile(julie, 'settings');
+  await julie.page.locator('#luminosite-value', { hasText: 'Pas encore réglée' }).waitFor();
+  await julie.page.click('#luminosite-card .setting-modify');
+  assert.strictEqual(await julie.page.locator('#luminosite').inputValue(), '70');
+  assert.strictEqual(await julie.page.locator('#luminosite-val').innerText(), '70 %');
+  await julie.page.locator('#luminosite').fill('85');
+  assert.strictEqual(await julie.page.locator('#luminosite-val').innerText(), '85 %');
+  await julie.page.click('#luminosite-card .setting-edit button[type=submit]');
+  await g.toast(julie, 'Luminosité envoyée à la tablette : 85 %');
+  await g.attendreBase(async () => (await g.lire(`families/${fid}`)).luminosite === 85, 'luminosite 85');
+  await julie.page.locator('#luminosite-value', { hasText: '85 % le jour, 55 % au plus le soir' }).waitFor();
+
+  await julie.page.click('#view-settings .back');
+  await g.attendreVue(julie, 'view-home');
+  const paul = await banc.telephone('Paul');
+  await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
+  await g.ouvrirTuile(paul, 'settings');
+  assert.strictEqual(await paul.page.locator('#luminosite-card').isVisible(), false);
+});

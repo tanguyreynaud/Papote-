@@ -5163,6 +5163,34 @@ SETTINGS['volume-card'] = {
   },
 };
 
+// Luminosité de l'écran le jour (Tanguy, 20/11) : families/{fid}.luminosite, entier de 40 à 100 (%), réglé par un
+// responsable (firestore.rules). La tablette l'applique le jour et la limite à 55 % le soir ; sans réglage, elle garde
+// la sienne. 70 % proposé par défaut.
+const LUMINOSITE_DEFAUT = 70;
+function luminositeReglee() {
+  const v = session.family?.luminosite;
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(100, Math.max(40, Math.round(v))) : null;
+}
+function renderLuminosite() {
+  const v = luminositeReglee();
+  $('luminosite-value').textContent = v == null ? 'Pas encore réglée : la tablette garde la sienne' : `${v} % le jour, 55 % au plus le soir`;
+}
+const majLuminositeVal = () => { $('luminosite-val').textContent = `${$('luminosite').value} %`; };
+$('luminosite').addEventListener('input', majLuminositeVal);
+SETTINGS['luminosite-card'] = {
+  fill() {
+    $('luminosite').value = String(luminositeReglee() ?? LUMINOSITE_DEFAUT);
+    majLuminositeVal();
+  },
+  async save() {
+    const v = Number($('luminosite').value);
+    if (!Number.isInteger(v) || v < 40 || v > 100) return false;
+    if (v === session.family?.luminosite) { toast(`Luminosité : ${v} %`); return true; }
+    await saveFamily({ luminosite: v }, `Luminosité envoyée à la tablette : ${v} %`);
+    return true;
+  },
+};
+
 // Ville de la météo : families/{fid}.meteoVille = { nom, lat, lon }, choisie par code postal ;
 // la tablette publie la sienne sur sa fiche membre, celle de la famille l'emporte.
 let communes = [];
@@ -5261,6 +5289,8 @@ function applyFamily() {
   renderAlertePasVue();
   $('volume-card').hidden = !amFamilyAdmin();
   renderVolume();
+  $('luminosite-card').hidden = !amFamilyAdmin();
+  renderLuminosite();
   $('options-card').hidden = !amFamilyAdmin();
   renderOptions();
   renderSosOrdre();
