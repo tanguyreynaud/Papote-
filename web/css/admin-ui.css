@@ -620,3 +620,81 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 .admin-body .card details.repli > summary h2, .admin-body details.repli.card > summary h2 { margin: 0; font-size: 15px; }
 .admin-body .contenu .lignes-kv button.ligne-kv { padding: 8px 0; border-radius: 0; font-size: 14px; }
 .admin-body .contenu .lignes-kv button.ligne-kv:first-child { border-top: 0; }
+
+/* ---------- Fiches (carte SIM, accessoire, dépense, client, famille) : même rangement que la tablette ---------- */
+.admin-body .colonne-seule { max-width: 640px; }
+.admin-body .deux-colonnes > div > .card:first-child, .admin-body .colonne-seule > .card:first-child { margin-top: 0; }
+.admin-body .deux-colonnes > div > .card > h2:first-child, .admin-body .colonne-seule > .card > h2:first-child { margin: 0 0 6px; font-size: 16px; }
+.admin-body .card > .tete-fiche h2 { font-size: 16px; }
+.admin-body .card > .tete-fiche { margin: 0 0 6px; }
+.admin-body dl.fiche.kv dd .badge { margin-left: 4px; }
+.admin-body dl.fiche.kv dd label.interrupteur { font-size: 14px; font-weight: 400; justify-content: flex-end; }
+.admin-body dl.fiche.kv dd .pieces-liste { justify-content: flex-end; }
+/* Fiches restées en pleine largeur (réglages) : libellés gris, un seul trait fin par ligne. */
+.admin-body dl.fiche:not(.kv) { gap: 0; grid-template-columns: minmax(150px, max-content) minmax(0, 1fr); }
+.admin-body dl.fiche:not(.kv) dt { color: var(--muted); font-weight: 400; padding-right: 20px; }
+.admin-body dl.fiche:not(.kv) dt.modifiable, .admin-body dl.fiche:not(.kv) dd.modifiable { border-bottom: 0; border-top: 1px solid var(--line); padding: 5px 0; min-height: 0; }
+.admin-body dl.fiche:not(.kv) dt:first-of-type, .admin-body dl.fiche:not(.kv) dd:first-of-type { border-top: 0; }
+@media (max-width: 640px) { .admin-body dl.fiche:not(.kv) { grid-template-columns: minmax(0, 1fr); } .admin-body dl.fiche:not(.kv) dt.modifiable { padding-bottom: 0; } .admin-body dl.fiche:not(.kv) dd.modifiable { border-top: 0; padding-top: 0; } }
+/* Liens vers une autre page : des lignes fines avec un chevron, plus des boîtes empilées. */
+.admin-body .liste-liens { gap: 0; }
+.admin-body .liste-liens li, .admin-body .liste-liens li:last-child { border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 9px 22px 9px 0; font-size: 14px; background: none; }
+.admin-body .liste-liens li:first-child { border-top: 0; }
+.admin-body .liste-liens li:has(a):hover { background: none; }
+.admin-body .liste-liens li:has(a):hover a { text-decoration: underline !important; }
+.admin-body .liste-liens li:has(a)::after { right: 2px; font-size: 16px; color: var(--chevron); font-weight: 400; }
+.admin-body .liste-liens .ll-quoi { width: 92px; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 14px; }
+.admin-body .liste-liens li > .muted { margin-left: auto; }
+.admin-body .liste-liens.groupe-commande + .liste-liens.groupe-commande { margin-top: 10px; border-top: 1px solid var(--line); }
+/* Famille : la fiche à gauche, ses liens à droite ; le titre de page laisse la place au nom. */
+.admin-body .contenu:has(#famille-fiche:not([hidden])) .contenu-tete h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; min-width: 0; }
+.admin-body .contenu:has(#famille-fiche:not([hidden])) .contenu-tete { min-height: 36px; margin-bottom: 0; }
+.admin-body #famille-fiche:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; align-items: start; }
+.admin-body #famille-fiche > .retour { grid-column: 1 / -1; justify-self: start; margin: -30px 0 10px; position: relative; }
+.admin-body #famille-fiche > #families { grid-column: 1; grid-row: 2 / span 3; margin: 0; }
+.admin-body #famille-fiche > #famille-liens { grid-column: 2; margin-top: 0; }
+.admin-body #famille-fiche > #famille-actions { grid-column: 2; }
+.admin-body #famille-fiche .family-head h2 { font: 700 24px var(--display); }
+.admin-body #famille-fiche #families > li:first-child { margin-top: 0; }
+@media (max-width: 1000px) {
+  .admin-body #famille-fiche:not([hidden]) { grid-template-columns: minmax(0, 1fr); }
+  .admin-body #famille-fiche > #families, .admin-body #famille-fiche > #famille-liens, .admin-body #famille-fiche > #famille-actions { grid-column: 1; grid-row: auto; }
+  .admin-body #famille-fiche > #famille-liens { margin-top: 12px; }
+}
+@media (max-width: 860px) { .admin-body #famille-fiche > .retour { margin: 10px 0 6px; } }
+/* Que faire si… : des lignes moins hautes. */
+.admin-body details.aide-cas { padding-top: 4px; padding-bottom: 4px; }
+.admin-body details.aide-cas > summary h2 { font-size: 15px; margin: 0; }
+/* Listes : un numéro de téléphone ne se coupe pas. */
+@media (min-width: 761px) { .admin-body #t-sim td:first-child { white-space: nowrap; } }
+.admin-body table td a[href^="tel:"] { white-space: nowrap; }
+.admin-body [data-panneau="clients"]:has(#famille-fiche:not([hidden])) > nav[data-sous] { display: none; }
+.admin-body #famille-fiche .family dl.fiche.kv { gap: 0; grid-template-columns: auto minmax(0, 1fr); }
+.admin-body [data-panneau="outils"] dl.fiche:not(.kv) { max-width: 640px; }
+/* Tablette introuvable : pas de blocs vides. */
+.admin-body details.repli:has(> summary .badge:empty) { display: none; }
+.admin-body .frise-tablette:empty { display: none; }
+/* Familles sur téléphone : une ligne par famille (nom, tablette, abonnement), comme les autres listes. */
+@media (max-width: 760px) {
+  .admin-body #t-familles, .admin-body #t-familles tbody { display: block; }
+  .admin-body #t-familles thead { display: none; }
+  .admin-body #t-familles tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; gap: 2px 8px; padding: 10px 12px; border-top: 1px solid var(--line); align-items: center; }
+  .admin-body #t-familles tbody tr:first-child { border-top: 0; }
+  .admin-body #t-familles tbody td { display: none; padding: 0; border: 0; }
+  .admin-body #t-familles tbody td:nth-child(1) { display: block; grid-column: 1; }
+  .admin-body #t-familles tbody td:nth-child(3) { display: block; grid-column: 1; grid-row: 2; color: var(--muted); font-size: 12px; }
+  .admin-body #t-familles tbody td:nth-child(4) { display: block; grid-column: 2; grid-row: 1 / span 2; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .admin-body #t-familles tbody tr[tabindex]::after { content: '›'; grid-column: 3; grid-row: 1 / span 2; color: var(--chevron); font-size: 20px; position: static; }
+  .admin-body #t-familles tbody td.error { display: block; }
+}
+@media (max-width: 760px) {
+  .admin-body #t-familles tbody td.vide { display: block; grid-column: 1 / -1; }
+  /* Tableaux en fiches dans une carte : des lignes séparées par un trait, pas des boîtes dans la boîte. */
+  .admin-body .card .table.cartes tbody tr { border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 8px 0; margin: 0; background: none; }
+  .admin-body .card .table.cartes tbody tr:first-child { border-top: 0; }
+  .admin-body .card .table.cartes tbody td { padding: 2px 0; font-size: 14px; }
+  .admin-body .card .table.cartes tbody td::before { color: var(--muted); font-weight: 400; }
+}
+@media (max-width: 640px) { .admin-body .v-etape { padding-top: 44px; } }
+/* Formulaires d'ajout dans la page : une colonne lisible, pas toute la largeur de l'écran. */
+.admin-body [data-panneau="nouveau"] > .card, .admin-body #dsi-corps > .card:only-child, .admin-body #dx-corps > .card:only-child { max-width: 760px; }

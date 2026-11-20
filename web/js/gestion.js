@@ -111,6 +111,21 @@ const nomEtDetail = (nom, ...details) => {
 };
 
 // Bloc d'une fiche : un titre et ses lignes « libellé … valeur » ; rien si toutes les lignes sont vides.
+// Page d'une fiche (carte SIM, accessoire, dépense, client) : le nom et le ⋮ en tête de page, puis deux colonnes
+// de cartes courtes comme sur la tablette et la commande. `gauche` = le nombre de cartes de la colonne de gauche.
+function miseEnFiche(zone, titreCarte, gauche = 1) {
+  const cartes = [...zone.children];
+  const tete = cartes[0] && cartes[0].querySelector(':scope > .tete-fiche');
+  if (!tete) return;
+  zone.querySelectorAll('dl.fiche').forEach((d) => d.classList.add('kv'));
+  if (titreCarte) cartes[0].prepend(h('h2', {}, titreCarte));
+  const g = cartes.slice(0, gauche);
+  const d = cartes.slice(gauche);
+  zone.replaceChildren(tete, d.length
+    ? h('div', { class: 'deux-colonnes egales' }, h('div', {}, ...g), h('div', {}, ...d))
+    : h('div', { class: 'colonne-seule' }, ...g));
+}
+
 const blocFiche = (titre, ...lignes) => {
   const l = lignes.flat();
   return l.length ? h('div', { class: 'card' }, h('h2', {}, titre), h('dl', { class: 'fiche kv' }, l)) : null;
@@ -930,8 +945,8 @@ function afficherAccueil() {
   const vues = tachesToutes ? montrees : montrees.slice(0, COURT);
   const reste = montrees.length - vues.length;
   $('a-faire').replaceChildren(...(taches.length ? vues.map(ligneTache) : [h('li', { class: 'vide' }, 'Rien à faire pour le moment.')]),
-    reste > 0 ? h('li', { class: 'voir-plus' }, h('button', { type: 'button', class: 'link', onclick: () => { tachesToutes = true; afficherAccueil(); } },
-      `Voir ${reste > 1 ? `les ${reste} autres` : 'la dernière'}`)) : null,
+    ...(reste > 0 ? [h('li', { class: 'voir-plus' }, h('button', { type: 'button', class: 'link', onclick: () => { tachesToutes = true; afficherAccueil(); } },
+      `Voir ${reste > 1 ? `les ${reste} autres` : 'la dernière'}`))] : []),
     ...(nMasquees ? [h('li', { class: 'muted small masquees' }, `${pluriel(nMasquees, 'ligne')} masquée${nMasquees > 1 ? 's' : ''} pour 7 jours · `,
       h('button', { type: 'button', class: 'link', onclick: () => masquer(null, 0) }, 'Tout réafficher'))] : []));
   // Sous le titre : la date du jour et ce qui presse.
@@ -2101,6 +2116,7 @@ function remplirPageSim(id) {
         ...ligne('Tablette en ligne le', vue.vue ? vue.vue.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null),
         ...ligne('ICCID lu', vue.sim.iccid && l.iccid && !String(vue.sim.iccid).endsWith(String(l.iccid).replace(/\D/g, '').slice(-6))
           ? h('span', { class: 'error' }, `…${String(vue.sim.iccid).slice(-6)} : ce n'est pas cette carte`) : null))) : null].filter(Boolean));
+  miseEnFiche(zone, 'La ligne');
 }
 
 function convertirEuros(v) {
@@ -2502,6 +2518,7 @@ function remplirPageAccessoire(id) {
         valeur: a.retour ? 'oui' : '', options: [['oui', 'Revient et repart chez le client suivant'], ['', 'Consommé à chaque envoi']], convertir: (v) => v === 'oui' }),
       ...modif('Note', a.note || null, 'note', { valeur: a.note || '', long: true, vide: 'aucune' })),
     livraison));
+  miseEnFiche(zone, 'L\'accessoire');
 }
 
 async function sauverAccessoire(donneesAppel, fait = 'Enregistré', attente) {
@@ -3171,8 +3188,8 @@ function friseTablette(t, bouton) {
   const etat = etatTablette(t);
   const i = PARCOURS_TABLETTE.findIndex(([k]) => k === etat);
   if (i < 0) {
-    return h('div', { class: 'frise-tablette' },
-      badge(donnees.etats[etat] || etat, ['perdue', 'hors-service', 'a-reparer'].includes(etat) ? 'ko' : 'info'), bouton);
+    // L'état est déjà écrit à côté du nom (en-tête de la page) : ici, seulement l'action.
+    return h('div', { class: 'frise-tablette' }, bouton);
   }
   // Étapes en ronds reliés (✓ pour les étapes passées), l'action suivante en dessous.
   return h('div', { class: 'etapes-tablette' },
@@ -3686,6 +3703,7 @@ function remplirPageDepense(id) {
         h('span', { class: 'muted small' }, donnees.etats[etatTablette(t)] || t.etat))))
         : h('p', { class: 'muted small' }, 'Aucune tablette rattachée à cet achat.')) : null,
   ].filter(Boolean));
+  miseEnFiche(zone, achat ? 'L\'achat' : 'La dépense');
 }
 
 // Ligne « Facture » de la page d'un achat : toute la ligne et son crayon ouvrent le choix du fichier.
@@ -4915,7 +4933,7 @@ async function remplirClient(email) {
   const paiements = h('div', {}, h('p', { class: 'muted small' }, commandes.length ? 'Lecture des paiements…' : 'Aucune commande, donc aucun paiement.'));
   zone.replaceChildren(
     h('div', { class: 'card' },
-      h('h2', {}, c.nom || c.email),
+      h('div', { class: 'tete-fiche' }, h('h2', {}, c.nom || c.email)),
       h('dl', { class: 'fiche' },
         ligne('Situation', [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : ''].join('')),
         ligne('E-mail', h('a', { href: `mailto:${c.email}` }, c.email)),
@@ -4945,6 +4963,9 @@ async function remplirClient(email) {
         h('p', { class: 'muted small' }, 'Aucune tablette rattachée.')),
     h('div', { class: 'card' }, h('h2', {}, 'Paiements'), paiements),
   );
+  // Coordonnées et paiements à gauche ; commandes, famille et tablette à droite.
+  zone.insertBefore(zone.lastElementChild, zone.children[1]);
+  miseEnFiche(zone, 'Coordonnées', 2);
   const payantes = commandes.filter((x) => !x.offerte);
   if (!payantes.length) {
     if (commandes.length) paiements.replaceChildren(h('p', { class: 'muted small' }, 'Commande offerte : aucun paiement.'));
@@ -4960,7 +4981,7 @@ async function remplirClient(email) {
         p.recu ? h('a', { href: p.recu, target: '_blank', rel: 'noopener' }, 'Reçu') : '']),
       { vide: 'Aucun paiement pour l\'instant.' });
     const total = lignes.filter((p) => p.statut === 'succeeded').reduce((s, p) => s + p.montant - (p.rembourse || 0), 0);
-    paiements.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(total)}`), h('div', { class: 'table' }, table));
+    paiements.replaceChildren(h('p', { class: 'small' }, `Payé au total : ${euros(total)}`), h('div', { class: 'table cartes' }, table));
   } catch (e) {
     paiements.replaceChildren(h('p', { class: 'error small' }, messageErreur(e)));
   }

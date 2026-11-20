@@ -1175,7 +1175,7 @@ function carteFamille(f) {
   titre.append(el('span', 'dot'), el('h2', null, f.name), place);
   donnees().then((d) => d.commandes || []).catch(() => [])
     .then((commandes) => place.replaceWith(menuFamille(f, tete, commandes.filter((c) => c.fid === f.id))));
-  const dl = el('dl', 'fiche');
+  const dl = el('dl', 'fiche kv');
   // Le nom se corrige au crayon, comme sur les pages tablette et carte SIM.
   dl.append(...ligneModifiable('Nom', f.name, { valeur: f.name, enregistrer: async (v) => {
     const nom = v.trim();
