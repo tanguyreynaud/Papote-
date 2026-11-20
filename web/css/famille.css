@@ -1855,10 +1855,13 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .dialog-icone { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin: 0 0 14px; border-radius: 50%; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .dialog-icone.danger { color: var(--danger); background: color-mix(in srgb, var(--danger) 11%, transparent); }
 .dialog-icone svg { width: 26px; height: 26px; }
-.dialog p.dialog-msg { margin: 0 0 20px; }
-.dialog-q { display: block; font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.25; text-wrap: balance; }
-.dialog-d { display: block; margin-top: 8px; font-size: 16px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
-.dialog-msg.seul { font-size: 18px; font-weight: 600; line-height: 1.4; text-wrap: balance; }
+/* La question et sa suite restent du texte en ligne (le texte lu par un lecteur d'écran ou un essai reste une seule
+   phrase) ; chacune occupe sa ligne sans retour à la ligne écrit. */
+.dialog p.dialog-msg { margin: 0 0 20px; line-height: 0; }
+.dialog-q, .dialog-d { display: inline-block; width: 100%; }
+.dialog-q { font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 25px; text-wrap: balance; }
+.dialog-d { margin-top: 8px; font-size: 16px; line-height: 23px; color: var(--muted); text-wrap: pretty; }
+.dialog p.dialog-msg.seul { font-size: 18px; font-weight: 600; line-height: 1.4; text-wrap: balance; }
 .dialog-buttons button { min-height: 46px; padding: 8px 12px; font-size: 16px; border-radius: 13px; }
 .dialog-buttons .secondary { background: transparent; }
 .dialog-buttons .primary { min-height: 46px; }
