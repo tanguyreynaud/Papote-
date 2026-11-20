@@ -252,6 +252,7 @@ const SCENES = [
   { groupe: 'Accueil', titre: 'Tablette débranchée', plein: true, donnees: () => connecte({ debranchee: true }) },
   { groupe: 'Accueil', titre: 'Batterie faible', plein: true, donnees: () => connecte({ batterie: 9 }) },
   { groupe: 'Accueil', titre: 'Tablette qui ne répond plus (plus de 1 h 10)', plein: true, donnees: () => connecte({ tabletteHorsLigne: true }) },
+  { groupe: 'Accueil', titre: 'Tablette qui ne répond plus : « Que faire ? » (3 étapes)', note: 'Nouveau (20/11) : le bouton « Que faire ? » sous le message ouvre 3 étapes, puis « Dépanner la tablette ».', donnees: () => connecte({ tabletteHorsLigne: true }), faire: toucher('#activity button') },
   { groupe: 'Accueil', titre: 'Mamie n’a pas touché la tablette depuis hier', plein: true, donnees: () => connecte({ inactive: true }) },
   { groupe: 'Accueil', titre: 'État de la tablette (toucher la pastille)', donnees: () => connecte(), faire: toucher('#tablet-chip') },
   { groupe: 'Accueil', titre: 'Tablette sur la carte SIM', plein: true, donnees: () => sousTablette() },
