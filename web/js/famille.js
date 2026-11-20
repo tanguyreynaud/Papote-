@@ -2,7 +2,7 @@
 import './retour.js';
 import './clavier.js';
 import {
-  query, where, orderBy, limit, getDocs, getCountFromServer,
+  query, where, orderBy, limit, getDocs, getCountFromServer, arrayUnion, arrayRemove, runTransaction,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
@@ -545,17 +545,6 @@ function timeLabel(date) {
   return `${date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${hm}`;
 }
 
-// Version courte pour les galeries : « 09:34 », « hier », « 12 oct. ».
-function shortLabel(date) {
-  if (!date) return '';
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return 'hier';
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-}
-
 // L'auteur supprime ses envois ; un responsable de la famille peut tout supprimer.
 function canDelete(post) {
   return post.authorUid === session.uid || amFamilyAdmin();
@@ -676,7 +665,20 @@ function galleryItem(post, what, onOpen) {
   return li;
 }
 
+// Photo ou vidéo ouverte en grand, supprimée entre-temps par un autre proche (audit du 19/11) : la visionneuse se
+// ferme, au lieu de montrer un envoi qui n'existe plus et dont « Enregistrer » ou « Supprimer » échoueraient.
+function visionneuseSuivre(posts) {
+  const post = viewerPost;
+  if ($('viewer').hidden || !post || posts.some((p) => p.id === post.id)) return;
+  getDoc(doc(db, 'families', session.fid, 'posts', post.id)).then((d) => {
+    if (d.exists() || $('viewer').hidden || viewerPost !== post) return;
+    history.back();
+    toast(post.type === 'video' ? 'Cette vidéo a été retirée.' : 'Cette photo a été retirée.');
+  }).catch(() => {});
+}
+
 function renderPhotos(posts) {
+  visionneuseSuivre(posts);
   $('photos').replaceChildren(...posts.map((p) => galleryItem(p, 'cette photo', () => openPhoto(p))));
   $('photos-empty').hidden = posts.length > 0;
   // Rien à télécharger sur une page vide (testeur, V14 du 17/11) : le bouton revient avec la première photo.
@@ -684,6 +686,7 @@ function renderPhotos(posts) {
 }
 
 function renderVideos(posts) {
+  visionneuseSuivre(posts);
   $('videos').replaceChildren(...posts.map((p) => galleryItem(p, 'cette vidéo', () => openVideo(p))));
   $('videos-empty').hidden = posts.length > 0;
 }
@@ -2773,8 +2776,11 @@ $('tile-call').addEventListener('click', async () => {
       leaveCallScreen();
       return;
     }
-    console.error(err);
-    if (!err || err.name !== 'BusyError') reportCallIncident('depart-video', `${err && err.name}: ${err && err.message}`);
+    // Tablette déjà en communication : un cas prévu, dit à l'écran, pas une panne.
+    if (!err || err.name !== 'BusyError') {
+      console.error(err);
+      reportCallIncident('depart-video', `${err && err.name}: ${err && err.message}`);
+    }
     finDAppel(callErrorMessage(err));
     setTimeout(() => { if (!currentCall) leaveCallScreen(); }, 4000);
   } finally {
@@ -3117,10 +3123,10 @@ $('members').addEventListener('click', (e) => {
 });
 
 async function setFamilyAdmin(uid, on) {
-  const admins = new Set(session.family.admins || []);
-  if (on) admins.add(uid); else admins.delete(uid);
+  // arrayUnion / arrayRemove, pas la liste entière : deux responsables qui en nomment chacun un au même instant
+  // gardent les deux (audit du 19/11 : la liste écrite par l'un effaçait le choix de l'autre).
   try {
-    await updateDoc(doc(db, 'families', session.fid), { admins: [...admins] });
+    await updateDoc(doc(db, 'families', session.fid), { admins: on ? arrayUnion(uid) : arrayRemove(uid) });
   } catch (err) {
     console.error(err);
     notice("Le changement n'a pas pu être enregistré.");
@@ -3203,7 +3209,19 @@ function requestCard(m) {
   no.textContent = 'Refuser';
   no.addEventListener('click', async () => {
     if (!await askConfirm(`Refuser la demande de ${m.name} ?`, 'Refuser')) return;
-    try { await deleteDoc(doc(db, 'families', session.fid, 'members', m.id)); toast('Demande refusée'); } catch (err) { console.error(err); notice("Le refus n'a pas pu être enregistré."); }
+    // Un autre responsable a pu accepter pendant que la question était ouverte (audit du 19/11) : on ne retire jamais
+    // un proche déjà entré, seulement une demande encore en attente.
+    const ref = doc(db, 'families', session.fid, 'members', m.id);
+    try {
+      const etat = await runTransaction(db, async (tx) => {
+        const d = await tx.get(ref);
+        if (!d.exists()) return 'parti';
+        if (d.data().status !== 'pending') return 'entre';
+        tx.delete(ref);
+        return 'refuse';
+      });
+      toast(etat === 'entre' ? `La demande de ${m.name} a déjà été acceptée par un autre responsable.` : 'Demande refusée');
+    } catch (err) { console.error(err); notice("Le refus n'a pas pu être enregistré."); }
   });
   const ok = document.createElement('button');
   ok.type = 'button';
@@ -3213,7 +3231,13 @@ function requestCard(m) {
   ok.addEventListener('click', async () => {
     if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
     ok.disabled = true;
-    try { await acceptMember(session.fid, m.id); toast(`${m.name} a rejoint la famille`); } catch (err) { console.error(err); notice("L'acceptation a échoué."); ok.disabled = false; }
+    try { await acceptMember(session.fid, m.id); toast(`${m.name} a rejoint la famille`); } catch (err) {
+      // Demande refusée entre-temps par un autre responsable : rien à accepter.
+      const parti = err?.code === 'not-found'
+        || !(await getDoc(doc(db, 'families', session.fid, 'members', m.id)).then((d) => d.exists()).catch(() => true));
+      if (parti) { toast(`La demande de ${m.name} a déjà été refusée par un autre responsable.`); return; }
+      console.error(err); notice("L'acceptation a échoué."); ok.disabled = false;
+    }
   });
   actions.append(no, ok);
   card.append(head, actions);
@@ -3261,6 +3285,7 @@ $('form-invite').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = $('invite-email').value.trim();
   if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
+  if (adresseIncomplete(email)) { notice(ADRESSE_INCOMPLETE); return; }
   // Le temps d'enregistrer l'invitation et d'envoyer l'e-mail : bouton « Un instant… », champ figé.
   const bouton = $('form-invite').querySelector('button[type=submit]');
   const libelle = bouton.textContent;
@@ -3280,9 +3305,16 @@ async function envoyerInvitation(email) {
   try {
     await inviteByEmail(session.fid, session.family, email, session.member.name);
   } catch (err) {
-    console.error(err);
-    notice("L'invitation n'a pas pu être enregistrée.");
-    return;
+    // Déjà invitée (on renvoie l'e-mail parce qu'elle ne l'a pas reçu, ou un autre responsable l'a invitée au même
+    // instant) : la base refuse de réécrire l'invitation, mais elle existe ; on renvoie seulement l'e-mail, au lieu de
+    // « n'a pas pu être enregistrée » sous une invitation bien affichée (audit du 19/11).
+    const deja = err?.code === 'permission-denied'
+      && await getDoc(doc(db, 'families', session.fid, 'invitations', email.toLowerCase())).then((d) => d.exists()).catch(() => false);
+    if (!deja) {
+      console.error(err);
+      notice("L'invitation n'a pas pu être enregistrée.");
+      return;
+    }
   }
   // Un vrai e-mail part de Papote ; si l'envoi n'est pas possible, on partage le lien soi-même.
   try {
@@ -6052,10 +6084,17 @@ $('btn-google').addEventListener('click', async () => {
   }
 });
 
+// Une adresse e-mail se termine par un point suivi de lettres (« .fr », « .com ») après l'arobase.
+const adresseIncomplete = (email) => /@/.test(email) && !/@[^@\s]+\.[^@\s.]{2,}$/.test(email);
+const ADRESSE_INCOMPLETE = "Cette adresse e-mail semble incomplète : il manque la fin, par exemple « .fr » ou « .com ».";
+
 $('form-email').addEventListener('submit', async (e) => {
   e.preventDefault();
   showLoginError('');
   const email = $('login-email').value.trim();
+  // « paul@exemple » (sans « .fr ») : le navigateur l'accepte, le lien partirait vers une adresse qui n'existe pas et le
+  // proche attendrait un e-mail qui ne vient jamais (audit du 19/11).
+  if (adresseIncomplete(email)) { showLoginError(ADRESSE_INCOMPLETE); return; }
   $('btn-email').disabled = true;
   try {
     await sendEmailLink(email);

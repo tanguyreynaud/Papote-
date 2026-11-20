@@ -3,7 +3,7 @@
 import {
   db, auth, doc, getDoc, collection, setDoc, addDoc, updateDoc, onSnapshot, serverTimestamp,
 } from './firebase.js';
-import { query, where, getDocs, runTransaction } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { query, where, getDocs, getDocsFromServer, runTransaction } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 // Sans relais TURN, la vidéo ne passe pas entre deux réseaux différents (4G, box…).
 // Le relais est décrit dans Firestore (config/turn), pas dans le code, qui est public :
@@ -238,6 +238,17 @@ export function watchTabletBusy(fid, onChange) {
   return () => { stop(); clearInterval(timer); };
 }
 
+// Un autre appel vivant (qui sonne ou décroché) écrit avant celui-ci ? Lu au serveur, heures du serveur comparées.
+async function premierAutreAppel(fid, monId) {
+  const snap = await getDocsFromServer(busyQuery(fid));
+  const docs = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+  const mien = docs.find((d) => d.id === monId);
+  const heure = (d) => (d.data.createdAt && d.data.createdAt.toMillis ? d.data.createdAt.toMillis() : Infinity);
+  if (!mien) return false;
+  return docs.some((d) => d.id !== monId && isBusyCall(d.data)
+    && (d.data.state === 'accepted' || heure(d) < heure(mien) || (heure(d) === heure(mien) && d.id < monId)));
+}
+
 /**
  * Lance un appel. `ui` reçoit les vidéos et les changements d'état :
  *   ui.local / ui.remote : éléments <video>
@@ -298,6 +309,18 @@ export async function startCall(fid, caller, ui) {
     createdAt: serverTimestamp(),
     endedAt: null,
   });
+  // Deux proches qui appellent au même instant passent tous deux la vérification d'avant la caméra (audit du 19/11) :
+  // l'appel écrit le premier garde la tablette, l'autre s'efface et entend « déjà en communication » au lieu de sonner
+  // dans le vide puis de lire « n'a pas répondu ». Même instant au serveur : le plus petit identifiant l'emporte.
+  const autrePremier = await premierAutreAppel(fid, callRef.id).catch(() => false);
+  if (autrePremier) {
+    pc.close();
+    sent.stop();
+    updateDoc(callRef, { state: 'ended', endedAt: serverTimestamp() }).catch(() => {});
+    const busy = new Error('La tablette est déjà en communication');
+    busy.name = 'BusyError';
+    throw busy;
+  }
   ui.onState('ringing');
 
   let finished = false;

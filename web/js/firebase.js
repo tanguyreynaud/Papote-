@@ -223,13 +223,6 @@ export async function leaveFamily(fid, uid) {
   saveFamilyId(null);
 }
 
-export function watchPosts(fid, max, callback) {
-  const q = query(collection(db, 'families', fid, 'posts'), orderBy('createdAt', 'desc'), limit(max));
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) })));
-  }, (err) => console.error('Lecture des envois impossible', err));
-}
-
 /** Membres en temps réel ; fromCache dit si les données viennent du cache (pas encore du serveur). */
 export function watchMembers(fid, callback, onError) {
   return onSnapshot(collection(db, 'families', fid, 'members'), { includeMetadataChanges: true }, (snap) => {
