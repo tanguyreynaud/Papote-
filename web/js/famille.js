@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
@@ -6018,7 +6018,9 @@ function renderActivity() {
     quoi.type = 'button';
     quoi.className = 'link';
     quoi.textContent = 'Que faire ?';
-    quoi.addEventListener('click', () => { if (!papoteAller('depanner')) openPage('settings', false); });
+    quoi.addEventListener('click', async () => {
+      if (await queFaireTablette(name, ago(online).replace('il y a ', '')) === 'depanner' && !papoteAller('depanner')) openPage('settings', false);
+    });
     el.append(' ', quoi);
   } else if (battery && battery.charging === false && battery.unpluggedAt) {
     // Débranchée (tablette 2.50+) : unpluggedAt est posé dès que le chargeur est retiré.

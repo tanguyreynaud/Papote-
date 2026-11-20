@@ -83,6 +83,20 @@ function dialog(message, buttons, extra = null) {
       ouverte: () => !back.classList.contains('closing'),
     });
     box.append(text);
+    // Étapes numérotées (« Que faire ? ») : numéro, dessin du sprite de la page, phrase en gras, détail.
+    if (extra?.etapes) {
+      const ol = document.createElement('ol');
+      ol.className = 'dialog-etapes';
+      extra.etapes.forEach((e, i) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="etape-num">${i + 1}</span><svg class="etape-icone" aria-hidden="true"><use href="#${e.icone}"/></svg>`
+          + '<span class="etape-texte"><strong></strong><span></span></span>';
+        li.querySelector('strong').textContent = e.titre;
+        li.querySelector('.etape-texte span').textContent = e.texte;
+        ol.append(li);
+      });
+      box.append(ol);
+    }
     if (extra?.list) {
       const ul = document.createElement('ul');
       ul.className = 'dialog-list';
@@ -171,6 +185,25 @@ export function chooseAction(title, options) {
 
 export function notice(message) {
   return dialog(message, [{ label: 'OK', value: true, cls: 'primary' }]);
+}
+
+/**
+ * « Que faire ? » quand la tablette ne répond plus (Tanguy, 20/11) : 3 étapes concrètes, chacune avec son numéro,
+ * son dessin et une phrase courte en gras, puis « Dépanner la tablette » en dessous (banc du 19/11 : Julie et Sylvie
+ * arrivaient dans Dépanner sans consigne). depuis : « 2 h »… Rend 'depanner' si la personne touche ce lien.
+ */
+export function queFaireTablette(nom, depuis) {
+  return dialog(depuis ? `Aucune nouvelle de la tablette depuis ${depuis}.` : '', [
+    { label: 'Compris', value: true, cls: 'primary' },
+    { label: 'Plus d\'aide : dépanner la tablette', value: 'depanner', cls: 'link' },
+  ], {
+    title: 'Que faire ?', stack: true, cls: 'dialog-que-faire',
+    etapes: [
+      { icone: 'i-tablette', titre: 'Son écran est-il allumé ?', texte: `Demandez-le à ${nom}, ou à quelqu'un près d'elle.` },
+      { icone: 'i-plug', titre: 'Écran noir : rallumez-la', texte: 'Branchez le chargeur, puis appuyez 3 secondes sur le bouton marche/arrêt, sur le côté.' },
+      { icone: 'i-wifi', titre: 'Elle revient toute seule', texte: 'En quelques minutes. Ce message disparaît dès qu\'elle est reconnectée.' },
+    ],
+  });
 }
 
 /** Message d'échec avec « Besoin d'aide ? » : rend 'aide' si la personne le touche. */

@@ -1194,6 +1194,14 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .dialog-title { margin: 0 0 8px; font-family: var(--display); font-size: 22px; }
 .dialog-list { margin: 0 0 12px; padding-left: 20px; }
 .dialog-list li { margin: 4px 0; }
+/* « Que faire ? » (tablette muette) : 3 étapes en cartes, numéro et dessin à gauche. */
+.dialog-que-faire > p { color: var(--muted); font-size: 15px; margin-bottom: 12px; }
+.dialog-etapes { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 8px; }
+.dialog-etapes li { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.etape-num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-text); font-weight: 700; font-size: 15px; display: grid; place-items: center; }
+.etape-icone { width: 26px; height: 26px; color: var(--accent); }
+.etape-texte { display: grid; gap: 2px; font-size: 15px; line-height: 1.35; color: var(--muted); }
+.etape-texte strong { color: var(--text); font-size: 16.5px; }
 .dialog-buttons.stack { display: flex; flex-direction: column; align-items: stretch; }
 .dialog-buttons.stack button { width: 100%; }
 
