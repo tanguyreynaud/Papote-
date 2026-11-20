@@ -363,6 +363,9 @@ async function toast(t, motif) {
 async function ouvrirTuile(t, pageNom) {
   // Photos n'a plus de tuile quand la tablette a un numéro : la page est dans la barre du bas.
   const tuile = t.page.locator(`.tile[data-page="${pageNom}"]`);
+  // Juste après un retour à l'accueil, WebKit lent peut ne pas avoir encore affiché les tuiles : on leur laisse 3 s
+  // avant de passer par la barre du bas (sinon l'essai cherchait Messages dans la barre, où il n'est plus).
+  await tuile.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
   if (await tuile.isVisible()) await tuile.click();
   else await t.page.click(`.nav-item[data-page="${pageNom}"]`);
   await attendreVue(t, `view-${pageNom}`);
