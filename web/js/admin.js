@@ -1300,7 +1300,7 @@ function render() {
   $('familles-liste').hidden = !!ouverte;
   $('famille-fiche').hidden = !ouverte;
   // Famille ouverte : une page à elle, sans les onglets de la liste.
-  document.querySelector('[data-panneau="clients"] .onglets').hidden = !!ouverte;
+  document.querySelector('[data-panneau="clients"] .onglets-caches').hidden = !!ouverte;
   if (ouverte && $('famille-fiche').dataset.fid !== ouverte.id + JSON.stringify(ouverte.abonnement || null)) {
     $('famille-fiche').dataset.fid = ouverte.id + JSON.stringify(ouverte.abonnement || null);
     $('families').replaceChildren(...carteFamille(ouverte));

@@ -242,3 +242,24 @@
   .admin-body dl.fiche, .admin-body #famille-fiche .family dl.fiche { grid-template-columns: minmax(0, 1fr); }
   .admin-body .fiche dd { border-top: 0; padding-top: 0; }
 }
+
+/* ---------- Onglets-liens d'une rubrique (Clients, Site, Réglages) ---------- */
+
+.admin-body .onglets-caches { display: none !important; }
+.admin-body .onglets a, .admin-body .onglets .onglet-lien {
+  flex: none; padding: 8px 12px 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+}
+.admin-body .onglets a:hover { color: var(--text); }
+.admin-body .onglets a.actif { color: var(--accent); border-bottom-color: var(--accent); }
+.admin-body nav.onglets-liens[hidden] { display: none; }
+/* Rubrique avec ses onglets-liens et ses propres onglets dessous (Validation) : le second rang en pastilles. */
+.admin-body nav.onglets-liens:not([hidden]) + .onglets { border-bottom: 0; gap: 6px; }
+.admin-body nav.onglets-liens:not([hidden]) + .onglets button {
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; margin: 0; font-size: 13px; background: var(--surface);
+}
+.admin-body nav.onglets-liens:not([hidden]) + .onglets button.actif { background: var(--text); border-color: var(--text); color: #fff; }
+/* Période des statistiques : des pastilles, pas des onglets. */
+.admin-body #stats-periode { border-bottom: 0; gap: 6px; }
+.admin-body #stats-periode button { border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; margin: 0; font-size: 13px; background: var(--surface); }
+.admin-body #stats-periode button.actif { background: var(--text); border-color: var(--text); color: #fff; }

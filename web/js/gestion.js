@@ -246,11 +246,11 @@ menusDansLaPage();
 
 const TITRES = {
   accueil: 'Accueil',
-  commandes: 'Commandes',
+  commandes: 'Clients',
   clients: 'Clients',
-  stock: 'Stock',
+  stock: 'Matériel',
   compta: 'Comptabilité',
-  statistiques: 'Statistiques',
+  statistiques: 'Site',
   validation: 'Validation',
   outils: 'Réglages',
   aide: 'Que faire si…', // guide des pépins courants (admin.html, section « aide »)
@@ -263,9 +263,29 @@ const TITRES = {
   nouveau: 'Ajouter',
 };
 // Pages d'une fiche (#tablette/id, #commande/id) : le menu garde sa section allumée.
-const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'clients', depense: 'compta', sim: 'stock', accessoire: 'stock', nouveau: 'compta' };
+const PARENTS = { tablette: 'stock', commande: 'commandes', client: 'commandes', depense: 'compta', sim: 'stock', accessoire: 'stock', nouveau: 'compta', validation: 'outils' };
+// Six rubriques (organisation du 20/11) : certaines rassemblent plusieurs pages, reliées par une barre d'onglets-liens
+// en haut (<nav data-sous>). [libellé, adresse, page, onglet] ; l'onglet allumé est celui de l'adresse en cours.
+const SOUS_MENUS = {
+  clients: [['Clients', '#commandes', 'commandes'], ['Familles', '#clients/familles', 'clients', 'familles'], ['Déclarations', '#clients/declarations', 'clients', 'declarations']],
+  site: [['Statistiques', '#statistiques', 'statistiques'], ['Contacts', '#clients/liste', 'clients', 'liste'], ['E-mail d\'information', '#clients/email', 'clients', 'email']],
+  reglages: [['Automatique', '#outils/automatique', 'outils', 'automatique'], ['Expédition', '#outils/expedition', 'outils', 'expedition'],
+    ['Calculs', '#outils/calculs', 'outils', 'calculs'], ['Maintenance', '#outils/maintenance', 'outils', 'maintenance'], ['Validation', '#validation', 'validation']],
+};
+// Onglets de la page Clients rangés dans la rubrique Site (contacts sans commande, e-mail d'information).
+const ONGLETS_SITE = ['liste', 'email'];
+document.querySelectorAll('nav[data-sous]').forEach((nav) => {
+  nav.replaceChildren(...SOUS_MENUS[nav.dataset.sous].map(([texte, href, page, onglet]) => {
+    const a = document.createElement('a');
+    a.href = href;
+    a.textContent = texte;
+    a.dataset.page = page;
+    if (onglet) a.dataset.versOnglet = onglet; // pas data-onglet : ce lien n'est pas un onglet de choisirOnglet
+    return a;
+  }));
+});
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
-const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures' };
+const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures', 'stock/achats': 'compta/depenses' };
 const AVEC_PERIODE = ['compta'];
 
 let connecte = false; // connexion admin faite (onAuthStateChanged plus bas)
@@ -303,19 +323,27 @@ document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) =
 const ANCRES = { 'compta/depenses/releve': 'courrier' };
 
 function afficherPage() {
-  const ancienne = ANCIENNES[location.hash.slice(1).split('/')[0]];
+  const morceaux = location.hash.slice(1).split('/');
+  const ancienne = ANCIENNES[morceaux.slice(0, 2).join('/')] || ANCIENNES[morceaux[0]];
   if (ancienne) history.replaceState(null, '', `#${ancienne}`);
   const page = pageCourante();
-  const menu = PARENTS[page] || page;
-  document.querySelectorAll('.nav a[data-page]').forEach((a) => {
-    a.classList.toggle('actif', a.dataset.page === menu);
-  });
   document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
   // Page d'une famille (#clients/familles/fid) : titre « Famille », pas « Clients ».
   const [, onglet, fiche] = location.hash.slice(1).split('/');
-  const titre = page === 'clients' && onglet === 'familles' && fiche ? 'Famille' : TITRES[page];
-  $('titre-page').textContent = titre;
   choisirOnglet(page, location.hash.slice(1).split('/')[1]);
+  // Onglet vraiment montré (celui de l'adresse, ou le dernier choisi) : il dit dans quelle rubrique on est.
+  const ongletVu = document.querySelector(`[data-panneau="${page}"] .onglets button[data-onglet].actif`)?.dataset.onglet || onglet;
+  const menu = page === 'clients' ? (ONGLETS_SITE.includes(ongletVu) ? 'statistiques' : 'commandes') : PARENTS[page] || page;
+  document.querySelectorAll('.nav a[data-page]').forEach((a) => {
+    a.classList.toggle('actif', a.dataset.page === menu);
+  });
+  document.querySelectorAll(`[data-panneau="${page}"] nav[data-sous]`).forEach((nav) => {
+    const rubrique = { commandes: 'clients', statistiques: 'site', outils: 'reglages' }[menu];
+    nav.hidden = nav.dataset.sous !== rubrique;
+    nav.querySelectorAll('a').forEach((a) => a.classList.toggle('actif', a.dataset.page === page && (!a.dataset.versOnglet || a.dataset.versOnglet === ongletVu)));
+  });
+  const titre = page === 'clients' && onglet === 'familles' && fiche ? 'Famille' : menu === 'statistiques' ? 'Site' : TITRES[page];
+  $('titre-page').textContent = titre;
   document.title = `Papote · ${titre}`;
   $('periode').hidden = !AVEC_PERIODE.includes(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
@@ -940,50 +968,43 @@ function afficherCommandes() {
   for (const c of toutes) parEtat[etatCommande(c)] = (parEtat[etatCommande(c)] || 0) + 1;
   // Les chiffres servent d'onglets : chaque statut montre sa liste, « au total » et « en service » le tableau.
   if (!vueCommandes) vueCommandes = parEtat['a-envoyer'] ? 'a-envoyer' : parEtat.retour ? 'retour' : parEtat['en-route'] ? 'en-route' : 'toutes';
-  const onglet = (vue, valeur, texte, classe, filtre = '') => {
-    const el = stat(String(valeur), texte, null, classe);
-    const actif = vue === vueCommandes && (vue !== 'toutes' || $('filtre-commandes').value === filtre);
-    el.classList.add('onglet');
-    el.classList.toggle('actif', actif);
-    el.tabIndex = 0;
-    el.setAttribute('role', 'button');
-    el.setAttribute('aria-pressed', String(actif));
-    const choisir = () => {
-      vueCommandes = vue;
-      if (vue === 'toutes') $('filtre-commandes').value = filtre;
-      afficherCommandes();
-    };
-    el.addEventListener('click', choisir);
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choisir(); } });
-    return el;
-  };
-  $('kpi-commandes').replaceChildren(...[
-    onglet('a-envoyer', parEtat['a-envoyer'] || 0, 'à envoyer'),
-    parEtat.paiement ? onglet('toutes', parEtat.paiement, 'paiement en attente', null, 'paiement') : null,
-    onglet('en-route', parEtat['en-route'] || 0, 'en route'),
-    onglet('retour', parEtat.retour || 0, 'à récupérer', parEtat.retour ? 'neg' : null),
-    onglet('toutes', parEtat.active || 0, 'en service', null, 'active'),
-    onglet('toutes', toutes.length, 'commandes au total'),
-  ].filter(Boolean));
+  // Pastilles : chaque statut montre sa liste (à envoyer, en route, à récupérer) ; les autres filtrent le tableau.
+  const actuel = vueCommandes === 'toutes' ? `toutes|${$('filtre-commandes').value}` : vueCommandes;
+  filtresPastilles($('kpi-commandes'), [
+    { valeur: 'toutes|', libelle: 'Tous', n: toutes.length },
+    { valeur: 'a-envoyer', libelle: 'À envoyer', n: parEtat['a-envoyer'] || 0 },
+    { valeur: 'toutes|paiement', libelle: 'Paiement en attente', n: parEtat.paiement || 0 },
+    { valeur: 'en-route', libelle: 'En route', n: parEtat['en-route'] || 0 },
+    { valeur: 'toutes|active', libelle: 'En service', n: parEtat.active || 0 },
+    { valeur: 'retour', libelle: 'À récupérer', n: parEtat.retour || 0 },
+    { valeur: 'toutes|arret', libelle: 'Arrêt prévu', n: parEtat.arret || 0 },
+    { valeur: 'toutes|terminee', libelle: 'Terminées', n: parEtat.terminee || 0 },
+    { valeur: 'toutes|annulee', libelle: 'Annulées', n: parEtat.annulee || 0 },
+  ], actuel, (v) => {
+    const [vue, filtre] = v.split('|');
+    vueCommandes = vue;
+    if (vue === 'toutes') $('filtre-commandes').value = filtre || '';
+    afficherCommandes();
+  });
   document.querySelectorAll('[data-panneau="commandes"] [data-vue]').forEach((c) => { c.hidden = c.dataset.vue !== vueCommandes; });
   const filtre = $('filtre-commandes').value;
   const tablettes = new Map(donnees.stock.filter((t) => t.commande).map((t) => [t.commande, t]));
   remplirTable($('t-commandes'), [
-    { titre: 'Date' }, { titre: 'Code' }, { titre: 'Client' }, { titre: 'Formule' }, { titre: 'État' },
-    { titre: 'Famille' }, { titre: 'Tablette' },
+    { titre: 'Client' }, { titre: 'État' }, { titre: 'Famille', classe: 'pc' }, { titre: 'Tablette', classe: 'pc' },
+    { titre: 'Commandé le', classe: 'pc court' },
   ], toutes.filter((c) => !filtre || etatCommande(c) === filtre).map((c) => {
     const [texte, classe] = ETATS_COMMANDE[etatCommande(c)];
     const t = tablettes.get(c.id);
     return {
       onclick: () => ouvrirCommande(c),
       cellules: [
-        jour(c.creeLe),
-        codeCommande(c.code),
-        h('div', {}, c.nom || c.email || '', c.nom ? h('div', { class: 'muted' }, c.email || '') : null),
-        formuleTexte(c),
+        h('div', {}, h('strong', {}, c.nom || c.email || codeCommande(c.code)),
+          h('small', {}, [codeCommande(c.code), formuleTexte(c), c.famille ? h('span', { class: 'tel-inline' }, c.famille) : null]
+            .filter(Boolean).flatMap((x, i) => (i ? [' · ', x] : [x])))),
         badge(texte, classe),
-        c.famille ? `${c.famille}${c.abonnement ? ` (${ABONNEMENTS[c.abonnement] || c.abonnement})` : ''}` : '',
-        t ? t.numero || t.modele || 'affectée' : '',
+        c.famille || h('span', { class: 'muted' }, '—'),
+        t ? t.ref || t.numero || t.modele || 'affectée' : h('span', { class: 'muted' }, '—'),
+        jour(c.creeLe),
       ],
     };
   }), { vide: 'Aucune commande.' });
