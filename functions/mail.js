@@ -414,7 +414,7 @@ function invitation({ prenom, tablette, lien, email }) {
     { etapes: [
       'Touchez le bouton « Rejoindre la famille » ci-dessous.',
       `Connectez-vous avec cette adresse e-mail : <b>${echapper(email)}</b>.`,
-      'C\'est tout : vous pouvez envoyer votre première photo.',
+      'Donnez votre prénom, une photo de vous, votre numéro et votre anniversaire : c\'est tout.',
     ] },
     { petit: 'L\'appli Papote s\'ouvre directement dans le navigateur de votre téléphone.' },
   ], { texte: 'Rejoindre la famille', lien });
