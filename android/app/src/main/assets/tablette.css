@@ -660,6 +660,8 @@ body.night .weather-label { color: #aaa4c2; }
   min-height: 24vmin;
   padding: 0 6vmin 3vmin;
 }
+/* La maison avant « Accueil » : une Mamie qui ne lit pas sait comment sortir des photos (banc utilisateurs, 19/11). */
+.photos .ln-btn.photo-home .icon { width: 1.05em; height: 1.05em; margin-right: 2vmin; vertical-align: -0.12em; }
 .photos .ln-btn.photo-home {
   min-height: 15vmin;
   padding: 0 7vmin;
@@ -1456,6 +1458,8 @@ body.night .next-when { color: #a5b4fc; }
   text-align: center;
 }
 .call-out[hidden] { display: none; }
+/* SOS annulé (« C'est annulé ») : tout l'écran se touche pour fermer tout de suite. */
+.sos-annule-zone { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 5vmin; }
 .call-face {
   width: 34vmin;
   height: 34vmin;
@@ -1804,6 +1808,8 @@ html .call-out .call-hangup, html .call-ring .call-btn.answer {
   font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 7.5vmin; font-weight: 800; color: #fff;
 }
 html .call-out .call-hangup { background: #dc2626; box-shadow: 0 1vmin 2.5vmin rgba(220, 38, 38, .3); }
+/* Combiné sur « Décrocher » (19/11). */
+html .call-out .call-answer .icon, html .call-ring .call-btn.answer .icon { width: 1.1em; height: 1.1em; margin-right: 2.5vmin; vertical-align: -0.15em; }
 html .call-ring .call-btn.answer { background: #166534; box-shadow: 0 1vmin 2.5vmin rgba(22, 101, 52, .35); }
 /* L'image à droite : grande, coins carrés, comme une photo reçue */
 html .call-out:not(.picker) .call-face {

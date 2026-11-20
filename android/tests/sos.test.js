@@ -129,6 +129,30 @@ test('SOS (F-a) : appui par erreur pendant la pause, « Annuler » : la pause re
   } finally { await b.fermer(); }
 });
 
+test('SOS : « Annuler » rassure Mamie (« C’est annulé ») 3 s, un toucher ferme tout de suite, rien ne part', async () => {
+  const b = await tablette({});
+  try {
+    await b.page.evaluate(() => { window.__sos = []; window.papoteCallFamily = (o) => { window.__sos.push(o); return { hangup() {} }; }; });
+    await b.toucher('#sos-btn');
+    await b.avancer(1000);
+    await b.toucher('.sos-cancel');
+    await b.avancer(300);
+    assert.ok(await b.visible('.sos-annule'), 'message affiché');
+    assert.match(await b.page.evaluate(() => document.querySelector('.sos-annule').textContent), /annulé.*Personne n’a été prévenu/);
+    await b.avancer(3200);
+    assert.ok(!(await b.visible('.call-out')), 'accueil au bout de 3 s');
+    // Deuxième fois : un toucher ferme aussitôt.
+    await b.toucher('#sos-btn');
+    await b.toucher('.sos-cancel');
+    await b.toucher('.sos-annule-zone');
+    await b.avancer(200);
+    assert.ok(!(await b.visible('.call-out')), 'fermé au toucher');
+    await b.avancer(10000);
+    assert.strictEqual(await b.page.evaluate(() => window.__sos.length), 0, 'aucun appel');
+    assert.strictEqual((await b.appels('sendSms')).length, 0, 'aucun SMS');
+  } finally { await b.fermer(); }
+});
+
 test('SOS (F-a) : SOS désactivé par la famille : pas de bouton sur l\'écran de pause', async () => {
   const b = await tablette({}, { subscription: 'suspendu', options: { sos: false } });
   try {
