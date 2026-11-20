@@ -3144,6 +3144,8 @@ exports.tachesHoraires = require('./taches').planifier({
   bilanSupport: support.bilanSupport,
   // « Pas vue depuis deux jours », chaque matin à 10 h (alertes.js).
   alerteMatin: require('./alertes').alerteMatin,
+  // « Une photo pour Mamie ? » au proche qui n'a rien envoyé depuis 7 jours (relances-photos.js, Tanguy 20/11).
+  relancesPhotos: () => require('./relances-photos').relancesPhotos(),
   // Forfait internet de la tablette à 80 et 95 % : Papote, puis la famille (forfait-alerte.js).
   alerteForfait: () => require('./forfait-alerte').alerteForfait(envoyerMail, { emailPapote: EMAIL_PAPOTE, auth: admin.auth(), estActif: require('./abonnement').estActif }),
   // E-mails importants non partis : un seul nouvel essai, puis « À faire » (courriels-perdus.js).

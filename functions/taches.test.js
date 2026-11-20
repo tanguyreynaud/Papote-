@@ -22,6 +22,7 @@ const ANCIEN = {
   relancesSepa: 'every day 11:00', // nouvelle (10/11) : « passer au prélèvement »
   gestionCopieVentes: 'every day 06:00', // nouvelle (10/11) : copie des PDF des factures de vente
   alerteSauvegarde: 'every day 09:00', // nouvelle (12/11) : sauvegarde du dimanche de plus de 8 jours
+  relancesPhotos: 'every day 18:00', // nouvelle (20/11) : « Une photo pour Mamie ? »
   gestionRecap: 'every monday 08:00',
   bilanSupport: 'every monday 09:00',
   purgeMensuelle: '1 of month 04:00',

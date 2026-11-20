@@ -273,6 +273,7 @@ exports.alerteMatin = async () => {
 };
 
 exports.etatAlerte = etatAlerte;
+exports.famillesEnPause = famillesEnPause;
 exports.message = message;
 exports.enVeille = enVeille;
 exports.pasVueDepuisLongtemps = pasVueDepuisLongtemps;
