@@ -263,3 +263,11 @@
 .admin-body #stats-periode { border-bottom: 0; gap: 6px; }
 .admin-body #stats-periode button { border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; margin: 0; font-size: 13px; background: var(--surface); }
 .admin-body #stats-periode button.actif { background: var(--text); border-color: var(--text); color: #fff; }
+
+/* Comptabilité > Déclarations : titre qui sépare URSSAF/TVA des registres. */
+.titre-section { font-size: 1.05rem; margin: 28px 0 10px; color: var(--muted, #5f5a6b); text-transform: uppercase; letter-spacing: .04em; }
+
+/* Champ de recherche au-dessus d'une liste courte (Contacts). */
+#cherche-clients.cherche-liste { flex: 1 1 220px; width: auto; max-width: 360px; margin: 0; }
+.filtres-seuls { margin: 0 0 14px; }
+.table.courte + .kpi-suite { margin-top: 10px; }

@@ -182,12 +182,15 @@
           <div class="attente" role="status"><span class="roue"></span><p>Chargement des déclarations…</p></div>
         </div>
         <div data-onglet="liste">
-          <div class="stats" id="kpi-clients"></div>
-          <div class="card">
-            <div class="tete">
-              <input id="cherche-clients" type="search" placeholder="Chercher" aria-label="Chercher un nom, un e-mail, un téléphone">
-              <div class="actions no-print">
-                <select id="filtre-clients" aria-label="Filtrer">
+          <div class="barre-liste">
+            <input id="cherche-clients" class="cherche-liste no-print" type="search" placeholder="Chercher un contact" aria-label="Chercher un nom, un e-mail, un téléphone">
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-titre="Autres actions sur les contacts">
+              <button type="button" id="x-clients" data-detail="La liste affichée, pour Excel">Exporter</button>
+            </div>
+          </div>
+          <div class="filtres no-print filtres-seuls" id="kpi-clients" role="group" aria-label="Montrer"></div>
+          <select id="filtre-clients" aria-label="Filtrer" hidden>
                   <option value="">Tout le monde</option>
                   <option value="client">Abonnés</option>
                   <option value="ancien">Anciens clients</option>
@@ -196,11 +199,8 @@
                   <option value="chat">Contacts du chat</option>
                   <option value="accord">Acceptent les e-mails</option>
                 </select>
-                <button type="button" class="secondary small-btn" id="x-clients">Exporter</button>
-              </div>
-            </div>
-            <div class="table"><table id="t-clients" class="cliquable"></table></div>
-          </div>
+          <div class="table courte"><table id="t-clients" class="cliquable"></table></div>
+          <p class="small muted kpi-suite" id="clients-suite"></p>
         </div>
         <div data-onglet="familles">
         <div id="loading-families" class="attente" role="status"><span class="roue"></span><p>Chargement des familles…</p></div>
@@ -289,15 +289,6 @@
           </div>
           <div class="table courte"><table id="t-accessoires"></table></div>
         </div>
-        <div class="card" data-onglet="achats">
-          <div class="tete">
-            <p class="muted small">Commandes passées chez les vendeurs (Cdiscount…), avec leur facture. Une facture transférée à factures@mapapote.fr arrive ici toute seule.</p>
-            <div class="actions no-print">
-              <button type="button" class="secondary small-btn" id="btn-achat-2">Ajouter un achat</button>
-            </div>
-          </div>
-          <div class="table"><table id="t-achats-vendeurs"></table></div>
-        </div>
       </section>
 
       <!-- ---------- Comptabilité : bilan, factures, dépenses, URSSAF ---------- -->
@@ -305,21 +296,21 @@
         <h2 class="titre-print" id="bilan-titre">Bilan</h2>
         <div class="onglets no-print" role="tablist">
           <button type="button" data-onglet="bilan">Bilan</button>
-          <button type="button" data-onglet="factures">Factures</button>
+          <button type="button" data-onglet="factures">Recettes</button>
           <button type="button" data-onglet="depenses">Dépenses</button>
-          <button type="button" data-onglet="urssaf">URSSAF et TVA</button>
-          <button type="button" data-onglet="rentabilite">Rentabilité</button>
-          <button type="button" data-onglet="registres">Registres</button>
+          <button type="button" data-onglet="urssaf">Déclarations</button>
         </div>
         <div data-onglet="bilan">
           <div class="stats" id="kpi-argent"></div>
           <div class="stats" id="kpi-activite"></div>
           <div class="card">
-            <div class="tete">
+            <div class="tete-fiche">
               <h2>Mois par mois</h2>
-              <div class="actions no-print">
-                <button type="button" class="secondary small-btn" id="imprimer">Imprimer / PDF</button>
-                <button type="button" class="primary small-btn" id="x-tout">Tout exporter pour le comptable</button>
+              <div class="tete-actions no-print">
+                <button type="button" class="secondary small-btn" id="x-tout">Tout exporter pour le comptable</button>
+                <div class="menu-actions" data-titre="Autres actions sur le bilan">
+                  <button type="button" id="imprimer" data-detail="Le bilan de la période, en PDF">Imprimer / PDF</button>
+                </div>
               </div>
             </div>
             <div class="table"><table id="t-bilan"></table></div>
@@ -330,28 +321,56 @@
               <figure><figcaption>Abonnements en cours, arrivées et départs</figcaption><div id="g-abonnes"></div></figure>
             </div>
           </div>
+          <div class="card" id="rentabilite">
+            <h2>Rentabilité d'un abonné</h2>
+            <details class="aide-repliee"><summary>Comment c'est calculé ?</summary>
+              <p class="muted small">Par abonné : ce qui reste chaque mois après frais Stripe, URSSAF et forfait SIM ; ce que coûte un nouveau client au départ (matériel, colis, envoi et retour, moins la mise en service) ; et en combien de mois il est remboursé.</p>
+            </details>
+            <div class="table" tabindex="0"><table id="t-rentabilite"></table></div>
+            <h3>Contenu du colis</h3>
+            <div id="rentabilite-colis"></div>
+          </div>
         </div>
         <div data-onglet="factures">
-        <div class="stats" id="kpi-factures"></div>
-        <div class="card">
-          <div class="tete">
-            <select id="filtre-factures" aria-label="Filtrer">
-              <option value="">Toutes</option>
-              <option value="paid">Payées</option>
-              <option value="open">À payer</option>
-              <option value="uncollectible">Irrécouvrables</option>
-              <option value="void">Annulées</option>
-            </select>
-            <button type="button" class="secondary small-btn no-print" id="x-factures">Exporter</button>
+          <div class="barre-liste">
+            <div class="filtres no-print" id="filtres-factures" role="group" aria-label="Filtrer les recettes"></div>
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-titre="Autres actions sur les recettes">
+              <button type="button" id="x-factures" data-detail="Toutes les factures, pour Excel">Exporter</button>
+            </div>
           </div>
-          <div class="table"><table id="t-factures"></table></div>
+          <select id="filtre-factures" aria-label="Filtrer" hidden>
+            <option value="">Toutes</option>
+            <option value="paid">Payées</option>
+            <option value="open">À payer</option>
+            <option value="uncollectible">Irrécouvrables</option>
+            <option value="void">Annulées</option>
+          </select>
+          <div class="table courte"><table id="t-factures"></table></div>
+          <p class="small muted kpi-suite" id="kpi-factures"></p>
         </div>
-        </div>
-        <div class="card" data-onglet="rentabilite">
-          <p class="muted small">Par abonné : ce qui reste chaque mois après frais Stripe, URSSAF et forfait SIM ; ce que coûte un nouveau client au départ (matériel, colis, envoi et retour, moins la mise en service) ; et en combien de mois il est remboursé.</p>
-          <div class="table" tabindex="0"><table id="t-rentabilite"></table></div>
-          <h3>Contenu du colis</h3>
-          <div id="rentabilite-colis"></div>
+        <div data-onglet="depenses">
+          <div class="barre-liste">
+            <div class="filtres no-print" id="filtres-depenses" role="group" aria-label="Filtrer les dépenses"></div>
+            <span class="espace"></span>
+            <div class="menu-actions no-print" data-texte="+ Ajouter" data-classe="principal" data-titre="Ajouter une dépense">
+              <button type="button" id="btn-depense" data-detail="Facture, abonnement, frais…">Une dépense</button>
+              <button type="button" id="btn-achat-2" data-detail="Tablettes ou matériel commandés chez un vendeur : crée aussi les fiches du stock">Un achat de matériel</button>
+            </div>
+          </div>
+          <div class="table courte"><table id="t-achats"></table></div>
+          <div class="card">
+            <div class="table"><table id="t-categories"></table></div>
+          </div>
+          <div class="card">
+            <h2>Factures reçues par e-mail</h2>
+            <details class="aide-repliee"><summary>Comment ça marche ?</summary>
+              <p class="muted small">Une facture envoyée à <strong>factures@mapapote.fr</strong> est lue et rangée toute seule (boîte relevée chaque heure). Dans « Ajouter une dépense », le justificatif choisi remplit la fiche tout seul ; on peut aussi glisser un fichier sur la page.</p>
+            </details>
+            <p id="courrier" class="small muted"></p>
+            <p class="no-print releve"><button type="button" class="secondary small-btn" id="btn-courrier">Relever maintenant</button>
+              <span id="courrier-etat" class="small" role="status"></span></p>
+          </div>
         </div>
         <div data-onglet="urssaf">
           <div class="card">
@@ -369,22 +388,7 @@
             <div class="table"><table id="t-urssaf"></table></div>
             <p class="muted small">Chiffre d'affaires encaissé, sans déduire frais ni dépenses. Taux à vérifier sur autoentrepreneur.urssaf.fr (réglable dans Réglages).</p>
           </div>
-        </div>
-        <div class="card" data-onglet="depenses">
-          <div class="tete">
-            <span></span>
-            <div class="actions no-print">
-              <button type="button" class="primary small-btn" id="btn-depense">Ajouter une dépense</button>
-            </div>
-          </div>
-          <div class="table"><table id="t-achats"></table></div>
-          <div class="table"><table id="t-categories"></table></div>
-          <p class="muted small">Une facture envoyée à <strong>factures@mapapote.fr</strong> est lue et rangée toute seule (boîte relevée chaque heure). Dans « Ajouter une dépense », le justificatif choisi remplit la fiche tout seul ; on peut aussi glisser un fichier sur la page.</p>
-          <p id="courrier" class="small muted"></p>
-          <p class="no-print releve"><button type="button" class="secondary small-btn" id="btn-courrier">Relever maintenant</button>
-            <span id="courrier-etat" class="small" role="status"></span></p>
-        </div>
-        <div data-onglet="registres">
+          <h2 class="titre-section" id="registres">Registres</h2>
           <div class="card">
             <h2>Livre des recettes</h2>
             <div class="table"><table id="t-recettes"></table></div>
@@ -457,11 +461,13 @@
           <a href="#validation" class="onglet-lien">Validation</a>
         </div>
         <div class="card" data-onglet="automatique">
-          <div class="tete">
+          <div class="tete-fiche">
             <h2>Tâches automatiques</h2>
-            <div class="actions">
-              <button type="button" class="secondary small-btn" id="btn-recap">Envoyer le récap</button>
-              <button type="button" class="secondary small-btn" id="btn-automatiser">Lancer maintenant</button>
+            <div class="tete-actions no-print">
+              <div class="menu-actions" data-texte="Actions" data-titre="Lancer à la main">
+                <button type="button" id="btn-automatiser" data-detail="Les tâches de la nuit, tout de suite">Lancer maintenant</button>
+                <button type="button" id="btn-recap" data-detail="Le récap de la semaine à contact@mapapote.fr">Envoyer le récap</button>
+              </div>
             </div>
           </div>
           <p class="muted small">Chaque nuit : facture du matériel non rendu, avoirs des remboursements, dépenses mensuelles. Chaque lundi à 8 h : récap de la semaine à contact@mapapote.fr.</p>
@@ -480,7 +486,7 @@
           <h2>Anciennes photos et vidéos</h2>
           <p class="muted small">Déplace vers Storage les envois faits avant Storage, sans rien changer pour les familles.</p>
           <p id="migrate-count" class="small"></p>
-          <button type="button" id="btn-migrate" class="primary wide" disabled>Transférer vers Storage</button>
+          <button type="button" id="btn-migrate" class="secondary small-btn" disabled>Transférer vers Storage</button>
           <pre id="migrate-log" class="log" hidden></pre>
         </div>
       </section>
@@ -506,10 +512,10 @@
         <details class="card aide-cas">
           <summary><h2>Tablette perdue ou volée</h2></summary>
           <ol class="aide-etapes">
-            <li><p><strong>Verrouillez-la à distance.</strong> Ouvrez la tablette dans le stock, puis « Verrouiller (perdue ou volée) » (il faut retaper son n° de série). Plus rien ne répond dessus ; les photos et données de la famille restent gardées. Si elle est éteinte, elle se verrouille dès qu'elle se reconnecte.</p>
+            <li><p><strong>Verrouillez-la à distance.</strong> Ouvrez la tablette (menu Matériel), bouton « Actions », puis « Verrouiller (perdue ou volée) » (il faut retaper son n° de série). Plus rien ne répond dessus ; les photos et données de la famille restent gardées. Si elle est éteinte, elle se verrouille dès qu'elle se reconnecte.</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
             <li><p><strong>Envoyez-en une autre.</strong> Sur la commande du client, menu ⋮ « Remplacer un élément du kit (cassé ou perdu)… » : d'abord la tablette, puis la carte SIM (l'ancienne carte passe « suspendue » : résiliez-la aussi chez l'opérateur). Prévenez la famille par téléphone : l'étiquette de retour qu'elle reçoit par e-mail ne sert pas si la tablette a disparu.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les clients</a></p></li>
             <li><p><strong>Rayez l'ancienne du stock.</strong> Sur sa page, menu ⋮ « Déclarer perdue ». Si elle réapparaît : ⋮ « Retrouvée », puis « Déverrouiller ».</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
           </ol>
@@ -521,9 +527,9 @@
             <li><p><strong>Repérez la famille.</strong> L'accueil l'affiche dans « À faire » : « en retard de paiement », avec la date de mise en pause. Pendant 7 jours, tout marche encore ; ensuite la tablette affiche « Papote est en pause ».</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#accueil">Ouvrir l'accueil</a></p></li>
             <li><p><strong>Appelez la famille.</strong> Elle met à jour sa carte ou son compte dans l'appli famille : Réglages, page Abonnement, « Carte bancaire et factures ». Tout repart dès que le paiement passe. Son numéro est dans la liste des clients.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#clients/liste">Ouvrir les clients</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#clients/liste">Ouvrir les contacts</a></p></li>
             <li><p><strong>Toujours rien ?</strong> Regardez le paiement dans Stripe (refus, contestation). Après 30 jours de pause, l'accueil vous propose de demander le retour de la tablette (« Arrêter l'abonnement » sur la commande).</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="https://dashboard.stripe.com" target="_blank" rel="noopener">Ouvrir Stripe ↗</a><a class="secondary small-btn" href="#compta/factures">Voir les factures</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="https://dashboard.stripe.com" target="_blank" rel="noopener">Ouvrir Stripe ↗</a><a class="secondary small-btn" href="#compta/factures">Voir les recettes</a></p></li>
           </ol>
         </details>
 
@@ -532,9 +538,9 @@
           <ol class="aide-etapes">
             <li><p><strong>Demandez un justificatif.</strong> Un bulletin d'hospitalisation, envoyé par la famille (e-mail ou photo).</p></li>
             <li><p><strong>Mettez en pause.</strong> Sur la commande, menu ⋮ « Pause hospitalisation… », puis la date de sortie prévue. Un mois qui compte plus de 2 semaines d'hospitalisation n'est pas prélevé (le dernier mois à l'arrêt compris), et plus d'alerte « ne répond plus » jusque-là ; la famille reçoit un e-mail. La tablette continue de marcher. Le menu ne la propose qu'après les 30 premiers jours de l'abonnement : avant, appelez la famille.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les clients</a></p></li>
             <li><p><strong>Au retour.</strong> À la date choisie, les prélèvements reprennent seuls. Retour plus tôt : menu ⋮ « Reprendre les prélèvements » sur la commande.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les clients</a></p></li>
           </ol>
         </details>
 
@@ -567,7 +573,7 @@
             <li><p><strong>Trouvez une tablette de rechange.</strong> Il en faut une « En stock » dans la liste des tablettes.</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
             <li><p><strong>Remplacez-la.</strong> Sur la commande du client, menu ⋮ « Remplacer un élément du kit (cassé ou perdu)… », « la tablette », avec le motif (ex. écran cassé). L'étiquette d'envoi s'ouvre ; celle du retour part au client par e-mail. Sa carte SIM passe dans la nouvelle tablette. Vous pouvez aussi faire l'échange en main propre.</p>
-              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les commandes</a></p></li>
+              <p class="aide-liens"><a class="secondary small-btn" href="#commandes">Ouvrir les clients</a></p></li>
             <li><p><strong>Quand l'ancienne revient.</strong> L'accueil la suit (« remplacée, à récupérer »). Une fois revenue, sur sa page : menu ⋮ « Mettre à réparer », ou « Déclarer hors service » si elle est fichue.</p>
               <p class="aide-liens"><a class="secondary small-btn" href="#stock/tablettes">Ouvrir les tablettes</a></p></li>
           </ol>

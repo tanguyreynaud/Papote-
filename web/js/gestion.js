@@ -285,8 +285,13 @@ document.querySelectorAll('nav[data-sous]').forEach((nav) => {
   }));
 });
 // Anciennes pages devenues des onglets (liens déjà notés, favoris) : #familles → #clients/familles.
-const ANCIENNES = { familles: 'clients/familles', factures: 'compta/factures', 'stock/achats': 'compta/depenses' };
+// Stock > Achats est devenu le filtre « Matériel » des dépenses ; Rentabilité est dans Bilan, Registres dans Déclarations.
+const ANCIENNES = {
+  familles: 'clients/familles', factures: 'compta/factures', 'stock/achats': 'compta/depenses',
+  'compta/rentabilite': 'compta/bilan/rentabilite', 'compta/registres': 'compta/urssaf/registres',
+};
 const AVEC_PERIODE = ['compta'];
+let filtreDepenses = ''; // filtre en pastille des dépenses ('' = toutes, 'materiel'…), posé aussi par #stock/achats
 
 let connecte = false; // connexion admin faite (onAuthStateChanged plus bas)
 
@@ -320,12 +325,13 @@ document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) =
 });
 
 // Adresses qui ouvrent une page sur un bloc précis (id de l'élément) plutôt qu'en haut.
-const ANCRES = { 'compta/depenses/releve': 'courrier' };
+const ANCRES = { 'compta/depenses/releve': 'courrier', 'compta/bilan/rentabilite': 'rentabilite', 'compta/urssaf/registres': 'registres' };
 
 function afficherPage() {
   const morceaux = location.hash.slice(1).split('/');
   const ancienne = ANCIENNES[morceaux.slice(0, 2).join('/')] || ANCIENNES[morceaux[0]];
   if (ancienne) history.replaceState(null, '', `#${ancienne}`);
+  if (morceaux.slice(0, 2).join('/') === 'stock/achats') filtreDepenses = 'materiel';
   const page = pageCourante();
   document.querySelectorAll('[data-panneau]').forEach((p) => { p.hidden = p.dataset.panneau !== page; });
   // Page d'une famille (#clients/familles/fid) : titre « Famille », pas « Clients ».
@@ -467,7 +473,6 @@ function afficherTout() {
     afficherCommandes();
     afficherExpediteur();
     afficherReglagesCalculs();
-    afficherAchats();
     afficherFiche();
   }
   if (donnees && stripe) {
@@ -850,7 +855,7 @@ function afficherAccueil() {
     [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
     // Contrôle des factures de vente à la clôture (Tanguy, 10/11) : une ligne par point, du mois le plus récent.
-    ...controleVentes().map((t) => [1, t, '#compta/registres', 'ko']),
+    ...controleVentes().map((t) => [1, t, '#compta/urssaf/registres', 'ko']),
     // E-mails rejetés par Brevo ou non partis après un second essai (A3) : une ligne par adresse, mêmes textes que le
     // récap du lundi ; « Réglé » dans le ⋮ la retire (corriger l'adresse sur la commande la retire aussi).
     ...courrielsAFaire().map(({ texte, ids, commande }) => [1, texte, commande ? versCommande({ id: commande }) : '#commandes', 'ko',
@@ -3343,26 +3348,36 @@ function afficherFactures() {
   const liste = toutes.filter((f) => !filtre || f.statut === filtre);
   const somme = (l, k) => l.reduce((s, f) => s + (f[k] || 0), 0);
   const ouvertes = toutes.filter((f) => f.statut === 'open');
-  $('kpi-factures').replaceChildren(
-    stat(String(toutes.filter((f) => f.statut !== 'draft' && f.statut !== 'void').length), 'factures émises'),
-    stat(euros(somme(toutes.filter((f) => f.statut === 'paid'), 'total')), 'facturé et payé'),
-    stat(euros(somme(ouvertes, 'du')), 'reste à encaisser', pluriel(ouvertes.length, 'facture'), ouvertes.length ? 'neg' : null),
-  );
+  const nb = (st) => toutes.filter((f) => f.statut === st).length;
+  filtresPastilles($('filtres-factures'), [
+    { valeur: '', libelle: 'Toutes', n: toutes.length },
+    { valeur: 'open', libelle: 'À payer', n: nb('open') },
+    { valeur: 'paid', libelle: 'Payées', n: nb('paid') },
+    { valeur: 'uncollectible', libelle: 'Irrécouvrables', n: nb('uncollectible') },
+    { valeur: 'void', libelle: 'Annulées', n: nb('void') },
+  ], filtre, (v) => { $('filtre-factures').value = v; afficherFactures(); });
+  // Les chiffres en une ligne sous la liste (au lieu de trois grosses cases).
+  $('kpi-factures').textContent = [
+    ((n) => `${n} facture${n > 1 ? 's' : ''} émise${n > 1 ? 's' : ''}`)(toutes.filter((f) => f.statut !== 'draft' && f.statut !== 'void').length),
+    `${euros(somme(toutes.filter((f) => f.statut === 'paid'), 'total'))} payés`,
+    ouvertes.length ? `${euros(somme(ouvertes, 'du'))} à encaisser (${pluriel(ouvertes.length, 'facture')})` : 'rien à encaisser',
+  ].join(' · ');
   const parAbonnement = new Map(donnees ? donnees.commandes.map((c) => [c.id, c]) : []);
   remplirTable($('t-factures'), [
-    { titre: 'N°' }, { titre: 'Date' }, { titre: 'Client' }, { titre: 'Détail' }, { titre: 'HT', n: 1 },
-    { titre: 'TVA', n: 1 }, { titre: 'TTC', n: 1 }, { titre: 'Statut' }, { titre: '' },
+    { titre: 'Client' }, { titre: 'Statut' }, { titre: 'N°', classe: 'pc' }, { titre: 'Date', classe: 'pc' },
+    { titre: 'TTC', n: 1 }, { titre: 'PDF', classe: 'pc' },
   ], liste.map((f) => {
     const [texte, classe] = STATUTS_FACTURE[f.statut] || [f.statut, ''];
     const c = parAbonnement.get(f.abonnement);
     return {
       onclick: c ? () => ouvrirCommande(c) : null,
-      cellules: [f.numero || '—', jour(f.le), h('div', {}, f.client || '', h('div', { class: 'muted' }, f.email || '')),
-        f.lignes, euros(f.ht), euros(f.tva), euros(f.total), badge(texte, classe),
+      cellules: [nomEtDetail(f.client || f.email || '—', f.numero, jour(f.le), euros(f.total)), badge(texte, classe),
+        f.numero || '—', jour(f.le), euros(f.total),
         f.lienPdf ? h('a', { href: f.lienPdf, target: '_blank', rel: 'noopener', onclick: (e) => e.stopPropagation() }, 'PDF') : ''],
     };
   }), {
-    total: liste.length ? ['Total', '', '', '', euros(somme(liste, 'ht')), euros(somme(liste, 'tva')), euros(somme(liste, 'total')), '', ''] : null,
+    total: liste.length ? ['Total', '', '', '', euros(somme(liste, 'total')), ''] : null,
+    vide: 'Aucune facture.',
   });
 }
 $('filtre-factures').addEventListener('change', afficherFactures);
@@ -3445,25 +3460,52 @@ choixFichier.addEventListener('change', async () => {
   }
 });
 
+// Dépenses : filtre « Matériel » = les achats chez les vendeurs (ancien Stock > Achats). filtreDepenses : plus haut.
+const estAchat = (d) => ['tablettes', 'materiel'].includes(d.categorie) || (d.materiel || []).length > 0;
+const FILTRES_DEPENSES = {
+  materiel: estAchat,
+  verifier: (d) => d.aVerifier,
+  'sans-piece': (d) => !(d.pieces || []).length && !d.justificatif,
+};
+
 function afficherCompta() {
   // La plus récente en haut (Tanguy, 19/11). Les exports (registre des achats) restent dans l'ordre des dates.
-  const deps = depensesPeriode().sort((a, b) => (b.date || 0) - (a.date || 0));
+  const toutes = depensesPeriode().sort((a, b) => (b.date || 0) - (a.date || 0));
+  if (filtreDepenses && !FILTRES_DEPENSES[filtreDepenses]) filtreDepenses = '';
+  const deps = filtreDepenses ? toutes.filter(FILTRES_DEPENSES[filtreDepenses]) : toutes;
+  const nb = (k) => toutes.filter(FILTRES_DEPENSES[k]).length;
+  filtresPastilles($('filtres-depenses'), [
+    { valeur: '', libelle: 'Toutes', n: toutes.length },
+    { valeur: 'materiel', libelle: 'Matériel', n: nb('materiel') },
+    { valeur: 'verifier', libelle: 'À vérifier', n: nb('verifier') },
+    { valeur: 'sans-piece', libelle: 'Sans justificatif', n: nb('sans-piece') },
+  ], filtreDepenses, (v) => { filtreDepenses = v; afficherCompta(); });
+  const etat = (d) => {
+    if (d.aVerifier) return badge('à vérifier', 'ko');
+    if (estAchat(d) && d.confirmation) return badge('pas encore reçu', 'info');
+    if (!(d.pieces || []).length && !d.justificatif) return badge('sans justificatif', 'warn');
+    return null;
+  };
   remplirTable($('t-achats'), [
-    { titre: 'Date' }, { titre: 'Fournisseur' }, { titre: 'Libellé' }, { titre: 'Catégorie' }, { titre: 'TTC', n: 1 },
-    { titre: 'dont TVA', n: 1 }, { titre: 'Justificatifs' }, { titre: '' },
-  ], deps.map((d) => ({ onclick: ouvrirDepense(d), cellules: [jour(d.date), d.fournisseur || '', libelleDepense(d), donnees.categories[d.categorie] || d.categorie,
-    euros(d.montant), euros(d.tva),
-    h('div', { class: 'pieces-liste' }, (d.pieces || []).map(lienPiece),
-      d.justificatif ? h('a', { href: d.justificatif, target: '_blank', rel: 'noopener' }, 'Lien') : null),
-    h('div', { class: 'no-print' }, menuPoints([
-      { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
-      d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
-      { libelle: 'Supprimer la dépense', danger: true, faire: () => supprimerDepense(d) },
-    ], `Actions pour « ${d.libelle} »`))] })),
+    { titre: 'Dépense' }, { titre: 'État' }, { titre: 'Date', classe: 'pc' }, { titre: 'Catégorie', classe: 'pc' },
+    { titre: 'TTC', n: 1 }, { titre: '', classe: 'pc' },
+  ], deps.map((d) => {
+    const tablettes = estAchat(d) ? donnees.stock.filter((t) => t.depense === d.id).length : 0;
+    return { onclick: ouvrirDepense(d), cellules: [
+      nomEtDetail(d.libelle || d.fournisseur || 'Dépense', d.fournisseur, jour(d.date), euros(d.montant)),
+      etat(d) || '', jour(d.date),
+      h('span', {}, donnees.categories[d.categorie] || d.categorie || '',
+        tablettes ? h('small', { class: 'muted' }, ` · ${pluriel(tablettes, 'tablette')}`) : null),
+      euros(d.montant),
+      h('div', { class: 'no-print' }, menuPoints([
+        { libelle: 'Joindre un justificatif', faire: () => { fichierDepense = d.id; choixFichier.click(); } },
+        d.recurrence ? { libelle: 'Ne plus l\'ajouter chaque mois', faire: () => arreterDepense(d) } : null,
+        { libelle: 'Supprimer la dépense', danger: true, faire: () => supprimerDepense(d) },
+      ], `Actions pour « ${d.libelle} »`))] };
+  }),
   {
-    total: deps.length ? ['Total', '', '', '', euros(deps.reduce((s, d) => s + d.montant, 0)),
-      euros(deps.reduce((s, d) => s + (d.tva || 0), 0)), '', ''] : null,
-    vide: 'Aucune dépense sur cette période.',
+    total: deps.length ? ['Total', '', '', '', euros(deps.reduce((s, d) => s + d.montant, 0)), ''] : null,
+    vide: filtreDepenses ? 'Aucune dépense de ce genre sur cette période.' : 'Aucune dépense sur cette période.',
   });
 
   const parCat = {};
@@ -3490,25 +3532,6 @@ function afficherCompta() {
   remplirTable($('t-virements'), [{ titre: 'Date' }, { titre: 'Arrivée prévue' }, { titre: 'Montant', n: 1 }],
     virements.map((m) => [jour(m.le), jour(m.disponibleLe), euros(-m.montant)]),
     { vide: 'Aucun virement sur cette période.' });
-}
-
-// Stock > Achats : les commandes passées chez les vendeurs (tablettes et matériel), séparées des tablettes.
-function afficherAchats() {
-  const achats = donnees.depenses.filter((d) => ['tablettes', 'materiel'].includes(d.categorie) || (d.materiel || []).length)
-    .sort((a, b) => (b.date || 0) - (a.date || 0));
-  remplirTable($('t-achats-vendeurs'), [
-    { titre: 'Date' }, { titre: 'Vendeur' }, { titre: 'Ce qui a été acheté' }, { titre: 'N° de commande' },
-    { titre: 'Montant', n: 1 }, { titre: 'Facture' }, { titre: 'Tablettes' },
-  ], achats.map((d) => {
-    const tablettes = donnees.stock.filter((t) => t.depense === d.id);
-    return { onclick: ouvrirDepense(d), cellules: [
-      jour(d.date), d.fournisseur || '', d.libelle || '', d.numero || '', euros(d.montant),
-      h('div', {}, d.confirmation ? badge('pas encore reçue', 'info') : badge('reçue', 'ok'),
-        ...((d.pieces || []).map((p) => h('div', {}, lienPiece(p))))),
-      h('div', {}, ...tablettes.map((t) => h('div', {}, h('a', { href: `#tablette/${encodeURIComponent(t.id)}` },
-        t.ref || t.numero || 'tablette')))),
-    ] };
-  }), { vide: 'Aucun achat enregistré.' });
 }
 
 // Ligne de tableau → page de la dépense (sauf un clic sur un lien, un bouton ou le ⋮ de la ligne).
@@ -3638,20 +3661,6 @@ function boutonPasLaFacture(d) {
 function simDe(id) {
   const l = id && donnees.sims.find((x) => x.id === id);
   return l ? h('a', { href: `#sim/${encodeURIComponent(l.id)}` }, [l.operateur, l.numero || fin4(l.iccid)].filter(Boolean).join(' · ') || 'Carte SIM') : null;
-}
-
-function libelleDepense(d) {
-  return h('div', {}, d.libelle,
-    d.numero ? h('span', { class: 'muted' }, ` · n° ${d.numero}`) : null,
-    d.recurrence ? h('div', {}, badge('chaque mois', 'info')) : null,
-    d.depuis ? h('div', { class: 'muted small' }, 'ajoutée automatiquement') : null,
-    (d.materiel || []).length ? h('div', { class: 'muted small' }, `Entré au stock : ${d.materiel.join(', ')}`) : null,
-    d.confirmation ? h('div', { class: 'muted small' }, 'Facture pas encore reçue (seule la confirmation de commande est arrivée)') : null,
-    d.aVerifier ? h('div', { class: 'a-verifier' },
-      h('p', { class: 'small' }, badge('à vérifier', 'ko'), ' ', sourceDepense(d),
-        ' : vérifiez le montant, la date et le vendeur, puis validez.'),
-      d.remarque ? h('p', { class: 'small' }, d.remarque) : null,
-      h('button', { type: 'button', class: 'secondary small-btn no-print', onclick: () => verifierDepense(d) }, 'Valider cette dépense')) : null);
 }
 
 // « e-mail de "Tanguy Reynaud" <adresse> » → « Lue dans l'e-mail de Tanguy Reynaud ».
@@ -4474,8 +4483,8 @@ function afficherRentabilite() {
       ].filter(Boolean).join(', '))),
       ligne('Envoi', r.fraisEnvoi), ligne('Retour', r.fraisRetour), ligne('Mise en service (en moins)', r.miseEnService)),
     h('p', { class: 'muted small' }, accessoires.length
-      ? 'Modifier le contenu : Stock, Accessoires. Chaque envoi sort ces articles du stock et prévient quand il en manque.'
-      : 'Aucun article de colis : ajoutez-les dans Stock, Accessoires (carton, housse, chargeur, câble, papier, fiche…), « Part avec : Chaque envoi ».'),
+      ? 'Modifier le contenu : Matériel, Accessoires. Chaque envoi sort ces articles du stock et prévient quand il en manque.'
+      : 'Aucun article de colis : ajoutez-les dans Matériel, Accessoires (carton, housse, chargeur, câble, papier, fiche…), « Part avec : Chaque envoi ».'),
   );
   afficherReglagesCalculs();
 }
@@ -4723,23 +4732,31 @@ function afficherClients() {
   if (!clients) return;
   const tous = clients.contacts;
   const compte = (f) => tous.filter(f).length;
-  $('kpi-clients').replaceChildren(
-    stat(String(compte((c) => c.type === 'client')), 'abonnés'),
-    stat(String(compte((c) => c.type === 'ancien')), 'anciens clients'),
-    stat(String(compte((c) => c.type === 'panier')), 'paniers abandonnés'),
-    stat(String(compte((c) => c.type === 'attente')), 'en liste d\'attente'),
-    stat(String(compte((c) => c.type === 'chat')), 'contacts du chat'),
-    stat(String(compte((c) => c.consentement && !c.desinscrit)), 'acceptent les e-mails', `${compte((c) => c.desinscrit)} désinscrits`),
-  );
+  const filtre = $('filtre-clients').value;
+  filtresPastilles($('kpi-clients'), [
+    { valeur: '', libelle: 'Tout le monde', n: tous.length },
+    { valeur: 'client', libelle: 'Abonnés', n: compte((c) => c.type === 'client') },
+    { valeur: 'attente', libelle: 'Liste d\'attente', n: compte((c) => c.type === 'attente') },
+    { valeur: 'panier', libelle: 'Paniers abandonnés', n: compte((c) => c.type === 'panier') },
+    { valeur: 'chat', libelle: 'Contacts du chat', n: compte((c) => c.type === 'chat') },
+    { valeur: 'ancien', libelle: 'Anciens clients', n: compte((c) => c.type === 'ancien') },
+    { valeur: 'accord', libelle: 'Acceptent les e-mails', n: compte((c) => c.consentement && !c.desinscrit) },
+  ], filtre, (v) => { $('filtre-clients').value = v; afficherClients(); });
+  const desinscrits = compte((c) => c.desinscrit);
+  $('clients-suite').textContent = desinscrits ? `${pluriel(desinscrits, 'personne')} désinscrite${desinscrits > 1 ? 's' : ''} des e-mails.` : '';
   const liste = clientsAffiches();
+  const COULEURS = { client: 'ok', panier: 'warn', attente: 'info' };
   remplirTable($('t-clients'), [
-    { titre: 'Nom' }, { titre: 'E-mail' }, { titre: 'Téléphone' }, { titre: 'Situation' }, { titre: 'Depuis' }, { titre: 'E-mails' },
+    { titre: 'Contact' }, { titre: 'Situation' }, { titre: 'E-mail', classe: 'pc' }, { titre: 'Téléphone', classe: 'pc' },
+    { titre: 'Depuis', classe: 'pc' }, { titre: 'E-mails', classe: 'pc' },
   ], liste.map((c) => ({
     cellules: [
-      c.nom || '', c.email,
+      nomEtDetail(c.nom || c.email, c.nom ? c.email : null, jour(c.depuis)),
+      badge([TYPES_CLIENT[c.type] || c.type || '', c.statut && c.type !== 'panier' ? ` (${(STATUTS_CLIENT[c.statut] || c.statut).toLowerCase()})` : ''].join(''),
+        COULEURS[c.type]),
+      c.email,
       // Toucher le numéro appelle (sans ouvrir la fiche).
       c.telephone ? h('a', { href: `tel:${c.telephone.replace(/\s/g, '')}`, onclick: (e) => e.stopPropagation() }, c.telephone) : '',
-      [TYPES_CLIENT[c.type] || '', c.statut && c.type !== 'panier' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : '', c.formule === 'wifi' ? ' · Wi-Fi (ancienne formule)' : ''].join(''),
       jour(c.depuis), accordTexte(c),
     ],
     onclick: () => { location.hash = `#client/${encodeURIComponent(c.email)}`; },

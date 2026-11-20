@@ -234,7 +234,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
         const majChoix = () => {
           e.tablette = choix.value || null;
           const t = tablette(e);
-          alerte.textContent = dispo.length ? '' : 'Installez d\'abord une tablette : Stock > Recevoir une tablette.';
+          alerte.textContent = dispo.length ? '' : 'Installez d\'abord une tablette : Matériel, « + Ajouter », « Recevoir une tablette ».';
           choixSim.hidden = !internet || !t || !!t.simId;
           e.sim = choixSim.hidden ? null : choixSim.value || null;
           maj();
