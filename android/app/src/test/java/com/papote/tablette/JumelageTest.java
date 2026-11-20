@@ -1,6 +1,8 @@
 package com.papote.tablette;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -23,7 +25,25 @@ public class JumelageTest {
     @Test
     public void sansReveilLentApresDixMinutesSansActivite() {
         assertEquals(15_000, Sync.delaiJumelage(10 * MIN, false));
-        assertEquals(15_000, Sync.delaiJumelage(3 * 24 * 60 * MIN, false));
+        assertEquals(15_000, Sync.delaiJumelage(60 * MIN - 1, false));
+    }
+
+    @Test
+    public void sansReveilEndormieApresUneHeureDeuxMinutes() {
+        // Nuit du 19/11 : à 15 s sans fin, une tablette oubliée sur l'écran d'attente coûtait ≈ 15 Mo par jour de SIM.
+        assertEquals(2 * MIN, Sync.delaiJumelage(60 * MIN, false));
+        assertEquals(2 * MIN, Sync.delaiJumelage(3 * 24 * 60 * MIN, false));
+    }
+
+    @Test
+    public void codeConfirmeTropAncienJeteSeulementSurPreuve() {
+        long exp = 1_800_000_000_000L, H = 60 * MIN;
+        assertTrue("403 et 24 h passées à l'heure du serveur", Sync.entreeExpiree(403, exp, exp + 24 * H + 1));
+        assertFalse("encore dans les 24 h", Sync.entreeExpiree(403, exp, exp + 23 * H));
+        assertFalse("heure du serveur inconnue", Sync.entreeExpiree(403, exp, 0));
+        assertFalse("autre refus (réseau, serveur)", Sync.entreeExpiree(500, exp, exp + 48 * H));
+        assertFalse("pas de refus", Sync.entreeExpiree(0, exp, exp + 48 * H));
+        assertFalse("échéance illisible", Sync.entreeExpiree(403, 0, exp));
     }
 
     @Test

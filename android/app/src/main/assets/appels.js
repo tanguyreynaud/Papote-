@@ -840,6 +840,10 @@ function traiterAppels(snap) {
       // Décompte du SOS à l'écran (tablette.js) : le SOS est annulé, l'appel du proche sonne normalement (Tanguy, 19/11).
       try { if (window.Papote && window.Papote.sosAnnuleParVisio) window.Papote.sosAnnuleParVisio(latest.data().callerName || ''); } catch (e) { /* rien */ }
       showRing(latest.id, latest.data({ serverTimestamps: 'estimate' }));
+      // Deux appels lus d'un coup : les autres sont refusés tout de suite (« Pas de réponse »), comme pendant une
+      // sonnerie. Avant, seulement à la lecture suivante, qui n'a jamais lieu avec le réveil par le serveur : l'autre
+      // appelant attendait dans le vide (Gestion, 19/11).
+      fresh.filter((d) => d.id !== latest.id).forEach((d) => refuseCall(d.id));
     }
 }
 

@@ -2748,6 +2748,14 @@ final class Sync {
     static final long JUMELAGE_VIF_MS = 10 * 60_000;
     static final long JUMELAGE_TOUR_VIF_MS = 4_000;
     static final long JUMELAGE_TOUR_LENT_MS = 15_000;
+    /**
+     * Sans réveil du serveur, au-delà d'une heure sans activité : une lecture toutes les 2 min (nuit du 19/11).
+     * À 15 s sans fin, une tablette restée sur « On prépare votre tablette… » (famille pas prête, réveils
+     * absents) relisait le serveur ≈ 5 800 fois par jour, de l'ordre de 15 Mo par jour sur la carte SIM.
+     * Toucher l'écran, un ordre ou le retour d'internet repasse en lecture rapide.
+     */
+    static final long JUMELAGE_ENDORMI_APRES_MS = 60 * 60_000;
+    static final long JUMELAGE_TOUR_ENDORMI_MS = 2 * 60_000;
     /** Le serveur prévient la tablette (push « jumelage ») : la relecture n'est plus qu'un secours. */
     static final long JUMELAGE_SECOURS_VIF_MS = 60_000;
     static final long JUMELAGE_SECOURS_LENT_MS = 10 * 60_000;
@@ -2765,7 +2773,8 @@ final class Sync {
     static long delaiJumelage(long depuisActiviteMs, boolean prevenue) {
         boolean vif = depuisActiviteMs >= 0 && depuisActiviteMs < JUMELAGE_VIF_MS;
         if (prevenue) return vif ? JUMELAGE_SECOURS_VIF_MS : JUMELAGE_SECOURS_LENT_MS;
-        return vif ? JUMELAGE_TOUR_VIF_MS : JUMELAGE_TOUR_LENT_MS;
+        if (vif) return JUMELAGE_TOUR_VIF_MS;
+        return depuisActiviteMs >= JUMELAGE_ENDORMI_APRES_MS ? JUMELAGE_TOUR_ENDORMI_MS : JUMELAGE_TOUR_LENT_MS;
     }
 
     private void jumelageVif() {
@@ -2947,7 +2956,17 @@ final class Sync {
             welcome(new JSONObject().put("step", "pair").put("code", code));
         } else if ("confirmed".equals(state) && Firebase.str(f, "fid") != null) {
             String famille = nz(Firebase.str(f, "familyName"));
-            if (joinFamily(code, Firebase.str(f, "fid"), famille.isEmpty() ? name : famille)) {
+            if (!joinFamily(code, Firebase.str(f, "fid"), famille.isEmpty() ? name : famille)) {
+                // Jumelage confirmé pendant que la tablette s'éteignait (coupure juste après la confirmation),
+                // rallumée plus de 24 h après : les règles refusent pour toujours d'entrer avec ce code. Sans
+                // ceci, elle restait sur « On prépare votre tablette… » et réessayait toutes les 15 s sans fin.
+                // Un nouveau code est écrit : le serveur la remet dans la famille de sa commande (jumeler).
+                if (entreeExpiree(dernierRefusEntree, Firebase.timestamp(f, "expiresAt"), Horloge.maintenantServeur())) {
+                    Journal.log(context, "Jumelage confirmé trop ancien (entrée refusée) : nouveau code");
+                    prefs.edit().remove("pairing").remove("pairingExpires").apply();
+                    jumelageVif();
+                }
+            } else {
                 long reservedAt = Firebase.timestamp(f, "reservedAt");
                 prefs.edit().putBoolean("installEnCours", true)
                         .putString("installPar", nz(Firebase.str(f, "claimedName")))
@@ -3149,7 +3168,7 @@ final class Sync {
                     .put("tabletUid", Firebase.string(firebase.uid()))
                     .put("name", Firebase.string(name))
                     .put("status", Firebase.string("waiting"))
-                    .put("expiresAt", new JSONObject().put("timestampValue", iso.format(new java.util.Date(expires))));
+                    .put("expiresAt", new JSONObject().put("timestampValue", iso.format(new java.util.Date(expiresServeur(expires)))));
             if (firebase.callsUid() != null) fields.put("callsUid", Firebase.string(firebase.callsUid()));
             // N° de série : le serveur reconnaît la tablette préparée et relie sa commande à la famille.
             String serie = serialNumber();
@@ -3176,6 +3195,28 @@ final class Sync {
         }
     }
 
+    /**
+     * expiresAt écrit sur le serveur : compté depuis l'heure du serveur quand elle est connue. Une tablette dont
+     * l'horloge avance (batterie vide, date d'usine) écrivait une échéance que les règles refusent (« au plus 20 min
+     * après l'heure du serveur ») : pas de code, « La tablette attend internet » jusqu'à ce qu'Android remette l'heure.
+     */
+    private static long expiresServeur(long expiresTablette) {
+        long serveur = Horloge.maintenantServeur();
+        return serveur > 0 ? serveur + PAIRING_MS : expiresTablette;
+    }
+
+    /** Code HTTP du dernier refus de joinFamily (0 : pas de refus du serveur). */
+    private int dernierRefusEntree;
+
+    /**
+     * Les règles (firestore.rules, members) n'acceptent l'entrée avec un code confirmé que jusqu'à 24 h après son
+     * expiresAt. Vrai seulement si le serveur a refusé (403) ET que l'heure d'un serveur (pas celle de la tablette)
+     * dépasse ce délai : un refus d'une autre cause (App Check, règles en panne) ne jette jamais le code.
+     */
+    static boolean entreeExpiree(int refus, long expiresAt, long heureServeurMs) {
+        return refus == 403 && expiresAt > 0 && heureServeurMs > 0 && heureServeurMs > expiresAt + 24 * 3600_000L;
+    }
+
     /** La tablette entre dans la famille (sa fiche membre, avec le code de jumelage comme preuve). */
     private boolean joinFamily(String code, String fid, String memberName) {
         try {
@@ -3191,10 +3232,12 @@ final class Sync {
                     .put("updateTransforms", new JSONArray().put(new JSONObject()
                             .put("fieldPath", "joinedAt").put("setToServerValue", "REQUEST_TIME")))
                     .put("currentDocument", new JSONObject().put("exists", false));
+            dernierRefusEntree = 0;
             firebase.commit(new JSONArray().put(member));
             prefs.edit().putString("fid", fid).apply();
             return true;
         } catch (Firebase.ApiException e) {
+            dernierRefusEntree = e.code;
             // Fiche déjà écrite (réponse perdue la fois d'avant) : la tablette est bien dans la famille.
             if (e.code == 409) {
                 prefs.edit().putString("fid", fid).apply();
