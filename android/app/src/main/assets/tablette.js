@@ -2173,6 +2173,8 @@
     if (sub) callScreen.appendChild(el2('p', 'call-sub', sub));
     if (state === 'ringing' || state === 'connected' || state === 'starting') {
       var hang = el2('button', 'call-hangup', 'Raccrocher');
+      // Le combiné couché, comme sur « Décrocher » (Tanguy, 20/11) : une Mamie qui ne lit pas reconnaît le bouton.
+      hang.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(135deg)"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg><span>Raccrocher</span>';
       on(hang, 'click', function () {
         // « Raccrocher » arrive sous le doigt, à la place de « Décrocher » ou de « Appeler Julie » : un 2e appui (doigt
         // qui appuie deux fois) ne doit pas couper l'appel tout juste pris ou lancé (banc d'utilisateurs, Tanguy 19/11).

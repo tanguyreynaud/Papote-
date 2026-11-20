@@ -1809,7 +1809,7 @@ html .call-out .call-hangup, html .call-ring .call-btn.answer {
 }
 html .call-out .call-hangup { background: #dc2626; box-shadow: 0 1vmin 2.5vmin rgba(220, 38, 38, .3); }
 /* Combiné sur « Décrocher » (19/11). */
-html .call-out .call-answer .icon, html .call-ring .call-btn.answer .icon { width: 1.1em; height: 1.1em; margin-right: 2.5vmin; vertical-align: -0.15em; }
+html .call-out .call-hangup .icon, html .call-ring .call-btn.answer .icon { width: 1.1em; height: 1.1em; margin-right: 2.5vmin; vertical-align: -0.15em; }
 html .call-ring .call-btn.answer { background: #166534; box-shadow: 0 1vmin 2.5vmin rgba(22, 101, 52, .35); }
 /* L'image à droite : grande, coins carrés, comme une photo reçue */
 html .call-out:not(.picker) .call-face {
