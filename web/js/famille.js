@@ -3013,7 +3013,7 @@ function sosContenu(s, notif) {
           : 'Ce SOS est terminé';
     const detail = e.message || (e.fin === 'repondu' && e.nom ? `${e.nom} a répondu.` : moi ? 'C\'est noté.' : '');
     return {
-      cle: `fin|${e.fin}|${e.uid}|${e.nom}|${e.message}`,
+      cle: `fin|${s.debut}|${e.fin}|${e.uid}|${e.nom}|${e.message}`,
       titre,
       texte: [detail, quandMin ? `SOS : ${quandMin}.` : ''].filter(Boolean).join(' '),
       boutons: [{ label: 'OK', value: false, cls: 'primary' }],
@@ -3023,7 +3023,7 @@ function sosContenu(s, notif) {
   const erreur = sosDemande?.debut === s.debut ? sosDemande.erreur : '';
   const suite = erreur || (notif ? 'Personne n\'a pu répondre.' : 'La tablette prévient la famille.');
   return {
-    cle: `cours|${attente}|${erreur}`,
+    cle: `cours|${s.debut}|${attente}|${erreur}`,
     titre: `${nom} a appuyé sur SOS`,
     texte: quand ? `${quand}. ${suite}` : suite,
     boutons: [
@@ -3055,6 +3055,13 @@ async function sosPrendre(s, bouton) {
 // La fenêtre ouverte suit le SOS (fiche de la tablette, sosPris, réponse du serveur) ; ne change que si l'affichage change.
 function sosMaj() {
   if (!sosFen || !session) return;
+  // Nouveau SOS pendant que la fenêtre du précédent est encore ouverte (« … a eu quelqu'un au téléphone » pas encore
+  // fermé) : la fenêtre passe au nouveau, qui s'affiche (sinon il restait caché derrière l'ancien, jamais montré).
+  const recent = sosDeLaTablette();
+  if (recent && recent.debut > sosFen.debut) {
+    sosFen.debut = recent.debut;
+    sosFen.notif = false;
+  }
   const s = tabletMembers.map((m) => m.sos).find((x) => x && x.debut === sosFen.debut) || sosFen.s;
   sosFen.s = s;
   const c = sosContenu(s, sosFen.notif);

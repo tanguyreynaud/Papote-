@@ -41,10 +41,12 @@ function dialog(message, buttons, extra = null) {
       setTimeout(() => back.remove(), 150);
       resolve(value);
     };
-    // Boutons changés juste après un toucher (api.boutons) : le 2e toucher d'un double appui sur l'ancien bouton
-    // tomberait sur le nouveau au même endroit ; ignoré pendant une demi-seconde. Un changement venu d'ailleurs (le
-    // serveur, longtemps après le dernier toucher) ne bloque rien.
+    // Boutons changés juste après un toucher sur un bouton de cette fenêtre (api.boutons) : le 2e toucher d'un double
+    // appui sur l'ancien bouton tomberait sur le nouveau au même endroit ; ignoré pendant une demi-seconde. Un
+    // changement venu d'ailleurs (la tablette, le serveur) ne bloque rien, même juste après un toucher ailleurs dans
+    // la page (CI WebKit, 20/11 : la fenêtre changée 0,4 s après un toucher sur l'accueil, son « OK » restait sourd).
     let nouveauxDepuis = -Infinity;
+    let toucherIci = -Infinity; // dernier toucher sur un bouton de CETTE fenêtre
     // action(bouton) : le bouton agit sans fermer la fenêtre (elle change ensuite par l'api) ; sinon il la ferme.
     const poserBoutons = (liste) => {
       row.replaceChildren();
@@ -56,6 +58,7 @@ function dialog(message, buttons, extra = null) {
         b.textContent = label;
         b.addEventListener('click', (e) => {
           if (doublon(e) || e.timeStamp - nouveauxDepuis < DOUBLE_MS || b.disabled) return;
+          toucherIci = e.timeStamp;
           if (action) action(b); else close(value);
         });
         row.append(b);
@@ -73,7 +76,7 @@ function dialog(message, buttons, extra = null) {
       texte: (t) => { text.textContent = t; text.hidden = !t; },
       boutons: (liste) => {
         poserBoutons(liste);
-        if (dernierToucher && performance.now() - dernierToucher.t < DOUBLE_MS) nouveauxDepuis = performance.now();
+        if (performance.now() - toucherIci < DOUBLE_MS) nouveauxDepuis = performance.now();
         row.firstChild?.focus();
       },
       fermer: (v) => close(v),
