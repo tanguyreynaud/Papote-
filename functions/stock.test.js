@@ -102,3 +102,26 @@ test('site : chaque image de vitrine/ est gardée 7 jours, les pages restent red
   assert.strictEqual(garde('**'), 'no-cache');
   assert.strictEqual(garde('/api/stock'), 'public, max-age=60, s-maxage=60');
 });
+
+// Sans cela, une image remplacée sous le même nom resterait 7 jours chez les visiteurs déjà venus.
+test('site : chaque lien d\'image porte l\'empreinte du fichier (sinon : node outils/empreintes-images.js)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const outil = require('../outils/empreintes-images');
+  assert.deepStrictEqual(outil.pagesEnRetard(), [], 'pages dont un lien d\'image n\'est pas à jour');
+  const accueil = fs.readFileSync(path.join(__dirname, '..', 'vitrine', 'accueil.html'), 'utf8');
+  assert.ok((accueil.match(/\.webp\?v=[0-9a-f]{8}/g) || []).length >= 15, 'les images de l\'accueil sont bien vues par l\'outil');
+  // Image changée → lien changé ; adresse complète et nom inconnu laissés tels quels ; relancer ne change rien.
+  const d = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'empreintes-'));
+  try {
+    fs.writeFileSync(path.join(d, 'a.webp'), 'un');
+    const page = '<img src="a.webp" srcset="/a.webp 2x"><meta content="https://mapapote.fr/a.webp"><img src="b.png">';
+    const v1 = outil.mettreAJour(page, d);
+    assert.match(v1, /^<img src="a\.webp\?v=[0-9a-f]{8}" srcset="\/a\.webp\?v=[0-9a-f]{8} 2x"><meta content="https:\/\/mapapote\.fr\/a\.webp"><img src="b\.png">$/);
+    assert.strictEqual(outil.mettreAJour(v1, d), v1);
+    fs.writeFileSync(path.join(d, 'a.webp'), 'deux');
+    assert.notStrictEqual(outil.mettreAJour(v1, d), v1);
+  } finally {
+    fs.rmSync(d, { recursive: true, force: true });
+  }
+});

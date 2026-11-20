@@ -229,6 +229,7 @@ if [ "$SECRETS_SEULS" = 0 ]; then
       etape "Sauvegardes : copie chiffrée" bash -c 'cd functions && node --test ../outils/admin/chiffrement.test.js'
     fi
     if touche '^(vitrine/|outils/galerie/|functions/mail)'; then
+      etape "Site : liens d'image à jour (empreintes-images.js --verifier)" node outils/empreintes-images.js --verifier
       if G=$(galerie_prete); then
         etape "Site : balayage accessibilité (--accessibilite vitrine)" bash -c "cd '$G' && node galerie.js --accessibilite vitrine --vitrine=ici --emails=ici"
         etape "Site : parcours de commande sur téléphone (commande-site.test.js)" bash -c "cd '$G' && NAVIGATEUR=chromium node --test commande-site.test.js"

@@ -9,7 +9,8 @@ name: Tests
 # faisaient tourner tout deux fois et doublaient les e-mails d'échec (Tanguy, 3/11).
 on:
   push:
-    paths: ['functions/**', 'outils/admin/**', 'vitrine/cgv.html', 'vitrine/chat-support.js', 'outils/cgv-pdf/**', '.github/workflows/tests.yml']
+    # vitrine/** et firebase.vitrine.json : l'essai des liens d'image et des durées de garde du site (stock.test.js).
+    paths: ['functions/**', 'outils/admin/**', 'vitrine/**', 'firebase.vitrine.json', 'outils/empreintes-images.js', 'outils/cgv-pdf/**', '.github/workflows/tests.yml']
   workflow_dispatch:
 
 # Un nouveau push sur la même branche de travail annule l'exécution encore en cours du commit précédent (CI plus
