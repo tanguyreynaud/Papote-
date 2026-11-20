@@ -228,11 +228,14 @@ test('A43 : famille préparée : le nom, puis « Réglons la tablette », une se
   await intro.waitFor({ timeout: 15_000 });
   assert.strictEqual(await julie.page.locator('.guide-back:not(.intro-back)').count(), 0, 'le guide attend');
   assert.match(await intro.locator('[data-step="0"]').innerText(), /Réglons la tablette[\s\S]*Mamie Emma/);
-  // V8 : la fenêtre et ses deux boutons (même taille) restent à la même place à chaque étape.
+  // V8 : le bas de la fenêtre et ses deux boutons (même taille) restent à la même place à chaque étape.
   const place = async () => {
     await julie.page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished)).then(() => true));
     const [f, p, n] = await Promise.all(['form', '.intro-prev', '.intro-next'].map((sel) => intro.locator(sel).boundingBox()));
-    return JSON.stringify([f, p, n].map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)]));
+    // La fenêtre prend la hauteur de chaque page (Tanguy, 20/11) et grandit vers le haut : son bas, sa largeur et ses
+    // deux boutons restent à la même place.
+    return JSON.stringify([[Math.round(f.x), Math.round(f.y + f.height), Math.round(f.width)],
+      ...[p, n].map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)])]);
   };
   const depart = await place();
   const [bp, bn] = JSON.parse(depart).slice(1);
