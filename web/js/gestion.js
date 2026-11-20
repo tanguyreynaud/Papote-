@@ -844,7 +844,7 @@ function afficherAccueil() {
     ...facturesAttendues.filter((d) => !achatsARelier.has(d.id)).map((d) => [1, `Facture ${d.fournisseur || 'du vendeur'} à télécharger : ${d.libelle || 'achat'}${d.numero ? `, commande ${d.numero}` : ''}. La télécharger chez le vendeur puis l'envoyer à factures@`,
       `#depense/${encodeURIComponent(d.id)}`, 'ko']),
     // Chaque carte SIM et chaque accessoire doit avoir son achat (Tanguy, 2026-10-22).
-    [simsSansAchat, `${pluriel(simsSansAchat, 'carte SIM')} sans achat lié : ouvrir la carte et choisir son achat`, '#stock/sim', ''],
+    [simsSansAchat, `${simsSansAchat} carte${simsSansAchat > 1 ? 's' : ''} SIM sans achat lié : ouvrir la carte et choisir son achat`, '#stock/sim', ''],
     [accessoiresSansAchat, `${pluriel(accessoiresSansAchat, 'accessoire')} sans achat lié : ouvrir l'accessoire et ajouter son achat`, '#stock/accessoires', ''],
     [sansFacture, `${pluriel(sansFacture, 'tablette')} reçue${sansFacture > 1 ? 's' : ''} sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr`, '#stock', 'ko'],
     ...aVerifierMail.map((d) => [1, `Facture ${d.fournisseur || ''} à vérifier : ${[d.libelle, euros(d.montant)].filter(Boolean).join(', ')}, reçue par e-mail`.replace('  ', ' '),
@@ -885,8 +885,8 @@ function afficherAccueil() {
   taches = taches.filter((t) => !masquees.has(cleTache(t)));
   // Rangé par sujet ; chaque ligne : un titre court, le détail en dessous, une pastille si c'est urgent.
   const groupe = (lien) => (/^#(commande|client)/.test(lien) ? 'Commandes et clients'
-    : /^#(tablette|stock|sim)/.test(lien) ? 'Stock' : /^#(depense|compta)/.test(lien) ? 'Comptabilité' : 'Fonctionnement');
-  const groupes = new Map(['Commandes et clients', 'Stock', 'Comptabilité', 'Fonctionnement'].map((g) => [g, []]));
+    : /^#(tablette|stock|sim)/.test(lien) ? 'Matériel' : /^#(depense|compta)/.test(lien) ? 'Comptabilité' : 'Fonctionnement');
+  const groupes = new Map(['Commandes et clients', 'Matériel', 'Comptabilité', 'Fonctionnement'].map((g) => [g, []]));
   for (const tache of taches) {
     const [, texte, lien, classe] = tache;
     const i = texte.indexOf(' : ');
@@ -1135,7 +1135,9 @@ async function remplirCommande(id) {
       h('dl', { class: 'fiche' },
       ligne('État', badge(texte, classe)),
       ligne('Commandée le', jour(c.creeLe)),
-      ligne('Client', [c.nom, c.email, c.telephone].filter(Boolean).join(' · ')),
+      // Le nom ouvre la fiche du client (ses autres commandes, sa famille, ses paiements).
+      ligne('Client', c.email ? h('span', {}, h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email),
+        [c.nom ? c.email : null, c.telephone].filter(Boolean).map((x) => ` · ${x}`).join('')) : [c.nom, c.telephone].filter(Boolean).join(' · ')),
       // Souvent un proche (compte joint, gendre…) : à regarder avant l'envoi, sans rien bloquer.
       ligne('Titulaire de l\'IBAN', c.titulaire),
       ligne('Formule', formuleTexte(c)),
@@ -2002,6 +2004,16 @@ function remplirPageSim(id) {
   const modif = (libelle, affiche, champ, opts = {}) => ligneModifiable(libelle, affiche, { ...opts,
     enregistrer: (v) => modifierChampsSim(l.id, { [champ]: v }) });
   const tablettesPossibles = donnees.stock.filter((x) => x.id === l.tablette || (!x.simId && !x.sim && !['perdue', 'hors-service'].includes(x.etat)));
+  const facultatives = [
+    [l.finPromo, modif('Fin de la promo', l.finPromo ? jour(l.finPromo) : null, 'finPromo', { valeur: dateChamp(l.finPromo), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) })],
+    [l.client, modif('Identifiant client', l.client, 'client', { valeur: l.client })],
+    [l.cb, modif('Carte bancaire', l.cb ? `…${l.cb}` : null, 'cb', { valeur: l.cb, mode: 'numeric', aide: '4 derniers chiffres' })],
+    [l.cbExp, modif('Expiration de la carte', l.cbExp, 'cbExp', { valeur: l.cbExp, type: 'month' })],
+    [l.note, modif('Note', l.note, 'note', { valeur: l.note, long: true })],
+  ];
+  const remplis = facultatives.filter(([v]) => v);
+  const vides = facultatives.filter(([v]) => !v);
+  const replieOuvert = !!zone.querySelector('details.a-completer[open]'); // reste ouvert après un enregistrement
   zone.replaceChildren(...[h('div', { class: 'card' },
     tete,
     alertes.length ? h('p', { class: 'small badges-longs' }, ...alertes.map((a) => badge(a, 'ko'))) : null,
@@ -2020,15 +2032,15 @@ function remplirPageSim(id) {
       ...modif('Forfait', l.go != null ? `${l.go} Go par mois` : null, 'go', { valeur: l.go != null ? String(l.go) : '', mode: 'decimal', suffixe: 'Go',
         convertir: (v) => { if (!v.trim()) return null; const n = Number(v.replace(',', '.')); if (!Number.isFinite(n)) throw new Error('Un nombre de Go.'); return n; } }),
       ...modif('Prix par mois', l.prix != null ? euros(l.prix) : null, 'prix', { valeur: enEuros(l.prix), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
-      ...modif('Fin de la promo', l.finPromo ? jour(l.finPromo) : null, 'finPromo', { valeur: dateChamp(l.finPromo), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }),
       ...(l.finPromo || l.prixApres != null ? modif('Prix après la promo', l.prixApres != null ? euros(l.prixApres) : null, 'prixApres', { valeur: enEuros(l.prixApres), mode: 'decimal', suffixe: '€', convertir: convertirEuros }) : []),
       ...ligne('Coût actuel', cout != null && cout !== l.prix ? euros(cout) : null),
       ...modif('Activée le', l.activation ? jour(l.activation) : null, 'activation', { valeur: dateChamp(l.activation), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }),
       ...(l.statut === 'stock' ? modif('À activer avant', l.activerAvant ? jour(l.activerAvant) : null, 'activerAvant', { valeur: dateChamp(l.activerAvant), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }) : []),
-      ...modif('Identifiant client', l.client, 'client', { valeur: l.client }),
-      ...modif('Carte bancaire', l.cb ? `…${l.cb}` : null, 'cb', { valeur: l.cb, mode: 'numeric', aide: '4 derniers chiffres' }),
-      ...modif('Expiration de la carte', l.cbExp, 'cbExp', { valeur: l.cbExp, type: 'month' }),
-      ...modif('Note', l.note, 'note', { valeur: l.note, long: true }))),
+      ...remplis.flatMap(([, ligneSim]) => ligneSim)),
+    // Infos facultatives encore vides : repliées, pour ne pas aligner cinq « à compléter » (Tanguy, 20/11).
+    vides.length ? h('details', { class: 'aide-repliee a-completer', open: replieOuvert || null },
+      h('summary', {}, `Autres infos à compléter (${vides.length})`),
+      h('dl', { class: 'fiche' }, ...vides.flatMap(([, ligneSim]) => ligneSim))) : null),
     carteBlocages(l),
     carteRecharges(l, modif, vue),
     vue ? h('div', { class: 'card' }, h('h2', {}, 'Ce que dit la tablette'),
@@ -2538,7 +2550,7 @@ function blocAlertes(zone, liste, { titre, avecTablette }) {
   const montrer = (genre) => {
     ouvert = ouvert === genre ? null : genre;
     detail.hidden = !ouvert;
-    zone.querySelectorAll('.stat').forEach((s) => s.classList.toggle('actif', s.dataset.genre === ouvert));
+    zone.querySelectorAll('[data-genre]').forEach((s) => { s.classList.toggle('actif', s.dataset.genre === ouvert); s.setAttribute('aria-pressed', String(s.dataset.genre === ouvert)); });
     if (!ouvert) return;
     detail.replaceChildren(...(ouvert === '*' ? liste : parGenre.get(ouvert)).map((a) => {
       const morceaux = [
@@ -2552,15 +2564,13 @@ function blocAlertes(zone, liste, { titre, avecTablette }) {
         ...morceaux.flatMap((m, i) => [i ? ' · ' : ' ', m]));
     }));
   };
-  const chiffre = (genre, n, texte) => {
-    const el = cliquable(stat(String(n), texte), () => montrer(genre));
-    el.dataset.genre = genre;
-    return el;
-  };
+  // Une pastille par sorte (« Tablette débranchée 1 ») : touchée, elle déplie la liste datée en dessous.
+  const chiffre = (genre, n, texte) => h('button', { type: 'button', 'data-genre': genre, 'aria-pressed': 'false', onclick: () => montrer(genre) },
+    texte === 'en tout' ? 'En tout' : texte, h('span', { class: 'n' }, String(n)));
   zone.replaceChildren(
     h('h2', {}, `${titre} (${jours} derniers jours)`),
     liste.length
-      ? h('div', { class: 'stats compact' }, chiffre('*', liste.length, 'en tout'),
+      ? h('div', { class: 'filtres', role: 'group' }, chiffre('*', liste.length, 'en tout'),
         ...[...parGenre.entries()].sort((x, y) => y[1].length - x[1].length).map(([g, l]) => chiffre(g, l.length, genres[g] || g)))
       : h('p', { class: 'muted small' }, 'Aucune alerte.'),
     detail,
@@ -2582,21 +2592,19 @@ function blocGardeFous(zone, t) {
   const montrer = (genre) => {
     ouvert = ouvert === genre ? null : genre;
     detail.hidden = !ouvert;
-    zone.querySelectorAll('.stat').forEach((s) => s.classList.toggle('actif', s.dataset.genre === ouvert));
+    zone.querySelectorAll('[data-genre]').forEach((s) => { s.classList.toggle('actif', s.dataset.genre === ouvert); s.setAttribute('aria-pressed', String(s.dataset.genre === ouvert)); });
     if (!ouvert) return;
     detail.replaceChildren(...(ouvert === '*' ? liste : parGenre.get(ouvert)).map((g) => h('li', {},
       h('span', { class: 'quand' }, new Date(g.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ',
       ouvert === '*' ? `${genres[g.genre] || g.genre} · ` : '', h('span', { class: 'muted' }, g.texte))));
   };
-  const chiffre = (genre, n, texte) => {
-    const el = cliquable(stat(String(n), texte), () => montrer(genre));
-    el.dataset.genre = genre;
-    return el;
-  };
+  // Une pastille par sorte (« Tablette débranchée 1 ») : touchée, elle déplie la liste datée en dessous.
+  const chiffre = (genre, n, texte) => h('button', { type: 'button', 'data-genre': genre, 'aria-pressed': 'false', onclick: () => montrer(genre) },
+    texte === 'en tout' ? 'En tout' : texte, h('span', { class: 'n' }, String(n)));
   zone.replaceChildren(
     h('h2', {}, 'Garde-fous de la tablette'),
     liste.length
-      ? h('div', { class: 'stats compact' }, chiffre('*', liste.length, 'en tout'),
+      ? h('div', { class: 'filtres', role: 'group' }, chiffre('*', liste.length, 'en tout'),
         ...Object.keys(genres).filter((g) => parGenre.has(g)).map((g) => chiffre(g, parGenre.get(g).length, genres[g])))
       : h('p', { class: 'muted small' }, 'Aucun dans son journal.'),
     h('p', { class: 'muted small' }, 'Comptés dans le journal de la tablette (ses 200 dernières lignes).'),

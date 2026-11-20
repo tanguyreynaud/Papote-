@@ -204,7 +204,9 @@
     display: block; padding: 0; border: 0; margin: 0; text-align: left; font-size: 14px;
   }
   .admin-body [data-panneau] .table.courte tbody td::before { content: none; }
-  .admin-body [data-panneau] .table.courte tbody td:first-child { flex: 1; min-width: 0; font-size: 15px; padding: 0; border: 0; margin: 0; }
+  .admin-body [data-panneau] .table.courte tbody td:first-child { flex: 1; min-width: 45%; font-size: 15px; padding: 0; border: 0; margin: 0; }
+  /* La pastille d'état passe sur deux lignes plutôt que d'écraser le nom (petit téléphone). */
+  .admin-body [data-panneau] .table.courte tbody td:not(:first-child) .badge { white-space: normal; text-align: center; }
   .admin-body [data-panneau] .table.courte tbody td:first-child small { font-size: 13px; overflow-wrap: anywhere; }
   .admin-body [data-panneau] .table.courte tbody td.pc { display: none; }
   .admin-body [data-panneau] .table.courte tbody td.chev { display: block; }
@@ -274,3 +276,17 @@
 #cherche-clients.cherche-liste { flex: 1 1 220px; width: auto; max-width: 360px; margin: 0; }
 .filtres-seuls { margin: 0 0 14px; }
 .table.courte ~ .kpi-suite { margin-top: 10px; }
+
+/* Statistiques : « Jour par jour » replié, le titre sert de bouton. */
+details.repli-jours > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+details.repli-jours > summary::-webkit-details-marker { display: none; }
+details.repli-jours > summary h2 { margin: 0; }
+details.repli-jours > summary::after { content: '▾'; color: var(--muted); }
+details.repli-jours[open] > summary::after { content: '▴'; }
+details.repli-jours[open] > summary { margin-bottom: 12px; }
+
+/* Fiche tablette sur téléphone : la frise « Où est-elle ? » ne garde que le nom de l'étape actuelle
+   (les cinq noms se chevauchaient : « PréparéeEnvoyée »). */
+@media (max-width: 640px) {
+  .admin-body .etapes-tablette .stepper li:not(.actuelle) .libelle { visibility: hidden; }
+}
