@@ -54,7 +54,12 @@ async function repondre(t, libelle) {
 async function texteFenetre(t) {
   const d = t.page.locator('.dialog-back:not(.closing) .dialog').first();
   await d.waitFor();
-  return d.innerText();
+  // Safari (WebKit) perd, dans innerText, l'espace entre la question et sa suite (deux blocs en ligne, chacun sur sa
+  // ligne) : « moment.Lui ». L'espace est bien dans la page ; on le remet pour lire la phrase telle qu'elle est écrite.
+  return d.evaluate((el) => {
+    const t = el.innerText, q = el.querySelector('.dialog-q'), s = el.querySelector('.dialog-d');
+    return q && s ? t.replace(q.textContent + s.textContent, `${q.textContent} ${s.textContent}`) : t;
+  });
 }
 
 // ---------- Fichiers ----------
