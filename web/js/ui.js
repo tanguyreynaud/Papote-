@@ -19,7 +19,7 @@ function dialog(message, buttons, extra = null) {
     const back = document.createElement('div');
     back.className = 'dialog-back';
     const box = document.createElement('div');
-    box.className = 'dialog';
+    box.className = extra?.cls ? `dialog ${extra.cls}` : 'dialog';
     box.setAttribute('role', 'alertdialog');
     const text = document.createElement('p');
     text.textContent = message;
@@ -101,6 +101,17 @@ export function avantDePartir({ intro, perdu, suite }) {
     { label: 'Garder Papote', value: false, cls: 'primary' },
     { label: 'Résilier quand même', value: true, cls: 'secondary' },
   ], { title: 'Avant de partir', list: perdu, after: suite, stack: true });
+}
+
+/**
+ * SOS resté sans réponse (notification « <Prénom> a appuyé sur SOS ») : le nom, l'heure, et « Rappeler <Prénom> » en
+ * premier, « Plus tard » dessous, même taille. true si « Rappeler » est touché (Tanguy, 20/11 : « Oui avec une popup »).
+ */
+export function fenetreSos(nom, quand) {
+  return dialog(quand ? `${quand}. Personne n'a pu répondre.` : 'Personne n\'a pu répondre.', [
+    { label: `Rappeler ${nom}`, value: true, cls: 'primary' },
+    { label: 'Plus tard', value: false, cls: 'secondary' },
+  ], { title: `${nom} a appuyé sur SOS`, stack: true, cls: 'dialog-sos' });
 }
 
 /** Menu d'actions (bouton « ⋯ ») : renvoie la valeur choisie, ou false si annulé. */

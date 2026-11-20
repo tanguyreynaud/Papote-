@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter, fenetreSos } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
@@ -2852,18 +2852,56 @@ $('tile-call').addEventListener('click', async () => {
 // « Rappeler » depuis la notification d'appel manqué : un appel téléphonique dès que la tablette a un
 // numéro (Tanguy, 2/11 : rappeler, c'est appeler, pas lancer une visio), sinon l'appel vidéo comme avec
 // la tuile. Une confirmation d'abord : elle sert aussi de geste pour le téléphone, la caméra et le plein écran.
-async function offerCallBack() {
+// SOS resté sans réponse (?rappeler=1&sos=1&quand=<ms>, notification « <Prénom> a appuyé sur SOS ») : la fenêtre le
+// dit, avec l'heure, et « Rappeler <Prénom> » (Tanguy, 20/11 : avant, toucher la notification menait juste à l'accueil).
+// Une seule fenêtre à la fois (notification touchée deux fois, ou app ouverte puis prévenue par le service worker) :
+// jamais deux fenêtres, jamais deux appels.
+let rappelOuvert = false;
+async function offerCallBack(sos = null) {
   try { history.replaceState(history.state, '', location.pathname); } catch (e) { /* rien */ }
-  if (!session || currentCall || callStarting) return;
-  if (numeroTablette() && !$('tile-phone').classList.contains('tile-off')) {
-    if (!await askConfirm(`Rappeler ${session.family.name} par téléphone ?`, 'Appeler')) return;
-    $('tile-phone').click();
-    return;
+  if (!session || currentCall || callStarting || rappelOuvert) return;
+  rappelOuvert = true;
+  try {
+    if (sos) {
+      const nom = session.family.name;
+      if (!await fenetreSos(nom, quandSos(sos.quand))) return;
+      if (currentCall || callStarting) return;
+      // Le choix téléphone ou vidéo se fait après l'appui : la fiche de la tablette a eu le temps d'arriver.
+      if (numeroTablette() && !$('tile-phone').classList.contains('tile-off')) { $('tile-phone').click(); return; }
+      for (let i = 0; i < 60 && $('tile-call').disabled; i++) await new Promise((r) => setTimeout(r, 250));
+      if ($('tile-call').disabled) { notice(`La tablette de ${nom} ne peut pas recevoir d'appel pour le moment.`); return; }
+      if (currentCall || callStarting) return;
+      appelConfirme = true;
+      $('tile-call').click();
+      return;
+    }
+    if (numeroTablette() && !$('tile-phone').classList.contains('tile-off')) {
+      if (!await askConfirm(`Rappeler ${session.family.name} par téléphone ?`, 'Appeler')) return;
+      $('tile-phone').click();
+      return;
+    }
+    if ($('tile-call').disabled) return;
+    if (!await askConfirm(`Rappeler ${session.family.name} en vidéo ?`, 'Appeler')) return;
+    appelConfirme = true;
+    $('tile-call').click();
+  } finally {
+    rappelOuvert = false;
   }
-  if ($('tile-call').disabled) return;
-  if (!await askConfirm(`Rappeler ${session.family.name} en vidéo ?`, 'Appeler')) return;
-  appelConfirme = true;
-  $('tile-call').click();
+}
+// ?sos=1&quand=<ms> d'une adresse « Rappeler » : { quand } (0 si l'heure manque), ou null pour un appel manqué ordinaire.
+function sosDe(params) {
+  return params.get('sos') === '1' ? { quand: /^\d{1,15}$/.test(params.get('quand') || '') ? Number(params.get('quand')) : 0 } : null;
+}
+// « Aujourd'hui à 14:32 », « Hier à 09:05 », « Le lundi 17 novembre à 22:10 » ; '' sans heure.
+function quandSos(ms) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  const hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const jour = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const ecart = Math.round((jour(new Date()) - jour(d)) / 86_400_000);
+  if (ecart === 0) return `Aujourd'hui à ${hm}`;
+  if (ecart === 1) return `Hier à ${hm}`;
+  return `Le ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${hm}`;
 }
 // Écran d'appel de l'app Android (?appeler=video) : l'appel déjà confirmé dans Chrome part dès que la tablette
 // est connue (la tuile reste grisée tant que sa fiche n'est pas arrivée).
@@ -2885,11 +2923,13 @@ navigator.serviceWorker?.addEventListener('message', (e) => {
   if (famille && session && famille !== session.fid && myFamilies.some((f) => f.fid === famille)) {
     reglagesPending = url.includes('reglages');
     abonnementPending = url.includes('abonnement=1');
+    rappelerPending = url.includes('rappeler=1');
+    sosPending = sosDe(new URL(url, location.origin).searchParams);
     saveFamilyId(famille);
     enterApp();
     return;
   }
-  if (url.includes('rappeler=1') && session) offerCallBack();
+  if (url.includes('rappeler=1') && session) offerCallBack(sosDe(new URL(url, location.origin).searchParams));
   if (url.includes('abonnement=1') && session) ouvrirAbonnement();
   const cid = url && new URL(url, location.origin).searchParams.get('appel');
   if (cid && session) answerOnArrival(cid);
@@ -6116,6 +6156,7 @@ let demandeEnvoyee = null;
 let stopPending = null;
 let sharedPending = false;
 let rappelerPending = false; // ouvert par « Rappeler » sur une notification d'appel manqué
+let sosPending = null; // … ou sur celle d'un SOS resté sans réponse (?sos=1) : { quand }
 let appelerPending = false; // écran d'appel de l'app Android : l'appel vidéo part dès l'arrivée
 let reglagesPending = false; // rouvert par l'app Android après le réglage de mise en pause
 let abonnementPending = false; // notification d'abonnement (paiement en retard, pause) : ouvre l'abonnement
@@ -6507,7 +6548,7 @@ async function enterApp() {
   }
   chargerJetonNatif();
   if (appelerPending) { appelerPending = false; appelerDesQuePossible(); }
-  else if (rappelerPending) { rappelerPending = false; offerCallBack(); }
+  else if (rappelerPending) { rappelerPending = false; const sos = sosPending; sosPending = null; offerCallBack(sos); }
   else if (reglagesPending) { reglagesPending = false; openPage('settings'); }
   else if (abonnementPending) { abonnementPending = false; ouvrirAbonnement(); }
 }
@@ -6560,6 +6601,7 @@ async function start() {
   const params = new URLSearchParams(location.search);
   sharedPending = params.has('partage');
   rappelerPending = params.has('rappeler');
+  sosPending = sosDe(params);
   reglagesPending = params.has('reglages');
   appelerPending = params.get('appeler') === 'video';
   abonnementPending = params.get('abonnement') === '1';

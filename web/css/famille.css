@@ -1402,6 +1402,10 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .member-more { margin-left: auto; width: 44px; height: 44px; font-size: 26px; line-height: 1; color: var(--muted); border-radius: 50%; }
 .member-more:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
 .dialog-buttons.stack .secondary { justify-content: center; min-height: 50px; font-weight: 700; }
+/* SOS resté sans réponse (ui.js fenetreSos) : indigo, « Rappeler » et « Plus tard » de même taille, chaque appui se voit. */
+.dialog-sos .dialog-title { color: var(--accent); }
+.dialog-sos .dialog-buttons.stack button { min-height: 56px; font-size: 17px; transition: transform .08s, filter .08s; }
+.dialog-sos .dialog-buttons.stack button:active { transform: scale(.97); filter: brightness(.92); }
 .action-danger { color: var(--danger) !important; }
 .agenda-edit + .agenda-edit { margin-left: 18px; }
 
