@@ -1765,7 +1765,8 @@ a { text-decoration: none; }
 .reglages-choix .seg[hidden] { display: none; }
 
 .rg-liste { margin: 0 0 16px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
-.rg-liste:not(:has(> :not([hidden]))) { display: none; }
+/* Liste dont toutes les lignes sont cachées : classe posée par famille.js (pas de :has(), Safari ne le recalcule pas toujours). */
+.rg-liste.rg-vide { display: none; }
 .rg-liste > * { border-top: 1px solid var(--line); }
 .rg-liste > :first-child, .rg-liste > [hidden] + :not([hidden]):not(:nth-child(n + 3)) { border-top: none; }
 .rg-liste > .card { margin: 0; border-radius: 0; box-shadow: none; background: transparent; }
@@ -1859,7 +1860,7 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .rg-abo .abo-status { margin: 0; font-family: var(--display); font-size: 17px; }
 .rg-abo-tete { cursor: default !important; }
 .rg-abo-corps { padding-top: 12px; }
-.rg-abo-corps:not(:has(> :not([hidden]))) { display: none; }
+.rg-abo-corps.rg-vide { display: none; }
 #btn-abo-page svg.rg-chev { margin-left: auto; }
 @media (max-width: 359px) {
   .reglages-choix .seg { font-size: 15px; padding: 6px 2px; white-space: nowrap; }

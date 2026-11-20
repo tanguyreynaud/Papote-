@@ -321,6 +321,8 @@ const PAGES = {
 // onglet : ouverte depuis la barre du bas (Photos, Messages) : la barre reste, sans flèche retour.
 function openPage(name, push = true, onglet = false) {
   const dejaOnglet = surUnOnglet();
+  // Réglages ouverts (tuile, barre du bas) : toujours sur le premier choix, quel que soit le dernier panneau regardé.
+  if (name === 'settings' && push && $('view-settings').hidden) reglagesPanneau = 'tablette';
   stopPage?.();
   stopPage = PAGES[name]();
   page = name;
@@ -436,7 +438,7 @@ const panneauReglages = () => (reglagesPanneau === 'tablette' && !amFamilyAdmin(
 function majReglagesChoix(view = $('view-profile').hidden ? 'view-settings' : 'view-profile') {
   // Page ouverte : le panneau montré reste le même si mes droits changent sous mes yeux (un proche sur « La famille »
   // nommé responsable ne saute pas sur « La tablette » ; le choix apparaît, c'est tout).
-  if (!$('view-settings').hidden) reglagesPanneau = panneauReglages();
+  if (!$('view-settings').hidden && session?.family) reglagesPanneau = panneauReglages();
   const actif = view === 'view-profile' ? 'profil' : panneauReglages();
   const admin = amFamilyAdmin();
   document.querySelectorAll('[data-reglages-choix]').forEach((b) => {
@@ -448,12 +450,23 @@ function majReglagesChoix(view = $('view-profile').hidden ? 'view-settings' : 'v
 }
 function ouvrirReglages(choix = 'tablette') {
   if (choix === 'profil') { ouvrirOnglet('profile'); return; }
-  reglagesPanneau = choix === 'famille' ? 'famille' : 'tablette';
   // Déjà sur la page Réglages : on change de panneau sur place, sans toucher à l'historique.
-  if (!$('view-settings').hidden) { majReglagesChoix('view-settings'); window.scrollTo(0, 0); return; }
-  if (!surUnOnglet()) goHome();
-  openPage('settings', true, true);
+  const dejaLa = !$('view-settings').hidden;
+  if (!dejaLa) {
+    if (!surUnOnglet()) goHome();
+    openPage('settings', true, true);
+  }
+  reglagesPanneau = choix === 'famille' ? 'famille' : 'tablette';
+  majReglagesChoix('view-settings');
+  if (dejaLa) window.scrollTo(0, 0);
 }
+// Une liste de lignes dont tout est caché disparaît (sinon un cadre vide). Fait ici et pas en CSS avec :has(), que
+// Safari ne recalcule pas toujours quand une ligne réapparaît.
+document.querySelectorAll('.rg-liste, .rg-abo-corps').forEach((liste) => {
+  const maj = () => liste.classList.toggle('rg-vide', ![...liste.children].some((c) => !c.hidden));
+  maj();
+  new MutationObserver(maj).observe(liste, { attributes: true, attributeFilter: ['hidden'], childList: true, subtree: true });
+});
 // Une carte de Réglages à montrer (assistant, raccourcis) : son panneau d'abord.
 function montrerPanneauDe(el) {
   const p = el?.closest?.('[data-reglages-panneau]');
