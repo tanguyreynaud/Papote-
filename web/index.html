@@ -410,7 +410,7 @@
       <p class="outbox" hidden></p>
       <ul id="photos" class="gallery"></ul>
       <div id="photos-more" class="feed-more"></div>
-      <p id="photos-empty" class="empty" hidden>Aucune photo pour l'instant.<br>Touchez + pour en envoyer une.</p>
+      <div id="photos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-photo"/></svg></span><p class="vide-titre">Aucune photo pour l'instant.</p><p>Touchez + pour en envoyer une.</p></div>
       <button type="button" class="fab" data-add="photo" aria-label="Ajouter une photo"><svg><use href="#i-plus"/></svg></button>
     </section>
 
@@ -423,7 +423,7 @@
       <p class="outbox" hidden></p>
       <ul id="videos" class="gallery"></ul>
       <div id="videos-more" class="feed-more"></div>
-      <p id="videos-empty" class="empty" hidden>Aucune vidéo pour l'instant.<br>Touchez + pour en envoyer une.</p>
+      <div id="videos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-video"/></svg></span><p class="vide-titre">Aucune vidéo pour l'instant.</p><p>Touchez + pour en envoyer une.</p></div>
       <button type="button" class="fab" data-add="video" aria-label="Ajouter une vidéo"><svg><use href="#i-plus"/></svg></button>
     </section>
 
@@ -435,7 +435,7 @@
       </header>
       <p class="outbox" hidden></p>
       <ul id="messages" class="chat"></ul>
-      <p id="messages-empty" class="empty" hidden>Aucun message pour l'instant.</p>
+      <div id="messages-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-message"/></svg></span><p class="vide-titre">Aucun message pour l'instant.</p></div>
       <form id="form-message" class="chat-bar">
         <p id="messages-limite" class="limite-note" role="status" hidden></p>
         <div id="quick-messages" class="quick-messages" role="group" aria-label="Messages rapides">
@@ -462,7 +462,7 @@
       <ul id="birthdays" class="list"></ul>
       <h2 class="list-title" id="reminders-title" hidden>Rappels</h2>
       <ul id="reminders" class="list"></ul>
-      <p id="reminders-empty" class="empty" hidden>Aucun rappel ni anniversaire pour l'instant.<br>Touchez + pour en ajouter un.</p>
+      <div id="reminders-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-agenda"/></svg></span><p class="vide-titre">Aucun rappel ni anniversaire pour l'instant.</p><p>Touchez + pour en ajouter un.</p></div>
       <button type="button" class="fab" id="add-reminder" aria-label="Ajouter un rappel"><svg><use href="#i-plus"/></svg></button>
     </section>
 
@@ -775,9 +775,13 @@
         <div class="card">
           <h2>Inviter avec le code famille</h2>
           <p class="muted">Faites scanner ce QR code avec l'appareil photo de la personne, ou envoyez-lui le lien. Un responsable devra accepter son arrivée.</p>
-          <div id="invite-qr" class="qr" role="img" aria-label="QR code pour rejoindre la famille"></div>
-          <p class="code" id="settings-code"></p>
-          <button id="btn-share" class="primary wide">Partager le lien</button>
+          <div class="invite-code">
+            <div id="invite-qr" class="qr" role="img" aria-label="QR code pour rejoindre la famille"></div>
+            <div class="invite-code-cote">
+              <p class="code" id="settings-code"></p>
+              <button id="btn-share" class="primary">Partager le lien</button>
+            </div>
+          </div>
           <button id="btn-new-code" class="link wide" hidden>Changer le code famille</button>
         </div>
       </div>

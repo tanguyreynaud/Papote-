@@ -1840,3 +1840,99 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .card.rg .sos-ordre-resume li::before { content: counter(sos) '. '; }
 .rg-qui-photo .face-buttons .secondary { flex: 1 1 0; min-width: 0; padding: 8px 6px; gap: 6px; font-size: 15px; }
 @media (max-width: 359px) { .rg-qui-photo .face-buttons .secondary { flex-basis: 100%; } }
+
+/* ================= Fenêtres et pages, revue du 20/11 (fil « Sublimer les fenêtres et pages ») =================
+   Une touche d'indigo plutôt que du tout indigo, des boutons plus petits, le même dessin partout. */
+
+/* ---------- Fenêtres de confirmation : dessin, question en gras, explication discrète, deux petits boutons ---------- */
+.dialog { max-width: 340px; padding: 24px 20px 18px; border-radius: 24px; }
+.dialog:has(> .dialog-msg) { text-align: center; }
+.dialog-icone { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; margin: 0 0 14px; border-radius: 50%; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.dialog-icone.danger { color: var(--danger); background: color-mix(in srgb, var(--danger) 11%, transparent); }
+.dialog-icone svg { width: 26px; height: 26px; }
+.dialog p.dialog-msg { margin: 0 0 20px; }
+.dialog-q { display: block; font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.25; text-wrap: balance; }
+.dialog-d { display: block; margin-top: 8px; font-size: 16px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
+.dialog-msg.seul { font-size: 18px; font-weight: 600; line-height: 1.4; text-wrap: balance; }
+.dialog-buttons button { min-height: 46px; padding: 8px 12px; font-size: 16px; border-radius: 13px; }
+.dialog-buttons .secondary { background: transparent; }
+.dialog-buttons .primary { min-height: 46px; }
+.dialog-buttons.stack .secondary, .dialog-buttons.stack .primary { min-height: 48px; }
+
+/* « Que faire ? » : trois étapes reliées par un fil, comme une marche à suivre, sans pavés de couleur. */
+.dialog.dialog-que-faire { max-width: 360px; }
+.dialog-que-faire .dialog-title { margin-bottom: 4px; }
+.dialog-que-faire > p { margin-bottom: 16px; }
+.dialog-etapes { gap: 0; margin: 0 0 18px; }
+.dialog-etapes li { position: relative; grid-template-columns: 40px 1fr; align-items: start; gap: 12px; padding: 0 0 16px; border-radius: 0; background: none; }
+.dialog-etapes li:last-child { padding-bottom: 0; }
+.dialog-etapes li:not(:last-child)::before { content: ''; position: absolute; left: 19px; top: 44px; bottom: 4px; width: 2px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.dialog-etapes .etape-num { display: none; }
+.dialog-etapes .etape-icone { box-sizing: border-box; width: 40px; height: 40px; padding: 9px; border-radius: 50%; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.dialog-etapes .etape-texte { padding-top: 1px; font-size: 15.5px; }
+.dialog-etapes .etape-texte strong { font-size: 17px; }
+
+/* ---------- Feuilles du bas : une poignée, une croix discrète, des cases plus basses ---------- */
+.sheet-body { padding-top: 10px; border-radius: 26px 26px 0 0; }
+.sheet-body::before { content: ''; display: block; grid-column: 1 / -1; width: 38px; height: 4px; margin: 0 auto 4px; border-radius: 2px; background: var(--line); }
+.sheet-head { margin: 0 -6px 10px 0; }
+.sheet-head .icon-btn { color: var(--muted); }
+.sheet-head .icon-btn svg { width: 22px; height: 22px; }
+.picker { min-height: 96px; gap: 10px; border: 1px solid var(--line); }
+.picker svg { box-sizing: border-box; width: 44px; height: 44px; padding: 10px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+#video-hint { margin: 10px 0 0; }
+/* Vidéo avant l'envoi : « Refilmer » et « Galerie » en petites pastilles sous l'image. */
+.paire { display: flex; justify-content: center; gap: 8px; }
+.paire .secondary { min-height: 44px; padding: 6px 16px; border-radius: 999px; font-size: 15px; background: transparent; }
+.send-btn { min-height: 50px; }
+/* Rappel : l'heure et « Prévenir avant » côte à côte, tout tient sans défiler. */
+#rem-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); column-gap: 10px; }
+#rem-fields > * { grid-column: 1 / -1; }
+#rem-fields > label:has(#rem-time) { grid-column: 1; }
+#rem-fields > label:has(#rem-avance) { grid-column: 2; }
+#rem-fields { row-gap: 12px; margin: 12px 0 14px; }
+#rem-fields > label, #rem-fields > .choice, #rem-fields > .days { margin: 0; }
+
+/* ---------- Photos et vidéos ---------- */
+/* « Envoyé ✓ » et « Lu » : la même pastille, grise puis teintée d'indigo. */
+.read-badge { font-size: 14px; padding: 4px 11px; }
+.read-badge.unread { border: 0; background: color-mix(in srgb, var(--muted) 11%, transparent); }
+/* Le triangle « lecture » se voit sur toute image : rond blanc, triangle sombre. */
+.shot-play { width: 58px; height: 58px; margin: -29px 0 0 -29px; background: rgba(255, 255, 255, .94); color: #24212f; box-shadow: 0 4px 18px rgba(0, 0, 0, .28); }
+.shot-play svg { width: 26px; height: 26px; fill: currentColor; }
+.shot-duration { right: 10px; bottom: 10px; padding: 3px 9px; border-radius: 999px; font-size: 14px; font-weight: 700; }
+/* Page vide : un dessin et deux lignes, au lieu d'une phrase grise perdue. */
+.empty.vide { padding: 18vh 32px 0; }
+.empty.vide[hidden] { display: none; }
+.vide-icone { display: inline-flex; align-items: center; justify-content: center; width: 76px; height: 76px; margin-bottom: 16px; border-radius: 24px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.vide-icone svg { width: 36px; height: 36px; }
+.empty.vide p { margin: 0; font-size: 16px; }
+.empty.vide .vide-titre { margin-bottom: 4px; font-family: var(--display); font-size: 19px; font-weight: 700; color: var(--text); text-wrap: balance; }
+
+/* ---------- Messages : mes messages en indigo léger, ceux de la tablette entourés d'un trait fin ---------- */
+.bubble { box-shadow: none; border: 1px solid var(--line); }
+.bubble.mine { background: color-mix(in srgb, var(--accent) 13%, var(--surface)); color: var(--text); border-color: transparent; }
+.bubble.mine.en-route { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+.bubble.reply { border: 1.5px solid color-mix(in srgb, var(--accent) 60%, var(--surface)); }
+.bubble-foot, .mine .bubble-foot { opacity: 1; color: var(--muted); }
+.bubble-del { opacity: .6; }
+
+/* ---------- Inviter : le QR code et le code côte à côte, un petit bouton ---------- */
+.invite-code { display: grid; grid-template-columns: 136px minmax(0, 1fr); align-items: center; gap: 14px; margin-top: 14px; }
+.invite-code .qr { width: 136px; max-width: none; margin: 0; padding: 5px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 12px; }
+.invite-code-cote { display: grid; gap: 10px; }
+.invite-code .code { margin: 0; padding: 10px 4px; font-size: 21px; letter-spacing: 2px; white-space: nowrap; }
+.invite-code .primary { min-height: 44px; padding: 8px 12px; font-size: 16px; }
+#view-invite .card h2 { font-size: 18px; }
+#view-invite .card > p.muted { font-size: 15px; margin: 0; }
+#view-invite .inline-field .primary { min-height: 48px; padding: 8px 16px; }
+
+/* ---------- « Réglons la tablette » : la première et la dernière page centrées dans la hauteur ---------- */
+.intro .intro-step[data-step="0"]:not([hidden]), .intro .intro-step[data-step="5"]:not([hidden]) { display: flex; flex-direction: column; justify-content: center; padding-bottom: 24px; }
+
+/* ---------- Menu « ⋮ » d'un membre : une liste fine, plus de gros boutons empilés ---------- */
+.dialog-menu .dialog-title { margin-bottom: 10px; font-size: 20px; }
+.dialog-menu .dialog-buttons.stack { gap: 0; }
+.dialog-menu .dialog-buttons.stack .secondary { justify-content: flex-start; min-height: 50px; padding: 8px 4px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; font-size: 17px; font-weight: 600; }
+.dialog-menu .dialog-buttons.stack .secondary:active { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.dialog-menu .dialog-buttons.stack .link { margin-top: 6px; min-height: 44px; border-radius: 13px; background: var(--bg); color: var(--text); font-weight: 600; }

@@ -22,8 +22,23 @@ function dialog(message, buttons, extra = null) {
     box.className = extra?.cls ? `dialog ${extra.cls}` : 'dialog';
     box.setAttribute('role', 'alertdialog');
     const text = document.createElement('p');
-    text.textContent = message;
-    text.hidden = !message;
+    // Sans titre : la première phrase, si elle est courte, est la question (en gras), la suite l'explique (plus
+    // discrète). Le texte complet reste dans le même paragraphe, mot pour mot.
+    const poserTexte = (t) => {
+      const m = !extra?.title && /^(.{1,64}?[?!.…])\s+(\S[\s\S]*)$/.exec(t || '');
+      text.className = extra?.title ? '' : 'dialog-msg';
+      if (!m) { text.textContent = t; text.classList.toggle('seul', !extra?.title); } else {
+        const q = document.createElement('span');
+        q.className = 'dialog-q';
+        q.textContent = m[1];
+        const d = document.createElement('span');
+        d.className = 'dialog-d';
+        d.textContent = m[2];
+        text.replaceChildren(q, ' ', d);
+      }
+      text.hidden = !t;
+    };
+    poserTexte(message);
     const row = document.createElement('div');
     row.className = extra?.stack ? 'dialog-buttons stack' : 'dialog-buttons';
     // Le toucher qui ouvre cette fenêtre (fenêtre ouverte pendant ce clic) : son double est ignoré.
@@ -73,7 +88,7 @@ function dialog(message, buttons, extra = null) {
     // Fenêtre qui change en restant ouverte (SOS : en cours, puis comment il s'est terminé) : titre, texte, boutons.
     extra?.api?.({
       titre: (t) => { h.textContent = t; if (!h.isConnected) box.prepend(h); },
-      texte: (t) => { text.textContent = t; text.hidden = !t; },
+      texte: (t) => poserTexte(t),
       boutons: (liste) => {
         poserBoutons(liste);
         if (performance.now() - toucherIci < DOUBLE_MS) nouveauxDepuis = performance.now();
@@ -82,6 +97,20 @@ function dialog(message, buttons, extra = null) {
       fermer: (v) => close(v),
       ouverte: () => !back.classList.contains('closing'),
     });
+    // Petit dessin en haut de la fenêtre (corbeille rouge pour supprimer, caméra pour appeler…) : on reconnaît la
+    // question d'un coup d'œil.
+    if (extra?.icone) {
+      const rond = document.createElement('span');
+      rond.className = extra.danger ? 'dialog-icone danger' : 'dialog-icone';
+      rond.setAttribute('aria-hidden', 'true');
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', `#i-${extra.icone}`);
+      svg.append(use);
+      rond.append(svg);
+      box.append(rond);
+      box.classList.add('avec-icone');
+    }
     box.append(text);
     // Étapes numérotées (« Que faire ? ») : numéro, dessin du sprite de la page, phrase en gras, détail.
     if (extra?.etapes) {
@@ -127,12 +156,22 @@ function actionLabel(message) {
   return /^[A-ZÉ][a-zéèêàç]+er$/.test(word) ? word : 'Confirmer';
 }
 
+// Le dessin de la fenêtre, d'après le premier mot de la question.
+function iconeDe(message) {
+  const m = [
+    [/^Supprimer|^Effacer/, 'trash'], [/^Appeler/, 'video'], [/^Redémarrer/, 'tablette'],
+    [/^Quitter|^Se déconnecter/, 'sortie'], [/^Retirer|^Refuser|^Rendre|^Mettre|^Accepter/, 'user'],
+    [/^Changer le code|^Inviter/, 'famille'],
+  ].find(([r]) => r.test(message));
+  return m ? m[1] : 'help';
+}
+
 export function askConfirm(message, okLabel = actionLabel(message)) {
   const danger = /^(Supprimer|Quitter|Retirer|Refuser|Se déconnecter|Changer)/.test(message);
   return dialog(message, [
     { label: 'Annuler', value: false, cls: 'secondary' },
     { label: okLabel, value: true, cls: danger ? 'primary danger-btn' : 'primary' },
-  ]);
+  ], { icone: iconeDe(message), danger });
 }
 
 /** Étape « Avant de partir » avant une résiliation : garder (principal) ou résilier quand même. */
@@ -180,7 +219,7 @@ export function chooseAction(title, options) {
   return dialog('', [
     ...options.map((o) => ({ label: o.label, value: o.value, cls: o.danger ? 'secondary action-danger' : 'secondary' })),
     { label: 'Annuler', value: false, cls: 'link' },
-  ], { title, stack: true });
+  ], { title, stack: true, cls: 'dialog-menu' });
 }
 
 export function notice(message) {
@@ -227,5 +266,5 @@ export function demanderQuitter() {
   return dialog('Voulez-vous quitter Papote ?', [
     { label: 'Rester', value: false, cls: 'secondary' },
     { label: 'Quitter', value: true, cls: 'primary' },
-  ]);
+  ], { icone: 'sortie' });
 }
