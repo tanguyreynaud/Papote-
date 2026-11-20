@@ -2833,6 +2833,7 @@ function blocReleves(zone, t) {
   membreTablette = null;
   familleTablette = null;
   zone.hidden = !relieeAUneFamille(t);
+  $('dt-pli-reseau').hidden = true;
   if (zone.hidden) return;
   zone.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'muted small' }, 'Lecture de la fiche de la tablette…')));
   const dessiner = () => {
@@ -2842,25 +2843,36 @@ function blocReleves(zone, t) {
     const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v || null);
     const enLigne = ms(m.lastOnline);
     const signal = sim && sim.signal >= 0 ? `${sim.signal} / 4` : null;
-    const mo = sim && sim.dataMoisMo >= 0 ? `${sim.dataMoisMo} Mo ce mois` : null;
+    const mo = sim && sim.dataMoisMo >= 0 ? sim.dataMoisMo : null;
+    // Forfait de la ligne notée dans le stock (1 Go sinon) : la data du mois se lit par rapport à lui.
+    const ligne = donnees.sims.find((x) => x.id === t.simId);
+    const go = ligne && ligne.go != null ? ligne.go : 1;
+    const part = mo != null && go ? Math.round((mo / (go * 1024)) * 100) : null;
     // Une ligne absente (null) ne doit pas s'écrire « null » : replaceChildren écrit tout ce qu'on lui donne.
-    // Le souci de réseau en bandeau tout en haut, puis les quatre chiffres, puis le détail des antennes replié.
+    // Le souci de réseau en bandeau tout en haut, puis les quatre chiffres ; le détail des antennes est une ligne repliée plus bas.
     const reseau = blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid });
     const souci = reseau && reseau.querySelector('p.error');
     if (souci) souci.className = 'bandeau rouge';
+    const retard = enLigne && Date.now() - enLigne > 70 * 60_000;
     zone.replaceChildren(...[
       souci,
       h('h2', { class: 'sr-only' }, 'En ce moment'),
       h('div', { class: 'card' }, h('div', { class: 'tuiles quatre' },
-        stat(enLigne ? ilYA(enLigne) : '—', 'En ligne', enLigne && Date.now() - enLigne > 70 * 60_000 ? 'ne répond plus ?' : null, enLigne && Date.now() - enLigne > 70 * 60_000 ? 'warn' : null),
-        stat(b.level != null ? `${b.level} %` : '—', b.charging ? 'Batterie, sur le chargeur' : 'Batterie, débranchée', null, b.charging === false ? 'warn' : null),
-        sim && sim.bloquee ? stat('Carte SIM', texteBloquee(sim).replace('Carte SIM ', ''), null, 'warn') : stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM', mo),
-        stat(m.appVersion || '—', 'Version de Papote')),
+        stat(enLigne ? ilYA(enLigne) : '—', 'dernier signe de vie', retard ? 'ne répond plus ?' : 'en ligne', retard ? 'warn' : null),
+        stat(b.level != null ? `${b.level} %` : '—', 'batterie', b.charging ? 'sur le chargeur' : 'débranchée', b.charging === false ? 'warn' : null),
+        sim && sim.bloquee ? stat('Carte SIM', texteBloquee(sim).replace('Carte SIM ', ''), null, 'warn') : stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM'),
+        sim && mo != null
+          ? stat(mo >= 1024 ? `${String(Math.round(mo / 102.4) / 10).replace('.', ',')} Go` : `${mo} Mo`, `utilisés sur ${String(go).replace('.', ',')} Go ce mois`, part != null ? `${part} % du forfait` : null, part >= 88 ? 'warn' : null)
+          : stat(m.appVersion || '—', 'version de Papote')),
+      sim && mo != null ? h('p', { class: 'muted small ligne-version' }, `Version de Papote : ${m.appVersion || 'inconnue'}`) : null,
       lignePush(modePush(sim))),
-      reseau ? h('details', { class: 'card repli' }, h('summary', {}, h('h2', {}, 'Réseau mobile chez le client'),
-        h('span', { class: 'badge' }, reseau.querySelectorAll('li').length ? pluriel(reseau.querySelectorAll('li').length, 'antenne') : 'détail')), reseau,
-        h('p', { class: 'muted small' }, 'Envoyés par la tablette quand elle est en ligne ; la page se met à jour toute seule.')) : null,
     ].filter(Boolean));
+    const antennes = reseau ? reseau.querySelectorAll('li').length : 0;
+    $('dt-pli-reseau').hidden = !reseau;
+    if (reseau) {
+      $('dt-n-reseau').textContent = antennes ? pluriel(antennes, 'antenne') : 'détail';
+      $('dt-reseau').replaceChildren(reseau, h('p', { class: 'muted small' }, 'Envoyés par la tablette quand elle est en ligne ; la page se met à jour toute seule.'));
+    }
     rafraichirSousTitres();
   };
   bdd().then((d) => {
@@ -3177,8 +3189,14 @@ function remplirTablette(id) {
     blocAgir($('dt-agir'), t);
   }
   afficherBatterie(t);
-  blocAlertes($('dt-alertes'), (donnees.alertes || []).filter((a) => a.fiche === t.id), { titre: 'Alertes' });
+  const alertesTablette = (donnees.alertes || []).filter((a) => a.fiche === t.id);
+  blocAlertes($('dt-alertes'), alertesTablette, { titre: 'Alertes' });
   blocGardeFous($('dt-gardefous'), t);
+  // Lignes repliées : le nombre se lit sans ouvrir.
+  $('dt-pli-alertes').hidden = $('dt-alertes').hidden;
+  $('dt-n-alertes').textContent = alertesTablette.length ? `${alertesTablette.length} en ${donnees.alertesJours || 90} jours` : 'aucune';
+  $('dt-pli-gardefous').hidden = $('dt-gardefous').hidden;
+  $('dt-n-gardefous').textContent = (t.gardeFous || []).length ? String(t.gardeFous.length) : 'aucun';
   $('dt-historique').replaceChildren(...historiqueLisible(t).reverse().map(([le, texte]) => h('li', {},
     h('span', { class: 'quand' }, new Date(le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })), ' ', texte)));
   $('dt-n-historique').textContent = $('dt-historique').children.length ? pluriel($('dt-historique').children.length, 'ligne') : 'vide';

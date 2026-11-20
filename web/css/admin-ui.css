@@ -727,3 +727,17 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
   .admin-body #t-achats td:first-child small.categorie { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 1px; }
 }
 @media (max-width: 760px) { .admin-body #t-achats small.categorie { display: none; } }
+
+/* ---------- Tablette : le détail en une seule carte de lignes repliées ---------- */
+.admin-body .card.plis { padding: 0 14px; overflow: hidden; margin-top: 12px; }
+.admin-body .card.plis > details.repli { padding: 12px 0; border-top: 1px solid var(--line); margin-top: -1px; }
+.admin-body .card.plis > details.repli[hidden], .admin-body .card.plis > details.repli:has(> summary .badge:empty) { display: none; }
+.admin-body .card.plis:not(:has(> details.repli:not([hidden]) > summary .badge:not(:empty))) { display: none; }
+.admin-body .card.plis .carte-tete, .admin-body .card.plis #dt-gardefous > h2 { display: none; }
+.admin-body .card.plis .lignes-kv button.ligne-kv { padding-left: 0; padding-right: 0; }
+.admin-body .tuiles + .ligne-version { margin: 8px 2px 0; }
+.admin-body .tuiles ~ .push-mode { margin: 4px 2px 0; }
+.admin-body .tuiles .stat > span.warn { color: var(--orange, #b45309); }
+/* « Chez qui » et « La tablette » : mêmes hauteurs de ligne, crayon ou pas. */
+.admin-body #dt-infos dl.fiche.kv dt, .admin-body #dt-infos dl.fiche.kv dd { min-height: 40px; display: flex; align-items: center; padding-top: 4px; padding-bottom: 4px; }
+.admin-body #dt-infos dl.fiche.kv dd { justify-content: flex-end; }

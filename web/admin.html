@@ -634,20 +634,29 @@
         </div>
         <div class="card" id="dt-agir" hidden></div>
         <div class="card" id="dt-batterie" hidden></div>
-        <!-- Côte à côte sur ordinateur, l'une sous l'autre sur téléphone. -->
-        <div class="cartes-duo">
-          <div class="card" id="dt-alertes" hidden></div>
-          <div class="card" id="dt-gardefous" hidden></div>
+        <!-- Une seule carte de lignes qui s'ouvrent d'un toucher : le détail reste à un clic, sans encombrer la page. -->
+        <div class="card plis" id="dt-plis">
+          <details class="repli" id="dt-pli-reseau" hidden>
+            <summary><h2>Réseau mobile chez le client</h2><span class="badge" id="dt-n-reseau"></span></summary>
+            <div id="dt-reseau"></div>
+          </details>
+          <details class="repli" id="dt-pli-alertes">
+            <summary><h2>Alertes envoyées à la famille</h2><span class="badge" id="dt-n-alertes"></span></summary>
+            <div id="dt-alertes" hidden></div>
+          </details>
+          <details class="repli" id="dt-pli-gardefous">
+            <summary><h2>Garde-fous de la tablette</h2><span class="badge" id="dt-n-gardefous"></span></summary>
+            <div id="dt-gardefous" hidden></div>
+          </details>
+          <details class="repli" id="dt-bloc-pieces">
+            <summary><h2>Documents</h2><span class="badge" id="dt-n-pieces"></span></summary>
+            <ul class="pieces" id="dt-pieces"></ul>
+          </details>
+          <details class="repli">
+            <summary><h2>Historique</h2><span class="badge" id="dt-n-historique"></span></summary>
+            <ul class="historique small muted" id="dt-historique"></ul>
+          </details>
         </div>
-        <!-- Repliés : une ligne chacun, qui s'ouvre d'un toucher. -->
-        <details class="card repli" id="dt-bloc-pieces">
-          <summary><h2>Documents</h2><span class="badge" id="dt-n-pieces"></span></summary>
-          <ul class="pieces" id="dt-pieces"></ul>
-        </details>
-        <details class="card repli">
-          <summary><h2>Historique</h2><span class="badge" id="dt-n-historique"></span></summary>
-          <ul class="historique small muted" id="dt-historique"></ul>
-        </details>
       </section>
 
       <!-- ---------- Page d'un client (#client/e-mail) ---------- -->
