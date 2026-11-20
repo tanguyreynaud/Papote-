@@ -2099,3 +2099,19 @@ html body.night .essai-appel-texte b { color: #c7d2fe; }
 .redemarrer-btn.oui { background: #4f46e5; }
 .redemarrer-btn.non { background: #57534e; }
 .redemarrer-btn[disabled] { opacity: .7; }
+
+/* ================= Revue de l'interface (Tanguy, 20/11) ================= */
+/* Diaporama : une légende longue tient sur trois lignes au lieu d'être coupée par « … » ; le bouton Accueil reste
+   en bas à sa place quand la légende grandit ; Accueil et flèches dans l'indigo du reste de la tablette. */
+html .photos .photo-text { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+html .photos .ln-btn.photo-home { -webkit-flex: none; flex: none; -webkit-align-self: flex-end; align-self: flex-end; color: #3730a3; }
+html .photos .arrow svg { stroke: #3730a3; }
+/* « Qui voulez-vous appeler ? » : le même bouton Accueil (maison) que dans les photos, un seul geste pour rentrer. */
+html .call-out.picker .call-back { display: -webkit-inline-flex; display: inline-flex; -webkit-align-items: center; align-items: center; min-height: 15vmin; padding: 0 7vmin; border-radius: 4vmin; background: #fff; color: #3730a3; font-size: 7vmin; font-weight: 800; box-shadow: 0 1vmin 3vmin rgba(49, 46, 129, .18); }
+html .call-out.picker .call-back .icon { width: 1.05em; height: 1.05em; margin-right: 2vmin; }
+/* Rendez-vous sur l'accueil : « Dans 30 minutes » est une étiquette, elle ne doit pas ressembler à un bouton. */
+html .frame-rdv .rdv-in { background: #e8e6fd; color: #3730a3; box-shadow: none; }
+/* Rappel : la carte au milieu de l'écran (elle était collée en haut). */
+html .overlay.reminder .ln-wood { -webkit-align-items: center; align-items: center; padding-top: 0; }
+/* « Raccrocher » avec le téléphone, comme « Décrocher ». */
+html .call-out .call-hangup .icon, html .call-out-hangup .icon { width: 1.1em; height: 1.1em; margin-right: 2.5vmin; vertical-align: -0.15em; }
