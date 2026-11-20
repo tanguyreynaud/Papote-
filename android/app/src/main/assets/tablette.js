@@ -2111,7 +2111,8 @@
     if (pages > 1) strip.appendChild(pageArrow('right', pickerPage >= pages - 1, 1));
     callScreen.appendChild(strip);
     var row = el2('div', 'call-nav');
-    var back = el2('button', 'call-back', 'Retour à l’accueil');
+    var back = el2('button', 'call-back');
+    back.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 2 11.5h3V21h5.5v-6h3v6H19v-9.5h3z"/></svg><span>Accueil</span>'; // le même bouton que dans les photos (Tanguy, 20/11)
     on(back, 'click', function () { pickerPage = 0; closeCallScreen(); });
     row.appendChild(back);
     callScreen.appendChild(row);
@@ -2172,7 +2173,8 @@
     callScreen.appendChild(el2('h1', 'call-title', title));
     if (sub) callScreen.appendChild(el2('p', 'call-sub', sub));
     if (state === 'ringing' || state === 'connected' || state === 'starting') {
-      var hang = el2('button', 'call-hangup', 'Raccrocher');
+      var hang = el2('button', 'call-hangup');
+      hang.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg><span>Raccrocher</span>';
       // Le combiné couché, comme sur « Décrocher » (Tanguy, 20/11) : une Mamie qui ne lit pas reconnaît le bouton.
       hang.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(135deg)"><path fill="currentColor" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg><span>Raccrocher</span>';
       on(hang, 'click', function () {
