@@ -65,6 +65,31 @@ test.before(async () => {
 test.after(() => env.cleanup());
 test.beforeEach(async () => { await env.clearFirestore(); await env.clearStorage(); });
 
+// Notifications vues (badge de la cloche, Tanguy 20/11) : l'heure du dernier passage est gardée sur ma fiche, pour
+// qu'elle survive à une déconnexion. Moi seul, horodatage serveur seulement ; un autre champ écrit ensuite passe toujours.
+test('notifications vues : sur ma fiche seulement, horodatage serveur', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `families/${FID}/members/paul`), fiche('paul', { status: 'active' }));
+  });
+  const julie = doc(proche('julie'), `families/${FID}/members/julie`);
+  await assertSucceeds(updateDoc(julie, { notifsVues: serverTimestamp() }));
+  // Une heure choisie par le téléphone (dans le futur : badge vidé pour toujours) est refusée.
+  await assertFails(updateDoc(julie, { notifsVues: Timestamp.fromMillis(Date.now() + 365 * 24 * 3600e3) }));
+  await assertFails(updateDoc(julie, { notifsVues: 'demain' }));
+  // Le champ déjà là n'empêche pas d'écrire autre chose sur ma fiche ensuite.
+  await assertSucceeds(updateDoc(julie, { lastActive: serverTimestamp() }));
+  // Ni un autre proche, ni un responsable, ni la tablette ne l'écrivent pour moi.
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}/members/julie`), { notifsVues: serverTimestamp() }));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/members/paul`), { notifsVues: serverTimestamp() }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/members/julie`), { notifsVues: serverTimestamp() }));
+  // Un proche en attente ne touche pas à sa fiche, ce champ compris.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `families/${FID}/members/marc`), fiche('marc', { name: 'Marc', status: 'pending' }));
+  });
+  await assertFails(updateDoc(doc(proche('marc'), `families/${FID}/members/marc`), { notifsVues: serverTimestamp() }));
+});
+
 // Mon numéro de téléphone (chantier téléphone 29/10) : écrit par le proche sur sa fiche, à l'inscription ou après.
 test('numéro de téléphone du proche : accepté bien formé, refusé sinon', async () => {
   await famille();

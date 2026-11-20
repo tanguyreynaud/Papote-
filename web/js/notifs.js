@@ -2,10 +2,11 @@
 import {
   query, orderBy, limit,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { db, collection, onSnapshot, toDate } from './firebase.js';
+import {
+  db, collection, onSnapshot, toDate, doc, updateDoc, serverTimestamp,
+} from './firebase.js';
 
 const $ = (id) => document.getElementById(id);
-const READ_KEY = 'papote.notifsLues';
 const WHAT = { photo: 'une photo', video: 'une vidéo', message: 'un message' };
 const WHAT_OF = { photo: 'la photo', video: 'la vidéo', message: 'le message' };
 
@@ -15,14 +16,30 @@ let posts = [];
 let calls = [];
 let members = [];
 let reminders = [];
+// Notifications vues : l'heure du dernier passage est gardée sur ma fiche (notifsVues, horodatage serveur), et non
+// plus sur le téléphone. Avant, la déconnexion l'effaçait avec le reste du compte et tout revenait en non lu à la
+// reconnexion (Tanguy 20/11) ; elle suit aussi le compte sur un autre téléphone, et un autre compte connecté ensuite
+// sur ce téléphone n'hérite de rien. vuIci : passage de cette session, le temps que la fiche revienne de la base.
+let vuIci = 0;
+let envoisLus = false;
 
+const heure = (ts) => toDate(ts)?.getTime() || 0;
 function lastRead() {
-  try { return Number(localStorage.getItem(READ_KEY)) || 0; } catch (e) { return 0; }
+  const moi = members.find((m) => m.id === session.uid);
+  return Math.max(vuIci, heure(session.member?.notifsVues), heure(moi?.notifsVues));
 }
 
+// Page Notifications ouverte : une écriture au plus par ouverture, et seulement s'il y avait du nouveau (données
+// mobiles comptées).
 export function markNotifsRead() {
-  try { localStorage.setItem(READ_KEY, String(Date.now())); } catch (e) { /* stockage indisponible */ }
+  if (!session) return;
+  const avant = lastRead();
+  const nouveau = !envoisLus || !avant || events().some((e) => !e.mine && e.date.getTime() > avant);
+  vuIci = Date.now();
   render();
+  if (!nouveau) return;
+  updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { notifsVues: serverTimestamp() })
+    .catch((err) => console.warn('Notifications vues non enregistrées', err));
 }
 
 // Page ouverte quand on touche la notification (famille.js) : ce dont elle parle.
@@ -142,10 +159,11 @@ export function setNotifReminders(list) { reminders = list; render(); }
 export function startNotifs(current) {
   stopNotifs();
   session = current;
+  vuIci = 0;
   const base = (name) => collection(db, 'families', session.fid, name);
   const read = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
   stops.push(onSnapshot(query(base('posts'), orderBy('createdAt', 'desc'), limit(30)),
-    (snap) => { posts = read(snap); render(); },
+    (snap) => { posts = read(snap); envoisLus = true; render(); },
     (err) => console.error('Notifications : envois illisibles', err)));
   stops.push(onSnapshot(query(base('calls'), orderBy('createdAt', 'desc'), limit(10)),
     (snap) => { calls = read(snap); render(); },
@@ -157,4 +175,6 @@ export function stopNotifs() {
   stops = [];
   posts = [];
   calls = [];
+  vuIci = 0;
+  envoisLus = false;
 }
