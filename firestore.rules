@@ -8,7 +8,8 @@ rules_version = '2';
 //   families/{fid}                  -> { name, code, createdBy, createdAt, admins?, installation? }
 //                                      installation { etape: photo|son|options|fini, pairing } : famille créée
 //                                      par le serveur au scan d'une nouvelle tablette (functions/installation.js)
-//   families/{fid}/members/{uid}    -> { name, role, code, joinedAt, uid?, email?, status?, genre? ('femme' | 'homme') }
+//   families/{fid}/members/{uid}    -> { name, role, code, joinedAt, uid?, email?, status?, genre? ('femme' | 'homme'),
+//                                        notifsVues? (dernier passage sur les notifications, écrit par soi seul) }
 //                                      status 'pending' : arrivé avec le code, en attente d'un responsable ;
 //                                      absent ou 'active' : membre (les fiches d'avant n'ont pas de status)
 //   families/{fid}/invitations/{email} -> { email, fid, familyName, invitedBy, createdAt }
@@ -577,7 +578,11 @@ service cloud.firestore {
           && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['canCall'])
               || resource.data.get('role', '') == 'tablette'
               || request.resource.data.canCall == false)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'fuseau', 'meteoVille', 'wifi', 'lastSeen', 'genre', 'telephone'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'canCall', 'lastActive', 'lastOnline', 'callable', 'face', 'appVersion', 'uid', 'email', 'battery', 'sim', 'fuseau', 'meteoVille', 'wifi', 'lastSeen', 'genre', 'telephone', 'notifsVues'])
+          // Dernier passage sur la page Notifications (badge de la barre du bas) : gardé sur ma fiche pour qu'il
+          // survive à une déconnexion et suive le compte sur un autre téléphone. Horodatage serveur seulement.
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['notifsVues'])
+              || request.resource.data.notifsVues == request.time)
           // Mon numéro de téléphone : la tablette m'appelle par la carte SIM et n'accepte que les numéros de la famille.
           && telephoneValide(request.resource.data)
           // Je suis une femme / un homme : voix qui lit mes messages sur la tablette.
