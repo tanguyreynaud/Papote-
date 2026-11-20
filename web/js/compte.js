@@ -3,8 +3,10 @@
 import {
   GoogleAuthProvider, EmailAuthProvider, signInWithPopup, linkWithPopup, signInWithCredential,
   signInWithRedirect, linkWithRedirect, getRedirectResult,
-  linkWithCredential, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut,
+  linkWithCredential, isSignInWithEmailLink, signInWithEmailLink, signOut,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 import {
   collectionGroup, query, where, getDocs,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
@@ -60,12 +62,18 @@ export async function finishRedirect() {
   }
 }
 
-export async function sendEmailLink(email) {
-  await sendSignInLinkToEmail(auth, email, {
-    url: `${location.origin}/?lien=1`,
-    handleCodeInApp: true,
-  });
-  try { localStorage.setItem(EMAIL_KEY, email); } catch (e) { /* stockage indisponible */ }
+// Le lien de connexion part de Papote, en français (fonction lienConnexion, functions/connexion.js), plus de
+// l'e-mail anglais de Firebase (Tanguy, 20/11). Jamais de repli vers sendSignInLinkToEmail : si la fonction échoue,
+// l'erreur remonte et la personne réessaie (famille.js, form-email). Un double appui pendant l'envoi reçoit la même
+// réponse : un seul e-mail part.
+let envoiEnCours = null;
+export function sendEmailLink(email) {
+  if (envoiEnCours) return envoiEnCours;
+  envoiEnCours = (async () => {
+    await httpsCallable(getFunctions(getApp(), 'europe-west1'), 'lienConnexion')({ email, retour: `${location.origin}/?lien=1` });
+    try { localStorage.setItem(EMAIL_KEY, email); } catch (e) { /* stockage indisponible */ }
+  })().finally(() => { envoiEnCours = null; });
+  return envoiEnCours;
 }
 
 /** Adresse à qui un lien de connexion a été envoyé depuis ce téléphone (lien pas encore utilisé). */

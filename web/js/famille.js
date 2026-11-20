@@ -6435,6 +6435,17 @@ for (const id of ['login-email', 'invite-email']) window.papoteEmail?.brancher($
 const adresseIncomplete = (email) => /@/.test(email) && !/@[^@\s]+\.[^@\s.]{2,}$/.test(email);
 const ADRESSE_INCOMPLETE = "Cette adresse e-mail semble incomplète : il manque la fin, par exemple « .fr » ou « .com ».";
 
+// Lien de connexion non parti (fonction lienConnexion) : trop de demandes (message du serveur), adresse refusée, ou
+// réseau et serveur indisponibles : le bouton « Recevoir le lien » se réactive pour réessayer.
+function erreurLien(err) {
+  const code = String(err?.code || '').replace(/^functions\//, '');
+  if (code === 'resource-exhausted') {
+    return err.message && /heure/.test(err.message) ? err.message : 'Trop de demandes de lien en peu de temps. Attendez une heure, puis réessayez.';
+  }
+  if (code === 'invalid-argument') return "L'e-mail n'a pas pu être envoyé. Vérifiez l'adresse.";
+  return "L'e-mail n'est pas parti. Vérifiez la connexion internet, puis touchez à nouveau « Recevoir le lien ».";
+}
+
 $('form-email').addEventListener('submit', async (e) => {
   e.preventDefault();
   showLoginError('');
@@ -6454,7 +6465,7 @@ $('form-email').addEventListener('submit', async (e) => {
     $('form-paste-link').hidden = !coller;
   } catch (err) {
     console.error(err);
-    showLoginError("L'e-mail n'a pas pu être envoyé. Vérifiez l'adresse.");
+    showLoginError(erreurLien(err));
   } finally {
     $('btn-email').disabled = false;
   }
