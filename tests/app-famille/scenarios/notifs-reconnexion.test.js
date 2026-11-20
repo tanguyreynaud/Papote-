@@ -88,10 +88,13 @@ test('Notifications vues : toujours vues après déconnexion et reconnexion, et 
   assert.strictEqual(await badge(julie), '1', 'la nouvelle réponse est comptée');
 
   // Rouvrir les notifications sans rien de nouveau : pas d'écriture de plus (données mobiles).
+  // On attend que l'heure dépasse la précédente (et non « moins de 10 s ») : sur un WebKit lent, la précédente
+  // pouvait dater de moins de 10 s et l'écriture attendue arrivait après la mesure.
+  const precedente = (await s.lire(`families/${fid}/members/${uid}`)).notifsVues.toMillis();
   await voirLesNotifs(julie);
   await g.attendreBase(async () => {
     const f = await s.lire(`families/${fid}/members/${uid}`);
-    return f?.notifsVues && f.notifsVues.toMillis() > Date.now() - 10_000;
+    return f?.notifsVues && f.notifsVues.toMillis() > precedente;
   }, 'notifsVues avancé');
   const avant = (await s.lire(`families/${fid}/members/${uid}`)).notifsVues.toMillis();
   await julie.page.click('#btn-bell');
