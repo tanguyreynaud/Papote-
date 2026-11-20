@@ -3088,6 +3088,11 @@ exports.gestionJumelage = onDocumentUpdated(
     const avant = event.data.before.data() || {};
     const p = event.data.after.data() || {};
     if (avant.status === p.status || !['claimed', 'confirmed'].includes(p.status)) return;
+    // Tablette entrée dans sa famille : luminosité de jour à 70 % si la famille n'en a encore aucune (jamais écrasée).
+    if (p.status === 'confirmed' && p.fid) {
+      await require('./installation').poserLuminositeParDefaut(db(), p.fid)
+        .catch((e) => logger.warn(`Jumelage ${event.data.after.ref.id} : luminosité par défaut non posée`, e.message));
+    }
     await appliquerJumelage(p, event.data.after.ref);
   });
 

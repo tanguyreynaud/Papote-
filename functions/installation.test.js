@@ -63,3 +63,36 @@ test('installation pas finie 30 minutes après le scan : un autre proche la repr
   assert.deepStrictEqual(r.decisionScan(conf, 'b', t, true), { etat: 'occupe', par: 'Julie' });
   assert.deepStrictEqual(r.decisionScan(conf, 'a', t), { etat: 'reprendre', fid: 'F1' });
 });
+
+// Tanguy, 20/11 : luminosité de jour à 70 % à l'installation, jamais par-dessus un réglage de la famille.
+test('luminosité par défaut : 70 seulement si la famille n\'en a aucune', async () => {
+  const { poserLuminositeParDefaut, LUMINOSITE_PAR_DEFAUT } = require('./installation');
+  const { luminositeAPoser } = r;
+  assert.strictEqual(LUMINOSITE_PAR_DEFAUT, 70);
+  assert.strictEqual(luminositeAPoser({ name: 'Mamie' }), true);
+  assert.strictEqual(luminositeAPoser({ luminosite: null }), true);
+  assert.strictEqual(luminositeAPoser({ luminosite: 40 }), false, 'réglée par un responsable : gardée');
+  assert.strictEqual(luminositeAPoser({ luminosite: 100 }), false);
+  assert.strictEqual(luminositeAPoser(null), false, 'famille absente : rien');
+
+  // Base en mémoire : une famille sans luminosité, une réglée à 45 %.
+  const docs = { 'families/F1': { name: 'Mamie' }, 'families/F2': { name: 'Papi', luminosite: 45 } };
+  const ecrits = [];
+  const db = {
+    doc: (chemin) => ({ chemin }),
+    runTransaction: async (f) => f({
+      get: async (ref) => ({ exists: ref.chemin in docs, data: () => docs[ref.chemin] }),
+      update: (ref, maj) => { ecrits.push([ref.chemin, maj]); Object.assign(docs[ref.chemin], { luminosite: maj.luminosite }); },
+    }),
+  };
+  assert.strictEqual(await poserLuminositeParDefaut(db, 'F1'), true);
+  assert.strictEqual(docs['families/F1'].luminosite, 70);
+  assert.strictEqual(await poserLuminositeParDefaut(db, 'F1'), false, 'deuxième jumelage : rien de plus');
+  assert.strictEqual(await poserLuminositeParDefaut(db, 'F2'), false);
+  assert.strictEqual(docs['families/F2'].luminosite, 45, 'jamais écrasée');
+  assert.strictEqual(await poserLuminositeParDefaut(db, 'F9'), false, 'famille supprimée');
+  assert.strictEqual(await poserLuminositeParDefaut(db, null), false);
+  assert.strictEqual(ecrits.length, 1);
+  assert.strictEqual(ecrits[0][0], 'families/F1');
+  assert.ok('rev' in ecrits[0][1], 'la tablette est prévenue (rev)');
+});

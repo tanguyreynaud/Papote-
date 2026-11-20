@@ -31,6 +31,9 @@ const OPTIONS_PAR_DEFAUT = Object.freeze({
   sos: true, lecture: true, rappelsAccueil: true, meteo: true, radio: { active: false },
 });
 const VOLUME_SONNERIE = 100;
+// Luminosité de l'écran en journée (families/{fid}.luminosite, 40 à 100 %, Tanguy 20/11) : 70 % à l'installation,
+// ensuite réglée par un responsable dans l'app. Jamais posée par-dessus un réglage existant.
+const LUMINOSITE_PAR_DEFAUT = 70;
 
 const ms = (v) => (v == null ? null : typeof v === 'number' ? v : v.toMillis ? v.toMillis() : null);
 
@@ -230,7 +233,7 @@ function brancher(deps) {
       const famille = db.collection('families').doc();
       tx.set(famille, {
         name: nom, code: invite, createdBy: uid, createdAt: FieldValue.serverTimestamp(),
-        options: OPTIONS_PAR_DEFAUT, volumeSonnerie: VOLUME_SONNERIE, rev: 1,
+        options: OPTIONS_PAR_DEFAUT, volumeSonnerie: VOLUME_SONNERIE, luminosite: LUMINOSITE_PAR_DEFAUT, rev: 1,
         // Ni l'app ni la tablette ne se mettent « en pause » pendant l'installation ; la commande
         // reliée au jumelage (gestionJumelage) remplace ce statut, sinon « aucun » à la fin. Installation jamais
         // finie : « aucun » 72 h après ce début (F2), comme 48 h après une fin sans commande (finDeGrace).
@@ -387,6 +390,24 @@ function brancher(deps) {
   return { reserverTablette, nommerFamille, finirInstallation, annulerInstallation };
 }
 
+// Faut-il poser la luminosité par défaut sur cette famille ? Seulement si elle existe et n'en a aucune (pure, testée).
+function luminositeAPoser(fam) {
+  return !!fam && (fam.luminosite === undefined || fam.luminosite === null);
+}
+
+// Tablette entrée dans une famille (jumelage confirmé, gestionJumelage) : 70 % si la famille n'a encore aucune
+// luminosité (famille d'avant le réglage), dans une transaction pour ne jamais écraser un choix de la famille.
+async function poserLuminositeParDefaut(db, fid) {
+  if (!fid) return false;
+  const ref = db.doc(`families/${fid}`);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || !luminositeAPoser(snap.data())) return false;
+    tx.update(ref, { luminosite: LUMINOSITE_PAR_DEFAUT, rev: FieldValue.increment(1) });
+    return true;
+  });
+}
+
 // Raison de refuser « Annuler l'installation », ou null (pure, testée).
 function refusAnnulation(fam, uid) {
   if (fam.createdBy !== uid) return "Seule la personne qui installe la tablette peut annuler l'installation.";
@@ -400,5 +421,7 @@ function refusAnnulation(fam, uid) {
 
 module.exports = {
   brancher,
-  regles: { decisionScan, refusAnnulation, REPRISE_MS, villeDuRelais, villeAvecCoordonnees, normaliserCode, codeAuHasard, OPTIONS_PAR_DEFAUT, ETAPES },
+  poserLuminositeParDefaut,
+  LUMINOSITE_PAR_DEFAUT,
+  regles: { decisionScan, refusAnnulation, REPRISE_MS, villeDuRelais, villeAvecCoordonnees, normaliserCode, codeAuHasard, OPTIONS_PAR_DEFAUT, ETAPES, luminositeAPoser, LUMINOSITE_PAR_DEFAUT },
 };
