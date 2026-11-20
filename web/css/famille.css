@@ -1131,6 +1131,8 @@ body:has(#hors-ligne-bandeau:not([hidden])) .install-fab { display: none; }
 /* Fin de l'installation de la tablette et connexion : l'installation de l'app proposée aussi (27/10). */
 /* Photos et Messages ouverts depuis la barre du bas : pas de flèche retour, la barre reste en bas. */
 .depuis-barre .page-head .back { display: none; }
+/* Sans la flèche, le titre (Photos, Réglages) collait au bord de l'écran : aligné sur les cartes (Tanguy, 20/11). */
+.depuis-barre .page-head { padding-left: 16px; }
 .depuis-barre .chat-bar { bottom: calc(var(--barre-bas) + env(safe-area-inset-bottom)); }
 /* Le bouton + garde un espace au-dessus de la barre du bas, il ne la touche pas (Tanguy, 27/10). */
 .depuis-barre .fab { bottom: calc(var(--barre-bas) + 16px + env(safe-area-inset-bottom)); }
