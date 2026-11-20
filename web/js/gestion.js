@@ -1790,12 +1790,12 @@ function afficherStock() {
   const valeurChez = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:chez'], t)).reduce((x, t) => x + (t.prixAchat || 0), 0);
   const valeurLibres = stock.filter((t) => dansGroupe(GROUPES_STOCK['g:disponibles'], t)).reduce((x, t) => x + (t.prixAchat || 0), 0);
   $('kpi-stock-suite').textContent = [
-    valeurLibres ? `Stock libre : ${euros(valeurLibres)}` : null,
-    valeurChez ? `chez les clients : ${euros(valeurChez)}` : null,
+    valeurLibres ? `Tablettes libres : ${euros(valeurLibres)}` : null,
+    valeurChez ? `tablettes chez les clients : ${euros(valeurChez)}` : null,
     donnees.aVendre == null ? null : donnees.aVendre
-      ? `le site propose ${donnees.aVendre} à la vente (stock + 10 précommandes)`
-      : 'le site propose « Être prévenu » (plus rien à vendre)',
-  ].filter(Boolean).join(' · ');
+      ? `le site peut encore en vendre ${donnees.aVendre}`
+      : 'le site n\'a plus rien à vendre (il propose « Être prévenu »)',
+  ].filter(Boolean).join(' · ').replace(/^./, (c) => c.toUpperCase());
   const manque = aEnvoyer - dispo;
   $('alerte-stock').hidden = manque <= 0;
   $('alerte-stock').textContent = manque > 0
@@ -4751,9 +4751,10 @@ function afficherClients() {
     { titre: 'Depuis', classe: 'pc' }, { titre: 'E-mails', classe: 'pc' },
   ], liste.map((c) => ({
     cellules: [
-      nomEtDetail(c.nom || c.email, c.nom ? c.email : null, jour(c.depuis)),
-      badge([TYPES_CLIENT[c.type] || c.type || '', c.statut && c.type !== 'panier' ? ` (${(STATUTS_CLIENT[c.statut] || c.statut).toLowerCase()})` : ''].join(''),
-        COULEURS[c.type]),
+      nomEtDetail(c.nom || c.email, c.nom ? c.email : null),
+      // « Abonné (impayé) » en rouge ; pas de parenthèse pour un ancien client (« Ancien client (annulée) » était faux).
+      badge([TYPES_CLIENT[c.type] || c.type || '', c.type === 'client' && c.statut && c.statut !== 'actif' ? ` (${STATUTS_CLIENT[c.statut] || c.statut})` : ''].join(''),
+        c.type === 'client' && ['impaye', 'suspendu'].includes(c.statut) ? 'ko' : COULEURS[c.type]),
       c.email,
       // Toucher le numéro appelle (sans ouvrir la fiche).
       c.telephone ? h('a', { href: `tel:${c.telephone.replace(/\s/g, '')}`, onclick: (e) => e.stopPropagation() }, c.telephone) : '',

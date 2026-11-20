@@ -252,6 +252,9 @@
 }
 .admin-body .onglets a:hover { color: var(--text); }
 .admin-body .onglets a.actif { color: var(--accent); border-bottom-color: var(--accent); }
+/* Plus fort que « [data-panneau] a » (gestion.css), qui mettait tous les onglets-liens en bleu. */
+.admin-body [data-panneau] .onglets a:not(.actif) { color: var(--muted); }
+.admin-body [data-panneau] .onglets a:not(.actif):hover { color: var(--text); }
 .admin-body nav.onglets-liens[hidden] { display: none; }
 /* Rubrique avec ses onglets-liens et ses propres onglets dessous (Validation) : le second rang en pastilles. */
 .admin-body nav.onglets-liens:not([hidden]) + .onglets { border-bottom: 0; gap: 6px; }
@@ -270,4 +273,4 @@
 /* Champ de recherche au-dessus d'une liste courte (Contacts). */
 #cherche-clients.cherche-liste { flex: 1 1 220px; width: auto; max-width: 360px; margin: 0; }
 .filtres-seuls { margin: 0 0 14px; }
-.table.courte + .kpi-suite { margin-top: 10px; }
+.table.courte ~ .kpi-suite { margin-top: 10px; }
