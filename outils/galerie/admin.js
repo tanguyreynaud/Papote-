@@ -206,6 +206,13 @@ const COMMANDE = {
   paiements: [{ id: 'ch_1', le: il(1), montant: 6000, rembourse: 0, statut: 'succeeded', description: 'Mise en service', recu: 'https://exemple.invalid/r' }],
 };
 
+// Commande à envoyer dont la préparation est déjà entamée (étape où reprendre, étapes faites).
+function avecPreparation(etape, faites) {
+  const g = gestionDonnees({});
+  const preparation = { etape, mode: 'colis', enceinte: 'non', tablette: 'T-003', tabletteLue: 'T-003', suivi: '12345678', faits: Object.fromEntries(faites.map((k) => [k, Date.now()])) };
+  return donnees({ donnees: { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-AB12' ? { ...c, preparation } : c)) } });
+}
+
 // Abonnement de la commande en service arrêté depuis l'admin, fin dans 27 jours.
 function arretPrevu() {
   const g = gestionDonnees({});
@@ -302,8 +309,26 @@ const QR_INSTALLATION = {
     'android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE': { papote_jeton: 'GaLeRiEjEtOnFaCtIcE0123456789ab', papote_canal: 'stable' },
   },
 };
-const toucher = (...sels) => async (p) => { for (const sel of sels) { await p.locator(sel).first().click(); await pause(p); } };
-const onglet = (t) => async (p) => { await p.locator('#kpi-commandes .onglet').filter({ hasText: t }).first().click(); await pause(p); };
+const toucher = (...sels) => async (p) => {
+  for (const sel of sels) {
+    const b = p.locator(sel).first();
+    // Bouton rangé dans un menu « ⋯ » ou « Actions » (admin du 20/11) : ouvrir le menu d'abord.
+    await b.waitFor({ state: 'attached', timeout: 8000 }).catch(() => null);
+    if (await b.count() && !await b.isVisible().catch(() => true)) {
+      const menu = b.locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," menu-points ")][1]').locator('.menu-points-bouton').first();
+      if (await menu.count()) { await menu.click(); await pause(p); }
+    }
+    await b.click();
+    await pause(p);
+  }
+};
+// Pastilles au-dessus de la liste des clients (admin du 20/11) ; avant : des chiffres-onglets.
+const PASTILLES = { 'en route': 'En route', 'à récupérer': 'À récupérer', 'commandes au total': 'Tous' };
+const onglet = (t) => async (p) => {
+  const neuf = p.locator('#kpi-commandes button').filter({ hasText: PASTILLES[t] || t });
+  await (await neuf.count() ? neuf : p.locator('#kpi-commandes .onglet').filter({ hasText: t })).first().click();
+  await pause(p);
+};
 
 // Aide du guide « Que faire si… » (#aide) : la question tapée puis « Demander ». bloque : le serveur ne répond pas.
 // Écran sans la question à l'aide (admin d'avant) : rien à toucher, la scène montre le guide seul.
@@ -382,6 +407,10 @@ const SCENES = [
   { groupe: 'Commandes', titre: 'Commandes : à envoyer', page: '#commandes', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },
   { groupe: 'Commandes', titre: 'Préparer l’envoi : les étapes', page: '#commandes', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees(), faire: toucher('text=Préparer l\'envoi') },
   { groupe: 'Commandes', titre: 'Préparer l’envoi : étape 2, choisir la tablette', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: toucher('text=Préparer l\'envoi', 'text=C\'est fait') },
+  { groupe: 'Commandes', titre: 'Préparer l’envoi : une étape qu’on peut remettre à plus tard', page: '#commandes', tailles: ['pc', 'tel'], plein: true, donnees: () => avecPreparation(6, ['mode', 'tablette', 'sim', 'sim-installer', 'hors-forfait', 'blocages']), faire: toucher('text=Reprendre la préparation') },
+  { groupe: 'Commandes', titre: 'Préparer l’envoi : après « Plus tard », l’étape suivante', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => avecPreparation(6, ['mode', 'tablette', 'sim', 'sim-installer', 'hors-forfait', 'blocages']), faire: toucher('text=Reprendre la préparation', 'text=Plus tard') },
+  { groupe: 'Commandes', titre: 'Préparer l’envoi : étape remise, redemandée avant le dépôt', page: '#commandes', tailles: ['pc', 'tel'], plein: true, donnees: () => avecPreparation(11, ['mode', 'tablette', 'sim', 'sim-installer', 'hors-forfait', 'blocages', 'enceinte-choix', 'fermer', 'etiquette']), faire: toucher('text=Reprendre la préparation') },
+  { groupe: 'Clients', titre: 'Un client avec beaucoup de paiements', page: '#client/claire%40exemple.fr', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees({ fonctions: { gestionCommande: { ...COMMANDE, paiements: Array.from({ length: 9 }, (_, n) => ({ id: `ch_${n}`, le: il(1 + 30 * n), montant: n === 8 ? 6000 : 1490, rembourse: 0, statut: 'succeeded', description: n === 8 ? 'Mise en service' : 'Abonnement', recu: 'https://exemple.invalid/r' })) } } }) },
   { groupe: 'Commandes', titre: 'Commandes : en route', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: onglet('en route') },
   { groupe: 'Commandes', titre: 'Commandes : à récupérer', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: onglet('à récupérer') },
   { groupe: 'Commandes', titre: 'Commandes : toutes', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: onglet('commandes au total') },
@@ -429,7 +458,7 @@ const SCENES = [
   { groupe: 'Stock', titre: 'Installer une tablette par QR : le formulaire', page: '#stock/tablettes', tailles: ['pc', 'tel'], donnees: () => donnees(), faire: toucher('#btn-installer-qr') },
   { groupe: 'Stock', titre: 'Installer une tablette par QR : le QR code', page: '#stock/tablettes', tailles: ['pc', 'tel'], plein: true,
     donnees: () => donnees({ fonctions: { jetonInstallation: QR_INSTALLATION } }), faire: async (p) => {
-      await p.click('#btn-installer-qr');
+      await toucher('#btn-installer-qr')(p);
       await p.fill('#f-installer [name="wifi"]', 'Livebox-Atelier');
       await p.fill('#f-installer [name="motDePasse"]', 'mot-de-passe-factice');
       await p.click('#f-installer button[type="submit"]');
