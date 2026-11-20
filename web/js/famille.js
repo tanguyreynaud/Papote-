@@ -5937,7 +5937,7 @@ function renderActivity() {
     quoi.className = 'link';
     quoi.textContent = 'Que faire ?';
     quoi.addEventListener('click', async () => {
-      if (await queFaireTablette(name) === 'depanner' && !papoteAller('depanner')) openPage('settings', false);
+      if (await queFaireTablette(name, ago(online).replace('il y a ', '')) === 'depanner' && !papoteAller('depanner')) openPage('settings', false);
     });
     el.append(' ', quoi);
   } else if (battery && battery.charging === false && battery.unpluggedAt) {
