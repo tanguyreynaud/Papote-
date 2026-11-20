@@ -56,7 +56,6 @@ const FACTURES_ADRESSE = defineString('FACTURES_ADRESSE', { default: 'factures@m
 const FACTURES_MOT_DE_PASSE = defineSecret('FACTURES_MOT_DE_PASSE');
 // « clé publique:clé secrète » de l'intégration Sendcloud « Papote étiquettes » (installer-sendcloud.bat).
 const SENDCLOUD_API = defineSecret('SENDCLOUD_API');
-const ESPACE_ADMIN = 'https://app.mapapote.fr/admin.html';
 const { FieldValue, Timestamp } = admin.firestore;
 // Base Firestore et bucket Storage : ceux d'origine (US) jusqu'à la bascule en Europe, où functions/.env
 // reçoit BASE_FIRESTORE=eu et BUCKET_STORAGE=papote-famille-eu (notes/securite-acces.md, section 9).
