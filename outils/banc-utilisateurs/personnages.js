@@ -210,4 +210,15 @@ LOTS['preuve-lot-h'] = [
 // Tour final (21/11 soir) : tout l'étape 1 sur la version finale, sans « nom » ni « rejoindre » (faux serveur).
 LOTS['tour-final'] = LOTS['tour-1'].filter((x) => x.tache !== 'nom' && x.tache !== 'rejoindre');
 
+// Fin du soir (21/11) : chaque tâche de l'app dans les 4 cas difficiles, personnages tournants ; puis la tablette.
+{
+  const proches = Object.keys(PROCHES);
+  const VAR = [['petit', { dimensions: { width: 360, height: 640 } }], ['sombre', { sombre: true }], ['lent', { reseau: 'lent' }], ['couche', { couche: true }]];
+  const taches = Object.keys(TACHES_FAMILLE).filter((t) => !['nom', 'rejoindre', 'mamieAppelle'].includes(t));
+  const l = [];
+  taches.forEach((t, i) => VAR.forEach(([nom, o], k) => l.push({ ...p('famille', proches[(i + k * 2 + 1) % 8], t, o), id: `f-${t}-${proches[(i + k * 2 + 1) % 8]}-${nom}` })));
+  Object.keys(SITUATIONS).forEach((sit) => { for (const m of Object.keys(MAMIES)) l.push(p('tablette', m, sit)); });
+  LOTS['soir-rares'] = l;
+}
+
 module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };
