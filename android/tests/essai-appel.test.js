@@ -1,5 +1,6 @@
 // Carte « Julie a essayé de vous appeler à 10 h 01 » (A49, OUI de Tanguy 12/11) : à la place de la météo,
-// sans bouton, jamais le mot « manqué ». Elle s'en va au premier de : un toucher sur la carte, un appel abouti
+// sans bouton, jamais le mot « manqué ». Un toucher sur la carte ouvre « Qui voulez-vous appeler ? », l'appelant en
+// premier (Tanguy, 21/11 ; personne à rappeler : le toucher l'enlève). Elle s'en va au premier de : un appel abouti
 // avec cette personne (sortant ou entrant, téléphone ou visio), la veille du soir / 21 h ; jamais le lendemain ;
 // elle survit à une relance de Papote.
 // Lancement : node --test android/tests/
@@ -51,7 +52,7 @@ async function sansErreur(b) {
   assert.deepStrictEqual(erreurs, [], 'erreurs JavaScript');
 }
 
-test('A49 : Julie appelle, personne ne décroche : la carte à la place de la météo, sans « manqué » ; un toucher l’enlève', async () => {
+test('A49 : Julie appelle, personne ne décroche : la carte à la place de la météo, sans « manqué » ; un toucher ouvre « Qui voulez-vous appeler ? », Julie en premier', async () => {
   const b = await tablette();
   try {
     assert.ok(await meteoVisible(b), 'météo avant');
@@ -64,7 +65,40 @@ test('A49 : Julie appelle, personne ne décroche : la carte à la place de la m�
     assert.ok(await b.visible('#sos-btn') && await b.visible('#view-home .call-btn'), 'SOS et Appeler toujours là');
     const couleur = await b.page.evaluate(() => getComputedStyle(document.querySelector('#essai-appel')).backgroundColor);
     assert.strictEqual(couleur, 'rgb(238, 242, 255)', 'fond indigo pâle #eef2ff');
+    // Toucher la carte (Tanguy, 21/11) : « Qui voulez-vous appeler ? », Julie en premier avec « vous a appelé à 10 h 01 ».
+    // Julie est la 1re de la liste de la famille : Marc essaie aussi, plus tard, pour prouver l'ordre.
+    await b.avancer(60000);
+    await sonneSansReponse(b, MARC); // 10 h 02
     await b.toucher('#essai-appel');
+    assert.ok(await b.visible('.call-out.picker'), 'l’écran « Qui voulez-vous appeler ? » est ouvert');
+    assert.match(await b.texte('.call-out.picker .call-title'), /Qui voulez-vous appeler/);
+    const cartes = await b.page.evaluate(() => [...document.querySelectorAll('.call-out.picker .call-person')].map((e) => ({
+      nom: e.querySelector('.call-person-name').textContent,
+      essai: ((e.querySelector('.call-person-essai') || {}).textContent || '').replace(/\s+/g, ' ').trim(),
+      mise: e.classList.contains('a-essaye'),
+    })));
+    assert.deepStrictEqual(cartes, [
+      { nom: 'Marc', essai: 'vous a appelé à 10 h 02', mise: true },
+      { nom: 'Julie', essai: 'vous a appelé à 10 h 01', mise: true },
+      { nom: 'Paul', essai: '', mise: false },
+    ], 'le plus récent d’abord, puis les autres proches, sans étiquette');
+    assert.strictEqual(await b.page.evaluate(() => document.querySelectorAll('.call-out.picker .call-person-essai button, #essai-appel button').length), 0, 'toujours pas de bouton « Rappeler »');
+    // Elle revient à l'accueil sans appeler : la carte est toujours là (elle part quand l'appel aboutit, ou le soir).
+    await b.toucher('.call-out.picker .call-back');
+    assert.strictEqual(await carte(b), 'Julie et Marc ont essayé de vous appeler', 'retour sans appeler : la carte reste');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('A49 : personne à rappeler (proche sans numéro) : un toucher enlève la carte, et elle ne revient pas après une relance', async () => {
+  const b = await tablette();
+  try {
+    assert.ok(await meteoVisible(b), 'météo avant');
+    // Visio d'un proche qui n'a pas donné son numéro : la tablette ne peut pas le rappeler.
+    await b.page.evaluate(() => window.Papote.essaiAppel('lea', 'Léa'));
+    assert.strictEqual(await carte(b), 'Léa a essayé de vous appeler à 10 h 00');
+    await b.toucher('#essai-appel');
+    assert.ok(!(await b.visible('.call-out.picker')), 'pas d’écran d’appel : personne à rappeler');
     assert.strictEqual(await carte(b), '', 'touchée : partie');
     assert.ok(await meteoVisible(b), 'la météo revient');
     await b.page.reload();

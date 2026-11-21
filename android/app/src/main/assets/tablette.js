@@ -1550,7 +1550,10 @@
     $('reminder-title').textContent = r.title;
     $('reminder-title').className = 'ln-text ' + sizeClass(r.title);
     $('reminder-time').textContent = (r.kind === 'rdv' ? 'Rendez-vous à ' : 'À ') + timeLabel(r.time);
-    $('reminder-done').textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
+    // Une coche devant le texte, à la taille du haut-parleur d'« Écouter » : le bouton se reconnaît sans lire
+    // (Tanguy, 21/11 : Lucienne, qui ne lit pas, le touchait au hasard).
+    $('reminder-done').innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.5l5 5L19.5 7"/></svg><span></span>';
+    $('reminder-done').lastChild.textContent = early ? "J'ai compris" : r.kind === 'rdv' ? "J'ai bien noté" : "C'est fait";
     show($('reminder-alert'), true);
     // La nuit, le rappel sonne quand même, doucement : l'écran se rallume le temps du rappel.
     if (asleep && android() && android().setSleep) { reveilRappel = true; android().setSleep(false); }
@@ -1923,6 +1926,15 @@
     afficherEssais();
   }
 
+  // Les proches qui ont essayé d'appeler et qu'on peut rappeler, le plus récent d'abord.
+  function aRappeler() {
+    var out = [], tous = appelables();
+    for (var i = essaisAppel.length - 1; i >= 0; i--) {
+      for (var j = 0; j < tous.length; j++) if (memePersonne(essaisAppel[i], tous[j].uid, tous[j].name)) { out.push({ p: tous[j], a: essaisAppel[i].a }); break; }
+    }
+    return out;
+  }
+
   function heureEssai(a) {
     var d = new Date(a);
     return d.getHours() + ' h ' + pad(d.getMinutes());
@@ -1941,7 +1953,13 @@
       carteEssai = el2('div', 'essai-appel');
       carteEssai.id = 'essai-appel';
       carteEssai.setAttribute('role', 'status');
-      on(carteEssai, 'click', function (e) { e.stopPropagation(); oublierEssais(0); });
+      // Toucher la carte : « Qui voulez-vous appeler ? », la personne qui a essayé en premier et mise en avant
+      // (tests du 21/11 : les 6 personnages touchaient la carte pour rappeler, elle disparaissait sans rien faire).
+      // Personne à rappeler (aucun numéro) : la carte s'en va, comme avant.
+      on(carteEssai, 'click', function (e) {
+        e.stopPropagation();
+        if (aRappeler().length) { pickerPage = 0; showPicker(); } else oublierEssais(0);
+      });
       $('weather').parentNode.insertBefore(carteEssai, $('weather').nextSibling);
     }
     var dernier = essaisAppel[essaisAppel.length - 1];
@@ -2089,6 +2107,13 @@
     callScreen.removeAttribute('hidden');
     callScreen.appendChild(el2('h1', 'call-title', 'Qui voulez-vous appeler ?'));
     var tous = appelables();
+    // Ceux qui ont essayé d'appeler aujourd'hui passent devant, avec « a essayé de vous appeler » sur leur carte.
+    var essais = aRappeler(), heures = {};
+    for (var k = essais.length - 1; k >= 0; k--) {
+      tous.splice(tous.indexOf(essais[k].p), 1);
+      tous.unshift(essais[k].p);
+      heures[essais[k].p.uid || essais[k].p.name] = essais[k].a;
+    }
     if (!tous.length) callScreen.appendChild(el2('p', 'call-sub', 'Personne à appeler pour le moment.'));
     var pages = Math.max(1, Math.ceil(tous.length / PER_PAGE));
     if (pickerPage >= pages) pickerPage = 0;
@@ -2099,6 +2124,11 @@
         var b = el2('button', 'call-person');
         b.appendChild(faceEl(p.uid, p.name, 'call-person-face'));
         b.appendChild(el2('span', 'call-person-name', p.name));
+        var quand = heures[p.uid || p.name];
+        if (quand) {
+          b.className += ' a-essaye';
+          b.appendChild(el2('span', 'call-person-essai', heureSure() ? 'vous a appelé à ' + heureEssai(quand) : 'vous a appelé'));
+        }
         on(b, 'click', function () { startCall(p.uid, p.name); });
         grid.appendChild(b);
       })(list[i]);
