@@ -68,28 +68,28 @@ test('tablette jamais vue : pas d’alerte', () => {
 const midi = Date.parse('2026-10-19T10:00:00Z');
 
 const H = 3600_000;
-test('pas vue depuis deux jours : 48 h sans caméra ni toucher, l\'un ou l\'autre suffit', () => {
-  assert.strictEqual(pasVueDepuisLongtemps({ lastSeen: new Date(midi - 47 * H) }, midi), false, 'vue avant-hier midi : pas encore');
-  assert.strictEqual(pasVueDepuisLongtemps({ lastSeen: new Date(midi - 49 * H) }, midi), true);
-  assert.strictEqual(pasVueDepuisLongtemps({ lastSeen: new Date(midi - 60 * H), lastActive: new Date(midi - 3 * H) }, midi), false, 'touchée ce matin');
-  assert.strictEqual(pasVueDepuisLongtemps({ joinedAt: new Date(midi - 72 * H) }, midi), true, 'jamais vue depuis son arrivée il y a 3 jours');
-  assert.strictEqual(pasVueDepuisLongtemps({ joinedAt: new Date(midi - 10 * H) }, midi), false, 'installée ce matin');
-  assert.strictEqual(pasVueDepuisLongtemps({}, midi), false, 'rien de connu : rien');
+test('pas vue, réglé à deux jours : 48 h sans caméra ni toucher, l\'un ou l\'autre suffit', () => {
+  assert.strictEqual(pasVueDepuisLongtemps({ lastSeen: new Date(midi - 47 * H) }, midi, 2), false, 'vue avant-hier midi : pas encore');
+  assert.strictEqual(pasVueDepuisLongtemps({ lastSeen: new Date(midi - 49 * H) }, midi, 2), true);
+  assert.strictEqual(pasVueDepuisLongtemps({ lastSeen: new Date(midi - 60 * H), lastActive: new Date(midi - 3 * H) }, midi, 2), false, 'touchée ce matin');
+  assert.strictEqual(pasVueDepuisLongtemps({ joinedAt: new Date(midi - 72 * H) }, midi, 2), true, 'jamais vue depuis son arrivée il y a 3 jours');
+  assert.strictEqual(pasVueDepuisLongtemps({ joinedAt: new Date(midi - 10 * H) }, midi, 2), false, 'installée ce matin');
+  assert.strictEqual(pasVueDepuisLongtemps({}, midi, 2), false, 'rien de connu : rien');
 });
 
-test('pas vue depuis deux jours : seulement si une tablette répond encore (sinon « ne répond plus » a déjà prévenu)', () => {
+test('pas vue, réglé à deux jours : seulement si une tablette répond encore (sinon « ne répond plus » a déjà prévenu)', () => {
   const hier = new Date(midi - 50 * H);
-  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 2 * MIN) }], midi), true);
-  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 80 * MIN) }], midi), false, 'tablette hors ligne');
-  assert.strictEqual(alertePasVueDue([{ lastSeen: new Date(midi - 20 * H), lastOnline: new Date(midi - MIN) }], midi), false, 'vue hier');
-  assert.strictEqual(alertePasVueDue([], midi), false);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 2 * MIN) }], midi, 2), true);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 80 * MIN) }], midi, 2), false, 'tablette hors ligne');
+  assert.strictEqual(alertePasVueDue([{ lastSeen: new Date(midi - 20 * H), lastOnline: new Date(midi - MIN) }], midi, 2), false, 'vue hier');
+  assert.strictEqual(alertePasVueDue([], midi, 2), false);
   // Deux tablettes : il suffit qu'une réponde et qu'aucune ne l'ait vue.
-  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 80 * MIN) }, { lastSeen: hier, lastOnline: new Date(midi - MIN) }], midi), true);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: hier, lastOnline: new Date(midi - 80 * MIN) }, { lastSeen: hier, lastOnline: new Date(midi - MIN) }], midi, 2), true);
 });
 
 test('le compte d’appels de la tablette (jamais en ligne) ne compte pas comme une tablette qui répond', () => {
   const vieux = new Date(midi - 60 * H);
-  assert.strictEqual(alertePasVueDue([{ lastSeen: vieux, lastOnline: new Date(midi - 80 * MIN) }, { joinedAt: vieux }], midi), false);
+  assert.strictEqual(alertePasVueDue([{ lastSeen: vieux, lastOnline: new Date(midi - 80 * MIN) }, { joinedAt: vieux }], midi, 2), false);
 });
 
 test('veille par défaut de 23 h à 5 h, demi-heures prises en compte', () => {
@@ -131,14 +131,14 @@ test('« pas vue depuis deux jours » part chaque jour à 10 h (Paris), hors des
   assert.strictEqual(enVeille({ active: true, de: 23, a: 12 }, Date.parse('2026-10-29T09:00:00Z')), false);
 });
 
-test('délai « pas vue » réglé par la famille : entier de 1 à 5 jours, 2 par défaut, toute valeur bizarre ramenée', () => {
+test('délai « pas vue » réglé par la famille : entier de 1 à 5 jours, 5 par défaut (21/11), toute valeur bizarre ramenée', () => {
   const { joursPasVue } = require('./alertes');
-  assert.strictEqual(joursPasVue(undefined), 2);
-  assert.strictEqual(joursPasVue(null), 2);
-  assert.strictEqual(joursPasVue('3'), 2, 'texte : défaut');
-  assert.strictEqual(joursPasVue(NaN), 2);
-  assert.strictEqual(joursPasVue(Infinity), 2);
-  assert.strictEqual(joursPasVue(true), 2);
+  assert.strictEqual(joursPasVue(undefined), 5);
+  assert.strictEqual(joursPasVue(null), 5);
+  assert.strictEqual(joursPasVue('3'), 5, 'texte : défaut');
+  assert.strictEqual(joursPasVue(NaN), 5);
+  assert.strictEqual(joursPasVue(Infinity), 5);
+  assert.strictEqual(joursPasVue(true), 5);
   for (const n of [1, 2, 3, 4, 5]) assert.strictEqual(joursPasVue(n), n);
   assert.strictEqual(joursPasVue(0), 1, 'trop petit : 1');
   assert.strictEqual(joursPasVue(-4), 1);
@@ -154,11 +154,12 @@ test('délai « pas vue » de 1, 3 ou 5 jours : la tablette compte le bon nombre
   assert.strictEqual(pasVueDepuisLongtemps(vue(73), midi, 3), true);
   assert.strictEqual(pasVueDepuisLongtemps(vue(119), midi, 5), false);
   assert.strictEqual(pasVueDepuisLongtemps(vue(121), midi, 5), true);
-  assert.strictEqual(pasVueDepuisLongtemps(vue(49), midi, 'n importe quoi'), true, 'réglage illisible : 2 jours');
+  assert.strictEqual(pasVueDepuisLongtemps(vue(49), midi, 'n importe quoi'), false, 'réglage illisible : 5 jours');
+  assert.strictEqual(pasVueDepuisLongtemps(vue(121), midi, 'n importe quoi'), true);
   assert.strictEqual(pasVueDepuisLongtemps(vue(49), midi, 99), false, 'réglage trop grand : 5 jours');
   const enLigne = new Date(midi - MIN);
   assert.strictEqual(alertePasVueDue([{ ...vue(30), lastOnline: enLigne }], midi, 1), true);
-  assert.strictEqual(alertePasVueDue([{ ...vue(30), lastOnline: enLigne }], midi), false, 'sans réglage : 2 jours');
+  assert.strictEqual(alertePasVueDue([{ ...vue(30), lastOnline: enLigne }], midi), false, 'sans réglage : 5 jours');
   assert.strictEqual(alertePasVueDue([{ ...vue(80), lastOnline: enLigne }], midi, 4), false);
 });
 
@@ -171,4 +172,71 @@ test('texte de l\'alerte « pas vue » : le nombre de jours choisi, « 1 jour »
   assert.strictEqual(messagePasVue('Mamie', 2).titre, "Mamie n'a pas été vue depuis 2 jours");
   assert.strictEqual(messagePasVue('Mamie', 3).titre, "Mamie n'a pas été vue depuis 3 jours");
   assert.match(messagePasVue('Mamie', 5).texte, /plus de 120 heures/);
+});
+
+// ---------- « N'a pas vu vos 3 derniers envois » (Tanguy, 21/11/2026) ----------
+const { nonVus, messageNonVus, heureTabletteEnMillis } = require('./alertes');
+// Lundi 23 novembre 2026, heure de Paris (UTC+1).
+const nov = (jourHeure) => Date.parse(`2026-11-${jourHeure}:00+01:00`);
+const tab = (plus = {}) => ({ uid: 'tab', lastOnline: new Date(nov('23T15:58')), lastSeen: new Date(nov('23T09:00')), ...plus });
+const envoi = (jourHeure, plus = {}) => ({ type: 'photo', authorUid: 'julie', createdAt: new Date(nov(jourHeure)), seenAt: null, ...plus });
+const a16h = nov('23T16:00');
+
+test('non vus : heure de la tablette lue à Paris, hiver comme été', () => {
+  assert.strictEqual(heureTabletteEnMillis('2026-11-23 12:00'), Date.parse('2026-11-23T12:00:00+01:00'));
+  assert.strictEqual(heureTabletteEnMillis('2026-07-01 12:00'), Date.parse('2026-07-01T12:00:00+02:00'));
+  assert.strictEqual(heureTabletteEnMillis('n importe quoi'), null);
+});
+
+test('non vus : 3 envois de suite sans « vu » depuis le dernier signe de vie : alerte', () => {
+  const r = nonVus({ tablettes: [tab()], envois: [envoi('23T10:00'), envoi('23T12:00'), envoi('23T15:00')], maintenant: a16h });
+  assert.deepStrictEqual(r, { due: true, depuis: nov('23T09:00'), nombre: 3 });
+  assert.match(messageNonVus('Mamie', 3).titre, /^Mamie n'a pas vu vos 3 derniers envois$/);
+});
+
+test('non vus : 2 seulement, rien', () => {
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois: [envoi('23T12:00'), envoi('23T15:00')], maintenant: a16h }).due, false);
+});
+
+test('non vus : un envoi lu, un toucher ou un visage remet à zéro', () => {
+  const envois = [envoi('23T10:00'), envoi('23T12:00', { seenAt: new Date(nov('23T12:05')) }), envoi('23T13:00'), envoi('23T15:00')];
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois, maintenant: a16h }).due, false, 'envoi de 12 h lu');
+  const trois = [envoi('23T10:00'), envoi('23T12:00'), envoi('23T15:00')];
+  assert.strictEqual(nonVus({ tablettes: [tab({ lastActive: new Date(nov('23T13:00')) })], envois: trois, maintenant: a16h }).due, false, 'touchée à 13 h');
+  assert.strictEqual(nonVus({ tablettes: [tab({ lastSeen: new Date(nov('23T11:00')) })], envois: trois, maintenant: a16h }).due, false, 'vue à 11 h');
+});
+
+test('non vus : les rappels comptent, et un rappel vu ou fait est un signe de vie', () => {
+  const rappel = { time: '11:00', repeat: 'daily', title: 'Médicament' };
+  const envois = [envoi('23T12:00'), envoi('23T15:00')];
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [rappel], maintenant: a16h }).due, true);
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, lastSeen: '2026-11-23 11:02' }], maintenant: a16h }).due, false, 'rappel vu');
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, lastAck: '2026-11-23 11:10' }], maintenant: a16h }).due, false, 'rappel fait');
+  // Rappel de 15 h : encore affiché à 16 h, ne compte pas encore.
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, time: '15:00' }], maintenant: a16h }).due, false);
+  // Rappel du mardi seulement (2) : pas aujourd'hui lundi.
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, repeat: 'weekly', days: [2] }], maintenant: a16h }).due, false);
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, repeat: 'weekly', days: [1] }], maintenant: a16h }).due, true);
+});
+
+test('non vus : rien la nuit, rien de trop frais, ni ses propres réponses', () => {
+  const t = tab({ lastSeen: new Date(nov('22T20:00')) });
+  const nuit = [envoi('22T23:30'), envoi('23T00:30'), envoi('23T10:00')];
+  assert.strictEqual(nonVus({ tablettes: [t], envois: nuit, maintenant: a16h }).nombre, 1, 'envoyés pendant la veille : pas comptés');
+  const frais = [envoi('23T10:00'), envoi('23T12:00'), envoi('23T15:50')];
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois: frais, maintenant: a16h }).due, false, 'envoyé il y a 10 min');
+  const reponses = [envoi('23T10:00'), envoi('23T12:00'), envoi('23T15:00', { type: 'reply' }), envoi('23T15:10', { authorUid: 'tab' })];
+  assert.strictEqual(nonVus({ tablettes: [tab()], envois: reponses, maintenant: a16h }).due, false);
+});
+
+test('non vus : tablette hors ligne ou absente, rien (« ne répond plus » s\'en charge)', () => {
+  const envois = [envoi('23T10:00'), envoi('23T12:00'), envoi('23T15:00')];
+  assert.strictEqual(nonVus({ tablettes: [tab({ lastOnline: new Date(nov('23T13:00')) })], envois, maintenant: a16h }).due, false);
+  assert.strictEqual(nonVus({ tablettes: [], envois, maintenant: a16h }).due, false);
+});
+
+test('non vus : sur plusieurs jours, et jamais vue depuis l\'arrivée de la tablette', () => {
+  const t = tab({ lastSeen: null, joinedAt: new Date(nov('21T09:00')) });
+  const envois = [envoi('21T18:00'), envoi('22T11:00'), envoi('23T10:00')];
+  assert.deepStrictEqual(nonVus({ tablettes: [t], envois, maintenant: a16h }), { due: true, depuis: nov('21T09:00'), nombre: 3 });
 });

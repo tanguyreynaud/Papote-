@@ -28,7 +28,7 @@ const SOURCES = {
 const FAUX = [
   [/décroche(nt)? toute? seule?s?|décrochent seuls|décrochent tout seuls/i, "décroché seulement si un visage est vu 1,2 s (appels.js FACE_HOLD_MS) ou sur « Décrocher » ; jamais pour un appel téléphone (AppelGsm.java)"],
   [/23 ?h (à|-) ?7 ?h/, 'veille par défaut de 23 h à 5 h, réglée par la famille (veille.js VEILLE_DEFAUT, Veille.java, famille.js)'],
-  [/(pas vue?|vu) de la matinée|depuis le matin|n'a pas été vue ce matin/i, "alerte « pas vue depuis deux jours », à 10 h, après 48 h (alertes.js PAS_VUE_MS)"],
+  [/(pas vue?|vu) de la matinée|depuis le matin|n'a pas été vue ce matin/i, "alerte « 3 envois pas vus » (alertes.js alerteNonVus) ou « pas vue depuis 5 jours » à 10 h (alertes.js PAS_VUE_MS)"],
   [/tout le monde à la fois|tous les proches à la fois/i, 'SOS par la carte SIM : un SMS à tous, puis appels un par un (tablette.js startSosTelephone)'],
   [/jusqu'à 3 ?h(eures)? en qualité réduite/i, 'forfait de 1 Go : ≈ 2 h pleine qualité puis ≈ 1 h 30 réduite (Forfait.java)'],
   [/onglet Famille/i, "pas d'onglet Famille : « Inviter » est en haut de l'accueil (web/index.html)"],
@@ -65,8 +65,11 @@ test('la veille de nuit est annoncée sans heures fixes, réglée par la famille
 test('l\'alerte « pas vue » annoncée a le délai du code', () => {
   const m = /PAS_VUE_MS = (\d+) \* 60 \* 60 \* 1000/.exec(lire('functions/alertes.js'));
   assert.ok(m, 'PAS_VUE_MS introuvable dans alertes.js');
-  assert.strictEqual(Number(m[1]), 48, 'si le délai change, changer « deux jours » sur le site et dans le guide du chat');
-  assert.match(SOURCES['vitrine/accueil.html'], /depuis deux jours/);
+  assert.strictEqual(Number(m[1]), 120, 'si le délai change, changer « 5 jours » dans le guide du chat');
+  assert.match(SOURCES['functions/support-connaissances.md'], /depuis 5 jours/);
+  assert.match(SOURCES['vitrine/accueil.html'], /ne voit plus vos envois/);
+  assert.match(lire('functions/alertes.js'), /const NON_VUS_SEUIL = 3;/, 'si le seuil change, changer « 3 envois » dans le guide du chat');
+  assert.match(SOURCES['functions/support-connaissances.md'], /3 envois ou rappels de suite/);
 });
 
 test('les CGV et la confidentialité disent que seules les 200 dernières photos et 40 dernières vidéos sont gardées', () => {

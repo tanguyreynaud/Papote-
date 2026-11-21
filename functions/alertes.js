@@ -7,6 +7,12 @@
 //                     la famille de 1 à 5 jours (families/{fid}.alertePasVueJours, 2 par défaut, appli famille, Réglages).
 //                     Le contrôle n'a lieu qu'une fois par jour : l'alerte arrive entre N et N + 1 jours après le
 //                     dernier signe de vie.
+//                     Délai par défaut 5 jours (Tanguy, 21/11/2026 : sans rien recevoir, Mamie n'a aucune raison de
+//                     toucher la tablette ; ce filet ne sert que quand la famille n'envoie rien).
+//   alerteNonVus      toutes les heures de 9 h à 20 h (Paris, taches.js) : « {nom} n'a pas vu vos 3 derniers envois »
+//                     quand 3 envois ou rappels de suite sont restés sans « vu » et que la tablette ne l'a ni vue ni
+//                     sentie depuis le premier (Tanguy, 21/11/2026 : l'alerte se fonde sur l'absence de réaction à ce
+//                     qu'on lui envoie, pas sur l'absence de toucher).
 //
 // L'épisode est noté sur la fiche de la tablette (alerteType, alerteLe) et remis à zéro quand
 // tout revient, pour ne pas prévenir toutes les 5 minutes. La décision est dans etatAlerte,
@@ -188,14 +194,15 @@ function derniereVue(tablette) {
 // un week-end chez les enfants aussi ; au-delà de 48 h, un coup de fil vaut le coup). Jamais vue : on compte
 // depuis l'arrivée de la tablette dans la famille (joinedAt), sinon rien.
 // Délai réglable par la famille de 1 à 5 jours (Tanguy, 18/11/2026) : families/{fid}.alertePasVueJours, écrit par
-// l'appli famille (Réglages) et vérifié par firestore.rules. PAS_VUE_MS reste le délai par défaut (2 jours).
-const PAS_VUE_MS = 48 * 60 * 60 * 1000;
-const JOURS_PAS_VUE_DEFAUT = 2;
+// l'appli famille (Réglages) et vérifié par firestore.rules. PAS_VUE_MS reste le délai par défaut (5 jours depuis le
+// 21/11/2026 : quand la famille envoie, c'est alerteNonVus qui prévient, bien plus tôt).
+const PAS_VUE_MS = 120 * 60 * 60 * 1000;
+const JOURS_PAS_VUE_DEFAUT = 5;
 const JOURS_PAS_VUE_MIN = 1;
 const JOURS_PAS_VUE_MAX = 5;
 const JOUR_MS = 24 * 60 * 60 * 1000;
 
-// Réglage de la famille -> nombre de jours sûr (entier de 1 à 5). Absent ou illisible : 2 ; hors bornes : ramené
+// Réglage de la famille -> nombre de jours sûr (entier de 1 à 5). Absent ou illisible : 5 (2 avant le 21/11/2026) ; hors bornes : ramené
 // dans les bornes ; décimal : arrondi.
 function joursPasVue(valeur) {
   if (typeof valeur !== 'number' || !Number.isFinite(valeur)) return JOURS_PAS_VUE_DEFAUT;
@@ -272,6 +279,149 @@ exports.alerteMatin = async () => {
   }
 };
 
+// ---------- « N'a pas vu vos 3 derniers envois » (Tanguy, 21/11/2026) ----------
+// Un envoi (photo, vidéo, message, vocal) ou un rappel « sans réponse » : pas de « vu » (visage ou OK) alors qu'il
+// aurait dû être vu. Trois de suite, sans aucun signe de vie de la personne depuis le premier : on prévient les
+// responsables, une fois par épisode. Tout signe de vie (toucher, visage, envoi lu, rappel vu ou fait) remet à zéro.
+// Le serveur le déduit seul : rien à changer sur la tablette.
+const NON_VUS_SEUIL = 3;
+// Envoi : laissé à la tablette le temps de l'afficher (durée réglable 1 à 5 min) et de le noter « vu ».
+const NON_VU_ENVOI_MS = 15 * 60_000;
+// Rappel : affiché 1 h au plus à partir de son heure (tablette.js REMINDER_WINDOW_MIN), plus une marge.
+const NON_VU_RAPPEL_MS = 75 * 60_000;
+// On ne remonte pas plus loin (le filet « pas vue depuis N jours » prend le relais au-delà).
+const NON_VUS_FENETRE_MS = 6 * JOUR_MS;
+const HEURES_NON_VUS = { de: 9, a: 20 }; // jamais de notification inquiétante la nuit ni trop tôt
+
+// « AAAA-MM-JJ HH:MM » (heure de la tablette, Paris) -> ms ; sinon null.
+function heureTabletteEnMillis(texte) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?/.exec(texte || '');
+  if (!m) return null;
+  const [an, mois, jour, h, min] = [m[1], m[2], m[3], m[4] || '00', m[5] || '00'].map(Number);
+  // Décalage de Paris à cette date : on part de l'heure lue comme UTC et on corrige.
+  const commeUtc = Date.UTC(an, mois - 1, jour, h, min);
+  const decalage = minutesParis(commeUtc) - (h * 60 + min);
+  const corr = ((decalage % 1440) + 2160) % 1440 - 720; // ramené entre -12 h et +12 h
+  return commeUtc - corr * 60_000;
+}
+
+// Jour « AAAA-MM-JJ » et jour de la semaine (0 = dimanche) à Paris.
+function jourEtSemaineParis(ms) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' })
+    .formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+  const semaine = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
+  return { jour: `${parts.year}-${parts.month}-${parts.day}`, semaine };
+}
+
+// Même règle que happensOn sur la tablette (tablette.js).
+function rappelCeJour(r, jour, semaine) {
+  if (r.finLe && jour > r.finLe) return false;
+  if (r.enPauseJusquau && jour <= r.enPauseJusquau) return false;
+  if (r.repeat === 'daily') return true;
+  if (r.repeat === 'weekly') return Array.isArray(r.days) && r.days.includes(semaine);
+  return r.date === jour;
+}
+
+// Heures (ms) des rappels à afficher entre debut et fin, avec leur « vu » éventuel. vuLe : heure du dernier
+// « vu » ou « fait » (lastSeen, lastAck) : une heure de rappel à laquelle il correspond (même jour, à partir de
+// l'heure) est vue.
+function occurrencesRappel(r, debut, fin) {
+  if (!/^\d{2}:\d{2}$/.test(r.time || '')) return [];
+  const sortie = [];
+  const vus = [r.lastSeen, r.lastAck].filter((v) => typeof v === 'string');
+  const cree = enMillis(r.createdAt) || 0;
+  for (let t = debut - JOUR_MS; t <= fin + JOUR_MS; t += JOUR_MS) {
+    const { jour, semaine } = jourEtSemaineParis(t);
+    if (!rappelCeJour(r, jour, semaine)) continue;
+    const quand = heureTabletteEnMillis(`${jour} ${r.time}`);
+    if (quand === null || quand < debut || quand > fin || quand < cree) continue;
+    if (sortie.some((o) => o.quand === quand)) continue;
+    const vu = vus.some((v) => v.startsWith(jour) && heureTabletteEnMillis(v) >= quand);
+    sortie.push({ quand, vu });
+  }
+  return sortie;
+}
+
+// Décision, sans base de données (alertes.test.js).
+//   tablettes : fiches des tablettes de la famille ; envois : { createdAt, seenAt, type, authorUid } ;
+//   rappels : documents de l'agenda ; veille : réglage de la famille.
+// Renvoie { due, depuis, nombre } : depuis = dernier signe de vie (ms), nombre = envois et rappels sans réponse
+// depuis.
+function nonVus({ tablettes, envois = [], rappels = [], veille, maintenant }) {
+  const rien = { due: false, depuis: null, nombre: 0 };
+  if (!tablettes.length) return rien;
+  // La tablette doit répondre : hors ligne, elle n'a rien reçu (l'alerte « ne répond plus » s'en charge).
+  if (!tablettes.some((t) => enMillis(t.lastOnline) && etatAlerte(t, maintenant, veille) !== 'silence')) return rien;
+  const uidsTablettes = new Set(tablettes.map((t) => t.uid).filter(Boolean));
+  let signe = Math.max(0, ...tablettes.map((t) => derniereVue(t) || enMillis(t.joinedAt) || 0));
+  if (!signe) return rien;
+  const debut = Math.max(maintenant - NON_VUS_FENETRE_MS, 0);
+  // Un envoi lu ou un rappel vu est aussi un signe de vie.
+  const aMontrer = envois.filter((e) => e.type !== 'reply' && !uidsTablettes.has(e.authorUid));
+  for (const e of aMontrer) signe = Math.max(signe, enMillis(e.seenAt) || 0);
+  const occ = rappels.flatMap((r) => occurrencesRappel(r, debut, maintenant));
+  for (const r of rappels) {
+    for (const v of [r.lastSeen, r.lastAck]) {
+      const ms = typeof v === 'string' ? heureTabletteEnMillis(v) : null;
+      if (ms && ms <= maintenant) signe = Math.max(signe, ms);
+    }
+  }
+  const depuis = Math.max(signe, debut);
+  // Pendant la veille, rien n'est montré : ce qui arrive la nuit ne compte pas.
+  const envoisSansReponse = aMontrer.filter((e) => {
+    const quand = enMillis(e.createdAt);
+    return quand && quand > depuis && maintenant - quand > NON_VU_ENVOI_MS && !enMillis(e.seenAt) && !enVeille(veille, quand);
+  }).length;
+  const rappelsSansReponse = occ.filter((o) => !o.vu && o.quand > depuis && maintenant - o.quand > NON_VU_RAPPEL_MS && !enVeille(veille, o.quand)).length;
+  const nombre = envoisSansReponse + rappelsSansReponse;
+  return { due: nombre >= NON_VUS_SEUIL, depuis: signe, nombre };
+}
+
+function messageNonVus(nom, nombre) {
+  return {
+    titre: `${nom} n'a pas vu vos ${nombre} derniers envois`,
+    texte: 'Ni photo, ni message, ni rappel vu, et la tablette ne l\'a pas vue depuis. Un petit coup de fil pour prendre des nouvelles ?',
+  };
+}
+
+// Lancée toutes les heures par taches.js ; ne fait rien hors de 9 h-20 h (Paris).
+exports.alerteNonVus = async () => {
+  const maintenant = Date.now();
+  const heure = Math.floor(minutesParis(maintenant) / 60);
+  if (heure < HEURES_NON_VUS.de || heure > HEURES_NON_VUS.a) return;
+  const db = base();
+  const enPause = await famillesEnPause(db, maintenant).catch((e) => { logger.warn('Pauses illisibles', e.message); return new Set(); });
+  const familles = await db.collection('families').get();
+  for (const fam of familles.docs) {
+    const famille = fam.data();
+    if (!estActif(famille.abonnement) || enPause.has(fam.id)) continue;
+    try {
+      const membres = await fam.ref.collection('members').where('role', '==', 'tablette').get();
+      if (membres.empty) continue;
+      const tablettes = membres.docs.map((t) => ({ ...t.data(), uid: t.id }));
+      const depuisLe = new Date(maintenant - NON_VUS_FENETRE_MS);
+      const [envois, rappels] = await Promise.all([
+        fam.ref.collection('posts').where('createdAt', '>=', depuisLe).get(),
+        fam.ref.collection('reminders').get(),
+      ]);
+      const r = nonVus({
+        tablettes, veille: famille.veille, maintenant,
+        envois: envois.docs.map((d) => d.data()), rappels: rappels.docs.map((d) => d.data()),
+      });
+      if (!r.due) continue;
+      // Une seule alerte par épisode (même dernier signe de vie).
+      if (famille.alerteNonVus && enMillis(famille.alerteNonVus.depuis) === r.depuis) continue;
+      const responsables = [...new Set([famille.createdBy, ...(famille.admins || [])].filter(Boolean))];
+      const n = await envoyer(db, fam.id, responsables, { type: 'alerte', ...messageNonVus(famille.name || 'Mamie', r.nombre) }, 6 * 3600);
+      await fam.ref.update({ alerteNonVus: { le: new Date(maintenant), depuis: new Date(r.depuis), nombre: r.nombre } });
+      await journal.noter(db, { genre: 'non-vus', fid: fam.id, tablette: tablettes.length === 1 ? tablettes[0].uid : null, telephones: n });
+      logger.info(`Famille ${fam.id} : ${r.nombre} envois sans réponse, ${n} téléphone(s)`);
+    } catch (e) {
+      logger.error(`Famille ${fam.id} : alerte « non vus » non envoyée`, e.message);
+    }
+  }
+};
+
 exports.etatAlerte = etatAlerte;
 exports.famillesEnPause = famillesEnPause;
 exports.message = message;
@@ -284,3 +434,7 @@ exports.PAS_VUE_MS = PAS_VUE_MS;
 exports.joursPasVue = joursPasVue;
 exports.messagePasVue = messagePasVue;
 exports.JOURS_PAS_VUE_DEFAUT = JOURS_PAS_VUE_DEFAUT;
+exports.nonVus = nonVus;
+exports.messageNonVus = messageNonVus;
+exports.heureTabletteEnMillis = heureTabletteEnMillis;
+exports.NON_VUS_SEUIL = NON_VUS_SEUIL;
