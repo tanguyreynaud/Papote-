@@ -4,6 +4,7 @@
 // Les factures déposées sont lues automatiquement (gestionLireFacture) pour préremplir les fiches.
 // La connexion et les sections familles, envois et maintenance sont dans admin.js.
 import './retour.js';
+import { silenceTolereMs } from './silence.js';
 import './declarations.js';
 import { demander, saisir, prevenir, menuPoints, menusDansLaPage, annoncer, boutonCharge, patienter, ligneModifiable } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -2865,7 +2866,7 @@ function blocReleves(zone, t) {
     const alerte = reseau && reseau.querySelector(':scope > p.error');
     const souci = alerte ? h('div', { class: 'reseau-mobile alerte-reseau' }, alerte) : null;
     const etatCarte = reseau ? h('div', { class: 'reseau-mobile etat-reseau' }, ...[...reseau.children].filter((x) => x.tagName === 'P' && !x.classList.contains('muted'))) : null;
-    const retard = enLigne && Date.now() - enLigne > 70 * 60_000;
+    const retard = enLigne && Date.now() - enLigne > silenceTolereMs(familleTablette && familleTablette.veille);
     zone.replaceChildren(...[
       souci,
       h('h2', { class: 'sr-only' }, 'En ce moment'),

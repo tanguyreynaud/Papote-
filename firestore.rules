@@ -818,15 +818,19 @@ service cloud.firestore {
         }
       }
 
-      // Journal d'erreurs de la tablette (200 dernières lignes), lisible des responsables.
+      // Journal d'erreurs de la tablette, lisible des responsables. « lines » : les 300 dernières lignes. Depuis le 21/11,
+      // la tablette n'envoie que les lignes nouvelles dans « ajouts » (liste de morceaux) ; le serveur les range dans
+      // « lines » et vide « ajouts » (functions/journal-tablette.js). Une ancienne tablette écrit encore « lines » en entier.
       match /logs/{uid} {
         allow read: if isFamilyAdmin(fid) || isAdmin();
         allow create, update: if signedIn()
           && request.auth.uid == uid
           && isMember(fid)
-          && request.resource.data.keys().hasOnly(['lines', 'version', 'updatedAt'])
-          && request.resource.data.lines is string
-          && request.resource.data.lines.size() <= 60000
+          && request.resource.data.keys().hasOnly(['lines', 'ajouts', 'version', 'updatedAt'])
+          && (!('lines' in request.resource.data) || (request.resource.data.lines is string
+            && request.resource.data.lines.size() <= 60000))
+          && (!('ajouts' in request.resource.data) || (request.resource.data.ajouts is list
+            && request.resource.data.ajouts.size() <= 20))
           && request.resource.data.updatedAt == request.time;
       }
 

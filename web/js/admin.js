@@ -19,6 +19,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 import { refreshSim } from './sim.js';
+import { silenceTolereMs } from './silence.js';
 import { appeler, donnees, signalerChangement } from './gestion-api.js';
 import { ouvrirParcours } from './parcours.js';
 
@@ -57,7 +58,6 @@ function choisirBase() {
 const functions = getFunctions(app, 'europe-west1');
 
 const $ = (id) => document.getElementById(id);
-const OFFLINE_MS = 70 * 60_000; // comme alertes.js : tour de 30 min sur la carte SIM
 const IDLE_MS = 24 * 3600_000;
 
 let families = [];
@@ -1122,7 +1122,7 @@ async function supprimerFamille(f, li, btn, commandes = []) {
 
 function state(f) {
   if (!f.hasTablet) return { cls: 'none', label: 'Pas de tablette' };
-  if (!f.online || Date.now() - f.online.getTime() > OFFLINE_MS) return { cls: 'off', label: `Hors ligne, vue ${ago(f.online)}` };
+  if (!f.online || Date.now() - f.online.getTime() > silenceTolereMs(f.veille)) return { cls: 'off', label: `Hors ligne, vue ${ago(f.online)}` };
   return { cls: 'on', label: 'En ligne' };
 }
 

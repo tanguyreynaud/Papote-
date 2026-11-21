@@ -70,8 +70,8 @@ test('Forfait « internet coupé » au bout : la date de coupure, puis une table
   await sim(970, 3);
   await julie.page.locator('#activity.calme', { hasText: 'utilisé à 97 %' }).waitFor();
   assert.ok((await julie.page.locator('#activity').textContent()).includes(`internet sera coupé jusqu'au ${fin}`));
-  // L'opérateur coupe : la tablette ne donne plus de nouvelles depuis 2 h.
-  await sim(990, 3, s.Timestamp.fromMillis(Date.now() - 2 * 3600_000));
+  // L'opérateur coupe : la tablette ne donne plus de nouvelles depuis 4 h (au-delà des 3 h tolérées la nuit).
+  await sim(990, 3, s.Timestamp.fromMillis(Date.now() - 4 * 3600_000));
   await julie.page.locator('#activity.calme', { hasText: 'n\'a sans doute plus internet' }).waitFor();
   const texte = await julie.page.locator('#activity').textContent();
   assert.strictEqual(texte, `La tablette de Mamie Emma n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au wifi si vous pouvez.`);

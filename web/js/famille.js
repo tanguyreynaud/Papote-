@@ -19,6 +19,7 @@ import {
 } from './firebase.js';
 import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
+import { silenceTolereMs } from './silence.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
   finDeContrat, facturesFamille, renvoyerTablette, retracter, inviterParEmail, nommerFamillePreparee,
@@ -5776,8 +5777,9 @@ function ago(ms) {
 }
 
 // Petit indicateur de l'accueil : en ligne (Wi-Fi ou carte SIM), branchée, batterie.
-// Au-delà, « ne répond plus » : la tablette se signale toutes les 30 min sur la carte SIM (alertes.js : 70 min).
-const EN_LIGNE_MS = 70 * 60_000;
+// Au-delà, « ne répond plus » : la tablette se signale toutes les 30 min le jour, toutes les 2 h pendant la veille
+// (silence.js : 1 h 10 le jour, 3 h la nuit, comme alertes.js).
+const enLigneMs = () => silenceTolereMs(session?.family?.veille);
 // Fiches des membres (dont l'état de la tablette) : écoute relancée si elle tombe en erreur
 // ou au retour sur l'app, pour ne jamais afficher un état périmé.
 let membresDuCache = true;
@@ -5833,7 +5835,7 @@ document.addEventListener('visibilitychange', () => {
 
 function tabletteEnLigne() {
   const t = targetTablet();
-  return !!(t?.lastOnline && Date.now() - toDate(t.lastOnline).getTime() < EN_LIGNE_MS);
+  return !!(t?.lastOnline && Date.now() - toDate(t.lastOnline).getTime() < enLigneMs());
 }
 
 // Garde-fou du forfait de la carte SIM (tablette, members/{uid}.sim : dataCycleMo, plafondMo, niveau,
@@ -6041,14 +6043,14 @@ function renderActivity() {
   // Batterie : envoyée par la tablette ({ level, charging, unpluggedAt }).
   const battery = tabletMembers.filter((m) => m.battery && m.lastOnline)
     .sort((a, b) => toDate(b.lastOnline) - toDate(a.lastOnline))[0]?.battery;
-  if (now - online > EN_LIGNE_MS && membresDuCache) {
+  if (now - online > enLigneMs() && membresDuCache) {
     // Données pas encore confirmées par le serveur (retour sur l'app) : on ne crie pas au loup.
     el.textContent = "Mise à jour de l'état de la tablette…";
-  } else if (now - online > EN_LIGNE_MS && coupeeParForfait()) {
+  } else if (now - online > enLigneMs() && coupeeParForfait()) {
     // Forfait « internet coupé » épuisé : pas de panique « ne répond plus », la vraie raison et la date.
     el.classList.add('calme');
     el.textContent = `La tablette de ${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au wifi si vous pouvez.`;
-  } else if (now - online > EN_LIGNE_MS) {
+  } else if (now - online > enLigneMs()) {
     // Ce que l'app sait déjà (branchée) est utilisé.
     el.classList.add('warn');
     // Court (Tanguy, 20/11 : « le bloc de texte rouge est un peu long ») : le fait en rouge, la piste en dessous en

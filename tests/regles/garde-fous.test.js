@@ -8,7 +8,7 @@ const test = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, writeBatch, serverTimestamp, Timestamp, setLogLevel } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, writeBatch, serverTimestamp, Timestamp, setLogLevel, arrayUnion } = require('firebase/firestore');
 
 setLogLevel('silent');
 
@@ -248,6 +248,12 @@ test('journal de la tablette : écrit par le compte lui-même, membre de la fami
   await assertFails(journal(proche('paul'), 'tab'));
   await assertFails(journal(tablette('inconnue'), 'inconnue'));
   await assertSucceeds(journal(tablette('tab'), 'tab'));
+  // Lignes nouvelles seulement (21/11) : ajoutées à « ajouts », « lines » gardé ; au plus 20 morceaux en attente.
+  const ajout = (texte) => updateDoc(doc(tablette('tab'), `families/${FID}/logs/tab`), { ajouts: arrayUnion(texte), version: '2.99', updatedAt: serverTimestamp() });
+  await assertSucceeds(ajout('nouvelle ligne'));
+  await assertFails(updateDoc(doc(proche('julie'), `families/${FID}/logs/tab`), { ajouts: arrayUnion('x'), updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/logs/tab`), { autre: 1, updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}/logs/tab`), { ajouts: Array.from({ length: 21 }, (_, i) => `l${i}`), updatedAt: serverTimestamp() }));
 });
 
 test('appels : lancés en son nom et « ringing » ; l\'offre ajoutée par l\'appelant seulement', async () => {
