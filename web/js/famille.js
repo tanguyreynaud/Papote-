@@ -3369,6 +3369,7 @@ function renderMembers(all) {
     const name = document.createElement('span');
     name.className = 'member-name';
     name.textContent = m.role === 'tablette' ? `Tablette de ${session.family.nomAChoisir ? 'votre proche' : session.family.name}` : m.name;
+    if (m.id === session.uid) { const v = document.createElement('span'); v.className = 'member-vous'; v.textContent = 'vous'; name.append(' ', v); }
     li.append(name);
     // Numéro de la tablette (carte SIM) : la famille peut l'appeler par téléphone ; les autres numéros sont refusés.
     const telTablette = m.role === 'tablette' ? numeroTablette() : '';
@@ -3458,7 +3459,7 @@ $('members').addEventListener('click', (e) => {
   if (more) { more.click(); return; }
   const m = allMembers.find((x) => x.id === li.dataset.uid);
   if (!m) return;
-  if (m.id === session.uid) { toast('C\'est vous : votre prénom, votre photo et votre numéro se changent dans Réglages, « Mon profil ».'); return; }
+  if (m.id === session.uid) { toast('C\'est vous. Votre prénom, votre photo, votre numéro et « Quitter cette famille » sont dans « Mon profil ».'); return; }
   if (m.role === 'tablette') {
     if (!$('tablet-chip').hidden) $('tablet-chip').click();
     else toast(`La tablette de ${session.family.name} n'a pas encore donné de nouvelles.`);
@@ -3742,13 +3743,23 @@ const dateLongue = (ts) => (ts ? toDate(ts).toLocaleDateString('fr-FR', { day: '
 const TEXTE_ARRETE = "L'abonnement Papote est arrêté : la tablette ne reçoit plus de photos ni d'appels. Les photos, les vidéos et les messages restent ici quelque temps : vous pouvez tout télécharger depuis la page Photos.";
 
 // Abonnement en pause : envois, agenda et appels bloqués, avec une explication.
+// Qui peut régler l'abonnement : les prénoms des responsables, jamais « un responsable » anonyme (tests IA, 21/11).
+function nomsResponsables() {
+  return (allMembers || []).filter((m) => m.role !== 'tablette' && estResponsable(m.id) && m.name).map((m) => m.name);
+}
+function quiRegle() {
+  const n = nomsResponsables();
+  if (!n.length) return "Seul un responsable de la famille peut régler l'abonnement.";
+  if (n.length === 1) return `C'est ${n[0]} qui peut régler l'abonnement : pensez à lui en parler.`;
+  return `Ce sont ${n.slice(0, -1).join(', ')} et ${n[n.length - 1]} qui peuvent régler l'abonnement : pensez à leur en parler.`;
+}
 function paused() {
   if (abonnementOk(session?.family)) return false;
   // Abonnement arrêté (résiliation voulue, décès, EHPAD) : rien n'est à régler (audit « mauvais jours », 5/11).
   if (session?.family?.abonnement?.statut === 'resilie') { notice(TEXTE_ARRETE); return true; }
   notice(amFamilyAdmin()
     ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Réglages en bas de l'écran, puis « Mon profil », puis Abonnement."
-    : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
+    : `Papote est en pause. Rien n'a été envoyé. ${quiRegle()} Tout repartira tout seul ensuite.`);
   return true;
 }
 
@@ -4231,6 +4242,9 @@ function ouvrirAdresse() {
   $('retour-adresse').hidden = false;
   $('btn-renvoyer').textContent = texteRenvoyer();
   $('retour-rue').focus();
+  // Les champs viennent au milieu de l'écran : ils restent visibles quand le clavier s'ouvre (l'abonnement est
+  // plus haut dans « Mon profil » depuis le 21/11).
+  $('retour-adresse').scrollIntoView({ block: 'center' });
 }
 
 $('btn-renvoyer').addEventListener('click', async () => {
@@ -4351,7 +4365,7 @@ function renderAbonnement() {
   } else if (!abonnementOk(session.family)) {
     text = admin
       ? "Papote est en pause : l'abonnement de la famille doit être réglé. Tout reviendra automatiquement."
-      : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable.";
+      : `Papote est en pause. ${quiRegle()}`;
   }
   // Sans abonnement en cours : un responsable peut relier une commande déjà payée sur le site.
   const sansAbo = ['aucun', 'resilie', 'suspendu', 'installation'].includes(statut) && admin;

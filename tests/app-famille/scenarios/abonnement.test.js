@@ -194,11 +194,11 @@ test('En pause (paiement non réglé) : envois et appels bloqués avec une expli
 
   // Suspendu : tout est en pause, avec une explication adaptée.
   await s.db.doc(`families/${fid}`).update({ 'abonnement.statut': 'suspendu' });
-  await paul.page.locator('#abo-banner', { hasText: 'réglé par un responsable' }).waitFor();
+  await paul.page.locator('#abo-banner', { hasText: "C'est Julie qui peut régler l'abonnement" }).waitFor();
   await g.ouvrirTuile(paul, 'messages');
   await paul.page.fill('#message-text', 'Coucou');
   await paul.page.click('#btn-message');
-  assert.match(await g.texteFenetre(paul), /Papote est en pause : l'abonnement de la famille doit être réglé par un responsable/);
+  assert.match(await g.texteFenetre(paul), /Papote est en pause\. Rien n'a été envoyé\. C'est Julie qui peut régler l'abonnement : pensez à lui en parler\./);
   await g.repondre(paul, 'OK');
   await paul.page.click('#view-messages .back');
   await g.ouvrirTuile(paul, 'photos');

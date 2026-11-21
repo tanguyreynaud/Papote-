@@ -2048,3 +2048,6 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 @media (orientation: landscape) and (max-height: 480px) {
   .sheet-valider { position: static; box-shadow: none; }
 }
+
+/* Liste des membres : « vous » sur sa propre ligne (Tanguy, 21/11). */
+.member-vous { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); font-size: .8rem; font-weight: 600; vertical-align: middle; }

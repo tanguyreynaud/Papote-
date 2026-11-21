@@ -892,22 +892,6 @@
             </form>
           </div>
         </div>
-        <h3 class="settings-group">Ce téléphone</h3>
-        <div class="rg-liste">
-          <label class="toggle-row rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-bell"/></svg></span><span class="toggle-text"><strong>Notifications</strong><span id="phone-push-text"></span></span><input type="checkbox" class="toggle" id="phone-push"></label>
-          <label class="toggle-row rg-ligne" id="rappels-photos-row" hidden><span class="rg-ico" aria-hidden="true"><svg><use href="#i-photo"/></svg></span><span class="toggle-text"><strong>Petits rappels</strong><span id="rappels-photos-text"></span></span><input type="checkbox" class="toggle" id="rappels-photos" checked></label>
-          <label class="toggle-row rg-ligne" id="phone-pause" hidden><span class="rg-ico" aria-hidden="true"><svg><use href="#i-lune"/></svg></span><span class="toggle-text"><strong>Arrière-plan</strong><span id="phone-pause-text"></span></span><input type="checkbox" class="toggle" id="phone-pause-toggle"></label>
-          <details class="card rg" id="apparence-card">
-            <summary class="rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-contraste"/></svg></span><span class="rg-texte"><strong class="rg-titre">Apparence</strong><span class="rg-valeur" id="apparence-value"></span></span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
-            <div class="rg-corps">
-            <div class="segmented" role="radiogroup" aria-label="Apparence">
-              <button type="button" class="seg" data-theme-choice="light">Clair</button>
-              <button type="button" class="seg" data-theme-choice="dark">Sombre</button>
-              <button type="button" class="seg" data-theme-choice="auto">Automatique</button>
-            </div>
-            </div>
-          </details>
-        </div>
         <h3 class="settings-group" id="abo-titre" hidden>Abonnement</h3>
         <div id="abo-card" class="rg-liste rg-abo" hidden>
           <div class="rg-ligne rg-abo-tete"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-carte"/></svg></span><span class="rg-texte"><strong id="abo-status" class="abo-status"></strong><span id="abo-details" class="rg-valeur"></span></span></div>
@@ -951,6 +935,22 @@
           </div>
           <p id="abo-error" class="error" hidden></p>
           </div>
+        </div>
+        <h3 class="settings-group">Ce téléphone</h3>
+        <div class="rg-liste">
+          <label class="toggle-row rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-bell"/></svg></span><span class="toggle-text"><strong>Notifications</strong><span id="phone-push-text"></span></span><input type="checkbox" class="toggle" id="phone-push"></label>
+          <label class="toggle-row rg-ligne" id="rappels-photos-row" hidden><span class="rg-ico" aria-hidden="true"><svg><use href="#i-photo"/></svg></span><span class="toggle-text"><strong>Petits rappels</strong><span id="rappels-photos-text"></span></span><input type="checkbox" class="toggle" id="rappels-photos" checked></label>
+          <label class="toggle-row rg-ligne" id="phone-pause" hidden><span class="rg-ico" aria-hidden="true"><svg><use href="#i-lune"/></svg></span><span class="toggle-text"><strong>Arrière-plan</strong><span id="phone-pause-text"></span></span><input type="checkbox" class="toggle" id="phone-pause-toggle"></label>
+          <details class="card rg" id="apparence-card">
+            <summary class="rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-contraste"/></svg></span><span class="rg-texte"><strong class="rg-titre">Apparence</strong><span class="rg-valeur" id="apparence-value"></span></span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+            <div class="rg-corps">
+            <div class="segmented" role="radiogroup" aria-label="Apparence">
+              <button type="button" class="seg" data-theme-choice="light">Clair</button>
+              <button type="button" class="seg" data-theme-choice="dark">Sombre</button>
+              <button type="button" class="seg" data-theme-choice="auto">Automatique</button>
+            </div>
+            </div>
+          </details>
         </div>
         <h3 class="settings-group">Mon compte</h3>
         <div class="rg-liste">

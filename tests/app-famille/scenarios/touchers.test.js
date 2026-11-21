@@ -73,7 +73,7 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   // Sa propre ligne (son badge « Responsable ») : où changer ses informations.
   await g.panneau(julie, 'famille');
   await p.locator('#members li', { hasText: 'Julie' }).locator('.badge', { hasText: 'Responsable' }).click();
-  await g.toast(julie, 'C\'est vous : votre prénom, votre photo et votre numéro se changent dans Réglages, « Mon profil ».');
+  await g.toast(julie, 'C\'est vous. Votre prénom, votre photo, votre numéro et « Quitter cette famille » sont dans « Mon profil ».');
   await p.click('#view-settings .back');
   await g.attendreVue(julie, 'view-home');
   await g.ouvrirProfil(julie);

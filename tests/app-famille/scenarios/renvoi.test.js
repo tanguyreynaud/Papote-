@@ -78,7 +78,7 @@ test('Commande sans adresse : « Je renvoie la tablette » demande l\'adresse, e
     await julie.page.click(champ);
     await julie.page.fill(champ, valeur);
     const box = await julie.page.locator(champ).boundingBox();
-    assert.ok(box.y >= 0 && box.y + box.height <= 510, `${champ} visible avec le clavier ouvert`);
+    assert.ok(box.y >= 0 && box.y + box.height <= 510, `${champ} visible avec le clavier ouvert (y = ${Math.round(box.y)}, hauteur ${Math.round(box.height)})`);
   }
   await g.verifierLargeur(julie, 'adresse de retour');
   // Le clavier se referme (la barre du bas revient), puis le doigt touche le bouton.
