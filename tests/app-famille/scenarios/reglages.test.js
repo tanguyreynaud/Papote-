@@ -170,7 +170,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await julie.page.selectOption('#sleep-from', '22:0');
   await julie.page.selectOption('#sleep-to', '6:30');
   await enregistrer(julie, 'sleep-card');
-  await g.toast(julie, 'Écran éteint la nuit : enregistré');
+  await g.toast(julie, 'Enregistré : écran éteint de 22 h à 6 h 30');
   assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 22, a: 6, aMin: 30 });
   await julie.page.locator('#sleep-value', { hasText: 'Écran éteint de 22 h à 6 h 30' }).waitFor();
 
@@ -369,7 +369,7 @@ test('Nom de la tablette : jamais un numéro (message sous le champ) ; nuit : he
   assert.deepStrictEqual([await julie.page.inputValue('#sleep-from'), await julie.page.inputValue('#sleep-to')], ['19:0', '10:0']);
   await julie.page.selectOption('#sleep-to', '7:0');
   await enregistrer(julie, 'sleep-card');
-  await g.toast(julie, 'Écran éteint la nuit : enregistré');
+  await g.toast(julie, 'Enregistré : écran éteint de 19 h à 7 h');
   assert.deepStrictEqual((await g.lire(`families/${fid}`)).veille, { active: true, de: 19, a: 7 });
   await julie.page.locator('#sleep-value', { hasText: 'Écran éteint de 19 h à 7 h' }).waitFor();
 });

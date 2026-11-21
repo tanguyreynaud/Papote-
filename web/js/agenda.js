@@ -327,9 +327,16 @@ function toastAgenda(text) {
   toastAgenda.timer = setTimeout(() => { t.hidden = true; }, 2500);
 }
 
-function fail(message) {
-  $('rem-error').textContent = message;
-  $('rem-error').hidden = false;
+// champ : le champ fautif. Le message se place juste sous lui et l'écran y revient : en bas de la feuille, sous le
+// bouton, il restait hors de vue et rien ne semblait se passer (tests du 21/11 : Sylvie a cru son rappel enregistré).
+function fail(message, champ) {
+  const erreur = $('rem-error');
+  erreur.textContent = message;
+  erreur.hidden = false;
+  const ancre = champ?.closest('label') || $('btn-reminder');
+  ancre.after(erreur);
+  (champ?.closest('label') || erreur).scrollIntoView({ block: 'center' });
+  champ?.focus({ preventScroll: true });
 }
 
 // ---------- Limites du jour (A12, Tanguy 12/11 ; serveur : functions/limites.js) ----------
@@ -364,12 +371,12 @@ function limite(message) {
 function reminderData() {
   const repeat = $('rem-repeat').value;
   const days = Array.from($('rem-days').querySelectorAll('input:checked')).map((i) => Number(i.value));
-  if (!$('rem-title').value.trim()) return fail('Écrivez ce qu\'il faut rappeler.');
+  if (!$('rem-title').value.trim()) return fail('Écrivez ce qu\'il faut rappeler.', $('rem-title'));
   if (repeat === 'weekly' && !days.length) return fail('Choisissez au moins un jour.');
-  if (repeat === 'once' && !$('rem-date').value) return fail('Choisissez une date.');
-  if (!$('rem-time').value) return fail('Choisissez une heure.');
+  if (repeat === 'once' && !$('rem-date').value) return fail('Choisissez une date.', $('rem-date'));
+  if (!$('rem-time').value) return fail('Choisissez une heure.', $('rem-time'));
   const finLe = repeat === 'once' ? null : $('rem-fin').value || null;
-  if (finLe && finLe < todayKey()) return fail('La date de fin est déjà passée.');
+  if (finLe && finLe < todayKey()) return fail('La date de fin est déjà passée.', $('rem-fin'));
   return {
     title: $('rem-title').value.trim(),
     kind: document.querySelector('input[name="rem-kind"]:checked').value,
