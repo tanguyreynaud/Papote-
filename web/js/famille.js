@@ -1159,12 +1159,22 @@ function showIntroTablette() {
       </div>
       <div class="intro-step" data-step="3" hidden>
         <h2>Le son</h2>
-        <p class="muted">Le son des vidéos, les messages lus à voix haute, la radio.</p>
+        <p class="muted">Trois volumes, comme dans Réglages.</p>
         <div class="intro-son">
-          <div class="intro-son-tete"><strong>Volume du son</strong><span id="intro-volume-val" class="setup-son-val"></span></div>
-          <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume">
+          <div class="intro-son-tete"><strong>Sonnerie</strong><span id="intro-sonnerie-val" class="setup-son-val"></span></div>
+          <p class="muted small intro-son-aide">Les appels qui arrivent</p>
+          <input id="intro-sonnerie" type="range" min="10" max="100" step="5" aria-label="Volume de la sonnerie">
         </div>
-        <p class="muted small">La sonnerie et le volume des appels se règlent ensuite dans Réglages.</p>
+        <div class="intro-son">
+          <div class="intro-son-tete"><strong>Vidéos et messages lus</strong><span id="intro-volume-val" class="setup-son-val"></span></div>
+          <p class="muted small intro-son-aide">Les vidéos, les messages lus à voix haute, la radio</p>
+          <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume des vidéos et des messages">
+        </div>
+        <div class="intro-son">
+          <div class="intro-son-tete"><strong>Appels</strong><span id="intro-appel-val" class="setup-son-val"></span></div>
+          <p class="muted small intro-son-aide">La voix du proche, en visio et au téléphone</p>
+          <input id="intro-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
+        </div>
       </div>
       <div class="intro-step" data-step="4" hidden>
         <h2>Les options</h2>
@@ -1195,8 +1205,13 @@ function showIntroTablette() {
   $i('#intro-heures').hidden = !$i('#intro-veille').checked;
   $i('#intro-de').value = valeurHeure(choix.veille.de, choix.veille.deMin);
   $i('#intro-a').value = valeurHeure(choix.veille.a, choix.veille.aMin);
-  $i('#intro-volume').value = String(choix.volume);
-  $i('#intro-volume-val').textContent = `${choix.volume} %`;
+  // Les trois volumes de Réglages (Tanguy, 21/11 : un seul curseur faisait croire que tout le son était réglé).
+  const sons = [['#intro-sonnerie', sonnerieActuelle()], ['#intro-volume', choix.volume], ['#intro-appel', appelActuel()]];
+  for (const [id, v] of sons) {
+    $i(id).value = String(v);
+    $i(`${id}-val`).textContent = `${v} %`;
+    $i(id).addEventListener('input', () => { $i(`${id}-val`).textContent = `${$i(id).value} %`; });
+  }
   $i('#intro-lecture').checked = choix.options.lecture;
   $i('#intro-sos').checked = choix.options.sos;
   const nat = document.createElement('optgroup');
@@ -1205,7 +1220,6 @@ function showIntroTablette() {
   loc.label = 'Locales (ex-France Bleu)';
   RADIOS.forEach((r, k) => (r.locale ? loc : nat).append(new Option(r.nom, String(k))));
   $i('#intro-station').append(nat, loc);
-  $i('#intro-volume').addEventListener('input', () => { $i('#intro-volume-val').textContent = `${$i('#intro-volume').value} %`; });
   $i('#intro-veille').addEventListener('change', () => { $i('#intro-heures').hidden = !$i('#intro-veille').checked; });
   $i('#intro-radio').addEventListener('change', () => { $i('#intro-station-wrap').hidden = !$i('#intro-radio').checked; });
 
@@ -1250,7 +1264,7 @@ function showIntroTablette() {
     // Une écriture par réglage : chaque règle n'accepte qu'un champ (avec rev) à la fois.
     const ecrire = (data) => updateDoc(doc(db, 'families', session.fid), { ...data, rev: increment(1) });
     await ecrire({ veille: choix.veille });
-    await ecrire({ volume: choix.volume });
+    await ecrire({ volume: choix.volume, volumeSonnerie: Number($i('#intro-sonnerie').value), volumeAppel: Number($i('#intro-appel').value) });
     await ecrire({ options: choix.options });
   }
 
