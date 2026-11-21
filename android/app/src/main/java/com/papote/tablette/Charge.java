@@ -6,7 +6,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.BatteryManager;
+import android.os.Bundle;
 import android.os.SystemClock;
 import android.provider.Settings;
 
@@ -79,20 +81,29 @@ final class Charge {
         }
     }
 
-    /** Réécrit la limite (une valeur en dessous, puis la sienne) : la tablette réexamine alors la charge. */
+    /**
+     * Demande à la mini-appli « Papote Charge » de réécrire la limite (une valeur en dessous, puis la sienne) :
+     * la tablette réexamine alors la charge. Papote n'a pas le droit de l'écrire elle-même (Android le refuse aux
+     * applis récentes, vu le 21/11) ; la mini-appli, déclarée « ancienne », l'a. Sans elle : redémarrage.
+     */
     private static boolean retoucherReglage(Context app, int niveau) {
+        String debut = "CHARGE : branchée sans charger à " + niveau + " %, ";
         try {
             int max = Settings.System.getInt(app.getContentResolver(), CLE_MAX, -1);
             if (max < 0) {
                 Journal.log(app, "Charge : branchée sans charger à " + niveau + " %, pas de limite Blackview sur cette tablette");
                 return false;
             }
-            Settings.System.putInt(app.getContentResolver(), CLE_MAX, max - 1);
-            Settings.System.putInt(app.getContentResolver(), CLE_MAX, max);
-            Journal.urgent(app, "CHARGE : branchée sans charger à " + niveau + " %, limite de " + max + " % réécrite pour relancer la charge");
-            return true;
+            Bundle r = app.getContentResolver().call(Uri.parse("content://com.papote.charge"), "relancer", null, null);
+            if (r != null && r.getBoolean("ok")) {
+                Journal.urgent(app, debut + "limite de " + max + " % réécrite par la mini-appli pour relancer la charge");
+                return true;
+            }
+            Journal.urgent(app, debut + "la mini-appli n'a pas pu réécrire la limite ("
+                + (r == null ? "pas de réponse" : r.getString("erreur")) + ")");
+            return false;
         } catch (Exception e) {
-            Journal.urgent(app, "CHARGE : branchée sans charger à " + niveau + " %, réglage de la limite refusé (" + e + ")");
+            Journal.urgent(app, debut + "mini-appli de charge absente ou refusée (" + e + ")");
             return false;
         }
     }

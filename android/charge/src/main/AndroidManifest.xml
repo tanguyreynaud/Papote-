@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+
+    <!-- Seule une appli signée avec la même clé (Papote) peut demander la relance. -->
+    <permission
+        android:name="com.papote.charge.RELANCER"
+        android:protectionLevel="signature" />
+
+    <!-- Aucune activité, aucune icône : rien à voir ni à toucher sur la tablette. -->
+    <application
+        android:allowBackup="false"
+        android:label="Papote Charge">
+        <provider
+            android:name=".Relance"
+            android:authorities="com.papote.charge"
+            android:exported="true"
+            android:permission="com.papote.charge.RELANCER" />
+    </application>
+</manifest>

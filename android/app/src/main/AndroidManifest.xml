@@ -35,11 +35,14 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="com.papote.charge.RELANCER" />
     <!-- Lecture à voix haute (Android 11+ : le moteur de synthèse doit être déclaré visible) -->
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <!-- Mini-appli « Papote Charge » (relance de la charge sans redémarrer, voir Charge.java) -->
+        <package android:name="com.papote.charge" />
     </queries>
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />

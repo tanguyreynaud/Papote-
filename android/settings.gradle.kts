@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Papote"
 include(":app")
+include(":charge")
