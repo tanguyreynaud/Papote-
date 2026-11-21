@@ -395,7 +395,9 @@ function ouvrirAssistant() {
   if (connecte) ouvrirOnglet('support');
   else document.body.classList.add('chat-libre');
   try { if (window.papoteChat) { window.papoteChat.ouvrir(); return; } } catch (e) { /* plus bas */ }
-  if (!connecte) notice("L'assistant ne répond pas pour l'instant. Écrivez-nous à contact@mapapote.fr, nous vous répondons vite.");
+  // Assistant pas chargé (hors ligne, ou chat-support.js pas encore là) : toujours un retour, connecté ou non
+  // (banc du 21/11 : « Poser une question à l'assistant » ne faisait rien, 4 proches ont abandonné).
+  notice("L'assistant ne répond pas pour l'instant. Écrivez-nous à contact@mapapote.fr, nous vous répondons vite.");
 }
 async function noticeAvecAide(message) {
   if (await noticeAide(message) === 'aide') ouvrirAssistant();
