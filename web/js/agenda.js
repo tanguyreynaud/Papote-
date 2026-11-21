@@ -230,6 +230,7 @@ function syncEmpty() {
 function syncRepeatFields() {
   const repeat = $('rem-repeat').value;
   $('rem-date-wrap').hidden = repeat !== 'once';
+  majJourDate();
   $('rem-days').hidden = repeat !== 'weekly';
   $('rem-fin-wrap').hidden = repeat === 'once';
 }
@@ -329,6 +330,24 @@ function toastAgenda(text) {
 
 // champ : le champ fautif. Le message se place juste sous lui et l'écran y revient : en bas de la feuille, sous le
 // bouton, il restait hors de vue et rien ne semblait se passer (tests du 21/11 : Sylvie a cru son rappel enregistré).
+// Le jour en toutes lettres sous la date : « 26/10/2026 » seul ne dit pas si c'est bien « jeudi prochain » (tests du
+// 21/11 : Marc et Paul ont enregistré un mauvais jour sans pouvoir le voir).
+function majJourDate() {
+  const el = $('rem-date-jour');
+  const v = $('rem-date').value;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if ($('rem-date-wrap').hidden || !m) { el.hidden = true; return; }
+  const jour = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const t = new Date();
+  const ecart = Math.round((jour - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
+  const texte = jour.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const quand = ecart === 0 ? "aujourd'hui" : ecart === 1 ? 'demain' : ecart > 1 ? `dans ${ecart} jours` : 'date déjà passée';
+  el.textContent = `${texte.charAt(0).toUpperCase()}${texte.slice(1)} · ${quand}`;
+  el.hidden = false;
+}
+document.getElementById('rem-date').addEventListener('input', majJourDate);
+document.getElementById('rem-date').addEventListener('change', majJourDate);
+
 function fail(message, champ) {
   const erreur = $('rem-error');
   erreur.textContent = message;

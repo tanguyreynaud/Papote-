@@ -1997,7 +1997,6 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 /* Tablette muette : le fait en rouge, la piste en dessous en texte normal. */
 .activity-piste { display: block; margin-top: 2px; color: var(--muted); font-weight: 400; }
 .activity:has(.activity-piste)::before { top: 18px; margin-top: 0; }
-=======
 /* Fidèle à la maquette (Tanguy, 20/11) : la personne ou moi en tête avec « Modifier » ; Apparence, Dépanner et
    l'abonnement sur une ligne. */
 .rg-texte { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -2043,3 +2042,4 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 }
 .abo-page-etat { margin: 4px 0 6px; font-size: 18px; font-weight: 700; }
 #rem-error { margin: 6px 0 0; }
+.rem-date-jour { margin: -2px 0 8px; font-size: 16px; font-weight: 700; color: var(--accent); }
