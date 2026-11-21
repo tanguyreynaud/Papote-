@@ -38,6 +38,11 @@ async function ouvrirAdmin(nom, { hash = '#accueil', largeur = 1280, hauteur = 9
 /** Le texte de « À faire », une fois les données arrivées. */
 async function aFaire(t) {
   await t.page.waitForFunction(() => document.querySelector('#a-faire') && !document.querySelector('#a-faire .fantome-ligne'), null, { timeout: 20_000 });
+  // Liste courte (20/11) : au-delà de 8 lignes, « À faire » ouvre sur « Urgent » et replie la suite. L'essai lit tout.
+  const tout = t.page.locator('#filtres-taches button', { hasText: 'Tout' });
+  if (await tout.isVisible() && await tout.getAttribute('aria-pressed') !== 'true') await tout.click();
+  const suite = t.page.locator('#a-faire .voir-plus button');
+  if (await suite.count()) await suite.click();
   return (await t.page.locator('#a-faire').innerText()).replace(/\n+/g, ' | ');
 }
 
