@@ -2115,3 +2115,15 @@ html .frame-rdv .rdv-in { background: #e8e6fd; color: #3730a3; box-shadow: none;
 html .overlay.reminder .ln-wood { -webkit-align-items: center; align-items: center; padding-top: 0; }
 /* « Raccrocher » avec le téléphone, comme « Décrocher ». */
 html .call-out .call-hangup .icon, html .call-out-hangup .icon { width: 1.1em; height: 1.1em; margin-right: 2.5vmin; vertical-align: -0.15em; }
+
+/* Proposition du 21/11 : dans « Qui voulez-vous appeler ? », la personne qui a essayé d'appeler est cerclée de vert
+   (le vert du bouton Appeler) et porte « vous a appelé à 10 h 30 » en haut de sa carte. Les cartes gardent leur taille. */
+html .call-out.picker .call-person { position: relative; }
+html .call-out.picker .call-person.a-essaye { box-shadow: 0 0 0 .9vmin #15803d, 0 1vmin 3vmin rgba(49, 46, 129, .12); }
+html .call-person-essai {
+  position: absolute; top: -3.2vmin; left: 50%; -webkit-transform: translateX(-50%); transform: translateX(-50%);
+  padding: 1.1vmin 2.6vmin; border-radius: 99vmin; background: #15803d; color: #fff; white-space: nowrap;
+  font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 3.4vmin; font-weight: 700;
+}
+html .call-out.picker .call-title { margin-bottom: 3vmin; }
+html #reminder-done .icon { width: 1.05em; height: 1.05em; margin-right: 2vmin; vertical-align: -0.16em; }
