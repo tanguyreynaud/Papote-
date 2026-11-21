@@ -2043,3 +2043,8 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .abo-page-etat { margin: 4px 0 6px; font-size: 18px; font-weight: 700; }
 #rem-error { margin: 6px 0 0; }
 .rem-date-jour { margin: -2px 0 8px; font-size: 16px; font-weight: 700; color: var(--accent); }
+/* Téléphone couché (écran très bas) : le bouton qui valide une feuille n'est plus collé en bas, il recouvrait « Quand ? »
+   et l'heure du rappel (tests du 21/11, étape 2 : Paul a enregistré 9 h sans voir le champ). Il reprend sa place à la fin. */
+@media (orientation: landscape) and (max-height: 480px) {
+  .sheet-valider { position: static; box-shadow: none; }
+}
