@@ -181,4 +181,13 @@ LOTS['tour-1-debout'] = LOTS['tour-1'].filter((x) => ["f-abonnement-ines", "f-ab
   LOTS['tour-3'] = t3;
 }
 
+// Étape 4a : preuves sur le lot h publié (date du rappel en lettres, fenêtres petit écran, luminosité, assistant).
+LOTS['preuve-lot-h'] = [
+  p('famille', 'marc', 'rappel'), p('famille', 'paul', 'rappel'), p('famille', 'nadia', 'rappel'), p('famille', 'sylvie', 'rappel'),
+  p('famille', 'julie', 'medicament', { dimensions: { width: 360, height: 640 } }), p('famille', 'thomas', 'medicament'),
+  p('famille', 'marc', 'luminosite', { dimensions: { width: 360, height: 640 } }), p('famille', 'sylvie', 'luminosite'),
+  p('famille', 'sylvie', 'etat', { dimensions: { width: 360, height: 640 } }), p('famille', 'nadia', 'etat'),
+  p('famille', 'julie', 'abonnement'), p('famille', 'ines', 'abonnement'),
+].map((x) => ({ ...x, id: x.id + (x.dimensions ? '-petit' : '') }));
+
 module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };
