@@ -96,7 +96,8 @@ export function menuPoints(actions, titre = 'Plus d\'actions', options = {}) {
   bouton.className = `menu-points-bouton${options.texte ? ' menu-points-nomme' : ''}${options.classe ? ` ${options.classe}` : ''}`;
   bouton.textContent = options.texte || '⋮';
   bouton.title = titre;
-  bouton.setAttribute('aria-label', titre);
+  // Bouton nommé : son texte visible fait partie du nom lu (« Actions : Lancer à la main »), sinon la commande vocale ne le trouve pas.
+  bouton.setAttribute('aria-label', options.texte && !titre.toLowerCase().includes(options.texte.replace(/^[^\p{L}]+/u, '').toLowerCase()) ? `${options.texte} : ${titre}` : titre);
   bouton.setAttribute('aria-haspopup', 'menu');
   bouton.setAttribute('aria-expanded', 'false');
   const liste = document.createElement('div');

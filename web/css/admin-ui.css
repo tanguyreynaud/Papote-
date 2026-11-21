@@ -811,3 +811,19 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 @media (max-width: 760px) { .admin-body #dt-releves .stats.tuiles.quatre { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .admin-body #dt-releves .alerte-reseau > p.error { background: var(--rouge-fond); border: 1px solid #f6d3d3; border-radius: 14px; padding: 10px 14px; margin: 0 0 12px; font-size: 14px; color: var(--text); font-weight: 600; }
 .admin-body #dt-releves .etat-reseau > p { margin: 4px 2px 0; font-size: 13px; color: var(--muted); }
+
+/* Lisibilité (contrôle du 21/11) : compteurs des filtres sans transparence, pastilles vertes et rouges plus foncées. */
+.admin-body .filtres button .n, .admin-body #filtres-taches button .n { opacity: 1; color: var(--muted); }
+.admin-body .badge.ok { color: #166534; }
+.admin-body .badge.ko { color: #b91c1c; }
+.admin-body .filtres button.actif .n, .admin-body #filtres-taches button.actif .n { color: inherit; }
+/* ICCID (19-20 chiffres) : jamais coupé ; sur téléphone, sa ligne passe sous le libellé. */
+.admin-body .iccid { white-space: nowrap; }
+@media (max-width: 480px) {
+  .admin-body dl.fiche.kv > dt:has(+ dd .iccid) { grid-column: 1 / -1; border-bottom: 0; padding-bottom: 0; min-height: 0; }
+  .admin-body dl.fiche.kv > dt:has(+ dd .iccid) + dd { grid-column: 1 / -1; justify-content: space-between; padding-top: 2px; }
+  .admin-body dl.fiche.kv > dt:has(+ dd .iccid) + dd .valeur { text-align: left; }
+}
+@media (max-width: 480px) { .admin-body dl.fiche.kv > dt:has(+ dd .iccid) + dd.modifiable { border-top: 0; } }
+/* Tableau en fiches dans une carte, sur téléphone : pas de flèche posée sur le dernier chiffre. */
+@media (max-width: 760px) { .admin-body .card .table.cartes tbody tr[tabindex] td:last-child::after { content: none; } }
