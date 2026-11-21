@@ -157,7 +157,7 @@ test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi 
   // « À faire » : une seule commande, la ligne ouvre directement sa page, avec le bouton « Préparer l'envoi ».
   assert.match(await aFaire(t), /1 tablette à envoyer/);
   await p.locator('#a-faire a', { hasText: 'tablette à envoyer' }).click();
-  await p.waitForURL(new RegExp(`#commande/${id}$`));
+  await p.waitForURL(new RegExp(`#commande/${id}$`), { waitUntil: 'commit' }); // pas « load » : WebKit le retarde parfois de 30 s
   await p.getByRole('button', { name: 'Préparer l\'envoi' }).first().click();
   await parcours(t).waitFor();
 
@@ -243,7 +243,7 @@ test('admin, l\'après-midi : abonnement fini, la tablette revient complète («
   assert.match(await aFaire(t), /Tablette T-\d+ à récupérer chez Paul Martin/);
   await p.locator('#a-faire a', { hasText: 'à récupérer' }).click();
   await p.getByRole('button', { name: /Tablette revenue/ }).click();
-  await p.waitForURL(new RegExp(`#commande/${id}$`));
+  await p.waitForURL(new RegExp(`#commande/${id}$`), { waitUntil: 'commit' }); // pas « load » : WebKit le retarde parfois de 30 s
   await p.getByRole('button', { name: 'Matériel reçu' }).click();
   const zone = p.locator('.zone-remplacement:not([hidden])');
   assert.match(await zone.innerText(), /la tablette \(130 €\)/);
