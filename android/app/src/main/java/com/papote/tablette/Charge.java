@@ -19,7 +19,7 @@ import android.provider.Settings;
  * d'abord en retouchant le réglage de la limite (qui reste à sa valeur), sinon en redémarrant la tablette.
  */
 final class Charge {
-    static final int SEUIL_REPRISE = 60;     // sous ce niveau, branchée sans charger : on relance la charge
+    static final int SEUIL_REPRISE = 70;     // sous ce niveau, branchée sans charger : on relance la charge (batterie entre 70 et 80 %)
     static final int SEUIL_REDEMARRAGE = 50; // le réglage n'a rien donné : redémarrage sous ce niveau
     static final long ATTENTE_MS = 5 * 60_000L;       // temps laissé à la charge pour repartir après un essai
     static final long ENTRE_ESSAIS_MS = 30 * 60_000L; // pas plus d'un essai de réglage par demi-heure
