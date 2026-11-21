@@ -2072,3 +2072,15 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
   .dialog-que-faire .dialog-etapes .etape-texte, .dialog-que-faire .dialog-etapes .etape-texte strong { font-size: 15px; }
   .dialog-que-faire .dialog-buttons { flex-direction: row; }
 }
+
+/* Boutons « + Envoyer une photo / une vidéo » avec leur texte, et accueil resserré sur petit téléphone pour que les
+   six cases tiennent à l'écran (Tanguy, 21/11 : rappels et vidéos introuvables aux tests IA). */
+.fab.fab-texte { width: auto; height: 52px; padding: 0 20px 0 14px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
+.fab.fab-texte svg { width: 24px; height: 24px; }
+@media (max-height: 700px) {
+  .tiles { gap: 8px; }
+  .tile { flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; min-height: 60px; padding: 8px 12px; border-radius: 18px; font-size: 17px; }
+  .tile-icon { width: 40px; height: 40px; padding: 9px; border-radius: 13px; flex: none; }
+  .photo-cta { padding-top: 12px; padding-bottom: 12px; margin-bottom: 10px; }
+  .tile-note { margin-top: 0; font-size: 13px; }
+}

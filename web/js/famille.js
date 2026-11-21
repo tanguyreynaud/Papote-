@@ -5222,7 +5222,7 @@ function renderOptions() {
   $('duree-value').textContent = `${m} minute${m > 1 ? 's' : ''}`;
   $('radio-value').textContent = o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée';
   // Interrupteurs à effet immédiat : ils suivent la base, sauf pendant leur propre envoi.
-  $('opt-rappels-accueil-texte').textContent = o.rappelsAccueil !== false ? "Affiché sur l'accueil" : "Pas affiché sur l'accueil";
+  $('opt-rappels-accueil-texte').textContent = o.rappelsAccueil !== false ? "Oui. Les rappels se créent dans Agenda." : "Non. Les rappels se créent dans Agenda.";
   for (const [id, on] of [['opt-lecture', o.lecture !== false], ['opt-rappels-accueil', o.rappelsAccueil !== false]]) {
     if (!$(id).disabled) $(id).checked = on;
   }
