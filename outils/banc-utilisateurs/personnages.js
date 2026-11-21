@@ -222,3 +222,15 @@ LOTS['tour-final'] = LOTS['tour-1'].filter((x) => x.tache !== 'nom' && x.tache !
 }
 
 module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };
+
+// Derniers crédits (21/11, 23 h 30) : ce qui compte le plus (envoyer, débloquer hors ligne) + T1/T2 tablette.
+{
+  const proches = Object.keys(PROCHES);
+  const VAR = [['', {}], ['petit', { dimensions: { width: 360, height: 640 } }]];
+  const l = [];
+  ['photo', 'video', 'rappel', 'medicament', 'etat'].forEach((t, i) => { for (let k = 0; k < 7; k++) { const [nom, o] = VAR[k % 2]; const pr = proches[(i + k * 3) % 8]; l.push({ ...p('famille', pr, t, o), id: `f-${t}-${pr}${nom ? '-' + nom : ''}` }); } });
+  for (const m of Object.keys(MAMIES)) l.push(p('tablette', m, 'manque'));
+  for (const m of Object.keys(MAMIES)) l.push(p('tablette', m, 'rappel'));
+  LOTS['derniers-credits'] = l;
+}
+module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };
