@@ -463,7 +463,7 @@ test('« N téléphones reçoivent les appels » : le serveur note sur chaque pr
   assert.strictEqual((await membre.get()).get('recoitAppels'), true);
 });
 
-test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tant qu\'elle n\'est pas revue', async () => {
+test('pas vue depuis 5 jours (sans réglage, 21/11) : une alerte aux responsables, pas de rappel tant qu\'elle n\'est pas revue', async () => {
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const julie = await s.compte('Julie', 'julie@exemple.fr');
   const marc = await s.compte('Marc', 'marc@exemple.fr');
@@ -483,26 +483,30 @@ test('pas vue depuis deux jours : une alerte aux responsables, pas de rappel tan
   s.avancer(1);
   await enLigne();
   await s.tache('alerteMatin');
-  assert.strictEqual(alertes().length, 1, 'plus de 48 h : alerte');
-  assert.match(alertes()[0].titre, /pas été vue depuis 2 jours/, 'sans réglage : 2 jours');
+  assert.strictEqual(alertes().length, 0, 'plus de 48 h : plus d\'alerte (2 jours avant le 21/11)');
+  s.avancer(3);
+  await enLigne();
+  await s.tache('alerteMatin');
+  assert.strictEqual(alertes().length, 1, 'plus de 5 jours : alerte');
+  assert.match(alertes()[0].titre, /pas été vue depuis 5 jours/, 'sans réglage : 5 jours');
   assert.deepStrictEqual(alertes()[0].uids, [julie.uid], 'aux responsables seulement, pas à Marc');
   s.avancer(1);
   await enLigne();
   await s.tache('alerteMatin');
   assert.strictEqual(alertes().length, 1, 'le lendemain : pas de rappel, même épisode');
 
-  // Revue, puis de nouveau absente trois jours : nouvel épisode.
+  // Revue, puis de nouveau absente six jours : nouvel épisode.
   await tablette.update({ lastActive: new Date(Date.now()) });
   await s.tache('alerteMatin');
   assert.strictEqual(alertes().length, 1);
-  s.avancer(3);
+  s.avancer(6);
   await enLigne();
   await s.tache('alerteMatin');
   assert.strictEqual(alertes().length, 2, 'nouvel épisode : nouvelle alerte');
 
   // Tablette hors ligne : « ne répond plus » s'en charge, pas d'alerte « pas vue » en plus.
   await tablette.update({ lastActive: new Date(Date.now()) });
-  s.avancer(3);
+  s.avancer(6);
   await s.tache('alerteMatin');
   assert.strictEqual(alertes().length, 2, 'hors ligne : rien');
 });
@@ -539,18 +543,73 @@ test('tâches regroupées (tachesHoraires) : l\'alerte « pas vue » part à 10 
   const paul = await s.compte('Paul', 'paul@exemple.fr');
   const { fid, t } = await familleAbonnee(paul);
   const tablette = s.db.doc(`families/${fid}/members/${t.tabletUid}`);
-  await tablette.update({ lastSeen: new Date(Date.now() - 72 * 3600e3), lastOnline: new Date(Date.now()) });
+  // Installée depuis plus de 5 jours (le compte d'appels de la tablette n'a que son arrivée comme signe de vie).
+  s.avancer(4);
+  await tablette.update({ lastSeen: new Date(Date.now() - 144 * 3600e3), lastActive: new Date(Date.now() - 144 * 3600e3), lastOnline: new Date(Date.now()) });
   s.notifications.length = 0;
   // Mercredi 4 novembre 2026 à 3 h (Paris) : les tâches horaires seulement.
   const nuit = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T02:00:00.000Z' });
-  assert.deepStrictEqual(nuit, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', courrielsAReessayer: 'ok' });
+  // alerteNonVus (21/11) est lancée chaque heure mais ne fait rien hors de 9 h-20 h.
+  assert.deepStrictEqual(nuit, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', alerteNonVus: 'ok', courrielsAReessayer: 'ok' });
   await s.calme();
   assert.strictEqual(alertes().length, 0, '3 h : pas d\'alerte « pas vue »');
   // Le même jour à 10 h : en plus, rappels de jumelage et alerte du matin.
   const matin = await s.fonctions.tachesHoraires.run({ scheduleTime: '2026-11-04T09:00:00.000Z' });
-  assert.deepStrictEqual(matin, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', rappelsJumelage: 'ok', alerteMatin: 'ok', courrielsAReessayer: 'ok' });
+  assert.deepStrictEqual(matin, { relancesPaniers: 'ok', finDeGrace: 'ok', gestionCourrier: 'ok', alerteForfait: 'ok', alerteNonVus: 'ok', rappelsJumelage: 'ok', alerteMatin: 'ok', courrielsAReessayer: 'ok' });
   await s.calme();
   assert.strictEqual(alertes().length, 1, '10 h : alerte « pas vue »');
+});
+
+test('« n\'a pas vu vos 3 derniers envois » (21/11) : 3 envois de suite sans « vu », une alerte aux responsables, rien la nuit, un signe de vie remet à zéro', async () => {
+  const paul = await s.compte('Paul', 'paul@exemple.fr');
+  const julie = await s.compte('Julie', 'julie@exemple.fr');
+  const { fid, t } = await familleAbonnee(paul, julie);
+  const { heureTabletteEnMillis } = require('../alertes');
+  const tablette = s.db.doc(`families/${fid}/members/${t.tabletUid}`);
+  // Heure de Paris, n jours après demain.
+  const demain = Date.now() + s.JOUR;
+  const heure = (n, hhmm) => heureTabletteEnMillis(`${new Date(demain + n * s.JOUR).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' })} ${hhmm}`);
+  const allerA = (n, hhmm) => s.avancer((heure(n, hhmm) - Date.now()) / s.JOUR);
+  const envoi = (quand) => s.db.collection(`families/${fid}/posts`).add({
+    type: 'message', text: 'Coucou', authorUid: julie.uid, authorName: 'Julie',
+    createdAt: s.Timestamp.fromMillis(quand), seenAt: null, hearts: 0,
+  });
+  const enLigne = () => tablette.update({ lastOnline: new Date(Date.now()) });
+  allerA(0, '08:00');
+  await tablette.update({ lastSeen: new Date(Date.now()), lastActive: new Date(Date.now() - 3600e3) });
+  await envoi(heure(0, '10:00'));
+  await envoi(heure(0, '12:00'));
+  allerA(0, '22:00');
+  await envoi(heure(0, '23:30')); // pendant la veille : ne compte pas
+  await enLigne();
+  await s.calme();
+  s.notifications.length = 0;
+  await s.tache('alerteNonVus');
+  assert.strictEqual(alertes().length, 0, '22 h : jamais d\'alerte la nuit');
+  allerA(1, '15:30');
+  await enLigne();
+  await s.tache('alerteNonVus');
+  assert.strictEqual(alertes().length, 0, '2 envois de jour seulement : rien');
+  await envoi(heure(1, '15:00'));
+  await s.calme();
+  await s.tache('alerteNonVus');
+  assert.strictEqual(alertes().length, 1, '3 envois de suite pas vus : alerte');
+  assert.match(alertes()[0].titre, /n'a pas vu vos 3 derniers envois$/);
+  assert.deepStrictEqual(alertes()[0].uids, [julie.uid], 'aux responsables seulement');
+  assert.strictEqual((await famille(fid)).alerteNonVus.nombre, 3);
+  await s.tache('alerteNonVus');
+  assert.strictEqual(alertes().length, 1, 'même épisode : pas de rappel');
+  // Elle touche la tablette, puis 2 nouveaux envois pas vus : remis à zéro, rien.
+  await tablette.update({ lastActive: new Date(Date.now()) });
+  await envoi(Date.now() + 60e3);
+  allerA(1, '18:00');
+  await envoi(Date.now() - 30 * 60e3);
+  await enLigne();
+  await s.calme();
+  await s.tache('alerteNonVus');
+  assert.strictEqual(alertes().length, 1, 'signe de vie : il en faut 3 nouveaux');
+  const { alertes: journal } = await s.appeler('gestionDonnees', {}, a.TANGUY);
+  assert.ok(journal.some((x) => x.genre === 'non-vus'), 'comptée pour l\'admin');
 });
 
 test('tablette remise en main propre : la famille n\'a que Mondial Relay (adresse demandée) ; la main propre se note dans l\'admin', async () => {
