@@ -207,4 +207,7 @@ LOTS['preuve-lot-h'] = [
   ].map((x) => ({ ...x, id: x.id + (x.dimensions ? '-petit' : '') }));
 }
 
+// Tour final (21/11 soir) : tout l'étape 1 sur la version finale, sans « nom » ni « rejoindre » (faux serveur).
+LOTS['tour-final'] = LOTS['tour-1'].filter((x) => x.tache !== 'nom' && x.tache !== 'rejoindre');
+
 module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };
