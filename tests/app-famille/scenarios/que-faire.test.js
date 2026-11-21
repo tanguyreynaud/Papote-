@@ -33,3 +33,11 @@ test('Tablette muette : « Que faire ? » donne 3 étapes, puis mène à « Dép
   await g.repondre(julie, 'Plus d\'aide : dépanner la tablette');
   await julie.page.locator('#remote-card').waitFor({ state: 'visible' });
 });
+
+test('Assistant pas chargé : « Poser une question à l\'assistant » le dit au lieu de ne rien faire', async () => {
+  const julie = await banc.telephone('Julie');
+  await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await julie.page.evaluate(() => { delete window.papoteChat; });
+  await julie.page.evaluate(() => document.getElementById('support-assistant').click());
+  assert.match(await g.texteFenetre(julie), /L'assistant ne répond pas pour l'instant/);
+});
