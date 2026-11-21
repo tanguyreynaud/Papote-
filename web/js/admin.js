@@ -879,6 +879,7 @@ async function load() {
         hasTablet: list.length > 0,
         online: latest('lastOnline'),
         active: latest('lastActive'),
+        vue: latest('lastSeen'),
         installee: latest('joinedAt'),
         version: list.map((t) => t.appVersion).filter(Boolean).sort().pop() || null,
       };
@@ -1126,11 +1127,13 @@ function state(f) {
 }
 
 let vueFamilles = null; // onglet de la liste des familles (off, on, idle, none, toutes)
-// Pas touchée depuis 24 h : compté depuis le dernier toucher, ou depuis l'installation (ou la création
-// de la famille) si personne ne l'a encore touchée ; une tablette installée aujourd'hui n'y est donc pas.
+// Sans signe de vie depuis 24 h : compté depuis le dernier toucher ou visage vu (21/11 : ne pas toucher n'est pas
+// grave), ou depuis l'installation (ou la création de la famille) si rien encore ; une tablette installée aujourd'hui
+// n'y est donc pas.
 const pasTouchee = (f) => {
   if (!f.hasTablet) return false;
-  const depuis = f.active || f.installee || toDate(f.createdAt);
+  const signe = [f.active, f.vue].filter(Boolean).sort((a, b) => b - a)[0];
+  const depuis = signe || f.installee || toDate(f.createdAt);
   return !!depuis && Date.now() - depuis.getTime() > IDLE_MS;
 };
 const dansVue = (f) => vueFamilles === 'toutes' || (vueFamilles === 'idle' ? pasTouchee(f) : state(f).cls === vueFamilles);
@@ -1300,7 +1303,7 @@ function render() {
   $('kpi-familles').replaceChildren(
     onglet('off', compte('off'), 'hors ligne', 'warn'),
     onglet('on', compte('on'), 'en ligne', 'ok'),
-    ...(vueFamilles === 'idle' || families.some(pasTouchee) ? [onglet('idle', families.filter(pasTouchee).length, 'pas touchées 24 h')] : []),
+    ...(vueFamilles === 'idle' || families.some(pasTouchee) ? [onglet('idle', families.filter(pasTouchee).length, 'sans signe de vie 24 h')] : []),
     onglet('none', compte('none'), 'sans tablette'),
     onglet('toutes', families.length, 'toutes les familles'),
   );

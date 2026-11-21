@@ -1,5 +1,5 @@
 // Délai de l'alerte « pas vue » (functions/alertes.js, chaque jour à 10 h), réglé dans Réglages > La tablette, carte
-// « Alerte si la tablette n'est pas utilisée » : de 1 à 5 jours, 2 par défaut (Tanguy, 18/11). Un responsable le
+// « Alerte si la tablette n'est pas utilisée » : de 1 à 5 jours, 5 par défaut (Tanguy, 21/11 ; 2 avant). Un responsable le
 // change, il reste après actualisation, un double appui n'écrit qu'une fois ; un proche ne le voit pas et ne peut pas
 // l'écrire (firestore.rules), et une valeur hors bornes écrite par erreur s'affiche ramenée.
 
@@ -20,12 +20,12 @@ async function modifier(t) {
 }
 const coche = (t) => t.page.locator('input[name="alerte-pas-vue"]:checked').getAttribute('value');
 
-test('Alerte « pas vue » : 2 jours par défaut, 3 jours choisis (double appui = une écriture), gardés après actualisation', async () => {
+test('Alerte « pas vue » : 5 jours par défaut, 3 jours choisis (double appui = une écriture), gardés après actualisation', async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await g.ouvrirTuile(julie, 'settings');
   await julie.page.locator(`#${CARTE} h2`, { hasText: 'Tablette pas utilisée' }).waitFor();
-  assert.strictEqual(await valeur(julie).innerText(), 'Alerte aux responsables après 2 jours');
+  assert.strictEqual(await valeur(julie).innerText(), 'Alerte aux responsables après 5 jours');
   assert.strictEqual((await g.lire(`families/${fid}`)).alertePasVueJours, undefined, 'rien d\'écrit tant qu\'on ne choisit pas');
 
   await modifier(julie);
@@ -33,7 +33,7 @@ test('Alerte « pas vue » : 2 jours par défaut, 3 jours choisis (double appui 
   assert.match(await form.innerText(), /Me prévenir si la tablette n'est pas utilisée depuis :/);
   assert.deepStrictEqual(await julie.page.locator('#alerte-pas-vue-choix label').allInnerTexts(),
     ['1 jour', '2 jours', '3 jours', '4 jours', '5 jours']);
-  assert.strictEqual(await coche(julie), '2', '2 jours coché par défaut');
+  assert.strictEqual(await coche(julie), '5', '5 jours coché par défaut');
   // Les cinq choix ont la même taille.
   const tailles = await julie.page.locator('#alerte-pas-vue-choix label').evaluateAll((ls) => ls.map((l) => Math.round(l.getBoundingClientRect().width)));
   assert.ok(Math.max(...tailles) - Math.min(...tailles) <= 1, `même largeur : ${tailles}`);
@@ -77,8 +77,10 @@ test('Alerte « pas vue » : 2 jours par défaut, 3 jours choisis (double appui 
   // Valeur hors bornes écrite par erreur (outil, ancienne version) : affichée ramenée, comme le serveur la lit.
   await s.db.doc(`families/${fid}`).update({ alertePasVueJours: 9 });
   await valeur(julie).filter({ hasText: 'après 5 jours' }).waitFor();
-  await s.db.doc(`families/${fid}`).update({ alertePasVueJours: 'trois' });
+  await s.db.doc(`families/${fid}`).update({ alertePasVueJours: 2 });
   await valeur(julie).filter({ hasText: 'après 2 jours' }).waitFor();
+  await s.db.doc(`families/${fid}`).update({ alertePasVueJours: 'trois' });
+  await valeur(julie).filter({ hasText: 'après 5 jours' }).waitFor();
 });
 
 test('Alerte « pas vue » : un proche (pas responsable) ne voit pas le réglage et ne peut pas l\'écrire', async () => {
@@ -102,4 +104,24 @@ test('Alerte « pas vue » : un proche (pas responsable) ne voit pas le réglage
   banc.tolerer(paul, /permission|insufficient|PERMISSION_DENIED/i);
   assert.strictEqual(code, 'permission-denied');
   assert.strictEqual((await g.lire(`families/${fid}`)).alertePasVueJours, undefined, 'rien d\'écrit');
+});
+
+test('Accueil : plus de « pas touché » ; « n\'a pas vu vos 3 derniers envois » tant qu\'aucun signe de vie ne suit', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const tab = (await g.liste(`families/${fid}/members`)).find((m) => m.role === 'tablette');
+  const ref = s.db.doc(`families/${fid}/members/${tab.id}`);
+  const ilYa = (h) => s.Timestamp.fromMillis(Date.now() - h * 3600_000);
+  // Ni touchée ni vue depuis 20 h, en ligne : avant, bandeau orange « pas touché » ; maintenant, tout va bien.
+  await ref.update({ lastOnline: s.Timestamp.now(), lastActive: ilYa(30), lastSeen: ilYa(20) });
+  await julie.page.locator('#activity', { hasText: 'était devant la tablette il y a 20 h' }).waitFor();
+  assert.ok(!(await julie.page.locator('#activity').evaluate((e) => e.classList.contains('warn'))), 'pas d\'alerte');
+  assert.doesNotMatch(await julie.page.locator('#activity').innerText(), /touché/);
+  // Le serveur a compté 3 envois pas vus depuis le dernier signe de vie.
+  await s.db.doc(`families/${fid}`).update({ alerteNonVus: { le: s.Timestamp.now(), depuis: ilYa(20), nombre: 3 } });
+  await julie.page.locator('#activity.warn', { hasText: "n'a pas vu vos 3 derniers envois. Un petit appel ?" }).waitFor();
+  // Elle passe devant la tablette : l'alerte disparaît.
+  await ref.update({ lastSeen: s.Timestamp.now() });
+  await julie.page.locator('#activity', { hasText: "était devant la tablette à l'instant" }).waitFor();
+  assert.ok(!(await julie.page.locator('#activity').evaluate((e) => e.classList.contains('warn'))));
 });

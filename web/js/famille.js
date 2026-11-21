@@ -5026,9 +5026,10 @@ SETTINGS['sleep-card'] = {
 };
 
 // Alerte « pas vue » (functions/alertes.js, chaque jour à 10 h) : families/{fid}.alertePasVueJours, entier de 1 à 5,
-// 2 par défaut (Tanguy, 18/11). Réglée par un responsable (firestore.rules) ; toute autre valeur est lue comme 2 jours,
-// comme le fait le serveur, ou ramenée dans les bornes.
-const JOURS_PAS_VUE_DEFAUT = 2;
+// 5 par défaut (Tanguy, 21/11 ; 2 avant) : c'est le filet quand la famille n'envoie rien ; quand elle envoie,
+// l'alerte « n'a pas vu vos 3 derniers envois » prévient bien plus tôt. Réglée par un responsable (firestore.rules) ;
+// toute autre valeur est lue comme 5 jours, comme le fait le serveur, ou ramenée dans les bornes.
+const JOURS_PAS_VUE_DEFAUT = 5;
 function joursPasVue() {
   const v = session.family?.alertePasVueJours;
   if (typeof v !== 'number' || !Number.isFinite(v)) return JOURS_PAS_VUE_DEFAUT;
@@ -6013,6 +6014,14 @@ $('contact-fait').addEventListener('click', () => {
   toast('C\'est noté.');
 });
 
+// Alerte « n'a pas vu vos 3 derniers envois » posée par le serveur (families/{fid}.alerteNonVus = { le, depuis, nombre })
+// et toujours d'actualité : aucun signe de vie (toucher ou visage) depuis.
+function nonVusEnCours(dernierSigne) {
+  const a = session.family?.alerteNonVus;
+  if (!a || !a.depuis) return false;
+  return !(dernierSigne > toDate(a.depuis).getTime() + 1000);
+}
+
 function renderActivity() {
   renderTabletChip();
   renderTuileTelephone();
@@ -6021,12 +6030,12 @@ function renderActivity() {
   const el = $('activity');
   const latest = (field) => Math.max(0, ...tabletMembers.map((m) => (m[field] ? toDate(m[field]).getTime() : 0)));
   const online = latest('lastOnline');
-  const active = latest('lastActive');
+  // Dernier signe de vie : toucher ou visage vu (Tanguy, 21/11 : ne pas toucher n'est pas grave si rien n'a été reçu).
+  const active = Math.max(latest('lastActive'), latest('lastSeen'));
   const copies = ['support-status', 'notifs-status'];
   if (!online) { el.hidden = true; copies.forEach((id) => { $(id).hidden = true; }); return; }
   const name = session.family.name;
   const now = Date.now();
-  const hour = new Date().getHours();
   el.hidden = false;
   el.classList.remove('warn', 'calme');
   // Batterie : envoyée par la tablette ({ level, charging, unpluggedAt }).
@@ -6083,12 +6092,13 @@ function renderActivity() {
       a.textContent = `Appeler ${name} par téléphone`;
       el.append(' ', a);
     }
-  } else if (active && now - active > 12 * 3600_000 && hour >= 10 && hour < 21) {
+  } else if (nonVusEnCours(active)) {
+    // 3 envois ou rappels de suite pas vus (functions/alertes.js alerteNonVus, qui a aussi prévenu les responsables).
     el.classList.add('warn');
-    el.textContent = `${name} n'a pas touché la tablette depuis ${ago(active).replace('il y a ', '')}.`;
+    el.textContent = `${name} n'a pas vu vos ${session.family.alerteNonVus.nombre || 3} derniers envois. Un petit appel ?`;
   } else {
     el.textContent = active
-      ? `Tablette en ligne. ${name} l'a utilisée ${ago(active)}.`
+      ? `Tablette en ligne. ${name} était devant la tablette ${ago(active)}.`
       : 'Tablette en ligne.';
   }
   // Même état de la tablette en haut de Notifications et dans Support.
