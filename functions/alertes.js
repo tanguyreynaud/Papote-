@@ -32,9 +32,12 @@ const DEBRANCHEE_MS = 10 * 60_000;
 // manqués plus une marge avant d'alerter.
 const SILENCE_MS = 70 * 60_000;
 // Pendant les heures de veille de la famille (families/{fid}.veille, 23 h-5 h par défaut, veille.js), la tablette ne
-// donne signe de vie qu'une fois par heure pour ménager la carte SIM (android/Sync.java, 28/10) : on
-// tolère 2 h de silence avant d'alerter.
-const SILENCE_NUIT_MS = 2 * 3600_000;
+// donne signe de vie que toutes les 2 h pour ménager la carte SIM (android/Sync.java ; 1 h avant le 21/11, Tanguy) :
+// un tour manqué plus une marge, on tolère 3 h de silence avant d'alerter.
+const SILENCE_NUIT_MS = 3 * 3600_000;
+// Au réveil, le premier tour du matin arrive juste après la fin de la veille : la tolérance de nuit court
+// encore 30 min, sinon un signe de vie de 5 h (avant un réveil à 6 h 30) déclencherait l'alerte à 6 h 30.
+const GRACE_MATIN_MS = 30 * 60_000;
 
 function enMillis(v) {
   if (!v) return null;
@@ -67,11 +70,17 @@ function enVeille(veille, maintenant) {
   return false;
 }
 
+// Silence toléré avant « ne répond plus » : 3 h pendant la veille et 30 min après, 1 h 10 sinon (aussi pour fiche-chat.js
+// et l'appli : web/js/silence.js).
+function silenceTolere(veille, maintenant) {
+  return enVeille(veille, maintenant) || enVeille(veille, maintenant - GRACE_MATIN_MS) ? SILENCE_NUIT_MS : SILENCE_MS;
+}
+
 // Fiche de la tablette -> 'silence' | 'debranchee' | null. Une tablette qui ne répond plus
 // n'envoie plus l'état de sa batterie : le silence passe avant. veille : réglage de la famille.
 function etatAlerte(tablette, maintenant, veille) {
   const vue = enMillis(tablette.lastOnline);
-  if (vue && maintenant - vue > (enVeille(veille, maintenant) ? SILENCE_NUIT_MS : SILENCE_MS)) return 'silence';
+  if (vue && maintenant - vue > silenceTolere(veille, maintenant)) return 'silence';
   const batterie = tablette.battery || {};
   const debranchee = enMillis(batterie.unpluggedAt);
   if (batterie.charging === false && debranchee && maintenant - debranchee > DEBRANCHEE_MS) return 'debranchee';
@@ -423,6 +432,7 @@ exports.alerteNonVus = async () => {
 };
 
 exports.etatAlerte = etatAlerte;
+exports.silenceTolere = silenceTolere;
 exports.famillesEnPause = famillesEnPause;
 exports.message = message;
 exports.enVeille = enVeille;

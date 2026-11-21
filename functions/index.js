@@ -3136,6 +3136,8 @@ exports.compterProches = onDocumentWritten(
 Object.assign(exports, require('./appels'));
 // Réveil des tablettes par notification push (plus d'écoute ouverte en permanence) : voir reveil.js.
 Object.assign(exports, (({ reveilAppel, reveilOrdre, reveilFamille, reveilMembres, reveilVersion, reveilPing }) => ({ reveilAppel, reveilOrdre, reveilFamille, reveilMembres, reveilVersion, reveilPing }))(require('./reveil')));
+// Journal de la tablette envoyé par morceaux (lignes nouvelles seulement) : voir journal-tablette.js.
+exports.journalTablette = require('./journal-tablette').journalTablette;
 
 // Protections contre une facture qui s'emballe : coupe-circuit à 150 € et plafonds de stockage.
 exports.coupeCircuit = require('./budget').coupeCircuit;

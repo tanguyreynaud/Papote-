@@ -15,7 +15,7 @@ const declencheurs = Object.entries(fonctions).filter(([, f]) => f && f.__endpoi
 
 test('liste des déclencheurs Firestore : tous connus (un nouveau doit être ajouté ici, et il passe par base.declencheurs)', () => {
   assert.deepStrictEqual(declencheurs.map(([n]) => n).sort(), [
-    'appelsManques', 'appelsSonnerie', 'commandeModifiee', 'compterProches', 'gestionJumelage', 'jetonUnique', 'jumelageAutomatique',
+    'appelsManques', 'appelsSonnerie', 'commandeModifiee', 'compterProches', 'gestionJumelage', 'jetonUnique', 'journalTablette', 'jumelageAutomatique',
     'membreAccepte', 'nouveauMembre', 'nouvelleFamille', 'quotaEnvois', 'reveilAppel', 'reveilFamille', 'reveilMembres', 'reveilOrdre',
     'reveilPing', 'reveilVersion', 'simInstallation', 'tabletteVoleeSuite', 'telephoneAppels', 'voixEnvoi', 'voixRappel',
   ]);

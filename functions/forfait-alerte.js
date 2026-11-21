@@ -20,8 +20,9 @@ const journal = require('./journal-alertes');
 const SEUILS = [80, 95];
 const SEUIL_FAMILLE = 95;
 const CYCLE_JOURS = 30; // Forfait.CYCLE_MS de la tablette : un pass « debut » repart tous les 30 jours
-// Silencieuse depuis plus de 2 h (la tablette se signale toutes les 30 min sur la SIM, une fois par heure la nuit).
-const SILENCE_MS = 2 * 3600_000;
+// Silencieuse depuis plus de 3 h (la tablette se signale toutes les 30 min sur la SIM, toutes les 2 h la nuit depuis le
+// 21/11 : un tour de nuit manqué plus une marge, comme alertes.js).
+const SILENCE_MS = 3 * 3600_000;
 // E-mail à la famille seulement en journée (heure de Paris) ; la nuit, il attend le matin.
 const JOURNEE = { de: 8, a: 21 };
 

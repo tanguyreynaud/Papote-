@@ -35,8 +35,21 @@ test('la nuit, 50 minutes de silence ne valent pas d’alerte (la tablette ne se
   assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(50) }, nuit, { active: true, de: 22, a: 8 }), null);
 });
 
-test('la nuit, plus de 2 heures de silence : alerte', () => {
-  assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(125) }, nuit), 'silence');
+test('la nuit, 2 h 30 de silence ne valent pas d’alerte (la tablette ne se signale que toutes les 2 h)', () => {
+  assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(150) }, nuit), null);
+});
+
+test('la nuit, plus de 3 heures de silence : alerte', () => {
+  assert.strictEqual(etatAlerte({ lastOnline: laNuitIl(185) }, nuit), 'silence');
+});
+
+test('au réveil, la tolérance de nuit court encore 30 min (premier tour du matin)', () => {
+  // Veille par défaut 23 h-5 h. 5 h 20 à Paris le 19/10/2026 = 3 h 20 UTC, dernier signe de vie à 3 h 30 Paris.
+  const matin = Date.parse('2026-10-19T03:20:00Z');
+  assert.strictEqual(etatAlerte({ lastOnline: new Date(matin - 110 * MIN) }, matin), null);
+  // 5 h 40 : la grâce est finie, règle de jour (1 h 10).
+  const plusTard = Date.parse('2026-10-19T03:40:00Z');
+  assert.strictEqual(etatAlerte({ lastOnline: new Date(plusTard - 130 * MIN) }, plusTard), 'silence');
 });
 
 test('veille désactivée par la famille : règle de jour (1 h 10)', () => {
