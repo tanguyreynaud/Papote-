@@ -73,7 +73,9 @@ async function aFaire(t) {
 /** Retour à l'accueil, données relues. */
 async function accueil(t) {
   await t.page.goto(`${banc.origine}/admin.html#accueil`);
-  await t.page.reload();
+  // On n'attend pas « load » : sur WebKit, une écoute Firestore encore ouverte l'a retardé au-delà de 30 s (lot h,
+  // 21/11). Le tableau de bord visible, attendu juste après, dit que la page est prête.
+  await t.page.reload({ waitUntil: 'domcontentloaded' });
   await t.page.locator('#dashboard').waitFor({ state: 'visible' });
   return aFaire(t);
 }
