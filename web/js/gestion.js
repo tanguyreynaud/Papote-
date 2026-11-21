@@ -2121,7 +2121,7 @@ function remplirPageSim(id) {
           h('dl', { class: 'fiche kv' },
             ...modif('Opérateur', l.operateur, 'operateur', { valeur: l.operateur }),
             ...modif('Numéro de ligne', l.numero, 'numero', { valeur: l.numero, mode: 'tel' }),
-            ...modif('ICCID', l.iccid, 'iccid', { valeur: l.iccid, mode: 'numeric' }),
+            ...modif('ICCID', l.iccid ? h('span', { class: 'iccid' }, l.iccid) : null, 'iccid', { valeur: l.iccid, mode: 'numeric' }),
             ...modif('Forfait', l.go != null ? `${l.go} Go par mois` : null, 'go', { valeur: l.go != null ? String(l.go) : '', mode: 'decimal', suffixe: 'Go',
               convertir: (v) => { if (!v.trim()) return null; const n = Number(v.replace(',', '.')); if (!Number.isFinite(n)) throw new Error('Un nombre de Go.'); return n; } }),
             ...modif('Prix par mois', l.prix != null ? euros(l.prix) : null, 'prix', { valeur: enEuros(l.prix), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
