@@ -89,5 +89,13 @@ test('admin : un colis parti mais pas encore installé reste « en route » (pas
   // 21 jours plus tard, toujours pas installée : « À faire » doit le dire (aujourd'hui : seulement un e-mail).
   s.avancer(21);
   await p.clock.setSystemTime(new Date(Date.now()));
-  assert.match(await accueil(t), /pas (encore )?(jumelée|installée)/);
+  // La ligne dépend des commandes relues après l'avance de l'horloge : « À faire » peut se dessiner une première fois
+  // sans elle (vu sur le lot du 20/11, une seule ligne à l'écran). On relit jusqu'à 20 s avant de conclure.
+  const attendu = /pas (encore )?(jumelée|installée)/;
+  let texte = await accueil(t);
+  for (let i = 0; i < 40 && !attendu.test(texte); i += 1) {
+    await t.page.waitForTimeout(500);
+    texte = await aFaire(t);
+  }
+  assert.match(texte, attendu);
 });
