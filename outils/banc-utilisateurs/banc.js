@@ -223,7 +223,10 @@ async function ouvrirDepart(browser, base, parcours, video, exemples) {
   const scenes = tab ? tablette.SCENES : famille.SCENES;
   const scene = scenes.find((s) => s.titre === def.depart);
   if (!scene) throw new Error(`Écran de départ introuvable dans la galerie : « ${def.depart} »`);
-  const taille = { ...(tab ? tablette.TAILLES[0] : famille.TAILLES[0]) }; // copie : « tourner_telephone » la modifie (bug du 21/11 : les parcours suivants partaient couchés)
+  const taille = { ...(tab ? tablette.TAILLES[0] : famille.TAILLES[0]) };
+  // Cas difficiles (étape 2) : petit téléphone, téléphone couché dès le départ.
+  if (parcours.dimensions) Object.assign(taille, parcours.dimensions);
+  if (parcours.couche) Object.assign(taille, { width: taille.height, height: taille.width }); // copie : « tourner_telephone » la modifie (bug du 21/11 : les parcours suivants partaient couchés)
   const sc = { ...scene, heure: def.heure || scene.heure };
   const { ctx, page, erreurs } = await (tab ? tablette : famille).ouvrir(browser, base, sc, taille, video);
   const notes = [];
@@ -241,6 +244,7 @@ async function ouvrirDepart(browser, base, parcours, video, exemples) {
     await page.evaluate(({ people, faces }) => window.Papote.onFamily({ people, faces, birthdays: [] }), { people: proches, faces });
     await page.waitForTimeout(800);
   }
+  if (parcours.sombre) await page.emulateMedia({ colorScheme: 'dark' });
   if (parcours.reseau === 'lent') await ctx.route('**/*', async (r) => { await new Promise((ok) => setTimeout(ok, 1500)); r.fallback(); });
   return { ctx, page, erreurs, notes, taille };
 }

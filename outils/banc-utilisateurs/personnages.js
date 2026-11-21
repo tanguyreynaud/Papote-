@@ -143,4 +143,22 @@ const LOTS = {
 // ni « rejoindre », qui butent sur le faux serveur (nom non enregistré, code non vérifié).
 LOTS['tour-1-debout'] = LOTS['tour-1'].filter((x) => ["f-abonnement-ines", "f-abonnement-julie", "f-abonnement-lea", "f-abonnement-paul", "f-abonnement-thomas", "f-appeler-marc", "f-etat-lea", "f-etat-marc", "f-etat-nadia", "f-etat-paul", "f-etat-sylvie", "f-inviter-ines", "f-inviter-julie", "f-inviter-lea", "f-inviter-sylvie", "f-inviter-thomas", "f-luminosite-lea", "f-luminosite-marc", "f-luminosite-nadia", "f-luminosite-sylvie", "f-luminosite-thomas", "f-medicament-ines", "f-medicament-julie", "f-medicament-lea", "f-medicament-sylvie", "f-medicament-thomas", "f-nuit-ines", "f-nuit-julie", "f-nuit-marc", "f-nuit-paul", "f-nuit-thomas", "f-numero-lea", "f-numero-marc", "f-numero-nadia", "f-numero-paul", "f-numero-sylvie", "f-petitsRappels-ines", "f-petitsRappels-julie", "f-petitsRappels-marc", "f-petitsRappels-nadia", "f-petitsRappels-paul", "f-rappel-ines", "f-rappel-julie", "f-rappel-marc", "f-rappel-nadia", "f-rappel-paul", "f-reglages-ines", "f-reglages-marc", "f-reglages-nadia", "f-reglages-paul", "f-reglages-sylvie"].includes(x.id));
 
+// Étape 2 du grand tour : cas difficiles, sur les tâches les plus courantes. Petit téléphone Android (360 × 640),
+// mode sombre, réseau lent, téléphone couché dès le départ ; tablette la nuit et par des Mamies peu à l'aise.
+{
+  const PETIT = { dimensions: { width: 360, height: 640 } };
+  const t2 = [];
+  const courantes = ['photo', 'video', 'message', 'appeler', 'rappel', 'medicament', 'inviter', 'etat', 'nuit', 'luminosite', 'numero', 'abonnement'];
+  const proches = Object.keys(PROCHES);
+  courantes.forEach((tache, i) => {
+    t2.push(p('famille', proches[i % 8], tache, PETIT));
+    t2.push(p('famille', proches[(i + 3) % 8], tache, { sombre: true }));
+    t2.push(p('famille', proches[(i + 5) % 8], tache, { reseau: 'lent' }));
+  });
+  ['photo', 'video', 'message', 'appeler', 'rappel', 'etat'].forEach((tache, i) => t2.push(p('famille', proches[(i + 2) % 8], tache, { couche: true })));
+  // Identifiants uniques : la variante dans l'id.
+  t2.forEach((x) => { x.id += x.dimensions ? '-petit' : x.sombre ? '-sombre' : x.reseau ? '-lent' : x.couche ? '-couche' : ''; });
+  LOTS['tour-2'] = t2;
+}
+
 module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };
