@@ -190,4 +190,21 @@ LOTS['preuve-lot-h'] = [
   p('famille', 'julie', 'abonnement'), p('famille', 'ines', 'abonnement'),
 ].map((x) => ({ ...x, id: x.id + (x.dimensions ? '-petit' : '') }));
 
+// Étape 4b : vérification finale du lot i (A1 abonnement, P1 pause, P3 volumes, P4 « Que faire ? » à distance,
+// T1 appel manqué, T2 « C'est fait ») ; médicament en 360 × 640 rejoué pour voir si l'Agenda sous le pli revient.
+{
+  const PETIT = { dimensions: { width: 360, height: 640 } };
+  LOTS['preuve-lot-i'] = [
+    p('famille', 'julie', 'abonnement'), p('famille', 'ines', 'abonnement'), p('famille', 'thomas', 'abonnement'), p('famille', 'nadia', 'abonnement'),
+    p('famille', 'julie', 'annulerCommande'), p('famille', 'thomas', 'annulerCommande'), p('famille', 'lea', 'annulerCommande'),
+    p('famille', 'ines', 'enPause'), p('famille', 'julie', 'enPause'), p('famille', 'thomas', 'enPause'),
+    p('famille', 'sylvie', 'reglerNeuve'), p('famille', 'ines', 'reglerNeuve'),
+    p('famille', 'ines', 'etat'), p('famille', 'lea', 'etat'),
+    p('famille', 'nadia', 'quitter'), p('famille', 'ines', 'quitter'),
+    p('famille', 'paul', 'medicament', PETIT), p('famille', 'marc', 'medicament', PETIT), p('famille', 'lea', 'rappel', PETIT),
+    p('tablette', 'rene', 'manque'), p('tablette', 'lucienne', 'manque'), p('tablette', 'odette', 'manque'),
+    p('tablette', 'simone', 'rappel'), p('tablette', 'lucienne', 'rappel'),
+  ].map((x) => ({ ...x, id: x.id + (x.dimensions ? '-petit' : '') }));
+}
+
 module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };
