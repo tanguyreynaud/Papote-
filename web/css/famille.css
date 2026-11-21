@@ -2061,3 +2061,14 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
   .intro .intro-son input[type=range] { height: 32px; }
   .intro-son .intro-son-aide { display: none; }
 }
+
+/* « Que faire ? » téléphone couché (tests IA du 21/11 : une seule étape visible) : étapes resserrées, sans dessin. */
+@media (orientation: landscape) and (max-height: 480px) {
+  .dialog.dialog-que-faire { max-width: 560px; }
+  .dialog-que-faire > p { margin-bottom: 8px; font-size: 14px; }
+  .dialog-que-faire .dialog-etapes { margin-bottom: 10px; }
+  .dialog-que-faire .dialog-etapes li { grid-template-columns: 1fr; padding-bottom: 6px; }
+  .dialog-que-faire .dialog-etapes li::before, .dialog-que-faire .dialog-etapes .etape-icone { display: none; }
+  .dialog-que-faire .dialog-etapes .etape-texte, .dialog-que-faire .dialog-etapes .etape-texte strong { font-size: 15px; }
+  .dialog-que-faire .dialog-buttons { flex-direction: row; }
+}
