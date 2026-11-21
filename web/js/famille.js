@@ -395,12 +395,14 @@ document.querySelectorAll('.bell-btn[data-tab]').forEach((b) => b.addEventListen
 // l'on est. Sans assistant (pas de réseau, script pas chargé) : les questions fréquentes, ou l'adresse e-mail.
 function ouvrirAssistant() {
   const connecte = !!session?.family && $('call').hidden && !VUES_PARCOURS.some((v) => !$(v).hidden) && $('loading').hidden;
+  const dejaSurAide = !$('view-support').hidden;
   if (connecte) ouvrirOnglet('support');
   else document.body.classList.add('chat-libre');
   try { if (window.papoteChat) { window.papoteChat.ouvrir(); return; } } catch (e) { /* plus bas */ }
-  // Assistant pas chargé (hors ligne, ou chat-support.js pas encore là) : toujours un retour, connecté ou non
-  // (banc du 21/11 : « Poser une question à l'assistant » ne faisait rien, 4 proches ont abandonné).
-  notice("L'assistant ne répond pas pour l'instant. Écrivez-nous à contact@mapapote.fr, nous vous répondons vite.");
+  // Assistant pas chargé (hors ligne, ou chat-support.js pas encore là) : connecté, la page Aide qui s'ouvre est le
+  // retour visible ; déjà sur l'Aide (« Poser une question à l'assistant »), rien ne bougeait : on le dit
+  // (banc du 21/11 : 4 proches ont abandonné sur ce bouton muet).
+  if (!connecte || dejaSurAide) notice("L'assistant ne répond pas pour l'instant. Écrivez-nous à contact@mapapote.fr, nous vous répondons vite.");
 }
 async function noticeAvecAide(message) {
   if (await noticeAide(message) === 'aide') ouvrirAssistant();

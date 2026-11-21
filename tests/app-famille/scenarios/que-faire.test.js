@@ -38,6 +38,10 @@ test('Assistant pas chargé : « Poser une question à l\'assistant » le dit au
   const julie = await banc.telephone('Julie');
   await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await julie.page.evaluate(() => { delete window.papoteChat; });
-  await julie.page.evaluate(() => document.getElementById('support-assistant').click());
+  await julie.page.click('#nav-reglages');
+  await g.attendreVue(julie, 'view-settings');
+  await julie.page.click('#view-settings [data-aide]');
+  await g.attendreVue(julie, 'view-support');
+  await julie.page.click('#support-assistant');
   assert.match(await g.texteFenetre(julie), /L'assistant ne répond pas pour l'instant/);
 });
