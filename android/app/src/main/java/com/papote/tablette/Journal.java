@@ -94,6 +94,29 @@ final class Journal {
         }
     }
 
+    /**
+     * Lignes de « tail » venues après « dernier » (dernière ligne déjà envoyée), les plus récentes en bas ; "" si rien
+     * de neuf. « dernier » absent ou plus dans les lignes (journal raccourci, première fois) : toutes les lignes.
+     */
+    static String nouvelles(String tail, String dernier) {
+        if (tail == null || tail.isEmpty()) return "";
+        if (dernier == null || dernier.isEmpty()) return tail;
+        String[] lines = tail.split("\n");
+        for (int i = lines.length - 1; i >= 0; i--) {
+            if (lines[i].equals(dernier)) {
+                return i == lines.length - 1 ? "" : String.join("\n", Arrays.copyOfRange(lines, i + 1, lines.length));
+            }
+        }
+        return tail;
+    }
+
+    /** La dernière ligne (la plus récente), "" si aucune. */
+    static String derniere(String tail) {
+        if (tail == null || tail.isEmpty()) return "";
+        int i = tail.lastIndexOf('\n');
+        return i < 0 ? tail : tail.substring(i + 1);
+    }
+
     /** Une erreur qui ferait planter l'appli est notée avant qu'Android ne la relance. */
     private static boolean crashesCaught;
 

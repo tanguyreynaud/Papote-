@@ -63,10 +63,11 @@ final class Sync {
     // Réveil par le serveur vérifié (Push.pret) : chaque changement réveille la tablette, le tour et le
     // signal « en ligne » passent à 30 min (Tanguy, 28/10 ; le serveur alerte à 1 h 10 sans signal).
     private static final long PUSH_POLL_MS = 30 * 60_000;
-    // La nuit (heures de veille de la famille, 21 h-6 h 30 par défaut) : un tour par heure seulement, et ni météo,
-    // ni rappels, ni proches relus (Tanguy, 28/10). Les appels et les envois arrivent toujours par l'écoute en
-    // direct de la page. Le serveur tolère 2 h de silence pendant la veille (functions/alertes.js) au lieu de 45 min.
-    private static final long NIGHT_POLL_MS = 60 * 60_000;
+    // La nuit (heures de veille de la famille, 23 h-5 h par défaut) : un tour toutes les 2 h seulement (Tanguy, 21/11 ;
+    // 1 h avant, 28/10), et ni météo, ni rappels, ni proches relus. Les appels, les ordres et les envois réveillent
+    // toujours la tablette par le push. Le serveur tolère 3 h de silence pendant la veille, et encore 30 min après le
+    // réveil (functions/alertes.js), au lieu de 1 h 10 le jour.
+    private static final long NIGHT_POLL_MS = 2 * 3600_000;
     // La météo n'affiche qu'aujourd'hui et demain : 2 h suffisent, et seulement si elle a changé (Meteo.forecast).
     /**
      * Météo lue 2 fois par jour (demande de Tanguy, 28/10) : au premier tour du matin et 12 h plus tard
@@ -2579,25 +2580,55 @@ final class Sync {
     private String lastJournalSent;
 
     private static final long JOURNAL_MS = 6 * 3600_000;
+    /** Dernière ligne du journal déjà envoyée, gardée après un redémarrage (pas de renvoi des 200 lignes). */
+    private static final String JOURNAL_DERNIER = "journalDernier";
 
-    /** Journal envoyé au plus toutes les 6 h et s'il a changé (ou tout de suite pour l'ordre « état »). */
+    /**
+     * Journal envoyé au plus toutes les 6 h et s'il a changé (ou tout de suite pour un incident ou l'ordre « état »).
+     * Seulement les lignes nouvelles depuis le dernier envoi (Tanguy, 21/11 : avant, les 200 dernières à chaque fois,
+     * ≈ 25 Ko sur la carte SIM) : ajoutées à la liste « ajouts » de la fiche ; le serveur (functions/journal-tablette.js)
+     * les range à la suite de « lines » et ne garde que les 300 dernières. Serveur pas encore à jour (écriture
+     * refusée par les règles) : l'ancien envoi des 200 dernières lignes, comme avant.
+     */
     private void uploadJournal(String fid, boolean now) {
         long t = System.currentTimeMillis();
         if (fid == null || (!now && t - lastJournalUpload < JOURNAL_MS)) return;
         String lines = Journal.tail(context, 200);
         if (!now && lines.equals(lastJournalSent)) return;
-        try {
-            JSONObject write = new JSONObject()
-                    .put("update", new JSONObject()
-                            .put("name", Firebase.docName("families/" + fid + "/logs/" + firebase.uid()))
-                            .put("fields", new JSONObject()
-                                    .put("lines", Firebase.string(lines))
-                                    .put("version", Firebase.string(appVersion()))))
-                    .put("updateTransforms", new JSONArray().put(new JSONObject()
-                            .put("fieldPath", "updatedAt").put("setToServerValue", "REQUEST_TIME")));
-            firebase.commit(new JSONArray().put(write));
+        String ajout = Journal.nouvelles(lines, prefs.getString(JOURNAL_DERNIER, null));
+        if (ajout.isEmpty()) {
             lastJournalUpload = t;
             lastJournalSent = lines;
+            return;
+        }
+        String chemin = Firebase.docName("families/" + fid + "/logs/" + firebase.uid());
+        try {
+            try {
+                JSONObject write = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", chemin)
+                                .put("fields", new JSONObject().put("version", Firebase.string(appVersion()))))
+                        .put("updateMask", new JSONObject().put("fieldPaths", new JSONArray().put("version")))
+                        .put("updateTransforms", new JSONArray()
+                                .put(new JSONObject().put("fieldPath", "updatedAt").put("setToServerValue", "REQUEST_TIME"))
+                                .put(new JSONObject().put("fieldPath", "ajouts").put("appendMissingElements",
+                                        new JSONObject().put("values", new JSONArray().put(Firebase.string(ajout))))));
+                firebase.commit(new JSONArray().put(write));
+            } catch (Firebase.ApiException e) {
+                if (e.code != 403) throw e;
+                JSONObject write = new JSONObject()
+                        .put("update", new JSONObject()
+                                .put("name", chemin)
+                                .put("fields", new JSONObject()
+                                        .put("lines", Firebase.string(lines))
+                                        .put("version", Firebase.string(appVersion()))))
+                        .put("updateTransforms", new JSONArray().put(new JSONObject()
+                                .put("fieldPath", "updatedAt").put("setToServerValue", "REQUEST_TIME")));
+                firebase.commit(new JSONArray().put(write));
+            }
+            lastJournalUpload = t;
+            lastJournalSent = lines;
+            prefs.edit().putString(JOURNAL_DERNIER, Journal.derniere(lines)).apply();
         } catch (Exception e) {
             Log.w(TAG, "Envoi du journal", e);
         }
