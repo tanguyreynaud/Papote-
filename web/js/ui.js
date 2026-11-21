@@ -165,7 +165,11 @@ function dialog(message, buttons, extra = null) {
     back.append(box);
     document.body.append(back);
     ouvertes.push(close);
-    (extra?.stack ? row.firstChild : row.lastChild).focus();
+    // Petit écran : la fenêtre, plus haute que l'écran, défile à l'intérieur. Sans preventScroll, le bouton qui prend
+    // la main (en bas) faisait défiler jusqu'à lui : on arrivait sur la fin du texte, titre et premières étapes coupés
+    // (tests du 21/11, « Que faire ? » : Marc, Nadia, Paul). La fenêtre s'ouvre toujours sur son titre.
+    (extra?.stack ? row.firstChild : row.lastChild).focus({ preventScroll: true });
+    box.scrollTop = 0;
   });
 }
 

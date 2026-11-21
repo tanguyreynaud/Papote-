@@ -581,6 +581,7 @@
                   <input id="luminosite" type="range" min="40" max="100" step="5" aria-label="Luminosité de l'écran le jour">
                 </div>
               </div>
+              <p id="luminosite-attente" class="pas-enregistre" role="status" hidden>Pas encore enregistré : touchez « Enregistrer ».</p>
               <div class="setting-actions">
                 <button type="button" class="secondary setting-cancel">Annuler</button>
                 <button type="submit" class="primary">Enregistrer</button>
@@ -594,8 +595,8 @@
               <p class="muted small">La nuit, l'écran s'éteint ; un toucher le rallume, et un appel ou un rappel le réveille.</p>
               <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Éteindre l'écran la nuit</strong></span><input type="checkbox" class="toggle" id="sleep-on"></label></div>
               <div id="sleep-hours" class="sleep-hours">
-                <label>De <select id="sleep-from"></select></label>
-                <label>à <select id="sleep-to"></select></label>
+                <label>L'écran s'éteint à <select id="sleep-from"></select></label>
+                <label>Il se rallume à <select id="sleep-to"></select></label>
               </div>
               <div class="setting-actions">
                 <button type="button" class="secondary setting-cancel">Annuler</button>
@@ -800,6 +801,12 @@
         <h1>Abonnement et paiement</h1>
       </header>
       <div class="page-pad">
+        <!-- Le prix et la prochaine date, redits ici : on arrivait sur cette page pour les chercher (tests du 21/11). -->
+        <div class="card" id="abo-page-resume" hidden>
+          <h2>Votre abonnement</h2>
+          <p id="abo-page-etat" class="abo-page-etat"></p>
+          <p id="abo-page-details" class="muted small"></p>
+        </div>
         <div class="card">
           <h2>Moyen de paiement</h2>
           <p class="muted small">Carte bancaire ou compte pour le prélèvement, à changer sur la page sécurisée de Stripe.</p>
@@ -1137,7 +1144,7 @@
       </div>
       <div id="rem-fields">
       <label>Quoi ?
-        <input id="rem-title" maxlength="120" placeholder="Prendre le Doliprane">
+        <input id="rem-title" maxlength="120" placeholder="Ex. : prendre le cachet du matin" aria-describedby="rem-error">
       </label>
       <div class="choice choice-ligne" role="radiogroup" aria-label="Type de rappel">
         <label><input type="radio" name="rem-kind" value="medicament" checked> Médicament</label>
@@ -1152,8 +1159,9 @@
         </select>
       </label>
       <label id="rem-date-wrap" hidden>Date
-        <input id="rem-date" type="date">
+        <input id="rem-date" type="date" aria-describedby="rem-date-jour">
       </label>
+      <p id="rem-date-jour" class="rem-date-jour" aria-live="polite" hidden></p>
       <div id="rem-days" class="days" hidden>
         <label><input type="checkbox" value="1"> Lun</label>
         <label><input type="checkbox" value="2"> Mar</label>

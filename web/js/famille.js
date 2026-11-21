@@ -234,6 +234,8 @@ function toast(text, duree = 2500) {
 // payé entre par son invitation ou le lien de l'e-mail de confirmation). Un seul appel à la fois (double appui).
 let dernierCodeRefuse = null;
 const CODE_INCONNU = 'Ce code ne correspond à aucune famille. Vérifiez-le, ou demandez à la personne qui vous l’a envoyé de vous inviter.';
+// 2e refus du même code : ton calme, et quoi vérifier (tests du 21/11 : « Toujours refusé » en rouge était vécu comme un échec).
+const CODE_ENCORE_INCONNU = 'Ce code n’est toujours pas reconnu. Comparez-le lettre par lettre avec celui reçu (le tiret s’ajoute tout seul), ou demandez à la personne qui vous l’a envoyé de vous inviter avec votre adresse e-mail.';
 $('form-join').addEventListener('submit', async (e) => {
   e.preventDefault();
   const button = e.target.querySelector('button[type=submit]');
@@ -266,7 +268,7 @@ $('form-join').addEventListener('submit', async (e) => {
     // Même code refusé une 2e fois : le message change pour montrer que l'app a bien réessayé (banc du 19/11).
     const encore = err instanceof CodeInconnuError && dernierCodeRefuse === code;
     if (err instanceof CodeInconnuError) dernierCodeRefuse = code;
-    showError($('join-error'), encore ? `Toujours refusé : ${CODE_INCONNU}` : err instanceof CodeInconnuError ? CODE_INCONNU
+    showError($('join-error'), encore ? CODE_ENCORE_INCONNU : err instanceof CodeInconnuError ? CODE_INCONNU
       : 'Impossible de rejoindre pour le moment. Vérifiez la connexion internet.');
   } finally {
     button.disabled = false;
@@ -1435,12 +1437,12 @@ async function compressPhoto(file) {
   return { full: fullSize(img), thumb: resize(img, 800, 0.72), small: resize(img, 480, 0.65) };
 }
 
-function openAdd(kind) {
+function openAdd(kind, titre) {
   if (paused()) return;
   addMode = kind;
   pendingPhotos = [];
   pendingVideo = null;
-  $('post-title').textContent = kind === 'photo' ? 'Envoyer une photo' : 'Envoyer une vidéo';
+  $('post-title').textContent = titre || (kind === 'photo' ? 'Envoyer une photo' : 'Envoyer une vidéo');
   $('pick-camera-label').textContent = kind === 'photo' ? 'Prendre une photo' : 'Filmer';
   $('pick-gallery-label').textContent = kind === 'photo' ? 'Choisir dans la galerie' : 'Choisir une vidéo';
   $('post-text').value = '';
@@ -1670,7 +1672,8 @@ async function addVideoFile(file) {
   try {
     const result = await prepareVideo(file, (done, total) => {
       // « 1 / 3 s » ne parlait pas (banc du 19/11) : on dit ce qui se passe et que rien n'est encore parti.
-      setStatus(`Préparation de la vidéo avant l'envoi (${Math.round(done)} s sur ${Math.round(total)}). Restez sur cet écran.`);
+      // « Restez sur cet écran » sonnait comme un envoi en cours qu'on n'osait plus fermer (tests du 21/11 : Marc, Paul).
+      setStatus(`On prépare votre vidéo (${Math.round(done)} s sur ${Math.round(total)}). Rien n'est encore envoyé.`);
     }, MAX_VIDEO_SECONDS, demanderToucherVideo);
     pendingVideo = { blob: result.blob, mime: result.mime, thumb: result.thumb, duration: result.duration };
     oublierApercuVideo();
@@ -3184,7 +3187,9 @@ async function offerVideoMessage(reason) {
   if (!await askConfirm(`${name} ${quoi}. Lui laisser un message vidéo ?`, 'Filmer')) return;
   // La feuille d'envoi s'ouvre là où l'on était (l'accueil) : « Fermer » y ramène, au lieu d'une page Vidéos
   // jamais demandée (banc utilisateurs du 19/11).
-  openAdd('video');
+  // Le titre dit pour qui et pourquoi : « Envoyer une vidéo » tout court faisait croire à une erreur d'écran juste
+  // après l'appel (tests du 21/11 : Léa, Thomas).
+  openAdd('video', `Message vidéo pour ${name}`);
   $('in-video-camera').click();
 }
 
@@ -4295,6 +4300,7 @@ function renderAbonnement() {
   $('abo-titre').hidden = false;
   $('abo-readonly').hidden = admin || !abo;
   if (!abo) {
+    $('abo-page-resume').hidden = true;
     $('abo-status').textContent = 'Formule d\u2019origine, sans abonnement payant';
     $('abo-status').className = 'abo-status s-offert';
     $('abo-details').textContent = 'Rien à régler pour cette famille.';
@@ -4321,6 +4327,10 @@ function renderAbonnement() {
       details.push(`Prochain prélèvement le ${dateLongue(futur(abo.essaiJusqua) ? abo.essaiJusqua : abo.finPeriode)}, pour le mois écoulé`);
     }
     $('abo-details').textContent = details.join(' · ');
+    // Les mêmes mots en tête de la page « Abonnement et paiement » : une seule source, rien de recalculé.
+    $('abo-page-etat').textContent = $('abo-status').textContent;
+    $('abo-page-details').textContent = details.join(' · ');
+    $('abo-page-resume').hidden = !details.length;
     const enCours = ['actif', 'impaye'].includes(statut);
     // En pause avec son abonnement Stripe : un seul geste, régler le paiement (plus de choix de formule).
     const aRegler = statut === 'impaye' || (statut === 'suspendu' && !!abo.stripeSubscriptionId);
@@ -5023,7 +5033,9 @@ SETTINGS['sleep-card'] = {
   },
   async save() {
     const veille = veilleChoisie($('sleep-on').checked, $('sleep-from'), $('sleep-to'));
-    await saveFamily({ veille }, 'Écran éteint la nuit : enregistré');
+    // Les heures dans le message : on relit « de 21 h à 8 h » sans chercher la ligne (tests du 21/11, Paul).
+    await saveFamily({ veille }, veille.active === false ? "Enregistré : l'écran reste allumé la nuit"
+      : `Enregistré : écran éteint de ${heureVeille(veille.de, veille.deMin)} à ${heureVeille(veille.a, veille.aMin)}`);
     return true;
   },
 };
@@ -5485,7 +5497,14 @@ function renderLuminosite() {
   const v = luminositeReglee();
   $('luminosite-value').textContent = v == null ? 'Pas encore réglée' : `${v} % le jour`;
 }
-const majLuminositeVal = () => { $('luminosite-val').textContent = `${$('luminosite').value} %`; };
+// Curseur bougé mais pas validé : dit à côté du pourcentage (tests du 21/11 : Thomas et Marc repartaient en croyant
+// la luminosité changée, sans avoir touché « Enregistrer »).
+const majLuminositeVal = () => {
+  const v = Number($('luminosite').value);
+  const change = v !== (luminositeReglee() ?? LUMINOSITE_DEFAUT);
+  $('luminosite-val').textContent = `${v} %`;
+  $('luminosite-attente').hidden = !change;
+};
 $('luminosite').addEventListener('input', majLuminositeVal);
 SETTINGS['luminosite-card'] = {
   fill() {

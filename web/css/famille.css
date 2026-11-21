@@ -1997,7 +1997,6 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 /* Tablette muette : le fait en rouge, la piste en dessous en texte normal. */
 .activity-piste { display: block; margin-top: 2px; color: var(--muted); font-weight: 400; }
 .activity:has(.activity-piste)::before { top: 18px; margin-top: 0; }
-=======
 /* Fidèle à la maquette (Tanguy, 20/11) : la personne ou moi en tête avec « Modifier » ; Apparence, Dépanner et
    l'abonnement sur une ligne. */
 .rg-texte { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -2033,3 +2032,14 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
    l'autre (elle grandit vers le haut) : « Retour » et « Suivant » ne bougent pas sous le doigt (règle V8, double appui). */
 .guide-back.intro-back { align-items: flex-end; padding-bottom: clamp(24px, calc(100dvh - 668px), calc(50dvh - 250px)); }
 .intro { max-height: 100%; }
+
+/* ---------- Corrections après les tests du 21/11 ---------- */
+.pas-enregistre { margin: 10px 0 0; font-size: 15px; font-weight: 700; color: var(--accent); }
+/* Écran court : les boutons d'une fenêtre restent visibles en bas pendant que son texte défile. */
+@media (max-height: 700px) {
+  .dialog-back { padding: 12px; }
+  .dialog .dialog-buttons { position: sticky; bottom: -18px; margin-bottom: -18px; padding: 10px 0 18px; background: var(--surface); }
+}
+.abo-page-etat { margin: 4px 0 6px; font-size: 18px; font-weight: 700; }
+#rem-error { margin: 6px 0 0; }
+.rem-date-jour { margin: -2px 0 8px; font-size: 16px; font-weight: 700; color: var(--accent); }
