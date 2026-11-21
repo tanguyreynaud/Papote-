@@ -173,11 +173,11 @@ function lignesCommande(c, maintenant) {
 }
 
 // Une ligne par tablette : en ligne ou non, Wi-Fi ou carte SIM, batterie, vue ou touchée, version.
-function ligneTablette(t, maintenant) {
+function ligneTablette(t, maintenant, veille) {
   const m = [];
   const vu = enMillis(t.lastOnline);
   if (!vu) m.push('jamais connectée pour l’instant');
-  else if (maintenant - vu < 70 * 60_000) m.push(`en ligne (dernier signe de vie ${ilYA(vu, maintenant)})`);
+  else if (maintenant - vu <= require('./alertes').silenceTolere(veille, maintenant)) m.push(`en ligne (dernier signe de vie ${ilYA(vu, maintenant)})`);
   else m.push(`hors ligne depuis ${ilYA(vu, maintenant).replace('il y a ', '')} (dernier signe de vie le ${date(vu)})`);
   if (t.wifi && t.wifi.ssid) m.push('sur le Wi-Fi');
   else if (t.sim && t.sim.reseau) m.push(`sur la carte SIM (${court(t.sim.reseau, 8)}${Number.isFinite(t.sim.signal) && t.sim.signal >= 0 ? `, signal ${t.sim.signal} sur 4` : ''})`);
@@ -203,7 +203,7 @@ function resumeFamille(d, qui, maintenant) {
   // Une tablette a deux comptes (affichage et appels, Sync.java) : seul celui qui donne des nouvelles compte. On garde
   // celui vu en ligne le plus récemment, comme l'appli (famille.js, targetTablet).
   const tablette = d.tablettes.slice().sort((x, y) => (enMillis(y.lastOnline) || 0) - (enMillis(x.lastOnline) || 0))[0];
-  l.push(tablette ? ligneTablette(tablette, maintenant) : 'Tablette : pas encore reliée à la famille.');
+  l.push(tablette ? ligneTablette(tablette, maintenant, d.veille) : 'Tablette : pas encore reliée à la famille.');
 
   const abo = d.abonnement || {};
   if (abo.statut) {

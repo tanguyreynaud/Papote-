@@ -35,7 +35,7 @@ test('état du forfait : rien sans SIM, sans limite, ou une fois le forfait repa
   const e = f.etatForfait(tablette(812), { mo: 1000, jour: 5 }, JOUR);
   assert.deepStrictEqual({ ...e }, { pourCent: 81, conso: 812, plafond: 1000, cycle: '2026-11-05', fin: '2026-12-05', type: 'reduit', silencieuse: false });
   assert.strictEqual(f.etatForfait(tablette(812), BLOQUE, JOUR).type, 'bloque');
-  assert.strictEqual(f.etatForfait(tablette(812, { lastOnline: new Date(JOUR - 3 * 3600_000) }), BLOQUE, JOUR).silencieuse, true);
+  assert.strictEqual(f.etatForfait(tablette(812, { lastOnline: new Date(JOUR - 4 * 3600_000) }), BLOQUE, JOUR).silencieuse, true);
 });
 
 test('80 % : Papote seulement ; 95 % : Papote et la famille (en journée) ; une seule fois par forfait', () => {
@@ -65,7 +65,7 @@ test('deux seuils passés d\'un coup : un seul e-mail à Papote ; la nuit, la fa
 });
 
 test('forfait « internet coupé » passé 95 % puis silencieux : Papote sait que c\'est le forfait, une fois', () => {
-  const vue = new Date(JOUR - 3 * 3600_000);
+  const vue = new Date(JOUR - 4 * 3600_000);
   const avant = { cycle: '2026-11-05', admin: [80, 95], famille: true };
   const d = f.decider(f.etatForfait(tablette(980, { lastOnline: vue }), BLOQUE, JOUR), avant, JOUR);
   assert.deepStrictEqual([d.admin, d.famille, d.coupee], [null, false, true]);
