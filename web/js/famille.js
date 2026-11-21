@@ -4773,7 +4773,22 @@ function renderRemote() {
 // ---------- Réglages : chaque valeur s'affiche, « Modifier » ouvre le champ, « Enregistrer » envoie ----------
 
 
+// Ce que contient le formulaire d'un réglage (pour savoir si quelque chose a changé depuis son ouverture).
+const etatReglage = (card) => JSON.stringify(Array.from(card.querySelectorAll('.setting-edit input, .setting-edit select, .setting-edit textarea'))
+  .map((c) => (c.type === 'checkbox' || c.type === 'radio' ? c.checked : c.type === 'file' ? '' : c.value)));
+const etatsOuverture = new WeakMap();
+
 function openSetting(card) {
+  // Un autre réglage ouvert avec un changement pas enregistré : on ne le referme plus en silence (tests du 21/11,
+  // étape 3 : Sylvie a perdu ses volumes en ouvrant « Nuit »). On y revient et on le dit.
+  const enCours = Array.from(document.querySelectorAll('.setting.editing')).find((other) => other !== card
+    && etatsOuverture.has(other) && etatsOuverture.get(other) !== etatReglage(other));
+  if (enCours) {
+    const titre = enCours.querySelector('.setting-head h2')?.textContent.trim();
+    toast(titre ? `« ${titre} » n'est pas encore enregistré : touchez Enregistrer ou Annuler.` : 'Ce réglage n\'est pas encore enregistré : touchez Enregistrer ou Annuler.');
+    enCours.querySelector('.setting-actions')?.scrollIntoView({ block: 'center' });
+    return;
+  }
   document.querySelectorAll('.setting.editing').forEach((other) => { if (other !== card) closeSetting(other); });
   SETTINGS[card.id]?.fill?.();
   card.classList.add('editing');
@@ -4791,9 +4806,11 @@ function openSetting(card) {
   const entete = card.closest('section')?.querySelector('.page-head');
   const haut = card.getBoundingClientRect().top + window.scrollY - (entete ? entete.getBoundingClientRect().height : 0) - 12;
   window.scrollTo({ top: Math.max(0, haut), behavior: 'smooth' });
+  etatsOuverture.set(card, etatReglage(card));
 }
 
 function closeSetting(card) {
+  etatsOuverture.delete(card);
   card.classList.remove('editing');
   card.querySelector('.setting-edit').hidden = true;
   const valeur = card.querySelector('.setting-value');
