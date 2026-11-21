@@ -266,6 +266,11 @@ const TOLERE = [
   // arrête ses écoutes : l'émulateur a parfois déjà fermé la session et répond 400. Vu 1 fois dans « Deux familles »
   // (Chromium, 18/11) : rien de l'app, seulement l'adieu du SDK à une session finie (audit/tests-instables-18-11.md).
   /status of 400 \(Bad Request\) \(http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/(Write|Listen)\/channel\?[^)]*TYPE=terminate/,
+  // Session d'écoute ou d'écriture que l'émulateur a déjà oubliée (page restée longtemps sans rien faire sur un runner
+  // chargé) : il répond 400 à la requête suivante de cette session et le SDK en rouvre une seule, sans rien perdre.
+  // Vu 2 fois dans mes-informations (morceau 2, Chromium, 20/11), jamais en local (3 tours sur 3 verts). Les vrais
+  // refus de l'app (règles) arrivent en 403 / permission-denied, pas ici.
+  /status of 400 \(Bad Request\) \(http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/(Write|Listen)\/channel\?[^)]*SID=/,
   // Les mêmes, avec les mots de Safari (WebKit) : réseau coupé exprès, requête coupée par le banc.
   ...(WEBKIT ? [
     /Failed to load resource: (The Internet connection appears to be offline|The network connection was lost|Could not connect to the server|A server with the specified hostname could not be found|cancelled)\.?/i,
