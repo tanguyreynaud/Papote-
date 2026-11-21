@@ -54,9 +54,9 @@ test('Abonnement arrêté (résilié) : aucun « doit être réglé », ni pour 
   await g.repondre(paul, 'OK');
   await paul.page.click('#view-messages .back');
 
-  // Impayé suspendu : l'ancien texte reste (c'est bien à régler).
+  // Impayé suspendu : c'est bien à régler, par le responsable nommé.
   await s.db.doc(`families/${fid}`).update({ 'abonnement.statut': 'suspendu', 'abonnement.stripeSubscriptionId': 'sub_x' });
-  await paul.page.locator('#abo-banner', { hasText: 'réglé par un responsable' }).waitFor();
+  await paul.page.locator('#abo-banner', { hasText: "qui peut régler l'abonnement" }).waitFor();
 });
 
 test('Décès : « Votre proche est décédé ? » arrête Papote en un geste, sans « Avant de partir » ni « Merci de rester »', async (t) => {

@@ -348,7 +348,7 @@ test('Réglages > Ce téléphone : chaque toucher sur Notifications et Arrière-
   // (au doigt sur le texte de la ligne : Playwright refuse de cliquer une ligne dont l'interrupteur est grisé)
   // « Besoin d'aide ? » et « La tablette / Mon profil » en haut de Réglages (20/11) : sur un iPhone SE, la ligne est
   // sous le bas de l'écran ; on la fait venir comme le ferait le doigt, avant de la toucher à ses coordonnées.
-  await julie.page.locator('#phone-push-text').scrollIntoViewIfNeeded();
+  await julie.page.locator('#phone-push-text').evaluate((el) => el.scrollIntoView({ block: 'center' })); // au milieu : jamais sous la barre du bas
   const ligne = await julie.page.locator('#phone-push-text').boundingBox();
   await julie.page.touchscreen.tap(ligne.x + 20, ligne.y + ligne.height / 2);
   await g.toast(julie, await julie.page.locator('#phone-push-text').innerText());

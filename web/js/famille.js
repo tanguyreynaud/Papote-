@@ -1164,12 +1164,22 @@ function showIntroTablette() {
       </div>
       <div class="intro-step" data-step="3" hidden>
         <h2>Le son</h2>
-        <p class="muted">Le son des vidéos, les messages lus à voix haute, la radio.</p>
+        <p class="muted">Trois volumes, comme dans Réglages.</p>
         <div class="intro-son">
-          <div class="intro-son-tete"><strong>Volume du son</strong><span id="intro-volume-val" class="setup-son-val"></span></div>
-          <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume">
+          <div class="intro-son-tete"><strong>Sonnerie</strong><span id="intro-sonnerie-val" class="setup-son-val"></span></div>
+          <p class="muted small intro-son-aide">Les appels qui arrivent</p>
+          <input id="intro-sonnerie" type="range" min="10" max="100" step="5" aria-label="Volume de la sonnerie">
         </div>
-        <p class="muted small">La sonnerie et le volume des appels se règlent ensuite dans Réglages.</p>
+        <div class="intro-son">
+          <div class="intro-son-tete"><strong>Vidéos et messages lus</strong><span id="intro-volume-val" class="setup-son-val"></span></div>
+          <p class="muted small intro-son-aide">Les vidéos, les messages lus à voix haute, la radio</p>
+          <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume des vidéos et des messages">
+        </div>
+        <div class="intro-son">
+          <div class="intro-son-tete"><strong>Appels</strong><span id="intro-appel-val" class="setup-son-val"></span></div>
+          <p class="muted small intro-son-aide">La voix du proche, en visio et au téléphone</p>
+          <input id="intro-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
+        </div>
       </div>
       <div class="intro-step" data-step="4" hidden>
         <h2>Les options</h2>
@@ -1200,8 +1210,13 @@ function showIntroTablette() {
   $i('#intro-heures').hidden = !$i('#intro-veille').checked;
   $i('#intro-de').value = valeurHeure(choix.veille.de, choix.veille.deMin);
   $i('#intro-a').value = valeurHeure(choix.veille.a, choix.veille.aMin);
-  $i('#intro-volume').value = String(choix.volume);
-  $i('#intro-volume-val').textContent = `${choix.volume} %`;
+  // Les trois volumes de Réglages (Tanguy, 21/11 : un seul curseur faisait croire que tout le son était réglé).
+  const sons = [['#intro-sonnerie', sonnerieActuelle()], ['#intro-volume', choix.volume], ['#intro-appel', appelActuel()]];
+  for (const [id, v] of sons) {
+    $i(id).value = String(v);
+    $i(`${id}-val`).textContent = `${v} %`;
+    $i(id).addEventListener('input', () => { $i(`${id}-val`).textContent = `${$i(id).value} %`; });
+  }
   $i('#intro-lecture').checked = choix.options.lecture;
   $i('#intro-sos').checked = choix.options.sos;
   const nat = document.createElement('optgroup');
@@ -1210,7 +1225,6 @@ function showIntroTablette() {
   loc.label = 'Locales (ex-France Bleu)';
   RADIOS.forEach((r, k) => (r.locale ? loc : nat).append(new Option(r.nom, String(k))));
   $i('#intro-station').append(nat, loc);
-  $i('#intro-volume').addEventListener('input', () => { $i('#intro-volume-val').textContent = `${$i('#intro-volume').value} %`; });
   $i('#intro-veille').addEventListener('change', () => { $i('#intro-heures').hidden = !$i('#intro-veille').checked; });
   $i('#intro-radio').addEventListener('change', () => { $i('#intro-station-wrap').hidden = !$i('#intro-radio').checked; });
 
@@ -1255,7 +1269,7 @@ function showIntroTablette() {
     // Une écriture par réglage : chaque règle n'accepte qu'un champ (avec rev) à la fois.
     const ecrire = (data) => updateDoc(doc(db, 'families', session.fid), { ...data, rev: increment(1) });
     await ecrire({ veille: choix.veille });
-    await ecrire({ volume: choix.volume });
+    await ecrire({ volume: choix.volume, volumeSonnerie: Number($i('#intro-sonnerie').value), volumeAppel: Number($i('#intro-appel').value) });
     await ecrire({ options: choix.options });
   }
 
@@ -3374,6 +3388,7 @@ function renderMembers(all) {
     const name = document.createElement('span');
     name.className = 'member-name';
     name.textContent = m.role === 'tablette' ? `Tablette de ${session.family.nomAChoisir ? 'votre proche' : session.family.name}` : m.name;
+    if (m.id === session.uid) { const v = document.createElement('span'); v.className = 'member-vous'; v.textContent = 'vous'; name.append(' ', v); }
     li.append(name);
     // Numéro de la tablette (carte SIM) : la famille peut l'appeler par téléphone ; les autres numéros sont refusés.
     const telTablette = m.role === 'tablette' ? numeroTablette() : '';
@@ -3463,7 +3478,7 @@ $('members').addEventListener('click', (e) => {
   if (more) { more.click(); return; }
   const m = allMembers.find((x) => x.id === li.dataset.uid);
   if (!m) return;
-  if (m.id === session.uid) { toast('C\'est vous : votre prénom, votre photo et votre numéro se changent dans Réglages, « Mon profil ».'); return; }
+  if (m.id === session.uid) { toast('C\'est vous. Votre prénom, votre photo, votre numéro et « Quitter cette famille » sont dans « Mon profil ».'); return; }
   if (m.role === 'tablette') {
     if (!$('tablet-chip').hidden) $('tablet-chip').click();
     else toast(`La tablette de ${session.family.name} n'a pas encore donné de nouvelles.`);
@@ -3747,13 +3762,23 @@ const dateLongue = (ts) => (ts ? toDate(ts).toLocaleDateString('fr-FR', { day: '
 const TEXTE_ARRETE = "L'abonnement Papote est arrêté : la tablette ne reçoit plus de photos ni d'appels. Les photos, les vidéos et les messages restent ici quelque temps : vous pouvez tout télécharger depuis la page Photos.";
 
 // Abonnement en pause : envois, agenda et appels bloqués, avec une explication.
+// Qui peut régler l'abonnement : les prénoms des responsables, jamais « un responsable » anonyme (tests IA, 21/11).
+function nomsResponsables() {
+  return (allMembers || []).filter((m) => m.role !== 'tablette' && estResponsable(m.id) && m.name).map((m) => m.name);
+}
+function quiRegle() {
+  const n = nomsResponsables();
+  if (!n.length) return "Seul un responsable de la famille peut régler l'abonnement.";
+  if (n.length === 1) return `C'est ${n[0]} qui peut régler l'abonnement : pensez à lui en parler.`;
+  return `Ce sont ${n.slice(0, -1).join(', ')} et ${n[n.length - 1]} qui peuvent régler l'abonnement : pensez à leur en parler.`;
+}
 function paused() {
   if (abonnementOk(session?.family)) return false;
   // Abonnement arrêté (résiliation voulue, décès, EHPAD) : rien n'est à régler (audit « mauvais jours », 5/11).
   if (session?.family?.abonnement?.statut === 'resilie') { notice(TEXTE_ARRETE); return true; }
   notice(amFamilyAdmin()
     ? "Papote est en pause : l'abonnement de la famille doit être réglé. Touchez Réglages en bas de l'écran, puis « Mon profil », puis Abonnement."
-    : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable de la famille.");
+    : `Papote est en pause. Rien n'a été envoyé. ${quiRegle()} Tout repartira tout seul ensuite.`);
   return true;
 }
 
@@ -4236,6 +4261,9 @@ function ouvrirAdresse() {
   $('retour-adresse').hidden = false;
   $('btn-renvoyer').textContent = texteRenvoyer();
   $('retour-rue').focus();
+  // Les champs viennent au milieu de l'écran : ils restent visibles quand le clavier s'ouvre (l'abonnement est
+  // plus haut dans « Mon profil » depuis le 21/11).
+  $('retour-adresse').scrollIntoView({ block: 'center' });
 }
 
 $('btn-renvoyer').addEventListener('click', async () => {
@@ -4356,7 +4384,7 @@ function renderAbonnement() {
   } else if (!abonnementOk(session.family)) {
     text = admin
       ? "Papote est en pause : l'abonnement de la famille doit être réglé. Tout reviendra automatiquement."
-      : "Papote est en pause : l'abonnement de la famille doit être réglé par un responsable.";
+      : `Papote est en pause. ${quiRegle()}`;
   }
   // Sans abonnement en cours : un responsable peut relier une commande déjà payée sur le site.
   const sansAbo = ['aucun', 'resilie', 'suspendu', 'installation'].includes(statut) && admin;
@@ -4778,7 +4806,22 @@ function renderRemote() {
 // ---------- Réglages : chaque valeur s'affiche, « Modifier » ouvre le champ, « Enregistrer » envoie ----------
 
 
+// Ce que contient le formulaire d'un réglage (pour savoir si quelque chose a changé depuis son ouverture).
+const etatReglage = (card) => JSON.stringify(Array.from(card.querySelectorAll('.setting-edit input, .setting-edit select, .setting-edit textarea'))
+  .map((c) => (c.type === 'checkbox' || c.type === 'radio' ? c.checked : c.type === 'file' ? '' : c.value)));
+const etatsOuverture = new WeakMap();
+
 function openSetting(card) {
+  // Un autre réglage ouvert avec un changement pas enregistré : on ne le referme plus en silence (tests du 21/11,
+  // étape 3 : Sylvie a perdu ses volumes en ouvrant « Nuit »). On y revient et on le dit.
+  const enCours = Array.from(document.querySelectorAll('.setting.editing')).find((other) => other !== card
+    && etatsOuverture.has(other) && etatsOuverture.get(other) !== etatReglage(other));
+  if (enCours) {
+    const titre = enCours.querySelector('.setting-head h2')?.textContent.trim();
+    toast(titre ? `« ${titre} » n'est pas encore enregistré : touchez Enregistrer ou Annuler.` : 'Ce réglage n\'est pas encore enregistré : touchez Enregistrer ou Annuler.');
+    enCours.querySelector('.setting-actions')?.scrollIntoView({ block: 'center' });
+    return;
+  }
   document.querySelectorAll('.setting.editing').forEach((other) => { if (other !== card) closeSetting(other); });
   SETTINGS[card.id]?.fill?.();
   card.classList.add('editing');
@@ -4796,9 +4839,11 @@ function openSetting(card) {
   const entete = card.closest('section')?.querySelector('.page-head');
   const haut = card.getBoundingClientRect().top + window.scrollY - (entete ? entete.getBoundingClientRect().height : 0) - 12;
   window.scrollTo({ top: Math.max(0, haut), behavior: 'smooth' });
+  etatsOuverture.set(card, etatReglage(card));
 }
 
 function closeSetting(card) {
+  etatsOuverture.delete(card);
   card.classList.remove('editing');
   card.querySelector('.setting-edit').hidden = true;
   const valeur = card.querySelector('.setting-value');
