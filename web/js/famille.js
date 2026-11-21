@@ -4477,7 +4477,11 @@ async function sendCommand(type, extra = {}) {
 }
 
 document.querySelectorAll('[data-cmd]').forEach((btn) => btn.addEventListener('click', async () => {
-  if (btn.dataset.cmd === 'restart' && !await askConfirm('Redémarrer la tablette ? Elle sera indisponible une minute.', 'Redémarrer')) return;
+  // Hors ligne, on le dit avant (tests IA du 21/11 : « une minute » faisait croire que la tablette redémarrait tout de suite).
+  const question = tabletteEnLigne()
+    ? 'Redémarrer la tablette ? Elle sera indisponible une minute.'
+    : "La tablette est hors ligne : elle ne redémarrera qu'une fois reconnectée. Vérifiez d'abord, sur place, qu'elle est branchée. Envoyer quand même la demande ?";
+  if (btn.dataset.cmd === 'restart' && !await askConfirm(question, tabletteEnLigne() ? 'Redémarrer' : 'Envoyer la demande')) return;
   // Attendue : le bouton tourne et ne se touche plus tant que l'ordre part (sinon un double clic envoyait 2 ordres).
   await sendCommand(btn.dataset.cmd);
 }));
@@ -5218,7 +5222,7 @@ function renderOptions() {
   $('duree-value').textContent = `${m} minute${m > 1 ? 's' : ''}`;
   $('radio-value').textContent = o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée';
   // Interrupteurs à effet immédiat : ils suivent la base, sauf pendant leur propre envoi.
-  $('opt-rappels-accueil-texte').textContent = o.rappelsAccueil !== false ? "Affiché sur l'accueil" : "Pas affiché sur l'accueil";
+  $('opt-rappels-accueil-texte').textContent = o.rappelsAccueil !== false ? "Oui. Les rappels se créent dans Agenda." : "Non. Les rappels se créent dans Agenda.";
   for (const [id, on] of [['opt-lecture', o.lecture !== false], ['opt-rappels-accueil', o.rappelsAccueil !== false]]) {
     if (!$(id).disabled) $(id).checked = on;
   }

@@ -396,7 +396,7 @@
           <svg class="tile-icon"><use href="#i-message"/></svg><span>Messages</span>
         </button>
         <button type="button" class="tile t-agenda" data-page="agenda">
-          <svg class="tile-icon"><use href="#i-agenda"/></svg><span>Agenda</span>
+          <svg class="tile-icon"><use href="#i-agenda"/></svg><span>Agenda<small class="tile-note">Rappels, rendez-vous</small></span>
         </button>
         <button type="button" class="tile t-settings" id="tile-settings" data-page="settings">
           <svg class="tile-icon"><use href="#i-settings"/></svg><span>Réglages</span>
@@ -416,7 +416,7 @@
       <ul id="photos" class="gallery"></ul>
       <div id="photos-more" class="feed-more"></div>
       <div id="photos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-photo"/></svg></span><p class="vide-titre">Aucune photo pour l'instant.</p><p>Touchez + pour en envoyer une.</p></div>
-      <button type="button" class="fab" data-add="photo" aria-label="Ajouter une photo"><svg><use href="#i-plus"/></svg></button>
+      <button type="button" class="fab fab-texte" data-add="photo"><svg><use href="#i-plus"/></svg><span>Envoyer une photo</span></button>
     </section>
 
     <!-- Vidéos -->
@@ -429,7 +429,7 @@
       <ul id="videos" class="gallery"></ul>
       <div id="videos-more" class="feed-more"></div>
       <div id="videos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-video"/></svg></span><p class="vide-titre">Aucune vidéo pour l'instant.</p><p>Touchez + pour en envoyer une.</p></div>
-      <button type="button" class="fab" data-add="video" aria-label="Ajouter une vidéo"><svg><use href="#i-plus"/></svg></button>
+      <button type="button" class="fab fab-texte" data-add="video"><svg><use href="#i-plus"/></svg><span>Envoyer une vidéo</span></button>
     </section>
 
     <!-- Messages -->
@@ -648,7 +648,7 @@
               </div>
             </form>
           </div>
-          <label class="toggle-row rg-ligne" id="opt-rappels-accueil-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-agenda"/></svg></span><span class="toggle-text"><strong>Prochain rappel</strong><span id="opt-rappels-accueil-texte">Affiché sur l'accueil</span></span><input type="checkbox" class="toggle" id="opt-rappels-accueil"></label>
+          <label class="toggle-row rg-ligne" id="opt-rappels-accueil-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-agenda"/></svg></span><span class="toggle-text"><strong>Afficher le prochain rappel</strong><span id="opt-rappels-accueil-texte">Affiché sur l'accueil</span></span><input type="checkbox" class="toggle" id="opt-rappels-accueil"></label>
           <div id="radio-card" class="card setting rg" hidden>
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-radio"/></svg></span><h2>Radio</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <p id="radio-value" class="setting-value"></p>
