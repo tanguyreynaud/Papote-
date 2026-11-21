@@ -31,6 +31,16 @@ const TACHES_FAMILLE = {
   petitsRappels: { depart: 'Accueil', but: "Ton téléphone t'envoie de temps en temps « Une photo pour Mamie ? ». Ça t'agace : arrête ces petits rappels, sur ton téléphone seulement.", reussite: "« Petits rappels » est désactivé pour ce téléphone." },
   medicament: { depart: 'Accueil', but: "Fais en sorte que la tablette rappelle à Mamie de prendre son cachet tous les matins à 8 h.", reussite: "Un rappel de médicament tous les jours à 8 h est enregistré." },
   numero: { depart: 'Accueil', but: "Ton numéro de portable a changé, c'est maintenant le 06 11 22 33 44. Mets-le à jour pour que la tablette de Mamie puisse t'appeler.", reussite: "Le nouveau numéro est enregistré dans ton profil." },
+  premierLancement: { depart: 'Vos informations (premier lancement, numéro vide)', but: "Tu viens d'installer Papote. Remplis ce que l'app te demande pour commencer à l'utiliser.", reussite: "Les informations demandées sont remplies et validées, l'app passe à la suite." },
+  reglerNeuve: { depart: 'Réglons la tablette (famille toute neuve)', but: "La tablette de Mamie vient d'être installée. Règle-la pour que l'écran s'éteigne la nuit et que le son ne soit pas trop fort.", reussite: "La nuit et le son sont réglés et enregistrés." },
+  mamieAppelle: { depart: 'Mamie appelle', but: "Ton téléphone sonne : c'est Mamie qui t'appelle depuis sa tablette. Réponds-lui.", reussite: "L'appel est décroché." },
+  dejaRepondu: { depart: 'Mamie appelle : un autre proche a déjà répondu', but: "Mamie t'appelait il y a un instant. Regarde ce qui se passe et fais ce qu'il faut.", reussite: "Tu comprends qu'un autre proche a déjà répondu à Mamie." },
+  procheReglage: { depart: 'Accueil d’un proche (pas propriétaire)', but: "Mamie se plaint que la tablette s'allume trop tôt le matin. Change l'heure de réveil de l'écran.", reussite: "L'heure est changée, ou l'app explique clairement qui peut le faire." },
+  enPause: { depart: 'Papote en pause (proche, pas responsable)', but: "Envoie à Mamie une photo prise hier.", reussite: "La photo est envoyée, ou l'app explique clairement pourquoi ce n'est pas possible et qui contacter." },
+  invitationMail: { depart: 'Invitation reçue par e-mail', but: "Ta cousine t'a invité par e-mail dans la famille Papote de Mamie. Rejoins la famille.", reussite: "Tu as rejoint la famille ou demandé à la rejoindre." },
+  quiAVu: { depart: 'Accueil', but: "Tu as envoyé une photo à Mamie ce matin. Vérifie si elle l'a vue.", reussite: "Tu sais si Mamie a vu la photo." },
+  annulerCommande: { depart: 'Abonnement et paiement : annuler ma commande (14 jours)', but: "Tu as commandé Papote il y a 3 jours mais tu as changé d'avis. Annule la commande.", reussite: "La commande est annulée (ou la demande est envoyée)." },
+  quitter: { depart: 'Accueil d’un proche (pas propriétaire)', but: "Tu ne veux plus faire partie de la famille Papote de Mamie. Quitte la famille.", reussite: "Tu as quitté la famille (ou confirmé que tu veux la quitter)." },
   rejoindre: { depart: 'Rejoindre ou installer', but: "Ta sœur t'a dit d'installer Papote et t'a envoyé le code ABCD2345 pour rejoindre la famille de Mamie.", reussite: "Tu as demandé à rejoindre la famille avec le code." },
 };
 
@@ -159,6 +169,16 @@ LOTS['tour-1-debout'] = LOTS['tour-1'].filter((x) => ["f-abonnement-ines", "f-ab
   // Identifiants uniques : la variante dans l'id.
   t2.forEach((x) => { x.id += x.dimensions ? '-petit' : x.sombre ? '-sombre' : x.reseau ? '-lent' : x.couche ? '-couche' : ''; });
   LOTS['tour-2'] = t2;
+}
+
+// Étape 3 du grand tour : ce qui n'avait jamais été testé (premier lancement, réglage d'une famille neuve, appel de
+// Mamie vers l'app, proche non responsable, pause, invitation, « a-t-elle vu ? », annulation, quitter).
+{
+  const proches = Object.keys(PROCHES);
+  const t3 = [];
+  ['premierLancement', 'reglerNeuve', 'mamieAppelle', 'dejaRepondu', 'procheReglage', 'enPause', 'invitationMail', 'quiAVu', 'annulerCommande', 'quitter']
+    .forEach((tache, i) => { for (let k = 0; k < 5; k++) t3.push(p('famille', proches[(i * 3 + k) % 8], tache)); });
+  LOTS['tour-3'] = t3;
 }
 
 module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };
