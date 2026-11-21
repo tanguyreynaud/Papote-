@@ -139,4 +139,8 @@ const LOTS = {
   LOTS['tour-1'] = t1;
 }
 
+// Étape 1 rejouée téléphone debout (bug du banc du 21/11 : 61 parcours famille sur 80 partaient couchés), sans « nom »
+// ni « rejoindre », qui butent sur le faux serveur (nom non enregistré, code non vérifié).
+LOTS['tour-1-debout'] = LOTS['tour-1'].filter((x) => ["f-abonnement-ines", "f-abonnement-julie", "f-abonnement-lea", "f-abonnement-paul", "f-abonnement-thomas", "f-appeler-marc", "f-etat-lea", "f-etat-marc", "f-etat-nadia", "f-etat-paul", "f-etat-sylvie", "f-inviter-ines", "f-inviter-julie", "f-inviter-lea", "f-inviter-sylvie", "f-inviter-thomas", "f-luminosite-lea", "f-luminosite-marc", "f-luminosite-nadia", "f-luminosite-sylvie", "f-luminosite-thomas", "f-medicament-ines", "f-medicament-julie", "f-medicament-lea", "f-medicament-sylvie", "f-medicament-thomas", "f-nuit-ines", "f-nuit-julie", "f-nuit-marc", "f-nuit-paul", "f-nuit-thomas", "f-numero-lea", "f-numero-marc", "f-numero-nadia", "f-numero-paul", "f-numero-sylvie", "f-petitsRappels-ines", "f-petitsRappels-julie", "f-petitsRappels-marc", "f-petitsRappels-nadia", "f-petitsRappels-paul", "f-rappel-ines", "f-rappel-julie", "f-rappel-marc", "f-rappel-nadia", "f-rappel-paul", "f-reglages-ines", "f-reglages-marc", "f-reglages-nadia", "f-reglages-paul", "f-reglages-sylvie"].includes(x.id));
+
 module.exports = { PROCHES, TACHES_FAMILLE, MAMIES, SITUATIONS, LOTS };

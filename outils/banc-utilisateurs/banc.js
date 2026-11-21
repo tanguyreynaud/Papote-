@@ -223,7 +223,7 @@ async function ouvrirDepart(browser, base, parcours, video, exemples) {
   const scenes = tab ? tablette.SCENES : famille.SCENES;
   const scene = scenes.find((s) => s.titre === def.depart);
   if (!scene) throw new Error(`Écran de départ introuvable dans la galerie : « ${def.depart} »`);
-  const taille = tab ? tablette.TAILLES[0] : famille.TAILLES[0];
+  const taille = { ...(tab ? tablette.TAILLES[0] : famille.TAILLES[0]) }; // copie : « tourner_telephone » la modifie (bug du 21/11 : les parcours suivants partaient couchés)
   const sc = { ...scene, heure: def.heure || scene.heure };
   const { ctx, page, erreurs } = await (tab ? tablette : famille).ouvrir(browser, base, sc, taille, video);
   const notes = [];
