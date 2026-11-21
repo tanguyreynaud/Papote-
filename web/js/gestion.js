@@ -2861,13 +2861,15 @@ function blocReleves(zone, t) {
     // Une ligne absente (null) ne doit pas s'écrire « null » : replaceChildren écrit tout ce qu'on lui donne.
     // Le souci de réseau en bandeau tout en haut, puis les quatre chiffres ; le détail des antennes est une ligne repliée plus bas.
     const reseau = blocReseau(reseauMobile(sim), { vu: m.reseauVu || null, fid: t.fid, uid: t.tabletUid });
-    const souci = reseau && reseau.querySelector('p.error');
-    if (souci) souci.className = 'bandeau rouge';
+    // L'alerte (p.error) et l'état de la carte restent visibles dans le relevé ; seules les antennes sont repliées plus bas.
+    const alerte = reseau && reseau.querySelector(':scope > p.error');
+    const souci = alerte ? h('div', { class: 'reseau-mobile alerte-reseau' }, alerte) : null;
+    const etatCarte = reseau ? h('div', { class: 'reseau-mobile etat-reseau' }, ...[...reseau.children].filter((x) => x.tagName === 'P' && !x.classList.contains('muted'))) : null;
     const retard = enLigne && Date.now() - enLigne > 70 * 60_000;
     zone.replaceChildren(...[
       souci,
       h('h2', { class: 'sr-only' }, 'En ce moment'),
-      h('div', { class: 'card' }, h('div', { class: 'tuiles quatre' },
+      h('div', { class: 'card' }, h('div', { class: 'stats tuiles quatre' },
         stat(enLigne ? ilYA(enLigne) : '—', 'dernier signe de vie', retard ? 'ne répond plus ?' : 'en ligne', retard ? 'warn' : null),
         stat(b.level != null ? `${b.level} %` : '—', 'batterie', b.charging ? 'sur le chargeur' : 'débranchée', b.charging === false ? 'warn' : null),
         sim && sim.bloquee ? stat('Carte SIM', texteBloquee(sim).replace('Carte SIM ', ''), null, 'warn') : stat(sim ? (sim.reseau || sim.operateur || 'Carte SIM') : 'Wi-Fi', sim ? [sim.operateur !== sim.reseau ? sim.operateur : null, signal ? `signal ${signal}` : null].filter(Boolean).join(' · ') || 'carte SIM' : 'pas de carte SIM'),
@@ -2875,11 +2877,13 @@ function blocReleves(zone, t) {
           ? stat(mo >= 1024 ? `${String(Math.round(mo / 102.4) / 10).replace('.', ',')} Go` : `${mo} Mo`, `utilisés sur ${String(go).replace('.', ',')} Go ce mois`, part != null ? `${part} % du forfait` : null, part >= 88 ? 'warn' : null)
           : stat(m.appVersion || '—', 'version de Papote')),
       sim && mo != null ? h('p', { class: 'muted small ligne-version' }, `Version de Papote : ${m.appVersion || 'inconnue'}`) : null,
+      etatCarte && etatCarte.children.length ? etatCarte : null,
       lignePush(modePush(sim))),
     ].filter(Boolean));
     const antennes = reseau ? reseau.querySelectorAll('li').length : 0;
-    $('dt-pli-reseau').hidden = !reseau;
-    if (reseau) {
+    const detailReseau = !!reseau && !!reseau.querySelector('ul, p');
+    $('dt-pli-reseau').hidden = !detailReseau;
+    if (detailReseau) {
       $('dt-n-reseau').textContent = antennes ? pluriel(antennes, 'antenne') : 'détail';
       $('dt-reseau').replaceChildren(reseau, h('p', { class: 'muted small' }, 'Envoyés par la tablette quand elle est en ligne ; la page se met à jour toute seule.'));
     }
