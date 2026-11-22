@@ -16,10 +16,11 @@ import android.provider.Settings;
  * Limite de charge Blackview à 80 % (Tanguy, 20/11) : une fois à 80 %, la tablette coupe la charge et ne la
  * rouvre que si on rebranche le câble, si on change son réglage ou si elle redémarre. Branchée en permanence,
  * elle se viderait donc jusqu'à s'éteindre. Papote le voit (branchée, ne charge pas, niveau bas) et relance :
- * d'abord en retouchant le réglage de la limite (qui reste à sa valeur), sinon en redémarrant la tablette.
+ * d'abord en faisant réécrire le réglage de la limite (qui reste à sa valeur) par la mini-appli « Papote Charge »
+ * (prouvé sur T-003 le 22/11, y compris après un redémarrage), sinon en redémarrant la tablette.
  */
 final class Charge {
-    static final int SEUIL_REPRISE = 78;     // ESSAI du 22/11 : relance très tôt pour avoir la preuve vite ; valeur finale à décider
+    static final int SEUIL_REPRISE = 70;     // sous ce niveau, branchée sans charger : on relance (batterie tenue entre 70 et 80 %)
     static final int SEUIL_REDEMARRAGE = 50; // le réglage n'a rien donné : redémarrage sous ce niveau
     static final long ATTENTE_MS = 5 * 60_000L;       // temps laissé à la charge pour repartir après un essai
     static final long ENTRE_ESSAIS_MS = 30 * 60_000L; // pas plus d'un essai de réglage par demi-heure
@@ -65,9 +66,10 @@ final class Charge {
             long maintenant = SystemClock.elapsedRealtime();
             long mur = System.currentTimeMillis(), redem = prefs.getLong("chargeRedemarrage", 0);
             long depuisRedem = redem <= 0 || redem > mur ? Long.MAX_VALUE : mur - redem;
+            boolean appel = AppelGsm.enCours() || MainActivity.occupee();
+            if (!appel) premierContact(app, prefs);
             // Juste après un redémarrage, on laisse à la tablette le temps de rouvrir la charge elle-même.
             if (maintenant < ATTENTE_MS) return;
-            boolean appel = AppelGsm.enCours() || MainActivity.occupee();
             Geste g = decider(branchee, charge, niveau, maintenant - dernierEssai, essaiRate, depuisRedem, appel);
             if (g == Geste.REGLAGE && appel) return; // la fenêtre de relance couperait l'appel une seconde : plus tard
             if (g == Geste.REGLAGE) {
@@ -81,6 +83,29 @@ final class Charge {
             }
         } catch (Exception e) {
             Journal.log(app, "Charge : vérification impossible (" + e + ")");
+        }
+    }
+
+    /**
+     * Première ouverture de la mini-appli après son installation (ou sa mise à jour) : Android affiche alors, une
+     * seule fois, « Cette appli a été conçue pour une ancienne version d'Android » avec un bouton OK (vu le 22/11).
+     * On la provoque tout de suite, pendant l'installation à l'atelier, pour que le client ne la voie jamais.
+     */
+    private static void premierContact(Context app, SharedPreferences prefs) {
+        long installee;
+        try {
+            installee = app.getPackageManager().getPackageInfo(MINI_APPLI, 0).lastUpdateTime;
+        } catch (Exception e) {
+            return; // pas de mini-appli sur cette tablette : le redémarrage reste le seul moyen
+        }
+        if (prefs.getLong("chargeMiniVue", 0) == installee) return;
+        prefs.edit().putLong("chargeMiniVue", installee).apply();
+        try {
+            app.startActivity(new Intent().setClassName(MINI_APPLI, MINI_APPLI + ".Fenetre")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+            Journal.log(app, "Charge : première ouverture de la mini-appli (message Android à valider une fois par OK)");
+        } catch (Exception e) {
+            Journal.log(app, "Charge : première ouverture de la mini-appli impossible (" + e + ")");
         }
     }
 

@@ -27,6 +27,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Package = 'com.papote.tablette'
+$messageChargeReste = $false
 $Apk = Join-Path $PSScriptRoot 'Papote.apk'
 
 function Say($text, $color = 'Gray') { Write-Host $text -ForegroundColor $color }
@@ -163,6 +164,25 @@ if ($attendu -and $avant -ge $attendu) {
     Say "App installée$(if ($attendu) { " (version $($feed.versionName))" })." 'Green'
 }
 
+# 3 bis. Mini-appli « Papote Charge » : elle seule a le droit de réécrire la limite de charge Blackview, ce qui
+#         relance la charge sans redémarrer la tablette (prouvé sur T-003 le 22/11). Seul le PC peut l'installer :
+#         -g évite l'écran « vérifiez les autorisations » que le mode kiosque bloquerait, et
+#         --bypass-low-target-sdk-block est exigé par Android 14 et plus pour une appli déclarée « ancienne ».
+$ChargeApk = Join-Path $PSScriptRoot 'Papote-charge.apk'
+$chargeInstallee = $false
+if (Test-Path $ChargeApk) {
+    $res = Adb install -r -g --bypass-low-target-sdk-block $ChargeApk
+    if ($res -notmatch 'Success') { $res = Adb install -r -g $ChargeApk }
+    if ($res -match 'Success') {
+        $chargeInstallee = $true
+        Say 'Mini-appli de charge installée.' 'Green'
+    } else {
+        Say "Mini-appli de charge pas installée ($res) : la charge sera relancée par un redémarrage automatique." 'Yellow'
+    }
+} else {
+    Say 'Papote-charge.apk absent du dossier : la charge sera relancée par un redémarrage automatique.' 'Yellow'
+}
+
 # 4. Réglages : date et heure automatiques (indispensable pour les connexions sécurisées),
 #    écran allumé tant que la tablette est branchée
 Adb shell settings put global auto_time 1 | Out-Null
@@ -171,7 +191,14 @@ Adb shell settings put global stay_on_while_plugged_in 7 | Out-Null
 # Barre de navigation du bas masquée pour de bon (réglage des tablettes UNISOC, sans effet ailleurs)
 Adb shell settings put system show_navigationbar 0 | Out-Null
 # Données : seul Papote utilise internet (Économiseur de données, applis inutiles désactivées).
-# Pas de plafond de charge (Tanguy, 05/11).
+# Limite de charge à 80 % sur les tablettes Blackview (Tanguy, 20/11 : durée de vie de la batterie). Sans effet
+# ailleurs : le réglage n'existe pas. Papote relance la charge quand la batterie redescend (voir Charge.java).
+$limiteCharge = "$(Adb shell settings get system bv_custom_charging_max)".Trim()
+if ($limiteCharge -match '^\d+$') {
+    Adb shell settings put system bv_charging_protection_mode 2 | Out-Null
+    Adb shell settings put system bv_custom_charging_max 80 | Out-Null
+    Say 'Limite de charge de la batterie : 80 %.' 'Green'
+}
 & (Join-Path $PSScriptRoot 'economie-donnees.ps1')
 # Tablette en français, clavier AZERTY : Papote change la langue au démarrage grâce à ces droits
 Adb shell pm grant $Package android.permission.CHANGE_CONFIGURATION | Out-Null
@@ -243,6 +270,40 @@ if ($Code) {
 } else {
     Adb shell am start -n "$Package/.MainActivity" @pinArgs --ez lock true | Out-Null
     Say "`nLa tablette affiche « Bienvenue » : le client lui donnera un nom, choisira son wifi et la reliera à sa famille." 'Cyan'
+}
+
+# 7 bis. À sa première ouverture, la mini-appli de charge fait afficher par Android, une seule fois, « Cette appli a
+#        été conçue pour une ancienne version d'Android » avec un bouton OK. Papote provoque cette ouverture dans la
+#        minute qui suit son lancement : on valide le message ici, pour que le client ne le voie jamais.
+if ($chargeInstallee) {
+    Say "`nMini-appli de charge : attente du message Android à valider (1 minute au plus)…" 'DarkGray'
+    $vu = $false
+    $finAttente = (Get-Date).AddSeconds(75)
+    while ((Get-Date) -lt $finAttente) {
+        Start-Sleep -Seconds 3
+        if ("$(Adb shell dumpsys window)" -match 'mCurrentFocus=.*DeprecatedTargetSdkVersionDialog') { $vu = $true; break }
+    }
+    if ($vu) {
+        # Touche Tabulation puis Entrée : le bouton OK est le seul de la fenêtre.
+        Adb shell input keyevent 61 | Out-Null
+        Adb shell input keyevent 66 | Out-Null
+        Start-Sleep -Seconds 2
+        $essais = 0
+        while ("$(Adb shell dumpsys window)" -match 'mCurrentFocus=.*DeprecatedTargetSdkVersionDialog') {
+            if ($Oui -or $essais -ge 20) { break }
+            Say 'Touchez « OK » sur le message affiché par la tablette (« conçue pour une ancienne version d''Android »).' 'Yellow'
+            Start-Sleep -Seconds 6
+            $essais++
+        }
+        if ("$(Adb shell dumpsys window)" -match 'mCurrentFocus=.*DeprecatedTargetSdkVersionDialog') {
+            $messageChargeReste = $true
+            Say 'Le message Android est encore affiché : touchez « OK » sur la tablette avant de l''envoyer.' 'Red'
+        } else {
+            Say 'Message Android validé : le client ne le verra pas.' 'Green'
+        }
+    } else {
+        Say 'Aucun message Android à valider.' 'DarkGray'
+    }
 }
 
 # 8. Clé App Check de la tablette (preuve pour Firebase que c'est une vraie tablette Papote).
@@ -350,6 +411,7 @@ while ((Get-Date) -lt $limite) {
 }
 if (-not $ok) { $problemes += 'Papote ne revient pas seule et verrouillée après un redémarrage' }
 if (-not $controleOk) { $problemes += 'contrôle atelier échoué' }
+if ($messageChargeReste -and "$(Adb shell dumpsys window)" -match 'mCurrentFocus=.*DeprecatedTargetSdkVersionDialog') { $problemes += 'message Android « ancienne version » encore affiché (touchez OK)' }
 if ($problemes.Count) {
     Say "`n!!! NE PAS ENVOYER CETTE TABLETTE : $($problemes -join ' ; ')." 'Red'
     Say 'Lancez diagnostic.bat et prévenez Claude.' 'Red'
