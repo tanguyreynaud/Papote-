@@ -84,10 +84,10 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   assert.ok((await effet(julie, '#face-img, #face-empty')).fichier, 'ma photo : choix d\'une photo');
   await p.click('#my-name-card .setting-cancel');
 
-  // Photos : « Envoyé ✓ » (pas encore vue) dit que Mamie ne l'a pas encore vue.
+  // Photos : « Envoyé, pas vu » dit que Mamie ne l'a pas encore vue.
   await g.retourAccueil(julie);
   await g.ouvrirTuile(julie, 'photos');
-  assert.equal((await p.locator('#photos .read-badge.unread').first().textContent()).trim(), 'Envoyé ✓');
+  assert.equal((await p.locator('#photos .read-badge.unread').first().textContent()).trim(), 'Envoyé, pas vu');
   await p.locator('#photos .read-badge').first().click();
   await g.toast(julie, 'Mamie Emma ne l\'a pas encore vue.');
   await p.click('#view-photos .back');
