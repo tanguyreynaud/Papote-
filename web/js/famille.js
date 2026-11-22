@@ -749,8 +749,10 @@ function galleryItem(post, what, onOpen) {
   meta.append(tete, info);
   const badge = document.createElement('span');
   badge.className = `read-badge ${post.seenAt ? 'read' : 'unread'}`;
-  badge.textContent = post.seenAt ? 'Lu' : 'Envoyé ✓'; // « Envoyé ✓ » puis « Lu » (Tanguy, 19/11 : « Non lu » ne disait pas que c'était bien parti)
-  // « Lu » / « Envoyé ✓ » touché : il dit quand (audit des touchers, 17/11 : il ne faisait rien).
+  // « Envoyé, pas vu » puis « Vu ✓ » (Tanguy, 22/11 : « Envoyé » dit que c'est bien parti ; aux tests IA, « Envoyé ✓ » seul
+  // ne disait pas si elle l'avait vue, et « Lu » surprenait pour une photo).
+  badge.textContent = post.seenAt ? 'Vu ✓' : 'Envoyé, pas vu';
+  // Touché : il dit quand (audit des touchers, 17/11 : il ne faisait rien).
   badge.setAttribute('role', 'button');
   badge.tabIndex = 0;
   badge.addEventListener('click', () => toast(post.seenAt
