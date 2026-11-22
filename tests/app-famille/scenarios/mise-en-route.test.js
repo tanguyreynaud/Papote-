@@ -95,8 +95,16 @@ test('M8 : « Enregistrez le numéro de Mamie Emma » sur l\'accueil dès que la
   await julie.page.click('#contact-oui');
   assert.strictEqual(await julie.page.locator('#contact-oui').innerText(), 'Un instant…', 'réaction visible tout de suite');
   const fichier = await telechargement;
-  // Le WebKit de Playwright remplace les espaces du nom proposé par « _ » (le nom donné par l'app reste « Mamie Emma.vcf »).
-  assert.match(fichier.suggestedFilename(), banc.WEBKIT ? /^Mamie[ _]Emma\.vcf$/ : /Mamie Emma\.vcf/);
+  if (banc.WEBKIT) {
+    // iPhone : la fiche s'ouvre directement (Safari affiche la fiche Apple), sans nom de fichier ; le WebKit de
+    // Playwright, qui ne sait pas l'afficher, la reçoit en téléchargement sans nom. On vérifie donc son contenu.
+    const contenu = require('node:fs').readFileSync(await fichier.path(), 'utf8');
+    assert.match(contenu, /^BEGIN:VCARD/);
+    assert.match(contenu, /FN:Mamie Emma \(Papote\)/);
+    assert.match(contenu, /TEL;TYPE=CELL:\+33698765432/);
+  } else {
+    assert.match(fichier.suggestedFilename(), /Mamie Emma\.vcf/);
+  }
   // Plus de fenêtre « Fiche contact … prête » (bug du 22/11) : sur Android, une phrase courte montre « Ouvrir » de Chrome.
   if (!banc.WEBKIT) await g.toast(julie, 'Touchez « Ouvrir » en bas de l\'écran');
   assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing) .dialog').count(), 0, 'aucune fenêtre à fermer');
