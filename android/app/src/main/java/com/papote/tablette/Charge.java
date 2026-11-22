@@ -19,12 +19,13 @@ import android.provider.Settings;
  * d'abord en retouchant le réglage de la limite (qui reste à sa valeur), sinon en redémarrant la tablette.
  */
 final class Charge {
-    static final int SEUIL_REPRISE = 70;     // sous ce niveau, branchée sans charger : on relance la charge (batterie entre 70 et 80 %)
+    static final int SEUIL_REPRISE = 78;     // ESSAI du 22/11 : relance très tôt pour avoir la preuve vite ; valeur finale à décider
     static final int SEUIL_REDEMARRAGE = 50; // le réglage n'a rien donné : redémarrage sous ce niveau
     static final long ATTENTE_MS = 5 * 60_000L;       // temps laissé à la charge pour repartir après un essai
     static final long ENTRE_ESSAIS_MS = 30 * 60_000L; // pas plus d'un essai de réglage par demi-heure
     static final long ENTRE_REDEMARRAGES_MS = 3 * 60 * 60_000L;
     private static final String CLE_MAX = "bv_custom_charging_max";
+    static final String MINI_APPLI = "com.papote.charge";
 
     enum Geste { RIEN, REGLAGE, REDEMARRER }
 
@@ -94,14 +95,28 @@ final class Charge {
                 Journal.log(app, "Charge : branchée sans charger à " + niveau + " %, pas de limite Blackview sur cette tablette");
                 return false;
             }
-            Bundle r = app.getContentResolver().call(Uri.parse("content://com.papote.charge"), "relancer", null, null);
+            // 1) La porte discrète (sans rien à l'écran). Blackview refuse de démarrer la mini-appli par ce chemin
+            //    tant qu'elle ne tourne pas (vu le 22/11 : « Failed to find provider info ») : la porte ne répond
+            //    donc que si la mini-appli tourne déjà.
+            Bundle r = null;
+            try {
+                r = app.getContentResolver().call(Uri.parse("content://" + MINI_APPLI), "relancer", null, null);
+            } catch (Exception e) { /* porte fermée : on passe par la fenêtre invisible */ }
             if (r != null && r.getBoolean("ok")) {
                 Journal.urgent(app, debut + "limite de " + max + " % réécrite par la mini-appli pour relancer la charge");
                 return true;
             }
-            Journal.urgent(app, debut + "la mini-appli n'a pas pu réécrire la limite ("
-                + (r == null ? "pas de réponse" : r.getString("erreur")) + ")");
-            return false;
+            if (r != null) {
+                Journal.urgent(app, debut + "la mini-appli n'a pas pu réécrire la limite (" + r.getString("erreur") + ")");
+                return false;
+            }
+            // 2) Sa fenêtre invisible : ouverte par Papote (au premier plan), elle réécrit la limite et se referme
+            //    aussitôt. On saura si ça a marché en voyant la charge repartir.
+            Intent i = new Intent().setClassName(MINI_APPLI, MINI_APPLI + ".Fenetre")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+            app.startActivity(i);
+            Journal.urgent(app, debut + "relance demandée à la mini-appli par sa fenêtre invisible (limite de " + max + " %)");
+            return true;
         } catch (Exception e) {
             Journal.urgent(app, debut + "mini-appli de charge absente ou refusée (" + e + ")");
             return false;

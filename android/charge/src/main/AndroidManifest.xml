@@ -8,10 +8,18 @@
         android:name="com.papote.charge.RELANCER"
         android:protectionLevel="signature" />
 
-    <!-- Aucune activité, aucune icône : rien à voir ni à toucher sur la tablette. -->
+    <!-- Aucune icône, et une seule fenêtre, invisible : rien à voir ni à toucher sur la tablette. -->
     <application
         android:allowBackup="false"
         android:label="Papote Charge">
+        <activity
+            android:name=".Fenetre"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:permission="com.papote.charge.RELANCER"
+            android:taskAffinity="com.papote.charge.fenetre"
+            android:theme="@android:style/Theme.NoDisplay" />
         <provider
             android:name=".Relance"
             android:authorities="com.papote.charge"

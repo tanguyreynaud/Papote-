@@ -12,8 +12,8 @@ public class ChargeTest {
     public void rienQuandToutVaBien() {
         assertEquals(Charge.Geste.RIEN, Charge.decider(true, true, 30, JAMAIS, false, JAMAIS, false));   // elle charge
         assertEquals(Charge.Geste.RIEN, Charge.decider(false, false, 30, JAMAIS, false, JAMAIS, false)); // débranchée
-        assertEquals(Charge.Geste.RIEN, Charge.decider(true, false, 79, JAMAIS, false, JAMAIS, false));  // limite à 80 %, normal
-        assertEquals(Charge.Geste.RIEN, Charge.decider(true, false, 70, JAMAIS, false, JAMAIS, false));
+        assertEquals(Charge.Geste.RIEN, Charge.decider(true, false, 80, JAMAIS, false, JAMAIS, false));  // limite à 80 %, normal
+        assertEquals(Charge.Geste.RIEN, Charge.decider(true, false, 78, JAMAIS, false, JAMAIS, false));
         assertEquals(Charge.Geste.RIEN, Charge.decider(true, false, -1, JAMAIS, false, JAMAIS, false));  // niveau inconnu
     }
 

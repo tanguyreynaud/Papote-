@@ -2,10 +2,12 @@ package com.papote.charge;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 
 /**
  * Seule porte de la mini-appli : Papote appelle « relancer », on réécrit la limite de charge Blackview
@@ -22,22 +24,29 @@ public final class Relance extends ContentProvider {
             r.putString("erreur", "demande inconnue");
             return r;
         }
+        ecrire(getContext(), r);
+        return r;
+    }
+
+    /** Réécrit la limite (une valeur en dessous, puis la sienne) et note le résultat dans « r » et dans le journal. */
+    static void ecrire(Context c, Bundle r) {
         try {
-            int max = Settings.System.getInt(getContext().getContentResolver(), CLE_MAX, -1);
+            int max = Settings.System.getInt(c.getContentResolver(), CLE_MAX, -1);
             r.putInt("max", max);
             if (max < 70 || max > 90) {
                 r.putString("erreur", "pas de limite Blackview valable (" + max + ")");
-                return r;
+            } else {
+                Settings.System.putInt(c.getContentResolver(), CLE_MAX, max - 1);
+                Settings.System.putInt(c.getContentResolver(), CLE_MAX, max);
+                int relu = Settings.System.getInt(c.getContentResolver(), CLE_MAX, -1);
+                if (relu != max) r.putString("erreur", "limite relue à " + relu + " au lieu de " + max);
+                else r.putBoolean("ok", true);
             }
-            Settings.System.putInt(getContext().getContentResolver(), CLE_MAX, max - 1);
-            Settings.System.putInt(getContext().getContentResolver(), CLE_MAX, max);
-            int relu = Settings.System.getInt(getContext().getContentResolver(), CLE_MAX, -1);
-            if (relu != max) r.putString("erreur", "limite relue à " + relu + " au lieu de " + max);
-            else r.putBoolean("ok", true);
         } catch (Exception e) {
             r.putString("erreur", String.valueOf(e));
         }
-        return r;
+        Log.w("PapoteCharge", r.getBoolean("ok") ? "limite de " + r.getInt("max") + " % réécrite"
+            : "limite non réécrite : " + r.getString("erreur"));
     }
 
     @Override public boolean onCreate() { return true; }

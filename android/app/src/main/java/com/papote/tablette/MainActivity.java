@@ -1498,7 +1498,8 @@ public class MainActivity extends Activity implements Sync.Listener {
         DevicePolicyManager dpm = dpm();
         ComponentName admin = admin();
         try {
-            dpm.setLockTaskPackages(admin, new String[]{getPackageName()});
+            // « Papote Charge » : sa fenêtre invisible doit pouvoir s'ouvrir une seconde en mode kiosque (voir Charge.java).
+            dpm.setLockTaskPackages(admin, new String[]{getPackageName(), Charge.MINI_APPLI});
             // Pas de menu « Éteindre / Redémarrer » sur le bouton marche/arrêt.
             dpm.setLockTaskFeatures(admin, DevicePolicyManager.LOCK_TASK_FEATURE_NONE);
             for (String r : RESTRICTIONS) dpm.addUserRestriction(admin, r);
