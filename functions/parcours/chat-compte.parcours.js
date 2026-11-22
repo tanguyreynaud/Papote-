@@ -100,7 +100,7 @@ test('appli : le responsable demande, le chat voit SA tablette, son abonnement e
   assert.match(fiche, /quelqu’un vu devant l’écran il y a 20 min/);
   assert.match(fiche, /écran touché il y a 3 h/);
   assert.match(fiche, /version 2\.99\.130/);
-  assert.match(fiche, /Abonnement : actif, (premier|prochain) prélèvement le \w+ \d+ \w+/);
+  assert.match(fiche, /Abonnement : actif, (premier|prochain) prélèvement le \p{L}+ \d+ \p{L}+/u);
   assert.match(fiche, /tablette reçue \(colis retiré\) le/);
   assert.match(fiche, /2 proches dans l’appli/);
   assert.match(fiche, /Tu ne peux toujours rien modifier/);
@@ -118,7 +118,7 @@ test('appli : le responsable demande, le chat voit SA tablette, son abonnement e
   // Impayé : la date de mise en pause n'est donnée qu'au responsable.
   await s.db.doc(`families/${fid}`).update({ 'abonnement.statut': 'impaye', 'abonnement.graceJusqua': s.Timestamp.fromMillis(Date.now() + 9 * s.JOUR) });
   const impaye = await demander('Pourquoi Papote dit que le paiement a échoué ?', { idToken: await jeton(paul.uid), famille: fid });
-  assert.match(impaye.fiche, /Abonnement : paiement en retard, la tablette se mettra en pause le \w+ \d+ \w+ si rien n’est réglé/);
+  assert.match(impaye.fiche, /Abonnement : paiement en retard, la tablette se mettra en pause le \p{L}+ \d+ \p{L}+ si rien n’est réglé/u);
 });
 
 test('appli : un proche non responsable voit l\'état de la tablette, sans les détails du paiement', async () => {
