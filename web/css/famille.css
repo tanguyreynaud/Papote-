@@ -2081,7 +2081,12 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
   .tiles { gap: 8px; }
   .tile { flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; min-height: 60px; padding: 8px 12px; border-radius: 18px; font-size: 17px; }
   .tile-icon { width: 40px; height: 40px; padding: 9px; border-radius: 13px; flex: none; }
-  .photo-cta { padding-top: 12px; padding-bottom: 12px; margin-bottom: 10px; }
+  /* « Envoyer une photo » à la taille des cases, sans sa 2e ligne (Tanguy, 22/11 : trop gros à côté du reste). */
+  .photo-cta { padding: 10px 14px; gap: 12px; margin-bottom: 10px; border-radius: 18px; }
+  .photo-cta strong { font-size: 19px; }
+  .photo-cta br, .photo-cta .small { display: none; }
+  .photo-cta-icon { width: 40px; height: 40px; }
+  .photo-cta-icon svg { width: 22px; height: 22px; }
   .tile-note { margin-top: 0; font-size: 13px; }
 }
 /* Petit téléphone ET texte agrandi (zoom 130 %, ~300 px de large) : pas la place pour l'icône à côté du mot
