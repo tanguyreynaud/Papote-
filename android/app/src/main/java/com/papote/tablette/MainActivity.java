@@ -315,6 +315,12 @@ public class MainActivity extends Activity implements Sync.Listener {
         }
     };
 
+    /** Pour Charge : ni fenêtre de relance ni redémarrage pendant un appel (vidéo ou téléphone) ou un SOS. */
+    static boolean occupee() {
+        MainActivity a = courante;
+        return a != null && a.occupeePourMaj();
+    }
+
     /** Appel vidéo ou téléphone en cours ou qui sonne, ou SOS lancé depuis moins de 30 min : pas d'installation. */
     private boolean occupeePourMaj() {
         CallAudio audio = callAudio;

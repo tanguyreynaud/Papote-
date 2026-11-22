@@ -67,7 +67,9 @@ final class Charge {
             long depuisRedem = redem <= 0 || redem > mur ? Long.MAX_VALUE : mur - redem;
             // Juste après un redémarrage, on laisse à la tablette le temps de rouvrir la charge elle-même.
             if (maintenant < ATTENTE_MS) return;
-            Geste g = decider(branchee, charge, niveau, maintenant - dernierEssai, essaiRate, depuisRedem, AppelGsm.enCours());
+            boolean appel = AppelGsm.enCours() || MainActivity.occupee();
+            Geste g = decider(branchee, charge, niveau, maintenant - dernierEssai, essaiRate, depuisRedem, appel);
+            if (g == Geste.REGLAGE && appel) return; // la fenêtre de relance couperait l'appel une seconde : plus tard
             if (g == Geste.REGLAGE) {
                 dernierEssai = maintenant;
                 essaiRate = !retoucherReglage(app, niveau);
