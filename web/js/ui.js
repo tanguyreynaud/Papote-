@@ -262,8 +262,8 @@ export function queFaireTablette(nom, depuis) {
   ], {
     title: 'Que faire ?', stack: true, cls: 'dialog-que-faire',
     etapes: [
-      { icone: 'i-tablette', titre: 'Son écran est-il allumé ?', texte: `Vous n'êtes pas sur place ? Appelez ${nom} ou quelqu'un près d'elle, et demandez-le.` },
-      { icone: 'i-plug', titre: 'Écran noir : rallumez-la', texte: 'Branchez le chargeur, puis appuyez 3 secondes sur le bouton marche/arrêt, sur le côté.' },
+      { icone: 'i-phone', titre: `Vous êtes loin ? Appelez ${nom} ou un voisin`, texte: 'Demandez de vérifier que la tablette est branchée et que son écran est allumé.' },
+      { icone: 'i-plug', titre: 'Écran noir : il faut la rallumer', texte: 'Brancher le chargeur, puis appuyer 3 secondes sur le bouton marche/arrêt, sur le côté.' },
       { icone: 'i-wifi', titre: 'Elle revient toute seule', texte: 'En quelques minutes. Ce message disparaît dès qu\'elle est reconnectée.' },
     ],
   });
