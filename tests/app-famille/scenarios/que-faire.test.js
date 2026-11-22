@@ -24,8 +24,8 @@ test('Tablette muette : « Que faire ? » donne 3 étapes, puis mène à « Dép
   const fenetre = await g.texteFenetre(julie);
   assert.match(fenetre, /Que faire \?/);
   assert.match(fenetre, /Aucune nouvelle de la tablette depuis 4 h/);
-  assert.match(fenetre, /Son écran est-il allumé \?.*Appelez Mamie Emma ou quelqu'un près d'elle/s);
-  assert.match(fenetre, /Écran noir : rallumez-la.*appuyez 3 secondes sur le bouton marche\/arrêt/s);
+  assert.match(fenetre, /Vous êtes loin \? Appelez Mamie Emma ou un voisin.*vérifier que la tablette est branchée et que son écran est allumé/s);
+  assert.match(fenetre, /Écran noir : il faut la rallumer.*appuyer 3 secondes sur le bouton marche\/arrêt/s);
   assert.match(fenetre, /Elle revient toute seule/);
   assert.strictEqual(await julie.page.locator('.dialog-etapes li').count(), 3);
   await julie.page.waitForTimeout(400);
