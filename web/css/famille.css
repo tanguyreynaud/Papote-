@@ -1125,7 +1125,7 @@ body:has(#hors-ligne-bandeau:not([hidden])) .install-fab { display: none; }
    Recontrôle du 18/11 : en pastille indigo ombrée, à moitié visible sous la barre du bas (selon la hauteur de
    l'écran et les cartes du haut), il avait encore l'air de flotter sur les tuiles. C'est maintenant une ligne de la
    page, de la largeur des tuiles, blanche comme elles : coupée par la barre, elle défile comme le reste. */
-#view-home:has(#btn-install:not([hidden])) { padding-bottom: calc(168px + env(safe-area-inset-bottom)); }
+#view-home:has(#btn-install:not([hidden])) { padding-bottom: calc(196px + env(safe-area-inset-bottom)); }
 .install-fab {
   display: flex;
   position: static;
@@ -2077,7 +2077,7 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
    six cases tiennent à l'écran (Tanguy, 21/11 : rappels et vidéos introuvables aux tests IA). */
 .fab.fab-texte { width: auto; height: 52px; padding: 0 20px 0 14px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
 .fab.fab-texte svg { width: 24px; height: 24px; }
-@media (max-height: 700px) {
+@media (max-height: 799px) {
   .tiles { gap: 8px; }
   .tile { flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; min-height: 60px; padding: 8px 12px; border-radius: 18px; font-size: 17px; }
   .tile-icon { width: 40px; height: 40px; padding: 9px; border-radius: 13px; flex: none; }
@@ -2091,8 +2091,15 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 }
 /* Petit téléphone ET texte agrandi (zoom 130 %, ~300 px de large) : pas la place pour l'icône à côté du mot
    (« Messages » sortait de l'écran) : l'icône repasse au-dessus, en petit. */
-@media (max-height: 700px) and (max-width: 340px) {
+@media (max-height: 799px) and (max-width: 340px) {
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tile { flex-direction: column; align-items: flex-start; gap: 6px; }
   .tile-icon { width: 34px; height: 34px; padding: 7px; border-radius: 11px; }
+}
+/* Grand téléphone (Tanguy, 22/11) : cases un peu moins hautes, pour que les six et « Installer l'app » tiennent
+   à l'écran sans faire défiler. Même dessin (icône au-dessus du mot). */
+@media (min-height: 800px) and (max-height: 960px) {
+  .tiles { gap: 12px; }
+  .tile { min-height: 104px; gap: 10px; padding: 14px 16px; }
+  .tile-icon { width: 44px; height: 44px; padding: 11px; border-radius: 14px; }
 }
