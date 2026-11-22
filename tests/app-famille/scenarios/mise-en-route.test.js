@@ -97,8 +97,9 @@ test('M8 : « Enregistrez le numéro de Mamie Emma » sur l\'accueil dès que la
   const fichier = await telechargement;
   // Le WebKit de Playwright remplace les espaces du nom proposé par « _ » (le nom donné par l'app reste « Mamie Emma.vcf »).
   assert.match(fichier.suggestedFilename(), banc.WEBKIT ? /^Mamie[ _]Emma\.vcf$/ : /Mamie Emma\.vcf/);
-  await g.texteFenetre(julie).then((t) => assert.match(t, /Fiche contact de Mamie Emma prête/));
-  await g.repondre(julie, 'OK').catch(() => null);
+  // Plus de fenêtre « Fiche contact … prête » (bug du 22/11) : sur Android, une phrase courte montre « Ouvrir » de Chrome.
+  if (!banc.WEBKIT) await g.toast(julie, 'Touchez « Ouvrir » en bas de l\'écran');
+  assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing) .dialog').count(), 0, 'aucune fenêtre à fermer');
   await julie.page.locator('#contact-encart').waitFor({ state: 'hidden' });
   await julie.page.reload();
   await g.attendreVue(julie, 'view-home', 30_000);
