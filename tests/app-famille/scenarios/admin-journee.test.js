@@ -67,6 +67,15 @@ async function ouvrirAdmin(nom, { hash = '#accueil', largeur = 1280, hauteur = 9
 /** Le texte de « À faire », une fois les données arrivées. */
 async function aFaire(t) {
   await t.page.waitForFunction(() => document.querySelector('#a-faire') && !document.querySelector('#a-faire .fantome-ligne'), null, { timeout: 20_000 });
+  // La liste est redessinée à chaque nouvelle donnée reçue (lignes remplacées, même texte). Un toucher qui tombe pile
+  // pendant ce remplacement vise une ligne retirée et n'ouvre rien : WebKit, lots j et k (22/11), 30 s d'attente puis
+  // échec. On attend donc que les lignes ne soient plus remplacées depuis 1 s avant de les lire ou de les toucher.
+  await t.page.waitForFunction(() => {
+    const premiere = document.querySelector('#a-faire').firstElementChild;
+    const avant = window.__lignesAFaire;
+    if (!avant || avant.premiere !== premiere) { window.__lignesAFaire = { premiere, depuis: performance.now() }; return false; }
+    return performance.now() - avant.depuis > 1000;
+  }, null, { timeout: 20_000, polling: 100 });
   return (await t.page.locator('#a-faire').innerText()).replace(/\n+/g, ' | ');
 }
 

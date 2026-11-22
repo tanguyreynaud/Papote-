@@ -19,6 +19,10 @@ test('La nuit : écran en veille ; une photo attend le matin sans rien allumer ;
   // applique aussi (17/11) : l'essai ne la cale plus sur l'heure qu'il est. La tablette est mise dans un fuseau où il
   // est 21 h passées (même minute qu'à Paris) ; l'horloge, elle, n'est pas truquée : tablette, comptes et serveur
   // ont la même heure. Le soir, nuit de 19 h à 5 h ; le matin, de 23 h à 5 h, qui ne couvre plus 21 h.
+  // Fuseau choisi d'après l'heure qu'il est : à moins de 3 min d'une heure pile, on attend l'heure suivante, sinon la
+  // tablette peut déjà être à 22 h quand on la regarde (lot j, 22/11, essai lancé vers 0 h 59 UTC : 22 !== 21).
+  const maintenant = new Date();
+  if (maintenant.getUTCMinutes() >= 57) await new Promise((r) => setTimeout(r, (60 - maintenant.getUTCMinutes()) * 60e3 - maintenant.getUTCSeconds() * 1e3 + 2000));
   const utc = new Date().getUTCHours();
   const decalage = ((21 - utc) % 24 + 24) % 24;
   const ecart = decalage > 14 ? decalage - 24 : decalage;
