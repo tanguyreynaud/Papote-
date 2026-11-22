@@ -2084,3 +2084,10 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
   .photo-cta { padding-top: 12px; padding-bottom: 12px; margin-bottom: 10px; }
   .tile-note { margin-top: 0; font-size: 13px; }
 }
+/* Petit téléphone ET texte agrandi (zoom 130 %, ~300 px de large) : pas la place pour l'icône à côté du mot
+   (« Messages » sortait de l'écran) : l'icône repasse au-dessus, en petit. */
+@media (max-height: 700px) and (max-width: 340px) {
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tile { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .tile-icon { width: 34px; height: 34px; padding: 7px; border-radius: 11px; }
+}
