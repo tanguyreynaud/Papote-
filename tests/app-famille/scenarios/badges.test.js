@@ -266,8 +266,7 @@ test('Navigateur : « Recevoir les appels » → numéro → prélèvement ; dou
   await surveiller(julie);
   await g.doubleAppui(julie, '#contact-oui');
   assert.strictEqual(await julie.page.locator('#contact-oui').innerText(), 'Un instant…', 'réaction visible tout de suite');
-  await g.texteFenetre(julie).then((txt) => assert.match(txt, /Fiche contact de Mamie Emma prête/));
-  await g.repondre(julie, 'OK');
+  if (!banc.WEBKIT) await g.toast(julie, 'Touchez « Ouvrir » en bas de l\'écran');
   await remplacee(julie, 'sepa-encart', null, 'numéro → prélèvement');
   assert.strictEqual(fiches, 1, 'une seule fiche contact');
 

@@ -6003,6 +6003,12 @@ export function vcardTablette(nom, tel) {
   return ['BEGIN:VCARD', 'VERSION:3.0', `FN:${propre} (Papote)`, `N:;${propre} (Papote);;;`,
     `TEL;TYPE=CELL:${intl}`, 'NOTE:Tablette Papote', 'END:VCARD', ''].join('\r\n');
 }
+// Un site ne peut pas écrire lui-même dans les contacts : c'est toujours le téléphone qui montre la fiche et demande
+// « Enregistrer ». Avant (bug signalé par Tanguy le 22/11) : un fichier téléchargé partout, puis notre fenêtre
+// « Fiche contact … prête : ouvrez-la », qui ne disait pas où la trouver.
+// Maintenant : iPhone, la fiche s'ouvre tout de suite (fiche Apple « Créer un contact ») ; Android, Chrome n'a pas
+// d'autre chemin que le fichier, mais il affiche lui-même « Ouvrir » en bas de l'écran : une phrase courte le
+// montre, sans fenêtre à fermer ; ordinateur, le fichier est téléchargé, rien d'autre.
 function enregistrerContact(nom, tel, bouton) {
   bouton.disabled = true;
   const texte = bouton.textContent;
@@ -6011,16 +6017,20 @@ function enregistrerContact(nom, tel, bouton) {
   bouton.textContent = 'Un instant…';
   try {
     const url = URL.createObjectURL(new Blob([vcardTablette(nom, tel)], { type: 'text/vcard' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${String(nom || 'Tablette').replace(/[^\p{L}\p{N} -]/gu, '').trim() || 'Tablette'}.vcf`;
-    document.body.append(a);
-    a.click();
-    a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    // Un instant après l'appui (le bouton dit « Un instant… ») : le 2e appui d'un double appui tombe sur le bouton
-    // désactivé, pas sur la fenêtre, qu'il refermait avant qu'on ait pu la lire.
-    setTimeout(() => notice(`Fiche contact de ${nom} prête : ouvrez-la pour l'ajouter à vos contacts.`), 450);
+    if (isIos()) {
+      // Sans « download » : Safari (et l'app de l'écran d'accueil) affichent la fiche Apple par-dessus la page au
+      // lieu de ranger un fichier dans « Fichiers ».
+      location.href = url;
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${String(nom || 'Tablette').replace(/[^\p{L}\p{N} -]/gu, '').trim() || 'Tablette'}.vcf`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      if (isAndroid()) toast('Touchez « Ouvrir » en bas de l\'écran, puis « Importer ».', 8000);
+    }
   } catch (e) {
     console.error(e);
     notice("La fiche contact n'a pas pu être créée. Notez le numéro : " + tel);
