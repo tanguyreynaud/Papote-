@@ -279,6 +279,11 @@ const TOLERE = [
     /Failed to load resource: WebKit encountered an internal error/,
     // Fermeture d'un canal Firestore (TYPE=terminate, envoyée par sendBeacon) pendant que le réseau est coupé.
     /^Beacon API cannot load http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/(Listen|Write)\/channel\?[^ ]*TYPE=terminate/,
+    // Requête Firestore « REST » (comptage runAggregationQuery de l'admin) coupée quand le banc ferme la page en fin
+    // d'essai : Safari le dit ainsi, l'app l'a déjà rattrapée (.catch, avertissement du SDK « unavailable »). Seulement
+    // vers l'émulateur. Vu dans admin-sim-bloquee, iPhone 15, lot k (22/11).
+    /^Connection terminated unexpectedly \(\)$/,
+    /^Failed to load resource: Connection terminated unexpectedly \(http:\/\/127\.0\.0\.1:\d+\/v1\/projects\/demo-papote\/databases\/[^)]*:runAggregationQuery/,
     // Safari ne connaît pas interactive-widget (balise viewport, pour Chrome d'Android) : il le dit et l'ignore.
     /Viewport argument key "interactive-widget" not recognized and ignored/,
   ] : []),
@@ -290,6 +295,8 @@ const TOLERE = [
 // checks ». Chromium n'en dit rien. Seulement les canaux de Firestore, mot pour mot.
 const TOLERE_PAGE = WEBKIT ? [
   /^Fetch API cannot load http:\/\/127\.0\.0\.1:\d+\/google\.firestore\.v1\.Firestore\/(Listen|Write)\/channel\?\S* due to access control checks\./,
+  // Même abandon pour un comptage (runAggregationQuery) coupé à la fermeture de la page : rattrapé par l'app (.catch).
+  /^(Fetch API cannot load http:)?\/\/?127\.0\.0\.1:\d+\/v1\/projects\/demo-papote\/databases\/\S*:runAggregationQuery\S* due to access control checks\./,
 ] : [];
 
 async function routerInternet(context) {
