@@ -899,3 +899,33 @@ test('lireDocument : cause exacte dans le message ; 400 sans reprise, 529/délai
     cleIA.signalerCleIA = avant;
   }
 });
+
+// Incident du 20/11 : avec 22 champs à deux types (« anyOf »), l'API refusait le schéma (erreur 400) et plus aucune
+// facture n'était lue. Les tests simulent l'API : seul ce compte protège de la limite.
+test('schéma de lecture des factures : peu de champs à deux types, textes absents remis à null', () => {
+  const g = require('./gestion').regles;
+  assert.ok(g.champsDeuxTypes(g.SCHEMA_FACTURE) <= g.MAX_CHAMPS_DEUX_TYPES,
+    `${g.champsDeuxTypes(g.SCHEMA_FACTURE)} champs à deux types, maximum ${g.MAX_CHAMPS_DEUX_TYPES}`);
+  assert.strictEqual(g.champsDeuxTypes({ a: { anyOf: [] }, b: { type: ['string', 'null'] }, c: [{ anyOf: [] }], d: { type: 'string' } }), 3);
+  const r = g.lectureVersFormulaire({
+    estUneFacture: true, confirmationCommande: true, fournisseur: '', numero: '', date: null, totalTTC: 259.98, tva: null,
+    devise: '', categorie: 'tablettes', libelle: '2 tablettes',
+    tablettes: { quantite: 2, modele: '', prixUnitaireTTC: 129.99, numerosSerie: [] },
+    cartesSim: { quantite: 1, operateur: '', iccids: [], numeros: [], prixCarteTTC: null, forfaitMensuelTTC: null, goParMois: 0,
+      renouvellementAuto: null, periodeForfait: 'inconnu', dureeForfaitJours: 0, finForfait: 'inconnu', identifiantClient: '' },
+    ligneMobile: '', accessoires: [], remarque: '',
+  });
+  assert.strictEqual(r.fournisseur, null);
+  assert.strictEqual(r.numero, null);
+  assert.strictEqual(r.devise, null);
+  assert.strictEqual(r.ligne, null);
+  assert.strictEqual(r.remarque, null);
+  assert.strictEqual(r.montant, 25998);
+  assert.deepStrictEqual(r.tablettes, { quantite: 2, modele: null, prixAchat: 12999, numeros: [] });
+  assert.strictEqual(r.cartesSim.operateur, null);
+  assert.strictEqual(r.cartesSim.go, null);
+  assert.strictEqual(r.cartesSim.periode, 'mois');
+  assert.strictEqual(r.cartesSim.dureeForfait, null);
+  assert.strictEqual(r.cartesSim.finForfait, null);
+  assert.strictEqual(r.cartesSim.identifiantClient, null);
+});

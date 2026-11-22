@@ -672,6 +672,19 @@ function memeAccessoire(a, b) {
 }
 
 const nul = (type) => ({ anyOf: [{ type }, { type: 'null' }] });
+// L'API refuse un schéma qui compte trop de champs à deux types (« anyOf », erreur 400 du 20/11 avec 22 champs :
+// plus aucune facture n'était lue). Les textes absents sont donc rendus par une chaîne vide, que
+// lectureVersFormulaire remet à null ; « anyOf » reste réservé aux montants, à la date et aux deux blocs
+// facultatifs. MAX_CHAMPS_DEUX_TYPES est vérifié par gestion.test.js.
+const MAX_CHAMPS_DEUX_TYPES = 12;
+const VIDE = ' Chaîne vide si le document ne le dit pas.';
+const texteOuVide = (description = '') => ({ type: 'string', description: `${description}${VIDE}`.trim() });
+function champsDeuxTypes(schema) {
+  if (!schema || typeof schema !== 'object') return 0;
+  if (Array.isArray(schema)) return schema.reduce((n, x) => n + champsDeuxTypes(x), 0);
+  const ici = Array.isArray(schema.anyOf) || Array.isArray(schema.type) ? 1 : 0;
+  return ici + Object.values(schema).reduce((n, x) => n + champsDeuxTypes(x), 0);
+}
 const SCHEMA_FACTURE = {
   type: 'object',
   additionalProperties: false,
@@ -680,12 +693,12 @@ const SCHEMA_FACTURE = {
   properties: {
     estUneFacture: { type: 'boolean', description: 'Faux si le document n\'est ni une facture, ni un ticket de caisse, ni une confirmation de commande avec le montant payé.' },
     confirmationCommande: { type: 'boolean', description: 'Vrai si c\'est une confirmation de commande d\'un site marchand et non la facture elle-même.' },
-    fournisseur: nul('string'),
-    numero: { ...nul('string'), description: 'Numéro de la facture.' },
+    fournisseur: texteOuVide('Nom du vendeur.'),
+    numero: texteOuVide('Numéro de la facture.'),
     date: { anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }], description: 'Date de la facture (AAAA-MM-JJ).' },
     totalTTC: { ...nul('number'), description: 'Total payé, toutes taxes comprises, en euros.' },
     tva: { ...nul('number'), description: 'Montant total de la TVA en euros, null si aucune.' },
-    devise: { ...nul('string'), description: 'Code ISO de la devise, EUR le plus souvent.' },
+    devise: texteOuVide('Code ISO de la devise, EUR le plus souvent.'),
     categorie: { type: 'string', enum: Object.keys(CATEGORIES) },
     libelle: { type: 'string', description: 'Ce qui a été acheté, en quelques mots, en français.' },
     tablettes: {
@@ -695,7 +708,7 @@ const SCHEMA_FACTURE = {
         required: ['quantite', 'modele', 'prixUnitaireTTC', 'numerosSerie'],
         properties: {
           quantite: { type: 'integer' },
-          modele: nul('string'),
+          modele: texteOuVide('Modèle de la tablette.'),
           prixUnitaireTTC: nul('number'),
           numerosSerie: { type: 'array', items: { type: 'string' } },
         },
@@ -710,29 +723,29 @@ const SCHEMA_FACTURE = {
           'renouvellementAuto', 'periodeForfait', 'dureeForfaitJours', 'finForfait', 'identifiantClient'],
         properties: {
           quantite: { type: 'integer' },
-          operateur: nul('string'),
+          operateur: texteOuVide('Opérateur mobile.'),
           iccids: { type: 'array', items: { type: 'string' }, description: 'ICCID lisibles (numéro de 19 ou 20 chiffres de la carte).' },
           numeros: { type: 'array', items: { type: 'string' }, description: 'Numéros de ligne attribués, dans le même ordre.' },
           prixCarteTTC: { ...nul('number'), description: 'Prix d\'une carte (kit SIM), en euros.' },
           forfaitMensuelTTC: { ...nul('number'), description: 'Prix mensuel du forfait de chaque ligne, en euros.' },
-          goParMois: { ...nul('number'), description: 'Données internet du forfait, en Go par période (1 pour « 1Go »).' },
+          goParMois: { type: 'number', description: 'Données internet du forfait, en Go par période (1 pour « 1Go ») ; 0 si le document ne le dit pas.' },
           renouvellementAuto: { ...nul('boolean'), description: 'Vrai pour un forfait reconduit et prélevé tout seul (abonnement mensuel, '
             + 'sans engagement, prélèvement SEPA) ; faux pour une recharge prépayée payée à chaque fois ; null si le document ne permet pas de le dire.' },
-          periodeForfait: { anyOf: [{ type: 'null' }, { type: 'string', enum: ['mois', 'jours'] }],
+          periodeForfait: { type: 'string', enum: ['mois', 'jours', 'inconnu'],
             description: '« jours » seulement si le document parle d\'un pass d\'un nombre de jours (« valable 30 jours », « 28 jours ») ; '
-              + '« mois » pour un forfait par mois (« /mois », mensuel, prélevé chaque mois) ; null si le document ne le dit pas (compté par mois).' },
-          dureeForfaitJours: { ...nul('integer'), description: 'Seulement pour un pass en jours : sa durée (30 pour « 30 jours »). null pour un forfait mensuel.' },
-          finForfait: { anyOf: [{ type: 'null' }, { type: 'string', enum: ['reduit', 'bloque'] }],
-            description: 'Au bout des Go : « reduit » (débit réduit) ou « bloque » (internet coupé), seulement si le document le dit, sinon null.' },
-          identifiantClient: { ...nul('string'), description: 'Identifiant ou numéro client chez l\'opérateur (pour se connecter à l\'espace client), '
-            + 'seulement s\'il est écrit ; sinon null. Jamais un n° de commande, de facture, de ligne ni une ICCID.' },
+              + '« mois » pour un forfait par mois (« /mois », mensuel, prélevé chaque mois) ; « inconnu » si le document ne le dit pas (compté par mois).' },
+          dureeForfaitJours: { type: 'integer', description: 'Seulement pour un pass en jours : sa durée (30 pour « 30 jours »). 0 pour un forfait mensuel.' },
+          finForfait: { type: 'string', enum: ['reduit', 'bloque', 'inconnu'],
+            description: 'Au bout des Go : « reduit » (débit réduit) ou « bloque » (internet coupé), seulement si le document le dit, sinon « inconnu ».' },
+          identifiantClient: { type: 'string', description: 'Identifiant ou numéro client chez l\'opérateur (pour se connecter à l\'espace client), '
+            + 'seulement s\'il est écrit ; sinon chaîne vide. Jamais un n° de commande, de facture, de ligne ni une ICCID.' },
         },
       }],
       description: 'Seulement pour des cartes SIM physiques achetées (kits SIM, nouvelles lignes) : sinon null. '
         + 'Une simple facture mensuelle de forfaits n\'en est pas une.',
     },
-    ligneMobile: { ...nul('string'), description: 'Pour une facture ou une recharge de forfait mobile : le numéro de ligne (06…) '
-      + 'ou l\'ICCID concerné, tel qu\'imprimé. null sinon, ou s\'il n\'y figure pas.' },
+    ligneMobile: { type: 'string', description: 'Pour une facture ou une recharge de forfait mobile : le numéro de ligne (06…) '
+      + 'ou l\'ICCID concerné, tel qu\'imprimé. Chaîne vide sinon, ou s\'il n\'y figure pas.' },
     accessoires: {
       type: 'array',
       description: 'Petit matériel envoyé avec les tablettes, à suivre en stock (clé ou routeur 4G, prise USB, chargeur, '
@@ -744,7 +757,7 @@ const SCHEMA_FACTURE = {
         properties: { nom: { type: 'string', description: 'Nom court en français, ex. « Clé 4G USB ».' }, quantite: { type: 'integer' }, prixUnitaireTTC: nul('number') },
       },
     },
-    remarque: { ...nul('string'), description: 'Un doute à signaler à la personne qui saisit (montant illisible…), sinon null.' },
+    remarque: { type: 'string', description: 'Un doute à signaler à la personne qui saisit (montant illisible…), sinon chaîne vide.' },
   },
 };
 
@@ -2308,7 +2321,7 @@ function confirmationARattacher(depenses, r) {
 
 const CONSIGNE_LECTURE = `Tu lis une facture d'achat (ou un ticket) reçue par Papote, une petite entreprise française
 qui prête des tablettes à des personnes âgées et leur famille. Remplis chaque champ d'après le document seulement :
-null quand l'information n'y figure pas, jamais d'invention. Montants en euros, tels qu'imprimés.
+null (ou chaîne vide pour un texte, 0 ou « inconnu » quand le champ le demande) quand l'information n'y figure pas, jamais d'invention. Montants en euros, tels qu'imprimés.
 Catégories : tablettes (achat de tablettes), sim (cartes SIM, forfaits mobiles), materiel (accessoires : câbles,
 chargeurs, supports, enceintes), reparations (réparation ou remplacement de matériel), expedition (transport, colis,
 étiquettes Mondial Relay ou Sendcloud), emballage (cartons, papier bulle, impression), deplacements (train, carburant,
@@ -4426,7 +4439,7 @@ exports.gestionParcours = onCall(async (request) => {
 });
 
 exports.regles = {
-  ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE,
+  ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE, champsDeuxTypes, MAX_CHAMPS_DEUX_TYPES,
   lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeFournisseur, destinataireDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre, gardeFous, lireDocument, aReessayer,
