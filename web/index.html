@@ -498,10 +498,9 @@
             <form id="form-family-name" class="setting-edit" hidden novalidate>
               <div id="tablet-face-card" class="rg-qui-photo" hidden>
                 <p class="choice-titre">Sa photo</p>
+                <!-- Un seul bouton, puis un petit menu : appareil photo, galerie, retirer (Tanguy, 23/11). -->
                 <div class="face-buttons">
-                  <button type="button" class="secondary" id="tface-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
-                  <button type="button" class="secondary" id="tface-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
-                  <button type="button" class="link danger" id="tface-remove" hidden>Retirer la photo</button>
+                  <button type="button" class="secondary photo-changer" id="tface-changer"><svg><use href="#i-camera"/></svg><span id="tface-changer-texte">Ajouter une photo</span></button>
                 </div>
                 <input id="in-tface-camera" type="file" accept="image/*" capture="environment" hidden>
                 <input id="in-tface-gallery" type="file" accept="image/*" hidden>
@@ -867,9 +866,7 @@
                 <p class="choice-titre">Ma photo</p>
                 <p class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
                 <div class="face-buttons">
-                  <button type="button" class="secondary" id="face-camera"><svg><use href="#i-camera"/></svg>Prendre une photo</button>
-                  <button type="button" class="secondary" id="face-gallery"><svg><use href="#i-gallery"/></svg>Choisir une photo</button>
-                  <button type="button" class="link danger" id="face-remove" hidden>Retirer ma photo</button>
+                  <button type="button" class="secondary photo-changer" id="face-changer"><svg><use href="#i-camera"/></svg><span id="face-changer-texte">Ajouter ma photo</span></button>
                 </div>
                 <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
                 <input id="in-face-gallery" type="file" accept="image/*" hidden>

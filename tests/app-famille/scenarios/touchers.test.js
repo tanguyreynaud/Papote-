@@ -54,10 +54,17 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await g.repondre(julie, 'OK');
   // La photo de Mamie, ronde et vide : « Choisir une photo ».
   await g.panneau(julie, 'tablette');
-  // La photo de Mamie touchée ouvre « Modifier » ; ouverte, elle propose de choisir une photo.
+  // La photo de Mamie touchée ouvre « Modifier » ; ouverte, le menu photo (appareil photo, galerie : Tanguy, 23/11),
+  // et « Choisir dans la galerie » ouvre le choix d'une photo.
   await p.click('#tface-empty');
   await p.locator('#form-family-name').waitFor();
-  assert.ok((await effet(julie, '#tface-empty')).fichier, 'photo de Mamie : choix d\'une photo');
+  await p.click('#tface-empty');
+  assert.match(await g.texteFenetre(julie), /Prendre une photo[\s\S]*Choisir dans la galerie/);
+  assert.doesNotMatch(await g.texteFenetre(julie), /Retirer/, 'rien à retirer sans photo');
+  await p.waitForTimeout(600);
+  const choisi = p.waitForEvent('filechooser');
+  await g.repondre(julie, 'Choisir dans la galerie');
+  await (await choisi).setFiles([]).catch(() => {});
   await p.click('#family-name-card .setting-cancel');
   // Le titre et la valeur d'un réglage : comme « Modifier ».
   await p.click('#sleep-value');
@@ -81,7 +88,11 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   // Ma photo touchée ouvre « Modifier » ; ouverte, elle propose de choisir une photo.
   await p.locator('#face-img, #face-empty').filter({ visible: true }).first().click();
   await p.locator('#form-my-name').waitFor();
-  assert.ok((await effet(julie, '#face-img, #face-empty')).fichier, 'ma photo : choix d\'une photo');
+  // Ouverte, le menu photo (Tanguy, 23/11) : Prendre une photo, galerie, et Retirer puisqu'il y en a une.
+  await p.locator('#face-img, #face-empty').filter({ visible: true }).first().click();
+  assert.match(await g.texteFenetre(julie), /Prendre une photo[\s\S]*Choisir dans la galerie/);
+  await p.waitForTimeout(600);
+  await g.repondre(julie, 'Annuler');
   await p.click('#my-name-card .setting-cancel');
 
   // Photos : « Envoyé, pas vu » dit que Mamie ne l'a pas encore vue.
@@ -146,7 +157,7 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
     }
   }
   await p.click('#family-name-card .setting-modify');
-  await verifier(['#tface-camera', '#tface-gallery']);
+  await verifier(['#tface-changer']);
   await p.click('#family-name-card .setting-cancel');
   await verifier(['#remote-card summary', '#remote-card [data-cmd="status"]']);
   await g.panneau(julie, 'famille');
@@ -175,7 +186,7 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
   }
   await verifier(['#apparence-card summary', '#view-profile [data-theme-choice]:not(.active)']);
   await p.click('#my-name-card .setting-modify');
-  await verifier(['#face-camera', '#face-gallery']);
+  await verifier(['#face-changer']);
 });
 
 // V14 (testeur, 17/11) : « Tout télécharger » sur une page Photos vide ne servait à rien. Caché tant qu'il n'y a

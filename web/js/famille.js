@@ -2060,7 +2060,7 @@ function avatar(src) {
 function renderFace() {
   $('face-img').hidden = !myFace;
   $('face-empty').hidden = !!myFace;
-  $('face-remove').hidden = !myFace;
+  $('face-changer-texte').textContent = myFace ? 'Changer ma photo' : 'Ajouter ma photo';
   if (myFace) $('face-img').src = myFace;
   badgeDu('face-nudge', !myFace);
 }
@@ -2124,7 +2124,7 @@ function renderTabletFace() {
   $('tface-img').hidden = !face;
   if (face) $('tface-img').src = face;
   $('tface-empty').hidden = !!face;
-  $('tface-remove').hidden = !face;
+  $('tface-changer-texte').textContent = face ? 'Changer la photo' : 'Ajouter une photo';
 }
 
 async function saveTabletFace(face) {
@@ -2156,29 +2156,39 @@ async function onTabletFaceChosen(e) {
   }
 }
 
-$('tface-camera').addEventListener('click', () => $('in-tface-camera').click());
-$('tface-gallery').addEventListener('click', () => $('in-tface-gallery').click());
-// La photo elle-même (ou le rond vide) touchée : « Choisir une photo », comme le bouton à côté (audit des touchers, 17/11).
-// La photo touchée : la carte s'ouvre (« Modifier ») ; déjà ouverte, on choisit une photo.
-['tface-img', 'tface-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('family-name-card').classList.contains('editing')) $('tface-gallery').click(); }));
+// Changer une photo (Tanguy, 23/11) : un seul bouton, puis un petit menu comme sur un téléphone : appareil photo,
+// galerie, et « Retirer la photo » s'il y en a une. Le menu se ferme dans le même toucher qui ouvre l'appareil photo
+// ou la galerie (sinon le navigateur refuse de les ouvrir).
+async function menuPhoto(titre, aPhoto, prefixe, retirer) {
+  const choix = await chooseAction(titre, [
+    { label: 'Prendre une photo', value: 'camera', icone: 'camera' },
+    { label: 'Choisir dans la galerie', value: 'gallery', icone: 'gallery' },
+    ...(aPhoto ? [{ label: 'Retirer la photo', value: 'retirer', danger: true, icone: 'trash' }] : []),
+  ]);
+  if (choix === 'camera' || choix === 'gallery') $(`in-${prefixe}-${choix}`).click();
+  else if (choix === 'retirer') retirer();
+}
+const photoTablette = () => tabletMembers.map((m) => m.face).find(Boolean) || null;
+const menuPhotoTablette = () => menuPhoto(`Photo de ${session.family.name}`, !!photoTablette(), 'tface', retirerPhotoTablette);
+$('tface-changer').addEventListener('click', menuPhotoTablette);
+// La photo touchée : la carte s'ouvre (« Modifier ») ; déjà ouverte, le même menu (audit des touchers, 17/11).
+['tface-img', 'tface-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('family-name-card').classList.contains('editing')) menuPhotoTablette(); }));
 $('in-tface-camera').addEventListener('change', onTabletFaceChosen);
 $('in-tface-gallery').addEventListener('change', onTabletFaceChosen);
-$('tface-remove').addEventListener('click', async () => {
-  if (!await askConfirm(`Retirer la photo de ${session.family.name} ?`, 'Retirer')) return;
+async function retirerPhotoTablette() {
   try {
     await saveTabletFace(null);
     toast('Photo retirée');
     apresPhoto('family-name-card');
   } catch (err) { console.error(err); notice("La photo n'a pas pu être retirée."); }
-});
+}
 
-$('face-camera').addEventListener('click', () => $('in-face-camera').click());
-$('face-gallery').addEventListener('click', () => $('in-face-gallery').click());
-['face-img', 'face-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('my-name-card').classList.contains('editing')) $('face-gallery').click(); }));
+const menuMaPhoto = () => menuPhoto('Ma photo', !!myFace, 'face', retirerMaPhoto);
+$('face-changer').addEventListener('click', menuMaPhoto);
+['face-img', 'face-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('my-name-card').classList.contains('editing')) menuMaPhoto(); }));
 $('in-face-camera').addEventListener('change', onFaceChosen);
 $('in-face-gallery').addEventListener('change', onFaceChosen);
-$('face-remove').addEventListener('click', async () => {
-  if (!await askConfirm('Retirer votre photo ?')) return;
+async function retirerMaPhoto() {
   myFace = null;
   renderFace();
   rememberVisage(SANS_VISAGE);
@@ -2190,7 +2200,7 @@ $('face-remove').addEventListener('click', async () => {
     console.error(err);
     notice("La photo n'a pas pu être retirée. Vérifiez la connexion.");
   }
-});
+}
 // Le Profil s'ouvre sous le doigt : le 2e appui d'un double appui n'y touche rien (sinon « Galerie » s'ouvrait).
 $('face-nudge').addEventListener('click', () => {
   document.documentElement.classList.add('sans-appui');
