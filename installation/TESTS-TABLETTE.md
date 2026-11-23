@@ -40,7 +40,10 @@ Les autres listes (commandes, stock, app famille) viendront à côté de celle-c
 - 👤 Couper le wifi 2 min : carte « Pas d'internet », puis retour seul
 - 👤 Débrancher le chargeur : la famille est prévenue
 - 👤 Remettre sur « Bienvenue » (`--ez bienvenue true`) avant la mise en carton
-- 👤 Chargée à plus de 80 %, câble et chargeur dans le carton
+- 👤 Batterie : `adb shell settings get system bv_custom_charging_max` répond 70 ; branchée, elle s'arrête de charger à 70 % (normal)
+- 👤 Mini-appli « Papote Charge » installée (`adb shell pm list packages com.papote.charge`), message Android « ancienne version » validé une fois par OK, écran propre
+- 👤 Si possible, laisser descendre à 60 % branchée : la charge repart seule (ligne « CHARGE : » dans le journal de la tablette)
+- 👤 Chargée autour de 70 % (limite voulue), câble et chargeur dans le carton
 
 ## D. Chaque nouvelle version, sur les tablettes de test avant tout le monde
 

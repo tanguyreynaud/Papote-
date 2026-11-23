@@ -10,6 +10,19 @@ Le canal de mise à jour, en bref :
   `tablette-test-v<version>-<numéro>` pour les tablettes de test. Sans étiquette, un ménage de branches pourrait
   faire disparaître le commit, et les tablettes éteintes à ce moment-là ne pourraient plus se mettre à jour.
 
+## La mini-appli « Papote Charge » ne passe PAS par ce canal
+
+`installation/Papote-charge.apk` (paquet `com.papote.charge`) relance la charge quand la tablette, bloquée à 70 % par
+la protection Blackview, redescend à 60 %. Elle est installée **uniquement par câble**, par `installer-tablette.ps1`
+(étape 3 bis), jamais par les mises à jour à distance.
+
+- Tablette installée **avant** le 23/11/2026 : la rebrancher au PC et relancer `installer-tablette.ps1` (ou, à la main :
+  `adb install -r -g --bypass-low-target-sdk-block installation\Papote-charge.apk`, puis
+  `adb shell settings put system bv_charging_protection_mode 2` et `adb shell settings put system bv_custom_charging_max 70`),
+  puis toucher une fois OK sur le message Android « conçue pour une ancienne version ».
+- Sans la mini-appli, Papote garde son secours : un redémarrage sous 50 % fait repartir la charge.
+- Si la mini-appli change un jour, il faut repasser par le câble sur chaque tablette.
+
 ## Publier
 
 | Script | Rôle |
