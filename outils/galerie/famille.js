@@ -471,6 +471,18 @@ const SCENES = [
   } }), faire: toucher('#btn-invite') },
   { groupe: 'Réglages', titre: 'Inviter : invitation envoyée', donnees: () => connecte({ fonctions: { inviterParEmail: { envoye: true } } }), faire: async (p) => {
     await toucher('#btn-invite')(p); await p.fill('#invite-email', 'paul@exemple.fr'); await p.locator('#form-invite button[type="submit"]').click(); await pause(p, 500);
+    // Depuis le 23/11 : « Inviter cette personne ? » avant l'envoi (rien à toucher sur une app plus ancienne).
+    const oui = p.locator('.dialog-back:not(.closing) .dialog button.primary');
+    if (await oui.count()) { await oui.click(); await pause(p, 900); }
+  } },
+  { groupe: 'Réglages', titre: 'Inviter : « Inviter cette personne ? »', donnees: () => connecte(), faire: async (p) => {
+    await toucher('#btn-invite')(p); await p.fill('#invite-email', 'christophe.delacroix@exemple.fr'); await p.locator('#form-invite button[type="submit"]').click(); await pause(p, 500);
+  } },
+  { groupe: 'Réglages', titre: 'Inviter : « Annuler l\'invitation ? »', donnees: () => connecte({ docs: {
+    [`families/${FID}/invitations/christophe.delacroix@exemple.fr`]: { email: 'christophe.delacroix@exemple.fr', fid: FID, familyName: 'Mamie Jeanne', invitedBy: 'Julie', createdAt: ilYa(1) },
+  } }), faire: async (p) => {
+    await toucher('#btn-invite')(p);
+    await p.locator('#invitations-sent button', { hasText: 'Annuler' }).first().click(); await pause(p, 500);
   } },
   { groupe: 'Réglages', titre: 'Inviter : famille complète (30 proches)', plein: true, donnees: () => {
     const d = connecte({ nombreux: true });
