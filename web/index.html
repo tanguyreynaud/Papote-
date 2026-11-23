@@ -501,6 +501,7 @@
                 <!-- Un seul bouton, puis un petit menu : appareil photo, galerie, retirer (Tanguy, 23/11). -->
                 <div class="face-buttons">
                   <button type="button" class="secondary photo-changer" id="tface-changer"><svg><use href="#i-camera"/></svg><span id="tface-changer-texte">Ajouter une photo</span></button>
+                  <button type="button" class="secondary photo-retirer-btn" id="tface-remove" hidden><svg><use href="#i-trash"/></svg>Retirer</button>
                 </div>
                 <input id="in-tface-camera" type="file" accept="image/*" capture="environment" hidden>
                 <input id="in-tface-gallery" type="file" accept="image/*" hidden>
@@ -867,6 +868,7 @@
                 <p class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
                 <div class="face-buttons">
                   <button type="button" class="secondary photo-changer" id="face-changer"><svg><use href="#i-camera"/></svg><span id="face-changer-texte">Ajouter ma photo</span></button>
+                  <button type="button" class="secondary photo-retirer-btn" id="face-remove" hidden><svg><use href="#i-trash"/></svg>Retirer</button>
                 </div>
                 <input id="in-face-camera" type="file" accept="image/*" capture="user" hidden>
                 <input id="in-face-gallery" type="file" accept="image/*" hidden>

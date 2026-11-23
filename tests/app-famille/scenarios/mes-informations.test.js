@@ -91,12 +91,12 @@ test('Profil : prénom, genre, numéro, photo (changée puis retirée) enregistr
   await julie.page.locator('#members li', { hasText: 'Paulo' }).locator('img').waitFor();
 
   // Photo retirée.
-  // Un seul bouton, puis le menu photo (Tanguy, 23/11) : « Retirer la photo », sans deuxième question.
-  if (!(await paul.page.locator('#face-changer').isVisible())) await paul.page.click('#my-name-card .setting-modify');
-  await paul.page.click('#face-changer');
-  // Le menu s'ouvre sous le doigt : un appui dans la demi-seconde serait pris pour un double appui (ui.js).
+  // « Retirer » à côté de « Changer ma photo » (Tanguy, 23/11), puis la confirmation.
+  if (!(await paul.page.locator('#face-remove').isVisible())) await paul.page.click('#my-name-card .setting-modify');
+  await paul.page.click('#face-remove');
+  // « Retirer » s'ouvre sous le doigt : un appui dans la demi-seconde serait pris pour un double appui (ui.js).
   await paul.page.waitForTimeout(600);
-  await g.repondre(paul, 'Retirer la photo');
+  await g.repondre(paul, 'Retirer');
   await paul.page.locator('#face-img').waitFor({ state: 'hidden' });
   await g.attendreBase(async () => !(await fiche()).face, 'photo retirée de la fiche');
   await paul.page.reload();
@@ -333,10 +333,10 @@ test('Photo retirée (V2) : ne revient pas après actualisation ni à la réouve
   const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'julie@exemple.fr').id;
   await g.attendreBase(async () => !!(await g.lire(`families/${fid}/members/${uid}`)).face, 'photo de l\'inscription');
   await profil(julie);
-  if (!(await julie.page.locator('#face-changer').isVisible())) await julie.page.click('#my-name-card .setting-modify');
-  await julie.page.click('#face-changer');
+  if (!(await julie.page.locator('#face-remove').isVisible())) await julie.page.click('#my-name-card .setting-modify');
+  await julie.page.click('#face-remove');
   await julie.page.waitForTimeout(600);
-  await g.repondre(julie, 'Retirer la photo');
+  await g.repondre(julie, 'Retirer');
   await g.attendreBase(async () => !(await g.lire(`families/${fid}/members/${uid}`)).face, 'photo retirée');
   for (let i = 0; i < 2; i++) {
     await julie.page.reload();
