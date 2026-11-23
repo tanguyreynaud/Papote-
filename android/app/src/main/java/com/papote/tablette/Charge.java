@@ -13,14 +13,14 @@ import android.os.SystemClock;
 import android.provider.Settings;
 
 /**
- * Limite de charge Blackview à 80 % (Tanguy, 20/11) : une fois à 80 %, la tablette coupe la charge et ne la
+ * Limite de charge Blackview (Tanguy, 20/11 ; réglée à 70 % par l'installateur depuis le 23/11) : une fois à la limite, la tablette coupe la charge et ne la
  * rouvre que si on rebranche le câble, si on change son réglage ou si elle redémarre. Branchée en permanence,
  * elle se viderait donc jusqu'à s'éteindre. Papote le voit (branchée, ne charge pas, niveau bas) et relance :
  * d'abord en faisant réécrire le réglage de la limite (qui reste à sa valeur) par la mini-appli « Papote Charge »
  * (prouvé sur T-003 le 22/11, y compris après un redémarrage), sinon en redémarrant la tablette.
  */
 final class Charge {
-    static final int SEUIL_REPRISE = 70;     // sous ce niveau, branchée sans charger : on relance (batterie tenue entre 70 et 80 %)
+    static final int SEUIL_REPRISE = 60;     // sous ce niveau, branchée sans charger : on relance (limite à 70 % : batterie tenue entre 60 et 70 %, Tanguy 23/11)
     static final int SEUIL_REDEMARRAGE = 50; // le réglage n'a rien donné : redémarrage sous ce niveau
     static final long ATTENTE_MS = 5 * 60_000L;       // temps laissé à la charge pour repartir après un essai
     static final long ENTRE_ESSAIS_MS = 30 * 60_000L; // pas plus d'un essai de réglage par demi-heure

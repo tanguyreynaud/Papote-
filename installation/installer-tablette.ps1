@@ -191,13 +191,13 @@ Adb shell settings put global stay_on_while_plugged_in 7 | Out-Null
 # Barre de navigation du bas masquée pour de bon (réglage des tablettes UNISOC, sans effet ailleurs)
 Adb shell settings put system show_navigationbar 0 | Out-Null
 # Données : seul Papote utilise internet (Économiseur de données, applis inutiles désactivées).
-# Limite de charge à 80 % sur les tablettes Blackview (Tanguy, 20/11 : durée de vie de la batterie). Sans effet
-# ailleurs : le réglage n'existe pas. Papote relance la charge quand la batterie redescend (voir Charge.java).
+# Limite de charge à 70 % sur les tablettes Blackview (Tanguy, 23/11 : durée de vie de la batterie ; 70 est le
+# minimum du réglage). Sans effet ailleurs : le réglage n'existe pas. Papote relance la charge à 60 % (Charge.java).
 $limiteCharge = "$(Adb shell settings get system bv_custom_charging_max)".Trim()
 if ($limiteCharge -match '^\d+$') {
     Adb shell settings put system bv_charging_protection_mode 2 | Out-Null
-    Adb shell settings put system bv_custom_charging_max 80 | Out-Null
-    Say 'Limite de charge de la batterie : 80 %.' 'Green'
+    Adb shell settings put system bv_custom_charging_max 70 | Out-Null
+    Say 'Limite de charge de la batterie : 70 %.' 'Green'
 }
 & (Join-Path $PSScriptRoot 'economie-donnees.ps1')
 # Tablette en français, clavier AZERTY : Papote change la langue au démarrage grâce à ces droits
