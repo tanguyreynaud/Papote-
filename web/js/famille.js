@@ -4766,6 +4766,7 @@ $('btn-wifi-scan').addEventListener('click', chercherReseaux);
 // Réseau actuel (la tablette le publie sur sa fiche : wifi = { ssid }). Hors ligne, elle ne
 // recevrait pas le changement : il se fait alors directement sur la tablette.
 function renderWifi() {
+  if (session.family) renderRadioCarte();
   const enLigne = tabletteEnLigne();
   $('wifi-modify').hidden = !enLigne;
   $('wifi-current').textContent = enLigne
@@ -5219,7 +5220,7 @@ function renderOptions() {
   const o = optionsActuelles();
   const admin = amFamilyAdmin();
   $('duree-card').hidden = !admin;
-  $('radio-card').hidden = !admin;
+  renderRadioCarte();
   const m = dureeAffichage(o);
   $('duree-value').textContent = `${m} minute${m > 1 ? 's' : ''}`;
   $('radio-value').textContent = o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée';
@@ -5228,6 +5229,12 @@ function renderOptions() {
   for (const [id, on] of [['opt-lecture', o.lecture !== false], ['opt-rappels-accueil', o.rappelsAccueil !== false]]) {
     if (!$(id).disabled) $(id).checked = on;
   }
+}
+// Radio seulement en Wi-Fi (Tanguy, 23/11) : la tablette ne la joue jamais sur la carte SIM (forfait de 1 Go). Le
+// réglage est caché tant que la tablette n'a pas de Wi-Fi, et revient dès qu'elle en a un. Une radio déjà activée
+// reste visible (Wi-Fi coupé un moment) : on peut toujours l'enlever.
+function renderRadioCarte() {
+  $('radio-card').hidden = !amFamilyAdmin() || !(wifiCourant() || optionsActuelles().radio?.active);
 }
 const saveOptions = (patch, message) => saveFamily({ options: { ...sansVocal(optionsActuelles()), ...patch } }, message);
 // Lecture à voix haute, prochain rappel : un toucher, c'est envoyé (comme « Notifications » dans Mon profil).
@@ -5538,6 +5545,99 @@ SETTINGS['volume-card'] = {
   },
 };
 
+// Sonneries (Tanguy, 23/11) : families/{fid}.sonAppel (appel qui arrive) et sonArrivee (photo, message ou rappel
+// qui arrive), choisis par un responsable parmi trois sons embarqués dans la tablette. Rien à régler sur la
+// tablette elle-même. Absent = le son d'avant (sonnerie de la tablette, ding-dong de Papote). « Écouter » joue le
+// son essayé sur la tablette, au volume de la barre qui va avec (Sonnerie, ou Vidéos et messages lus).
+const SONS = {
+  appel: [
+    { id: 'tablette', nom: 'Sonnerie de la tablette', aide: 'Le son d\'origine' },
+    { id: 'autrefois', nom: 'Téléphone d\'autrefois', aide: 'Sonnerie à cloches, comme avant' },
+    { id: 'horloge', nom: 'Carillon d\'horloge', aide: 'Quatre notes de cloche' },
+  ],
+  arrivee: [
+    { id: 'dingdong', nom: 'Ding-dong', aide: 'Le son d\'origine' },
+    { id: 'cloche', nom: 'Cloche', aide: 'Deux coups, plus graves' },
+    { id: 'sonnette', nom: 'Sonnette', aide: 'Comme une sonnette de porte' },
+  ],
+};
+const sonChoisi = (quoi) => {
+  const v = session.family?.[quoi === 'appel' ? 'sonAppel' : 'sonArrivee'];
+  return SONS[quoi].some((x) => x.id === v) ? v : SONS[quoi][0].id;
+};
+const nomSon = (quoi, id) => SONS[quoi].find((x) => x.id === id)?.nom || SONS[quoi][0].nom;
+function renderSons() {
+  $('sons-value').textContent = `Appel : ${nomSon('appel', sonChoisi('appel'))} · Envois : ${nomSon('arrivee', sonChoisi('arrivee'))}`;
+}
+async function ecouterSon(quoi, son) {
+  if (!tabletMembers.length) { toast('Aucune tablette dans la famille pour le moment.'); return; }
+  const volume = quoi === 'appel' ? sonnerieActuelle() : volumeActuel();
+  const data = {
+    type: 'son', quoi: quoi === 'appel' ? 'sonnerie' : 'arrivee', son, volume,
+    createdBy: session.uid, createdAt: serverTimestamp(), state: 'pending',
+  };
+  toast('Écoutez la tablette : elle sonne.');
+  try {
+    await Promise.all(tabletMembers.map((t) => setDoc(doc(collection(db, 'families', session.fid, 'commands')), { ...data, target: t.id })));
+  } catch (err) {
+    console.error(err);
+    toast('La tablette n\'a pas pu être prévenue. Vérifiez la connexion internet.');
+  }
+}
+for (const quoi of ['appel', 'arrivee']) {
+  $(`sons-${quoi}`).replaceChildren(...SONS[quoi].map((x) => {
+    const ligne = document.createElement('div');
+    ligne.className = 'son-ligne';
+    const label = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = `son-${quoi}`;
+    radio.value = x.id;
+    const texte = document.createElement('span');
+    texte.className = 'son-texte';
+    const nom = document.createElement('strong');
+    nom.textContent = x.nom;
+    const aide = document.createElement('span');
+    aide.className = 'muted small';
+    aide.textContent = x.aide;
+    texte.append(nom, aide);
+    label.append(radio, texte);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'setup-essai son-essai';
+    b.setAttribute('aria-label', `Écouter : ${x.nom}`);
+    b.innerHTML = '<svg><use href="#i-play"/></svg><span>Écouter</span>';
+    // Comme les Volumes : un appui = une demande, « Écoute… » le temps du son.
+    b.addEventListener('click', () => {
+      if (b.classList.contains('en-cours')) return;
+      b.classList.add('en-cours');
+      b.setAttribute('aria-busy', 'true');
+      b.querySelector('span').textContent = 'Écoute…';
+      setTimeout(() => { b.classList.remove('en-cours'); b.removeAttribute('aria-busy'); b.querySelector('span').textContent = 'Écouter'; }, ESSAI_MS);
+      radio.checked = true;
+      ecouterSon(quoi, x.id);
+    });
+    ligne.append(label, b);
+    return ligne;
+  }));
+}
+const sonCoche = (quoi) => document.querySelector(`#sons-${quoi} input:checked`)?.value || SONS[quoi][0].id;
+SETTINGS['sons-card'] = {
+  fill() {
+    for (const quoi of ['appel', 'arrivee']) {
+      const id = sonChoisi(quoi);
+      document.querySelectorAll(`#sons-${quoi} input`).forEach((r) => { r.checked = r.value === id; });
+    }
+  },
+  async save() {
+    const sonAppel = sonCoche('appel');
+    const sonArrivee = sonCoche('arrivee');
+    if (sonAppel === sonChoisi('appel') && sonArrivee === sonChoisi('arrivee')) { toast('Sonneries enregistrées'); return true; }
+    await saveFamily({ sonAppel, sonArrivee }, 'Sonneries envoyées à la tablette');
+    return true;
+  },
+};
+
 // Luminosité de l'écran le jour (Tanguy, 20/11) : families/{fid}.luminosite, entier de 40 à 100 (%), réglé par un
 // responsable (firestore.rules). La tablette l'applique le jour et la limite à 55 % le soir ; sans réglage, elle garde
 // la sienne. 70 % proposé par défaut.
@@ -5682,6 +5782,8 @@ function applyFamily() {
   renderAlertePasVue();
   $('volume-card').hidden = !amFamilyAdmin();
   renderVolume();
+  $('sons-card').hidden = !amFamilyAdmin();
+  renderSons();
   $('luminosite-card').hidden = !amFamilyAdmin();
   renderLuminosite();
   renderOptions();

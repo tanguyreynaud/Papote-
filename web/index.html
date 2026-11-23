@@ -563,6 +563,25 @@
               </div>
             </form>
           </div>
+          <div id="sons-card" class="card setting rg" hidden>
+            <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-bell"/></svg></span><h2>Sonneries</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
+            <p id="sons-value" class="setting-value"></p>
+            <form id="form-sons" class="setting-edit" hidden>
+              <p class="muted small">Touchez « Écouter » pour entendre le son sur la tablette.</p>
+              <fieldset class="son-groupe">
+                <legend>Quand on l'appelle</legend>
+                <div id="sons-appel" class="son-choix"></div>
+              </fieldset>
+              <fieldset class="son-groupe">
+                <legend>Quand une photo ou un message arrive</legend>
+                <div id="sons-arrivee" class="son-choix"></div>
+              </fieldset>
+              <div class="setting-actions">
+                <button type="button" class="secondary setting-cancel">Annuler</button>
+                <button type="submit" class="primary">Enregistrer</button>
+              </div>
+            </form>
+          </div>
           <label class="toggle-row rg-ligne" id="opt-lecture-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-voix"/></svg></span><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et les rappels</span></span><input type="checkbox" class="toggle" id="opt-lecture"></label>
           </div>
           <h3 class="settings-group">Écran</h3>
@@ -654,7 +673,7 @@
             <p id="radio-value" class="setting-value"></p>
             <form id="form-radio" class="setting-edit" hidden>
             <div class="toggle-list">
-            <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
+            <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» à côté de « Appeler ». Fonctionne seulement en Wi-Fi.</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
               <div id="opt-radio-wrap" class="station">
                 <label for="opt-radio-station">Station</label>
                 <div class="station-row">

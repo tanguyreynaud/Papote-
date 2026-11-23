@@ -838,6 +838,25 @@ test('« Écouter » des Volumes : sonnerie, voix ou appel, de 10 à 100, par un
   await assertFails(setDoc(doc(proche('paul'), `families/${FID}/commands/s5`), son('appel', { volume: 5 })));
   await assertFails(setDoc(doc(proche('paul'), `families/${FID}/commands/s6`), son('appel', { parle: 'x'.repeat(201) })));
   await assertFails(setDoc(doc(proche('lea'), `families/${FID}/commands/s7`), { ...son('appel'), createdBy: 'lea' }));
+  // « Écouter » des Sonneries (Tanguy, 23/11) : la sonnerie ou le son d'arrivée essayé, parmi les sons connus.
+  await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/commands/s8`), son('sonnerie', { son: 'autrefois' })));
+  await assertSucceeds(setDoc(doc(proche('paul'), `families/${FID}/commands/s9`), son('arrivee', { son: 'cloche' })));
+  await assertFails(setDoc(doc(proche('paul'), `families/${FID}/commands/s10`), son('arrivee', { son: 'https://exemple.fr/son.mp3' })));
+});
+
+// Tanguy, 23/11 : son de l'appel et des envois (families/{fid}.sonAppel, sonArrivee), parmi les sons de la tablette.
+test('sonneries : trois sons connus par usage, par un responsable seulement', async () => {
+  await famille();
+  const julie = proche('julie');
+  await assertSucceeds(updateDoc(doc(julie, `families/${FID}`), { sonAppel: 'autrefois', sonArrivee: 'cloche', rev: increment(1) }));
+  await assertSucceeds(updateDoc(doc(julie, `families/${FID}`), { sonAppel: 'tablette', sonArrivee: 'dingdong', rev: increment(1) }));
+  await assertSucceeds(updateDoc(doc(julie, `families/${FID}`), { sonAppel: 'horloge', sonArrivee: 'sonnette' }));
+  for (const v of [{ sonAppel: 'cloche' }, { sonArrivee: 'autrefois' }, { sonAppel: 'x' }, { sonAppel: 1 }, { sonAppel: 'autrefois', name: 'X' }]) {
+    await assertFails(updateDoc(doc(julie, `families/${FID}`), v)).catch((e) => { throw new Error(`${JSON.stringify(v)} : ${e.message}`); });
+  }
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `families/${FID}/members/paul`), fiche('paul', { status: 'active' })));
+  await assertFails(updateDoc(doc(proche('paul'), `families/${FID}`), { sonAppel: 'autrefois', rev: increment(1) }));
+  await assertFails(updateDoc(doc(tablette('tab'), `families/${FID}`), { sonAppel: 'autrefois' }));
 });
 
 test('wifi depuis l\'appli (A36) : mot de passe jamais dans l\'ordre, à part, lisible de la seule tablette, expiré', async () => {

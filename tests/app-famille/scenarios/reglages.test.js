@@ -68,13 +68,23 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await enregistrer(julie, 'duree-card');
   await g.toast(julie, 'Durée envoyée à la tablette');
   await julie.page.locator('#duree-value', { hasText: '5 minutes' }).waitFor();
+  // Radio seulement en Wi-Fi (Tanguy, 23/11) : cachée tant que la tablette n'a pas de Wi-Fi, là dès qu'elle en a un.
+  assert.strictEqual(await julie.page.locator('#radio-card').isVisible(), false, 'pas de radio sans Wi-Fi');
+  const membreTab = (await g.liste(`families/${fid}/members`)).find((m) => m.role === 'tablette');
+  await s.db.doc(`families/${fid}/members/${membreTab.id}`).update({ wifi: { ssid: 'Livebox-Emma' } });
+  await julie.page.locator('#radio-card').waitFor({ state: 'visible' });
   // Accueil de la tablette : radio FIP ; prochain rappel enlevé d'un toucher.
   await modifier(julie, 'radio-card');
+  await julie.page.locator('#form-radio', { hasText: 'Fonctionne seulement en Wi-Fi' }).waitFor();
   await julie.page.locator('#opt-radio').setChecked(true);
   await julie.page.selectOption('#opt-radio-station', { label: 'FIP' });
   await enregistrer(julie, 'radio-card');
   await g.toast(julie, 'Radio envoyée à la tablette');
   await julie.page.locator('#radio-value', { hasText: 'FIP' }).waitFor();
+  // Wi-Fi perdu un moment : une radio déjà activée reste visible, pour pouvoir l'enlever.
+  await s.db.doc(`families/${fid}/members/${membreTab.id}`).update({ wifi: null });
+  await julie.page.waitForTimeout(800);
+  assert.strictEqual(await julie.page.locator('#radio-card').isVisible(), true, 'radio activée gardée sans Wi-Fi');
   await julie.page.waitForTimeout(2800); // le toast précédent s'en va
   await julie.page.click('#opt-rappels-accueil-ligne .toggle-text');
   await g.toast(julie, 'Prochain rappel enlevé de l\'accueil');
@@ -155,6 +165,33 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 · Vidéos 50 · Appels 80' }).waitFor();
   assert.strictEqual((await essaisSon()).length, total, 'Enregistrer ne fait rien sonner');
 
+  // Sonneries (Tanguy, 23/11) : trois sons pour l'appel, trois pour les envois ; le son d'avant par défaut.
+  await julie.page.locator('#sons-value', { hasText: 'Appel : Sonnerie de la tablette · Envois : Ding-dong' }).waitFor();
+  await modifier(julie, 'sons-card');
+  assert.deepStrictEqual(await julie.page.locator('#sons-appel strong').allInnerTexts(), ['Sonnerie de la tablette', 'Téléphone d\'autrefois', 'Carillon d\'horloge']);
+  assert.deepStrictEqual(await julie.page.locator('#sons-arrivee strong').allInnerTexts(), ['Ding-dong', 'Cloche', 'Sonnette']);
+  assert.strictEqual(await julie.page.isChecked('#sons-appel input[value=tablette]'), true);
+  assert.strictEqual(await julie.page.isChecked('#sons-arrivee input[value=dingdong]'), true);
+  // « Écouter » : le son essayé est coché et joué sur la tablette, au volume de sa barre ; double appui = une demande.
+  await g.doubleAppui(julie, '#sons-appel .son-ligne:nth-child(2) .son-essai');
+  await g.toast(julie, 'Écoutez la tablette : elle sonne.');
+  total += tablettes;
+  await g.attendreBase(async () => (await essaisSon()).length >= total, 'essai de la sonnerie choisie');
+  await julie.page.waitForTimeout(800);
+  const essaiAppel = (await essaisSon()).filter((d) => d.son === 'autrefois');
+  assert.strictEqual(essaiAppel.length, tablettes, 'une seule demande');
+  assert.ok(essaiAppel.every((d) => d.quoi === 'sonnerie' && d.volume === 70));
+  assert.strictEqual(await julie.page.isChecked('#sons-appel input[value=autrefois]'), true, 'le son écouté est coché');
+  await julie.page.locator('#sons-arrivee .son-ligne:nth-child(2) .son-essai').click();
+  total += tablettes;
+  await g.attendreBase(async () => (await essaisSon()).filter((d) => d.son === 'cloche').length === tablettes, 'essai du son d\'arrivée');
+  assert.ok((await essaisSon()).filter((d) => d.son === 'cloche').every((d) => d.quoi === 'arrivee' && d.volume === 50));
+  await enregistrer(julie, 'sons-card');
+  await g.toast(julie, 'Sonneries envoyées à la tablette');
+  const famSons = await g.lire(`families/${fid}`);
+  assert.deepStrictEqual([famSons.sonAppel, famSons.sonArrivee], ['autrefois', 'cloche']);
+  await julie.page.locator('#sons-value', { hasText: 'Appel : Téléphone d\'autrefois · Envois : Cloche' }).waitFor();
+
   // Nuit : le coucher se choisit le soir (19 h à 23 h 30), le réveil le matin (5 h à 10 h), par demi-heure
   // (Tanguy, 17/11) ; puis de 22 h à 6 h 30.
   await modifier(julie, 'sleep-card');
@@ -229,7 +266,7 @@ test('Un proche (pas propriétaire) : réglages de la tablette réservés, profi
   assert.deepStrictEqual(await paul.page.locator('#view-settings [data-reglages-choix]:visible').allInnerTexts(), ['La famille', 'Mon profil']);
   await paul.page.locator('#tablet-owner-note', { hasText: 'depuis le téléphone de Julie' }).waitFor();
   await paul.page.locator('#btn-invite-famille').waitFor({ state: 'visible' });
-  for (const carte of ['duree-card', 'radio-card', 'sos-ordre-card', 'opt-lecture-ligne', 'volume-card', 'sleep-card', 'meteo-card', 'family-name-card', 'remote-card']) {
+  for (const carte of ['duree-card', 'radio-card', 'sons-card', 'sos-ordre-card', 'opt-lecture-ligne', 'volume-card', 'sleep-card', 'meteo-card', 'family-name-card', 'remote-card']) {
     assert.strictEqual(await paul.page.locator(`#${carte}`).isVisible(), false, `${carte} caché pour un proche`);
   }
   await paul.page.click('#view-settings .back');

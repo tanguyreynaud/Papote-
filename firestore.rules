@@ -412,6 +412,11 @@ service cloud.firestore {
                 || (request.resource.data.volumeSonnerie is int && request.resource.data.volumeSonnerie >= 10 && request.resource.data.volumeSonnerie <= 100))
             && (!('volumeAppel' in request.resource.data)
                 || (request.resource.data.volumeAppel is int && request.resource.data.volumeAppel >= 10 && request.resource.data.volumeAppel <= 100)))
+          // Sonneries de la tablette (Tanguy, 23/11) : son de l'appel et des envois, parmi les sons embarqués.
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sonAppel', 'sonArrivee', 'rev'])
+            && isFamilyAdmin(fid)
+            && (!('sonAppel' in request.resource.data) || request.resource.data.sonAppel in ['tablette', 'autrefois', 'horloge'])
+            && (!('sonArrivee' in request.resource.data) || request.resource.data.sonArrivee in ['dingdong', 'cloche', 'sonnette']))
           // Étape du parcours d'installation (la fin, « fini », est écrite par le serveur).
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['installation'])
             && isFamilyAdmin(fid)
@@ -770,11 +775,13 @@ service cloud.firestore {
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.state == 'pending';
         allow create: if isFamilyAdmin(fid)
-          && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'state', 'quoi', 'volume', 'parle'])
+          && request.resource.data.keys().hasOnly(['type', 'target', 'createdBy', 'createdAt', 'ssid', 'security', 'state', 'quoi', 'volume', 'parle', 'son'])
           && request.resource.data.type in ['wifi', 'restart', 'status', 'wifiScan', 'son']
-          // Test du son (« Écouter » des Volumes) : la tablette sonne, parle (voix), ou parle au volume des appels (appel).
+          // Test du son (« Écouter » des Volumes) : la tablette sonne, parle (voix), ou parle au volume des appels (appel) ;
+          // « Écouter » des Sonneries : la sonnerie ou le son d'arrivée essayé (son), pas encore enregistré.
           && (request.resource.data.type != 'son'
-            || (request.resource.data.quoi in ['sonnerie', 'voix', 'appel']
+            || (request.resource.data.quoi in ['sonnerie', 'voix', 'appel', 'arrivee']
+              && (!('son' in request.resource.data) || request.resource.data.son in ['tablette', 'autrefois', 'horloge', 'dingdong', 'cloche', 'sonnette'])
               && request.resource.data.volume is int && request.resource.data.volume >= 10 && request.resource.data.volume <= 100
               && (!('parle' in request.resource.data) || (request.resource.data.parle is string && request.resource.data.parle.size() <= 200))))
           && request.resource.data.target is string
