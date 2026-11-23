@@ -136,7 +136,8 @@ test('Textes longs : nom de la tablette, prénoms, e-mails, Wi-Fi, communes pass
   for (const page of ['photos', 'messages', 'agenda']) {
     await g.ouvrirTuile(julie, page);
     await debordements(julie, page);
-    await julie.page.click(`#view-${page} .back`);
+    // Photos s'ouvre comme depuis la barre du bas, sans flèche (23/11).
+    if (page === 'photos') await g.retourAccueil(julie); else await julie.page.click(`#view-${page} .back`);
     await g.attendreVue(julie, 'view-home');
   }
   await g.ouvrirProfil(julie);

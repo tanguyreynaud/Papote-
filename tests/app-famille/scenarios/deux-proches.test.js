@@ -48,7 +48,8 @@ test('Le même rappel modifié par deux proches en même temps : une seule versi
   assert.ok(['10:30', '11:45'].includes(rappels[0].time), `heure gardée : ${rappels[0].time}`);
   await chezJulie.filter({ hasText: `à ${rappels[0].time}` }).waitFor();
   await chezPaul.filter({ hasText: `à ${rappels[0].time}` }).waitFor();
-  assert.ok(await julie.page.locator('#sheet-reminder').isHidden() && await paul.page.locator('#sheet-reminder').isHidden());
+  // La feuille se ferme en fondu (23/11) : on lui laisse le temps de partir.
+  for (const t of [julie, paul]) await t.page.locator('#sheet-reminder').waitFor({ state: 'hidden', timeout: 2000 });
 });
 
 test('Le même message supprimé par deux proches en même temps : disparu une fois, aucune erreur', async () => {

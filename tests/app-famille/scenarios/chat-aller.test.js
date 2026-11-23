@@ -41,7 +41,8 @@ const niveau = (t) => t.page.evaluate(() => history.state?.niveau || 0);
 async function verifierEcran(t, nom) {
   const [vue, carte] = ATTENDU[nom];
   await g.attendreVue(t, vue, 5_000);
-  assert.ok(await t.page.locator('#sheet-wifi').isHidden(), `${nom} : feuille Wi-Fi fermée`);
+  // La feuille se ferme en fondu (23/11) : on lui laisse le temps de partir.
+  assert.ok(await t.page.locator('#sheet-wifi').waitFor({ state: 'hidden', timeout: 2000 }).then(() => true, () => false), `${nom} : feuille Wi-Fi fermée`);
   assert.ok(await t.page.locator('#viewer').isHidden(), `${nom} : visionneuse fermée`);
   if (!carte) return;
   const visible = await t.page.locator(carte).isVisible();

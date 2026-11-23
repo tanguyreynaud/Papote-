@@ -19,8 +19,8 @@ test('360 px : connexion, installation, accueil, chaque page et chaque onglet ti
   for (const pageNom of ['photos', 'messages', 'videos', 'agenda', 'invite', 'settings']) {
     if (!(await t.page.locator(`.tile[data-page="${pageNom}"]`).isVisible())) continue;
     await g.ouvrirTuile(t, pageNom);
-    // Réglages s'ouvre comme depuis la barre du bas, sans flèche (23/11).
-    if (pageNom === 'settings') await g.retourAccueil(t);
+    // Réglages et Photos s'ouvrent comme depuis la barre du bas, sans flèche (23/11).
+    if (pageNom === 'settings' || pageNom === 'photos') await g.retourAccueil(t);
     else await t.page.click(`#view-${pageNom} .page-head .back`);
     await g.attendreVue(t, 'view-home');
   }
