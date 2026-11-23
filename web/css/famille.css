@@ -1893,7 +1893,7 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .dialog p.dialog-msg { margin: 0 0 20px; line-height: 0; }
 .dialog-q, .dialog-d { display: inline-block; width: 100%; }
 .dialog-q { font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 25px; text-wrap: balance; }
-.dialog-adresse { display: inline-block; box-sizing: border-box; max-width: 100%; margin-top: 12px; padding: 7px 14px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 9%, var(--bg)); color: var(--text); font-size: 15px; font-weight: 600; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+.dialog-adresse { display: inline-block; box-sizing: border-box; max-width: 100%; margin-top: 12px; padding: 7px 14px; border-radius: 18px; background: color-mix(in srgb, var(--accent) 9%, var(--bg)); color: var(--text); font-size: 15px; font-weight: 600; line-height: 22px; overflow-wrap: anywhere; vertical-align: top; }
 .dialog-adresse + .dialog-d { margin-top: 12px; }
 .dialog-d { margin-top: 8px; font-size: 16px; line-height: 23px; color: var(--muted); text-wrap: pretty; }
 .dialog p.dialog-msg.seul { font-size: 18px; font-weight: 600; line-height: 1.4; text-wrap: balance; }

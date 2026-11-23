@@ -36,12 +36,11 @@ function dialog(message, buttons, extra = null) {
         d.textContent = m[2];
         text.replaceChildren(q, ' ', d);
         // Une adresse e-mail dont parle la question : seule sur sa ligne, entre la question et l'explication,
-        // jamais coupée en deux (« … » si elle est vraiment trop longue).
+        // entière pour qu'on puisse la relire (une adresse vraiment très longue passe à la ligne).
         if (extra?.adresse) {
           const a = document.createElement('span');
           a.className = 'dialog-adresse';
           a.textContent = extra.adresse;
-          a.title = extra.adresse;
           d.before(a, ' ');
         }
       }
