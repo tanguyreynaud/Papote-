@@ -63,6 +63,8 @@ test('Code famille : demande en attente, acceptée par la responsable, l\'app s\
   await carte.waitFor();
   assert.match(await carte.innerText(), /marc@exemple\.fr/);
   await carte.locator('.join-ok').click();
+  assert.match(await g.texteFenetre(julie), /Accepter Marc dans la famille \?/);
+  await g.repondre(julie, 'Accepter');
   await g.toast(julie, 'Marc a rejoint la famille');
   await g.attendreVue(marc, 'view-home');
   await g.fermerAccueil(marc);
@@ -106,6 +108,7 @@ test('Code faux, puis responsable désigné, membre retiré, départ d\'un proch
   await paul.page.click('#form-join button[type=submit]');
   await g.attendreVue(paul, 'view-pending');
   await julie.page.locator('#pending-banner .join-ok').click();
+  await g.repondre(julie, 'Accepter'); // la question « Accepter … dans la famille ? » (23/11)
   await g.attendreVue(paul, 'view-home');
   await g.fermerAccueil(paul);
   const uidPaul = (await g.liste(`families/${fid}/members`)).find((m) => m.name === 'Paul').id;

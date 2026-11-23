@@ -327,6 +327,7 @@ async function rejoindre(responsable, fid, t, { email, prenom, genre = 'homme' }
   await t.page.click('#form-join button[type=submit]');
   await attendreVue(t, 'view-pending');
   await responsable.page.locator('#pending-banner .join-card', { hasText: prenom }).locator('.join-ok').click();
+  await repondre(responsable, 'Accepter'); // la question « Accepter … dans la famille ? » (23/11)
   await attendreVue(t, 'view-home');
   await fermerAccueil(t);
   const membre = await attendreBase(async () => (await liste(`families/${fid}/members`)).find((m) => m.email === email), 'membre');

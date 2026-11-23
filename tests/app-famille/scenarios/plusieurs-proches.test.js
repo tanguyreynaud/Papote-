@@ -197,6 +197,7 @@ test('Demande acceptée par Julie pendant que Paul la refuse : Ana reste dans la
   await paul.page.locator('#pending-banner .join-card', { hasText: 'Ana' }).locator('.join-no').click();
   await paul.page.locator('.dialog-back:not(.closing) .dialog', { hasText: 'Refuser la demande' }).waitFor();
   await julie.page.locator('#pending-banner .join-card', { hasText: 'Ana' }).locator('.join-ok').click();
+  await g.repondre(julie, 'Accepter'); // la question « Accepter … dans la famille ? » (23/11)
   await g.toast(julie, 'Ana a rejoint la famille');
   await g.attendreVue(ana, 'view-home');
   await g.repondre(paul, 'Refuser');
@@ -216,6 +217,7 @@ test('Demande acceptée par Julie pendant que Paul la refuse : Ana reste dans la
   await g.attendreBase(async () => !(await g.liste(`families/${fid}/members`)).some((m) => m.email === 'zoe@exemple.fr'), 'demande de Zoé retirée');
   // La carte a disparu chez Julie, ou elle a eu le temps de toucher « Accepter » : jamais « L'acceptation a échoué ».
   await julie.page.evaluate(() => { const c = window.__carteZoe; if (c) c.querySelector('.join-ok').click(); });
+  await julie.page.locator('.dialog-back:not(.closing) .dialog button', { hasText: 'Accepter' }).click({ timeout: 2000 }).catch(() => {});
   await new Promise((r) => setTimeout(r, 1500));
   assert.strictEqual(await julie.page.locator('.dialog-back', { hasText: 'acceptation a échoué' }).count(), 0);
   assert.ok(!(await g.liste(`families/${fid}/members`)).some((m) => m.email === 'zoe@exemple.fr'), 'Zoé pas entrée');
@@ -257,6 +259,7 @@ test('Premier usage (Tanguy, 20/11) : faute de frappe dans l\'adresse corrigée 
   await g.attendreVue(paul, 'view-pending');
   await julie.page.click('#view-invite .page-head .back').catch(() => {});
   await julie.page.locator('#pending-banner .join-ok').click();
+  await g.repondre(julie, 'Accepter'); // la question « Accepter … dans la famille ? » (23/11)
   await g.attendreVue(paul, 'view-home');
   await paul.page.locator('.guide-back').waitFor();
   assert.match(await paul.page.locator('.guide').innerText(), /Touchez « Envoyer une photo », en haut de l'accueil/);
@@ -274,6 +277,10 @@ test('Aide : « Besoin d\'aide ? » en haut de Réglages et sous une erreur de c
   await g.attendreVue(julie, 'view-settings');
   await julie.page.click('#view-settings [data-aide]');
   await g.attendreVue(julie, 'view-support');
+  // L'Aide est une page à part (23/11) : flèche retour, pas de barre du bas ; la flèche ramène aux Réglages.
+  assert.ok(await julie.page.locator('#nav').isHidden(), 'pas de barre du bas sur l\'Aide');
+  await julie.page.click('#view-support .page-head .back');
+  await g.attendreVue(julie, 'view-settings');
   await g.ouvrirProfil(julie);
   await julie.page.click('#view-profile [data-aide]');
   await g.attendreVue(julie, 'view-support');

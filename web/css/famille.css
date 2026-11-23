@@ -2193,3 +2193,9 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
   .toast, .sheet, .sheet-body { transition: none; }
   details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation: none; }
 }
+
+/* Lot 1 validé par Tanguy le 23/11 : croix des petits menus, date des envois sur une ligne */
+.dialog-menu-croix .dialog-title, .dialog-menu-croix .dialog-tete { padding-right: 40px; }
+.dialog.dialog-menu-croix { padding-bottom: 14px; }
+.shot-meta .shot-info { flex: 1 1 0; min-width: 0; }
+.shot-quand { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

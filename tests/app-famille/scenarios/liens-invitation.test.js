@@ -94,6 +94,7 @@ test('Déjà inscrit ailleurs : « Plus tard » garde sa famille, puis « Rejoin
 
   // Julie accepte. Paul a deux familles : le bouton « Pour … » permet de changer.
   await julie.page.locator('#pending-banner .join-card', { hasText: 'Paul' }).locator('.join-ok').click();
+  await g.repondre(julie, 'Accepter'); // la question « Accepter … dans la famille ? » (23/11)
   await g.toast(julie, 'Paul a rejoint la famille');
   await g.attendreBase(async () => (await g.liste(`families/${emma}/members`))
     .find((m) => m.email === 'paul@exemple.fr')?.status === 'active', 'Paul accepté');

@@ -35,6 +35,7 @@ test('Entrée dans la famille avec le numéro de Julie : refusé avec son préno
   await paul.page.click('#form-join button[type=submit]');
   await g.attendreVue(paul, 'view-pending');
   await julie.page.locator('#pending-banner .join-card', { hasText: 'Paul' }).locator('.join-ok').click();
+  await g.repondre(julie, 'Accepter'); // la question « Accepter … dans la famille ? » (23/11)
 
   // Accepté : « Vos informations » revient, le numéro refusé et le message affichés.
   await g.attendreVue(paul, 'view-moi', 30_000);

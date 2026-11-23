@@ -277,8 +277,7 @@ export function fenetreSosSuivie(etat) {
 export function chooseAction(title, options, tete = null) {
   return dialog('', [
     ...options.map((o) => ({ label: o.label, value: o.value, icone: o.icone, cls: o.danger ? 'secondary action-danger' : 'secondary' })),
-    { label: 'Annuler', value: false, cls: 'link' },
-  ], { title, stack: true, cls: 'dialog-menu', tete });
+  ], { title, stack: true, cls: 'dialog-menu dialog-menu-croix', tete, croix: true });
 }
 
 /**

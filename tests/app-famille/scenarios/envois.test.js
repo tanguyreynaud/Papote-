@@ -400,6 +400,7 @@ test('Un proche voit les envois des autres, ne peut supprimer que les siens', as
   await g.attendreVue(paul, 'view-join');
   await paul.page.click('#form-join button[type=submit]');
   await julie.page.locator('#pending-banner .join-ok').click();
+  await g.repondre(julie, 'Accepter'); // la question « Accepter … dans la famille ? » (23/11)
   await g.attendreVue(paul, 'view-home');
   await g.fermerAccueil(paul);
 

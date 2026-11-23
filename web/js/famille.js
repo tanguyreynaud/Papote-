@@ -410,7 +410,7 @@ async function noticeAvecAide(message) {
 document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', ouvrirAssistant));
 
 // Notifications n'en est plus un : page à part avec une flèche retour, sans barre du bas (Tanguy, 23/11).
-const VUES_ONGLETS = ['profile', 'support'];
+const VUES_ONGLETS = ['profile'];
 
 // Une notification touchée ouvre ce dont elle parle (audit des touchers, 17/11 : rien ne se passait) ; un appel :
 // l'accueil, où sont les tuiles d'appel.
@@ -429,7 +429,8 @@ function surUnOnglet() {
 // Notifications, Profil, Aide : une entrée d'historique au-dessus de l'accueil, remplacée d'un onglet à l'autre.
 function ouvrirOnglet(nom) {
   const etat = { vue: nom };
-  if (surUnOnglet()) remplacer(etat);
+  // Aide et Notifications : pages à part (flèche retour), toujours empilées au-dessus de la page d'où l'on vient.
+  if (nom !== 'support' && nom !== 'notifs' && surUnOnglet()) remplacer(etat);
   else empiler(etat);
   stopPage?.();
   stopPage = null;
@@ -635,6 +636,19 @@ function watchType(types, max, callback) {
   return () => stop();
 }
 
+// Date courte, toujours sur une ligne dans la carte d'une photo ou d'une vidéo, même à côté de « Envoyé, pas vu » :
+// « à 09:30 » (aujourd'hui), « hier à 09:30 », « 24 oct. à 19:00 ».
+function timeLabelCourt(date) {
+  if (!date) return '';
+  const now = new Date();
+  const hm = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  if (date.toDateString() === now.toDateString()) return `à ${hm}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `hier à ${hm}`;
+  return `${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} à ${hm}`;
+}
+
 function timeLabel(date) {
   if (!date) return '';
   const now = new Date();
@@ -749,7 +763,7 @@ function galleryItem(post, what, onOpen) {
   sep.textContent = ' · ';
   const quand = document.createElement('span');
   quand.className = 'shot-quand';
-  quand.textContent = timeLabel(toDate(post.createdAt));
+  quand.textContent = timeLabelCourt(toDate(post.createdAt));
   who.append(prenom, sep, quand);
   info.append(who);
   const tete = faces[post.authorUid] ? avatar(faces[post.authorUid]) : document.createElement('span');
@@ -3643,6 +3657,7 @@ function requestCard(m) {
   ok.disabled = familyFull;
   ok.addEventListener('click', async () => {
     if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
+    if (!await askConfirm(`Accepter ${m.name} dans la famille ? Cette personne verra les photos et pourra en envoyer sur la tablette.`, 'Accepter')) return;
     ok.disabled = true;
     try { await acceptMember(session.fid, m.id); toast(`${m.name} a rejoint la famille`); } catch (err) {
       // Demande refusée entre-temps par un autre responsable : rien à accepter.

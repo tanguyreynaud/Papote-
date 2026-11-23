@@ -25,11 +25,12 @@ test('Retour : chaque écran ramène à celui d\'avant, une fenêtre se ferme sa
   await g.attendreVue(julie, 'view-notifs');
   await retour(julie, 'view-home');
 
-  // Profil, puis Aide depuis le Profil : les onglets partagent une étape, retour = accueil.
+  // Profil, puis Aide depuis le Profil : l'Aide est une page à part (23/11), retour = Profil, puis accueil.
   await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
   await julie.page.click('#view-profile .aide-pastille');
   await g.attendreVue(julie, 'view-support');
+  await retour(julie, 'view-profile');
   await retour(julie, 'view-home');
 
   // Abonnement et paiement : retour au Profil.

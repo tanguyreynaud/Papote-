@@ -48,7 +48,8 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await g.ouvrirFamille(julie);
   await p.locator('#members li', { hasText: 'Paul' }).locator('.member-email').click();
   assert.match(await g.texteFenetre(julie), /Paul/);
-  await g.repondre(julie, 'Annuler');
+  await p.click('.dialog-back:not(.closing) .dialog-croix'); // petits menus : une croix, plus de ligne « Annuler » (23/11)
+  await p.locator('.dialog-back').first().waitFor({ state: 'detached' }).catch(() => {});
   await p.locator('#members li', { hasText: 'Tablette de Mamie Emma' }).locator('.member-name').click();
   assert.match(await g.texteFenetre(julie), /En ligne par le Wi-Fi « Livebox-Emma »/);
   await g.repondre(julie, 'OK');
@@ -142,7 +143,9 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
       const r = await effet(julie, sel);
       assert.ok(r.n > 0 || r.fichier, `${sel} : aucun effet visible`);
       // Revenir à la page de départ : fenêtre, feuille ou page ouverte.
-      if (await p.locator('.dialog-back:not(.closing)').count()) await p.locator('.dialog-back:not(.closing) .dialog .dialog-buttons button').last().click();
+      // Un petit menu se ferme par sa croix (23/11), une question par son dernier bouton.
+      if (await p.locator('.dialog-back:not(.closing) .dialog-croix').count()) await p.locator('.dialog-back:not(.closing) .dialog-croix').click();
+      else if (await p.locator('.dialog-back:not(.closing)').count()) await p.locator('.dialog-back:not(.closing) .dialog .dialog-buttons button').last().click();
       await p.waitForTimeout(200);
     }
   };

@@ -340,6 +340,7 @@ test('V7, V8 : « C\'est prêt » seulement quand la tablette est là ; le petit
   await paul.page.click('#form-join button[type=submit]');
   await g.attendreVue(paul, 'view-pending');
   await julie.page.locator('#pending-banner .join-card', { hasText: 'Paul' }).locator('.join-ok').click();
+  await g.repondre(julie, 'Accepter'); // la question « Accepter … dans la famille ? » (23/11)
   await g.attendreVue(paul, 'view-home');
   const guide = paul.page.locator('.guide-back');
   await guide.waitFor();

@@ -127,6 +127,7 @@ test('Numéro ajouté dans l\'app puis par l\'admin : compteur, tuile « Appeler
   await paul.page.click('#form-join button[type=submit]');
   await g.attendreVue(paul, 'view-pending');
   await julie.page.locator('#pending-banner .join-card', { hasText: 'Paul' }).locator('.join-ok').click();
+  await g.repondre(julie, 'Accepter'); // la question « Accepter … dans la famille ? » (23/11)
   await g.attendreVue(paul, 'view-home', 30_000);
   await g.fermerAccueil(paul);
   const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'paul@exemple.fr').id;
