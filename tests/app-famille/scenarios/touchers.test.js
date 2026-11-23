@@ -74,7 +74,7 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await g.panneau(julie, 'famille');
   await p.locator('#members li', { hasText: 'Julie' }).locator('.badge', { hasText: 'Responsable' }).click();
   await g.toast(julie, 'C\'est vous. Votre prénom, votre photo, votre numéro et « Quitter cette famille » sont dans « Mon profil ».');
-  await p.click('#view-settings .back');
+  await g.retourAccueil(julie); // Réglages : plus de flèche, la barre du bas (23/11)
   await g.attendreVue(julie, 'view-home');
   await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');
@@ -163,7 +163,7 @@ test('Audit : chaque élément qui a l\'air de se toucher réagit, page par page
   await g.toast(julie, 'Écoutez la tablette : elle sonne.');
   await p.click('#volume-card .setting-cancel');
   // Profil.
-  await p.click('#view-settings .back');
+  await g.retourAccueil(julie); // Réglages : plus de flèche, la barre du bas (23/11)
   await g.attendreVue(julie, 'view-home');
   await g.ouvrirProfil(julie);
   await g.attendreVue(julie, 'view-profile');

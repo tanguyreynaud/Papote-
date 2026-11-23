@@ -397,7 +397,9 @@ async function ouvrirProfil(t) {
 }
 
 async function retourAccueil(t) {
-  await t.page.click('.nav-item[data-tab="home"]');
+  // Notifications : page à part, sans barre du bas, avec sa flèche retour (Tanguy, 23/11).
+  if (await t.page.locator('#view-notifs').isVisible()) await t.page.click('#view-notifs .back');
+  else await t.page.click('.nav-item[data-tab="home"]');
   await attendreVue(t, 'view-home');
 }
 

@@ -190,7 +190,7 @@ function show(view) {
   if (view === 'loading') splashNoteTimer = setTimeout(() => { if (!$('loading').hidden) $('splash-note').textContent = 'On y est presque…'; }, 4000);
   document.body.classList.remove('depuis-barre', 'chat-libre');
   document.body.classList.toggle('on-support', view === 'view-support');
-  // La barre du bas n'apparaît que sur Accueil, Notifications et Support.
+  // La barre du bas n'apparaît que sur Accueil, Profil et Aide (plus Notifications : page à part, 23/11).
   $('nav').hidden = !$(view).classList.contains('tab-page');
   const reglages = view === 'view-settings' || view === 'view-profile';
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', `view-${b.dataset.tab}` === view || (reglages && b.id === 'nav-reglages')));
@@ -409,14 +409,15 @@ async function noticeAvecAide(message) {
 }
 document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', ouvrirAssistant));
 
-const VUES_ONGLETS = ['notifs', 'profile', 'support'];
+// Notifications n'en est plus un : page à part avec une flèche retour, sans barre du bas (Tanguy, 23/11).
+const VUES_ONGLETS = ['profile', 'support'];
 
 // Une notification touchée ouvre ce dont elle parle (audit des touchers, 17/11 : rien ne se passait) ; un appel :
 // l'accueil, où sont les tuiles d'appel.
 $('notifs').addEventListener('click', (e) => {
   const li = e.target.closest('li.notif');
   if (!li?.dataset.page) return;
-  if (li.dataset.page === 'home') { if (surUnOnglet()) history.back(); else goHome(); return; }
+  if (li.dataset.page === 'home') { if (niveau() > 0) history.back(); else goHome(); return; }
   openPage(li.dataset.page);
 });
 
@@ -499,7 +500,9 @@ $('btn-invite').addEventListener('click', () => openPage('invite'));
 $('btn-invite-famille').addEventListener('click', () => openPage('invite'));
 
 document.querySelectorAll('.tile[data-page]').forEach((tile) => {
-  tile.addEventListener('click', () => openPage(tile.dataset.page));
+  // Réglages s'ouvre comme depuis la barre du bas (barre visible, pas de flèche) : sinon la flèche disparaissait en
+  // passant sur « Mon profil » et le titre sautait (Tanguy, 23/11).
+  tile.addEventListener('click', () => (tile.dataset.page === 'settings' ? ouvrirReglages() : openPage(tile.dataset.page)));
 });
 document.querySelectorAll('.page .back').forEach((btn) => {
   btn.addEventListener('click', () => history.back());
@@ -2107,6 +2110,7 @@ async function onFaceChosen(e) {
     await saveFace(myFace);
     rememberVisage(myFace);
     toast('Photo enregistrée');
+    apresPhoto('my-name-card');
   } catch (err) {
     console.error(err);
     notice("La photo n'a pas pu être enregistrée. Vérifiez la connexion.");
@@ -2129,6 +2133,15 @@ async function saveTabletFace(face) {
   await batch.commit();
 }
 
+// Photo enregistrée ou retirée (Tanguy, 23/11) : la fiche se referme et montre la nouvelle photo, sauf si le reste
+// du formulaire (nom, prénom…) a été changé sans être enregistré ; la barre du haut reprend sa couleur crème
+// (Chrome en appli Android la laissait noire au retour de l'appareil photo ou de la galerie).
+function apresPhoto(carte) {
+  const card = $(carte);
+  if (card?.classList.contains('editing') && (!etatsOuverture.has(card) || etatsOuverture.get(card) === etatReglage(card))) closeSetting(card);
+  setTimeout(recolorerBarres, 300);
+}
+
 async function onTabletFaceChosen(e) {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
@@ -2136,6 +2149,7 @@ async function onTabletFaceChosen(e) {
   try {
     await saveTabletFace(await visageCarre(file));
     toast('Photo enregistrée');
+    apresPhoto('family-name-card');
   } catch (err) {
     console.error(err);
     notice("La photo n'a pas pu être enregistrée. Vérifiez la connexion.");
@@ -2151,7 +2165,11 @@ $('in-tface-camera').addEventListener('change', onTabletFaceChosen);
 $('in-tface-gallery').addEventListener('change', onTabletFaceChosen);
 $('tface-remove').addEventListener('click', async () => {
   if (!await askConfirm(`Retirer la photo de ${session.family.name} ?`, 'Retirer')) return;
-  try { await saveTabletFace(null); } catch (err) { console.error(err); notice("La photo n'a pas pu être retirée."); }
+  try {
+    await saveTabletFace(null);
+    toast('Photo retirée');
+    apresPhoto('family-name-card');
+  } catch (err) { console.error(err); notice("La photo n'a pas pu être retirée."); }
 });
 
 $('face-camera').addEventListener('click', () => $('in-face-camera').click());
@@ -2166,6 +2184,8 @@ $('face-remove').addEventListener('click', async () => {
   rememberVisage(SANS_VISAGE);
   try {
     await saveFace(null);
+    toast('Photo retirée');
+    apresPhoto('my-name-card');
   } catch (err) {
     console.error(err);
     notice("La photo n'a pas pu être retirée. Vérifiez la connexion.");
@@ -2478,6 +2498,8 @@ document.addEventListener('fullscreenchange', () => {
   }
   setTimeout(recolorerBarres, 300);
 });
+// Retour dans l'appli (appareil photo, galerie, autre appli) : la barre du haut reprend sa couleur (Tanguy, 23/11).
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(recolorerBarres, 300); });
 
 // Pendant un appel, l'écran reste allumé : sinon le téléphone se verrouille au bout de 30 s, et
 // sur iPhone, l'app mise en veille coupe l'appel. Le verrou tombe tout seul si l'app passe derrière.
@@ -5540,7 +5562,7 @@ SETTINGS['volume-card'] = {
     syncVolumes();
   },
   async save() {
-    await saveFamily({ volume: Number($('volume').value), volumeSonnerie: Number($('volume-sonnerie').value), volumeAppel: Number($('volume-appel').value) }, 'Volumes envoyés à la tablette');
+    await saveFamily({ volume: Number($('volume').value), volumeSonnerie: Number($('volume-sonnerie').value), volumeAppel: Number($('volume-appel').value) }, 'Volumes enregistrés');
     return true;
   },
 };
@@ -5633,7 +5655,7 @@ SETTINGS['sons-card'] = {
     const sonAppel = sonCoche('appel');
     const sonArrivee = sonCoche('arrivee');
     if (sonAppel === sonChoisi('appel') && sonArrivee === sonChoisi('arrivee')) { toast('Sonneries enregistrées'); return true; }
-    await saveFamily({ sonAppel, sonArrivee }, 'Sonneries envoyées à la tablette');
+    await saveFamily({ sonAppel, sonArrivee }, 'Sonneries enregistrées');
     return true;
   },
 };

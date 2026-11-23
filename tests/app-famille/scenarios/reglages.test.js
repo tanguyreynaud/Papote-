@@ -159,7 +159,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   // Le son fini, le bouton redevient « Écouter ».
   await julie.page.locator('#volume-card .volume-essai[data-essai="appel"]:not(.en-cours)', { hasText: 'Écouter' }).waitFor();
   await enregistrer(julie, 'volume-card');
-  await g.toast(julie, 'Volumes envoyés');
+  await g.toast(julie, 'Volumes enregistrés');
   const fam = await g.lire(`families/${fid}`);
   assert.deepStrictEqual([fam.volume, fam.volumeSonnerie, fam.volumeAppel], [50, 70, 80]);
   await julie.page.locator('#volume-text', { hasText: 'Sonnerie 70 · Vidéos 50 · Appels 80' }).waitFor();
@@ -187,7 +187,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await g.attendreBase(async () => (await essaisSon()).filter((d) => d.son === 'cloche').length === tablettes, 'essai du son d\'arrivée');
   assert.ok((await essaisSon()).filter((d) => d.son === 'cloche').every((d) => d.quoi === 'arrivee' && d.volume === 50));
   await enregistrer(julie, 'sons-card');
-  await g.toast(julie, 'Sonneries envoyées à la tablette');
+  await g.toast(julie, 'Sonneries enregistrées');
   const famSons = await g.lire(`families/${fid}`);
   assert.deepStrictEqual([famSons.sonAppel, famSons.sonArrivee], ['autrefois', 'cloche']);
   await julie.page.locator('#sons-value', { hasText: 'Appel : Téléphone d\'autrefois · Envois : Cloche' }).waitFor();
@@ -232,8 +232,10 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
     await g.attendreBase(async () => (await g.lire(`families/${fid}/members/${uid}`)).face, `photo sur la fiche ${uid}`);
   }
 
+  // La photo enregistrée, la fiche se referme et la montre (Tanguy, 23/11).
+  await julie.page.locator('#family-name-card .setting-edit').waitFor({ state: 'hidden' });
+  await julie.page.locator('#tface-img').waitFor({ state: 'visible' });
   // Dépannage : « Obtenir l'état », la tablette répond.
-  await julie.page.click('#family-name-card .setting-cancel');
   await julie.page.locator('#remote-card').waitFor({ state: 'visible' });
   await julie.page.click('#remote-card summary');
   await julie.page.click('#remote-card [data-cmd="status"]');
@@ -269,7 +271,7 @@ test('Un proche (pas propriétaire) : réglages de la tablette réservés, profi
   for (const carte of ['duree-card', 'radio-card', 'sons-card', 'sos-ordre-card', 'opt-lecture-ligne', 'volume-card', 'sleep-card', 'meteo-card', 'family-name-card', 'remote-card']) {
     assert.strictEqual(await paul.page.locator(`#${carte}`).isVisible(), false, `${carte} caché pour un proche`);
   }
-  await paul.page.click('#view-settings .back');
+  await g.retourAccueil(paul); // Réglages : plus de flèche, la barre du bas (23/11)
   await g.attendreVue(paul, 'view-home');
 
   // Profil : prénom, genre, photo, apparence sombre.
@@ -299,7 +301,7 @@ test('Un proche (pas propriétaire) : réglages de la tablette réservés, profi
   await julie.page.locator('#members li', { hasText: 'Paulo' }).waitFor();
 
   // Julie (propriétaire et responsable) ne peut pas quitter sa famille ; Paul si.
-  await julie.page.click('#view-settings .back');
+  await g.retourAccueil(julie); // Réglages : plus de flèche, la barre du bas (23/11)
   await g.attendreVue(julie, 'view-home');
   await g.ouvrirProfil(julie);
   assert.strictEqual(await julie.page.locator('#btn-leave').isVisible(), false);
@@ -430,7 +432,7 @@ test('Luminosité : 70 % posé par le serveur, réglée à 85 % par Julie ; Paul
   await g.attendreBase(async () => (await g.lire(`families/${fid}`)).luminosite === 85, 'luminosite 85');
   await julie.page.locator('#luminosite-value', { hasText: '85 % le jour' }).waitFor();
 
-  await julie.page.click('#view-settings .back');
+  await g.retourAccueil(julie); // Réglages : plus de flèche, la barre du bas (23/11)
   await g.attendreVue(julie, 'view-home');
   const paul = await banc.telephone('Paul');
   await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });

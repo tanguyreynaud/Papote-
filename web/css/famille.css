@@ -852,6 +852,9 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 .faq details[open] summary::after { transform: rotate(-135deg); margin-top: -2px; }
 .faq details p { margin: 0 0 14px; color: var(--muted); }
 .tab-page .page-head { padding-left: 20px; padding-top: calc(16px + env(safe-area-inset-top)); }
+/* « Mon profil » partage le haut de Réglages (titre, « Besoin d'aide ? », La tablette / La famille / Mon profil) :
+   mêmes marges que Réglages ouvert depuis la barre, rien ne saute d'un choix à l'autre (Tanguy, 23/11). */
+#view-profile .page-head { padding-left: 16px; padding-top: calc(8px + env(safe-area-inset-top)); }
 .notifs-status { margin: 4px 16px 8px; }
 .contact-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; border-radius: 14px; font-weight: 600; text-decoration: none; }
 

@@ -110,7 +110,7 @@ test('Ordre d\'appel SOS : ↑/↓, double appui, enregistré, relu après actua
   assert.strictEqual(await paul.page.locator(CARTE).isVisible(), false, 'carte cachée pour un proche');
 
   // Marc arrive après : appelé en dernier, sans rien changer à l'ordre choisi.
-  await julie.page.click('#view-settings .back');
+  await g.retourAccueil(julie); // Réglages : plus de flèche, la barre du bas (23/11)
   await g.attendreVue(julie, 'view-home');
   const marc = await banc.telephone('Marc');
   const uidMarc = await g.rejoindre(julie, fid, marc, { email: 'marc@exemple.fr', prenom: 'Marc' });

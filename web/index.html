@@ -992,8 +992,9 @@
     </section>
 
     <!-- Notifications -->
-    <section id="view-notifs" class="page tab-page" hidden>
-      <header class="page-head"><h1>Notifications</h1></header>
+    <!-- Page à part, comme Inviter : pas de barre du bas, une flèche retour (Tanguy, 23/11). -->
+    <section id="view-notifs" class="page" hidden>
+      <header class="page-head"><button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button><h1>Notifications</h1></header>
       <p id="notifs-status" class="activity notifs-status" hidden></p>
       <ul id="notifs" class="notifs"></ul>
       <p id="notifs-empty" class="empty" hidden>Rien de nouveau pour l'instant.</p>

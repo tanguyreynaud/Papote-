@@ -119,7 +119,7 @@ test('Textes longs : nom de la tablette, prénoms, e-mails, Wi-Fi, communes pass
   await julie.page.locator('#sheet-wifi').waitFor({ state: 'hidden' });
 
   // Accueil (demande pour rejoindre, titre), Inviter (invitation en attente), Profil.
-  await julie.page.click('#view-settings .back');
+  await g.retourAccueil(julie); // Réglages : plus de flèche, la barre du bas (23/11)
   await g.attendreVue(julie, 'view-home');
   await julie.page.locator('#pending-banner', { hasText: 'Marie-Léa-Clémentine-Joséphine' }).waitFor();
   await julie.page.locator('#family-title, #family-switch').filter({ visible: true, hasText: NOM_TABLETTE }).first().waitFor();
