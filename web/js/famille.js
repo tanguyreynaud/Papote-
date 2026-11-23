@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import { silenceTolereMs } from './silence.js';
 import {
@@ -2159,17 +2159,13 @@ async function onTabletFaceChosen(e) {
 // Changer une photo (Tanguy, 23/11) : un seul bouton, puis un petit menu comme sur un téléphone : appareil photo,
 // galerie, et « Retirer la photo » s'il y en a une. Le menu se ferme dans le même toucher qui ouvre l'appareil photo
 // ou la galerie (sinon le navigateur refuse de les ouvrir).
-async function menuPhoto(titre, aPhoto, prefixe, retirer) {
-  const choix = await chooseAction(titre, [
-    { label: 'Prendre une photo', value: 'camera', icone: 'camera' },
-    { label: 'Choisir dans la galerie', value: 'gallery', icone: 'gallery' },
-    ...(aPhoto ? [{ label: 'Retirer la photo', value: 'retirer', danger: true, icone: 'trash' }] : []),
-  ]);
+async function menuPhoto(titre, photo, prefixe, retirer) {
+  const choix = await choisirPhoto(titre, photo);
   if (choix === 'camera' || choix === 'gallery') $(`in-${prefixe}-${choix}`).click();
   else if (choix === 'retirer') retirer();
 }
 const photoTablette = () => tabletMembers.map((m) => m.face).find(Boolean) || null;
-const menuPhotoTablette = () => menuPhoto(`Photo de ${session.family.name}`, !!photoTablette(), 'tface', retirerPhotoTablette);
+const menuPhotoTablette = () => menuPhoto(`Photo de ${session.family.name}`, photoTablette(), 'tface', retirerPhotoTablette);
 $('tface-changer').addEventListener('click', menuPhotoTablette);
 // La photo touchée : la carte s'ouvre (« Modifier ») ; déjà ouverte, le même menu (audit des touchers, 17/11).
 ['tface-img', 'tface-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('family-name-card').classList.contains('editing')) menuPhotoTablette(); }));
@@ -2183,7 +2179,7 @@ async function retirerPhotoTablette() {
   } catch (err) { console.error(err); notice("La photo n'a pas pu être retirée."); }
 }
 
-const menuMaPhoto = () => menuPhoto('Ma photo', !!myFace, 'face', retirerMaPhoto);
+const menuMaPhoto = () => menuPhoto('Ma photo', myFace, 'face', retirerMaPhoto);
 $('face-changer').addEventListener('click', menuMaPhoto);
 ['face-img', 'face-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('my-name-card').classList.contains('editing')) menuMaPhoto(); }));
 $('in-face-camera').addEventListener('change', onFaceChosen);

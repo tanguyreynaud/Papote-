@@ -246,6 +246,19 @@ export function chooseAction(title, options, tete = null) {
   ], { title, stack: true, cls: 'dialog-menu', tete });
 }
 
+/**
+ * Photo d'une personne (Tanguy, 23/11) : deux grandes cases « Appareil photo » et « Galerie », « Retirer la photo »
+ * dessous s'il y en a une. Renvoie 'camera', 'gallery', 'retirer', ou false si annulé.
+ */
+export function choisirPhoto(titre, photo) {
+  return dialog('', [
+    { label: 'Appareil photo', value: 'camera', icone: 'camera', cls: 'secondary photo-case' },
+    { label: 'Galerie', value: 'gallery', icone: 'gallery', cls: 'secondary photo-case' },
+    ...(photo ? [{ label: 'Retirer la photo', value: 'retirer', cls: 'link photo-retirer' }] : []),
+    { label: 'Annuler', value: false, cls: 'link photo-annuler' },
+  ], { title: titre, stack: true, cls: 'dialog-menu dialog-photo', tete: { photo: photo || '', sous: photo ? 'Photo actuelle' : 'Pas encore de photo' } });
+}
+
 export function notice(message) {
   return dialog(message, [{ label: 'OK', value: true, cls: 'primary' }]);
 }

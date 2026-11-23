@@ -59,11 +59,11 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await p.click('#tface-empty');
   await p.locator('#form-family-name').waitFor();
   await p.click('#tface-empty');
-  assert.match(await g.texteFenetre(julie), /Prendre une photo[\s\S]*Choisir dans la galerie/);
+  assert.match(await g.texteFenetre(julie), /Appareil photo[\s\S]*Galerie/);
   assert.doesNotMatch(await g.texteFenetre(julie), /Retirer/, 'rien à retirer sans photo');
   await p.waitForTimeout(600);
   const choisi = p.waitForEvent('filechooser');
-  await g.repondre(julie, 'Choisir dans la galerie');
+  await g.repondre(julie, 'Galerie');
   await (await choisi).setFiles([]).catch(() => {});
   await p.click('#family-name-card .setting-cancel');
   // Le titre et la valeur d'un réglage : comme « Modifier ».
@@ -90,7 +90,7 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   await p.locator('#form-my-name').waitFor();
   // Ouverte, le menu photo (Tanguy, 23/11) : Prendre une photo, galerie, et Retirer puisqu'il y en a une.
   await p.locator('#face-img, #face-empty').filter({ visible: true }).first().click();
-  assert.match(await g.texteFenetre(julie), /Prendre une photo[\s\S]*Choisir dans la galerie/);
+  assert.match(await g.texteFenetre(julie), /Appareil photo[\s\S]*Galerie/);
   await p.waitForTimeout(600);
   await g.repondre(julie, 'Annuler');
   await p.click('#my-name-card .setting-cancel');

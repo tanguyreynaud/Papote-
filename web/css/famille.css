@@ -2122,3 +2122,15 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 
 /* Photo (Tanguy, 23/11) : un seul petit bouton « Changer la photo », le choix appareil photo / galerie dans un menu. */
 .rg-qui-photo .face-buttons .photo-changer { flex: 0 1 auto; padding: 8px 16px; gap: 8px; font-size: 15px; }
+/* Menu photo (Tanguy, 23/11) : la photo actuelle en tête, deux grandes cases côte à côte, Retirer et Annuler dessous. */
+.dialog-photo .dialog-tete-photo { width: 64px; height: 64px; }
+.dialog-photo .dialog-buttons.stack { display: grid; grid-template-columns: 1fr 1fr; grid-auto-flow: row; gap: 10px; }
+.dialog-menu.dialog-photo .dialog-buttons.stack .photo-case {
+  flex-direction: column; justify-content: center; align-items: center; gap: 10px; min-height: 116px; padding: 14px 8px;
+  border: 1.5px solid var(--line); border-radius: 18px; background: var(--surface); text-align: center; font-size: 16px; font-weight: 700;
+}
+.dialog-menu.dialog-photo .dialog-buttons.stack .photo-case:active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.dialog-photo .photo-case .menu-icone { width: 52px; height: 52px; border-radius: 50%; }
+.dialog-photo .photo-case .menu-icone svg { width: 26px; height: 26px; }
+.dialog-menu.dialog-photo .dialog-buttons.stack .link { grid-column: 1 / -1; }
+.dialog-menu.dialog-photo .dialog-buttons.stack .photo-retirer { margin-top: 2px; min-height: 44px; border-top: 0; color: var(--danger); }
