@@ -288,7 +288,8 @@ async function entrerFamillePreparee(t, tab, { nom = 'Mamie Emma', accueil = tru
   await t.page.click('#btn-send');
   await toast(t, 'Envoyé');
   await t.page.locator('#sheet-post').waitFor({ state: 'hidden' });
-  await t.page.click('#view-photos .page-head .back');
+  // Photos : la barre du bas, plus de flèche (cohérence, 23/11).
+  await t.page.click('.nav-item[data-tab="home"]');
   await attendreVue(t, 'view-home');
   await s.calme();
   return fid;

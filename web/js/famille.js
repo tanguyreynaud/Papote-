@@ -502,7 +502,12 @@ $('btn-invite-famille').addEventListener('click', () => openPage('invite'));
 document.querySelectorAll('.tile[data-page]').forEach((tile) => {
   // Réglages s'ouvre comme depuis la barre du bas (barre visible, pas de flèche) : sinon la flèche disparaissait en
   // passant sur « Mon profil » et le titre sautait (Tanguy, 23/11).
-  tile.addEventListener('click', () => (tile.dataset.page === 'settings' ? ouvrirReglages() : openPage(tile.dataset.page)));
+  // Photos aussi (cohérence, 23/11) : la page est dans la barre du bas, elle a donc toujours la même tête, barre
+  // visible et pas de flèche, qu'on vienne de la tuile ou de la barre.
+  tile.addEventListener('click', () => {
+    if (tile.dataset.page === 'settings') ouvrirReglages();
+    else openPage(tile.dataset.page, true, tile.dataset.page === 'photos');
+  });
 });
 document.querySelectorAll('.page .back').forEach((btn) => {
   btn.addEventListener('click', () => history.back());
@@ -660,6 +665,7 @@ async function confirmDelete(post, what) {
   if (!await askConfirm(`Supprimer ${what} de la tablette ?`)) return;
   try {
     await removePost(post);
+    toast(post.type === 'video' ? 'Vidéo supprimée' : 'Photo supprimée');
   } catch (err) {
     console.error(err);
     notice("La suppression a échoué. Vérifiez la connexion.");
@@ -812,12 +818,14 @@ function openViewer(post) {
   viewerPost = post;
   $('viewer-delete').hidden = !canDelete(post);
   $('viewer').hidden = false;
+  couleurBarres();
   $('viewer-caption').textContent = post.text || '';
   empiler({ page, viewer: true });
 }
 
 function closeViewer() {
   $('viewer').hidden = true;
+  couleurBarres();
   $('viewer-video').pause();
   $('viewer-video').removeAttribute('src');
   $('viewer-video').hidden = true;
@@ -860,7 +868,7 @@ $('viewer-delete').addEventListener('click', async () => {
   const what = post.type === 'video' ? 'cette vidéo' : 'cette photo';
   if (!await askConfirm(`Supprimer ${what} de la tablette ?`)) return;
   history.back();
-  try { await removePost(post); } catch (err) { console.error(err); notice('La suppression a échoué. Vérifiez la connexion.'); }
+  try { await removePost(post); toast(post.type === 'video' ? 'Vidéo supprimée' : 'Photo supprimée'); } catch (err) { console.error(err); notice('La suppression a échoué. Vérifiez la connexion.'); }
 });
 
 // Enregistrer sur le téléphone : feuille de partage sur iPhone (« Enregistrer l'image »),
@@ -3552,6 +3560,7 @@ async function removeMember(m) {
   try {
     await deleteDoc(doc(db, 'families', session.fid, 'members', m.id));
     if ((session.family.admins || []).includes(m.id)) await setFamilyAdmin(m.id, false);
+    toast(`${m.name} ne fait plus partie de la famille`);
   } catch (err) {
     console.error(err);
     notice("Ce membre n'a pas pu être retiré.");
@@ -3881,9 +3890,22 @@ function currentTheme() {
   try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch (e) { return 'auto'; }
 }
 
+// Barres du téléphone (cohérence, 23/11) : toujours la couleur du fond de l'écran. « Sombre » ou « Clair » choisi dans
+// Réglages sur un téléphone réglé à l'inverse : la barre du haut suit l'app (avant, barre claire sur app sombre).
+// Photo ou vidéo ouverte en grand (fond noir) : barre noire, puis sa couleur revient à la fermeture.
+const COULEUR_BARRE = { light: '#fdfaf5', dark: '#121110' };
+function couleurBarres() {
+  const force = document.documentElement.dataset.theme;
+  const noir = !document.getElementById('viewer').hidden;
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+    m.content = noir ? '#000000' : COULEUR_BARRE[force || (m.media.includes('dark') ? 'dark' : 'light')];
+  });
+}
+
 function applyTheme(theme) {
   if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
   else delete document.documentElement.dataset.theme;
+  couleurBarres();
   document.querySelectorAll('[data-theme-choice]').forEach((b) => b.classList.toggle('active', b.dataset.themeChoice === theme));
   $('apparence-value').textContent = theme === 'light' ? 'Clair' : theme === 'dark' ? 'Sombre' : 'Automatique';
 }

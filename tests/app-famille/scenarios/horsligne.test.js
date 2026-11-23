@@ -33,8 +33,7 @@ async function envoyerHorsLigne(t) {
   await g.toast(t, 'Pas de réseau');
   await t.page.locator('#sheet-post').waitFor({ state: 'hidden' });
   await t.page.locator('#view-photos .outbox', { hasText: '2 envois en attente de réseau' }).waitFor();
-  await t.page.click('#view-photos .back');
-  await g.attendreVue(t, 'view-home');
+  await g.retourAccueil(t); // Photos : la barre du bas, plus de flèche (cohérence, 23/11)
 }
 
 async function verifierPartis(fid) {

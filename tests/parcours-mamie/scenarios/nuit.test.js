@@ -43,7 +43,7 @@ test('La nuit : écran en veille ; une photo attend le matin sans rien allumer ;
   assert.ok(!(await g.liste(`families/${fid}/posts`))[0].seenAt, 'pas « Vu » pendant que Mamie dort');
 
   // Un appel en pleine nuit sonne et se voit.
-  await julie.page.click('#view-photos .back');
+  await julie.page.click('.nav-item[data-tab="home"]'); // Photos : la barre du bas, plus de flèche (cohérence, 23/11)
   await g.attendreVue(julie, 'view-home');
   await julie.page.locator('#tile-call:not([disabled])').waitFor({ timeout: 30_000 });
   await julie.page.click('#tile-call');

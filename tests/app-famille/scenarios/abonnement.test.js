@@ -206,7 +206,7 @@ test('En pause (paiement non réglé) : envois et appels bloqués avec une expli
   assert.match(await g.texteFenetre(paul), /Papote est en pause/);
   await g.repondre(paul, 'OK');
   assert.strictEqual(await paul.page.locator('#sheet-post').isVisible(), false);
-  await paul.page.click('#view-photos .back');
+  await g.retourAccueil(paul); // Photos : la barre du bas, plus de flèche (cohérence, 23/11)
   await paul.page.click('#tile-call');
   assert.match(await g.texteFenetre(paul), /Papote est en pause/);
   await g.repondre(paul, 'OK');

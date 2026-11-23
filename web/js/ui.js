@@ -14,6 +14,20 @@ const DOUBLE_PX = 40;
 let dernierToucher = null; // { x, y, t } du dernier clic de la page
 document.addEventListener('click', (e) => { dernierToucher = { x: e.clientX, y: e.clientY, t: e.timeStamp }; }, { capture: true, passive: true });
 
+// « Wi-Fi » ne se coupe jamais en deux lignes (« Wi- » en bout de ligne, « Fi » dessous) : le mot reste entier.
+// Le texte lu (textContent) ne change pas.
+function poserSansCoupure(el, texte) {
+  const morceaux = String(texte ?? '').split(/(Wi-Fi)/);
+  if (morceaux.length === 1) { el.textContent = texte; return; }
+  el.replaceChildren(...morceaux.filter(Boolean).map((m) => {
+    if (m !== 'Wi-Fi') return m;
+    const s = document.createElement('span');
+    s.className = 'sans-coupure';
+    s.textContent = m;
+    return s;
+  }));
+}
+
 function dialog(message, buttons, extra = null) {
   return new Promise((resolve) => {
     const back = document.createElement('div');
@@ -27,13 +41,13 @@ function dialog(message, buttons, extra = null) {
     const poserTexte = (t) => {
       const m = !extra?.title && /^(.{1,64}?[?!.…])\s+(\S[\s\S]*)$/.exec(t || '');
       text.className = extra?.title ? '' : 'dialog-msg';
-      if (!m) { text.textContent = t; text.classList.toggle('seul', !extra?.title); } else {
+      if (!m) { poserSansCoupure(text, t); text.classList.toggle('seul', !extra?.title); } else {
         const q = document.createElement('span');
         q.className = 'dialog-q';
-        q.textContent = m[1];
+        poserSansCoupure(q, m[1]);
         const d = document.createElement('span');
         d.className = 'dialog-d';
-        d.textContent = m[2];
+        poserSansCoupure(d, m[2]);
         text.replaceChildren(q, ' ', d);
         // Une adresse e-mail dont parle la question : seule sur sa ligne, entre la question et l'explication,
         // entière pour qu'on puisse la relire (une adresse vraiment très longue passe à la ligne).

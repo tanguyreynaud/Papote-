@@ -60,7 +60,7 @@ test('Trois proches envoient une photo puis un message au même instant : tout a
     assert.ok(vus.some((v) => /^Envoyé|^Photo envoyée|serveur ne répond pas/.test(v)), `${t.nom} : un mot après l'envoi (${JSON.stringify(vus)})`);
   }
   for (const t of tels) await t.page.locator('#sheet-post').waitFor({ state: 'hidden' });
-  for (const t of tels) { await t.page.click('#view-photos .page-head .back'); await g.ouvrirTuile(t, 'messages'); }
+  for (const t of tels) { await g.retourAccueil(t); await g.ouvrirTuile(t, 'messages'); }
   for (const t of tels) await t.page.fill('#message-text', `Bisous de ${t.nom}`);
   await Promise.all(tels.map((t) => t.page.click('#btn-message')));
   await g.attendreBase(async () => (await g.liste(`families/${fid}/posts`)).filter((p) => /^Bisous de/.test(p.text || '')).length === 3, '3 messages', 60_000);

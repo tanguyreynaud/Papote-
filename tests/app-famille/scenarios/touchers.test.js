@@ -102,8 +102,7 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   assert.equal((await p.locator('#photos .read-badge.unread').first().textContent()).trim(), 'Envoyé, pas vu');
   await p.locator('#photos .read-badge').first().click();
   await g.toast(julie, 'Mamie Emma ne l\'a pas encore vue.');
-  await p.click('#view-photos .back');
-  await g.attendreVue(julie, 'view-home');
+  await g.retourAccueil(julie); // Photos : la barre du bas, plus de flèche (cohérence, 23/11)
 
   // Réglages dans la barre du bas (Tanguy, 20/11) ; double appui, une seule page : « retour » ramène à l'accueil.
   await p.locator('#nav-reglages').dblclick();

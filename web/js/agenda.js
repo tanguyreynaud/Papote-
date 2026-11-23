@@ -111,6 +111,8 @@ async function remove(kind, id) {
   batch.delete(doc(db, 'families', session.fid, kind, id));
   bumpRev(batch, session.fid);
   await batch.commit();
+  // Toute action faite se dit, comme « Message supprimé » (cohérence, 23/11).
+  toastAgenda(kind === 'reminders' ? 'Rappel supprimé' : 'Anniversaire supprimé');
 }
 
 function editButton(label, onClick) {
@@ -494,6 +496,7 @@ $('form-reminder').addEventListener('submit', async (e) => {
     bumpRev(batch, session.fid);
     await batch.commit();
     if (editing) toastAgenda(editing.coll === 'reminders' ? 'Rappel modifié' : 'Anniversaire modifié');
+    else toastAgenda(seg === 'reminder' ? 'Rappel ajouté' : 'Anniversaire ajouté');
     editing = null;
     $('rem-title').value = '';
     $('bday-name').value = '';

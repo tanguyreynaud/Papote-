@@ -2167,3 +2167,32 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 /* « Retirer » à côté de « Changer la photo », en rouge discret. */
 .rg-qui-photo .face-buttons .photo-retirer-btn { flex: 0 1 auto; padding: 8px 14px; gap: 6px; font-size: 15px; color: var(--danger); }
 .rg-qui-photo .face-buttons .photo-retirer-btn svg { color: var(--danger); stroke: var(--danger); }
+
+/* ---------- Cohérence de toute l'app (23/11) : mêmes règles sur chaque page et chaque fenêtre ---------- */
+/* Un bouton tient sur une ligne. Dans une fenêtre à deux boutons, celui qui renonce (« Annuler ») prend moins de
+   place quand l'autre a un mot long (« Rendre responsable », « Annuler ma commande »). */
+.dialog-buttons:not(.stack) { display: flex; }
+.dialog-buttons:not(.stack) button { flex: 1 1 0; min-width: max-content; white-space: nowrap; }
+.contact-actions button, .guide button, .intro button { white-space: nowrap; }
+.contact-actions { flex-wrap: nowrap; gap: 8px; }
+.contact-actions button { flex: 1 1 auto; min-width: 0; padding-left: 8px; padding-right: 8px; font-size: 15px; }
+.sans-coupure { white-space: nowrap; }
+/* Le bouton qui a la main : le même anneau indigo partout (avant, l'anneau noir du navigateur sur les fenêtres
+   ouvertes sans toucher : « Voulez-vous quitter ? », « Abonnement activé »). */
+button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+/* Rien ne surgit, rien ne disparaît d'un coup : le petit message noir, les feuilles du bas et leur fond gris
+   arrivent et repartent en douceur ; un réglage qu'on ouvre se découvre en fondu. Sans animation si le téléphone
+   les a coupées, et sur un navigateur ancien tout reste simplement instantané. */
+.toast { transition: opacity .2s ease-out, transform .2s ease-out, display .2s allow-discrete; }
+.toast[hidden] { opacity: 0; transform: translateX(-50%) translateY(8px); pointer-events: none; }
+@starting-style { .toast { opacity: 0; transform: translateX(-50%) translateY(8px); } }
+.sheet { transition: background-color .2s ease-out, display .2s allow-discrete; }
+.sheet[hidden] { background-color: transparent; pointer-events: none; }
+@starting-style { .sheet { background-color: transparent; } }
+.sheet-body { transition: transform .2s ease-in, opacity .2s ease-in; }
+.sheet[hidden] .sheet-body { transform: translateY(40px); opacity: 0; }
+details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation: fade-in .2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .toast, .sheet, .sheet-body { transition: none; }
+  details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation: none; }
+}
