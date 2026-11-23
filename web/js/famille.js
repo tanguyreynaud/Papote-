@@ -2061,6 +2061,7 @@ function renderFace() {
   $('face-img').hidden = !myFace;
   $('face-empty').hidden = !!myFace;
   $('face-changer-texte').textContent = myFace ? 'Changer ma photo' : 'Ajouter ma photo';
+  $('face-remove').hidden = !myFace;
   if (myFace) $('face-img').src = myFace;
   badgeDu('face-nudge', !myFace);
 }
@@ -2125,6 +2126,7 @@ function renderTabletFace() {
   if (face) $('tface-img').src = face;
   $('tface-empty').hidden = !!face;
   $('tface-changer-texte').textContent = face ? 'Changer la photo' : 'Ajouter une photo';
+  $('tface-remove').hidden = !face;
 }
 
 async function saveTabletFace(face) {
@@ -2156,16 +2158,18 @@ async function onTabletFaceChosen(e) {
   }
 }
 
-// Changer une photo (Tanguy, 23/11) : un seul bouton, puis un petit menu comme sur un téléphone : appareil photo,
-// galerie, et « Retirer la photo » s'il y en a une. Le menu se ferme dans le même toucher qui ouvre l'appareil photo
-// ou la galerie (sinon le navigateur refuse de les ouvrir).
-async function menuPhoto(titre, photo, prefixe, retirer) {
-  const choix = await choisirPhoto(titre, photo);
+// Changer une photo (Tanguy, 23/11) : « Changer la photo » ouvre la fenêtre Appareil photo / Galerie ; « Retirer » est
+// un bouton à côté. La fenêtre se ferme dans le même toucher qui ouvre l'appareil photo ou la galerie (sinon le
+// navigateur refuse de les ouvrir).
+async function menuPhoto(titre, prefixe) {
+  const choix = await choisirPhoto(titre);
   if (choix === 'camera' || choix === 'gallery') $(`in-${prefixe}-${choix}`).click();
-  else if (choix === 'retirer') retirer();
 }
 const photoTablette = () => tabletMembers.map((m) => m.face).find(Boolean) || null;
-const menuPhotoTablette = () => menuPhoto(`Photo de ${session.family.name}`, photoTablette(), 'tface', retirerPhotoTablette);
+const menuPhotoTablette = () => menuPhoto(`Photo de ${session.family.name}`, 'tface');
+$('tface-remove').addEventListener('click', async () => {
+  if (await askConfirm(`Retirer la photo de ${session.family.name} ?`, 'Retirer')) retirerPhotoTablette();
+});
 $('tface-changer').addEventListener('click', menuPhotoTablette);
 // La photo touchée : la carte s'ouvre (« Modifier ») ; déjà ouverte, le même menu (audit des touchers, 17/11).
 ['tface-img', 'tface-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('family-name-card').classList.contains('editing')) menuPhotoTablette(); }));
@@ -2179,7 +2183,10 @@ async function retirerPhotoTablette() {
   } catch (err) { console.error(err); notice("La photo n'a pas pu être retirée."); }
 }
 
-const menuMaPhoto = () => menuPhoto('Ma photo', myFace, 'face', retirerMaPhoto);
+const menuMaPhoto = () => menuPhoto('Ma photo', 'face');
+$('face-remove').addEventListener('click', async () => {
+  if (await askConfirm('Retirer votre photo ?', 'Retirer')) retirerMaPhoto();
+});
 $('face-changer').addEventListener('click', menuMaPhoto);
 ['face-img', 'face-empty'].forEach((id) => $(id).addEventListener('click', () => { if ($('my-name-card').classList.contains('editing')) menuMaPhoto(); }));
 $('in-face-camera').addEventListener('change', onFaceChosen);

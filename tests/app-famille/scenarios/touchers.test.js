@@ -88,11 +88,12 @@ test('Touchers sans effet trouvés par l\'audit : membres, « Non lu », photos 
   // Ma photo touchée ouvre « Modifier » ; ouverte, elle propose de choisir une photo.
   await p.locator('#face-img, #face-empty').filter({ visible: true }).first().click();
   await p.locator('#form-my-name').waitFor();
-  // Ouverte, le menu photo (Tanguy, 23/11) : Prendre une photo, galerie, et Retirer puisqu'il y en a une.
+  // Ouverte, la fenêtre photo (Tanguy, 23/11) : Appareil photo et Galerie, une croix pour fermer.
   await p.locator('#face-img, #face-empty').filter({ visible: true }).first().click();
   assert.match(await g.texteFenetre(julie), /Appareil photo[\s\S]*Galerie/);
   await p.waitForTimeout(600);
-  await g.repondre(julie, 'Annuler');
+  await p.click('.dialog-back:not(.closing) .dialog-croix'); // la croix ferme la fenêtre (Tanguy, 23/11)
+  await p.locator('.dialog-back').first().waitFor({ state: 'detached' });
   await p.click('#my-name-card .setting-cancel');
 
   // Photos : « Envoyé, pas vu » dit que Mamie ne l'a pas encore vue.
