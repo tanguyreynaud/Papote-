@@ -286,6 +286,7 @@ test('Prénom vide ou sans lettre : un mot sous le champ partout où l\'on tape 
   await g.attendreVue(julie, 'view-invite');
   await julie.page.fill('#invite-email', 'lea@exemple.fr');
   await julie.page.click('#form-invite button[type=submit]');
+  await g.repondre(julie, 'Inviter'); // « Inviter cette personne ? »
   await g.toast(julie, 'Invitation envoyée à');
   const lien = /\?code=([A-Z0-9-]+)&pour=([^\s"<>]+)/.exec(g.dernierMail('lea@exemple.fr').texte);
   const lea = await banc.telephone('Léa');

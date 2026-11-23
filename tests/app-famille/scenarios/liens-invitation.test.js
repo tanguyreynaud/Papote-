@@ -131,6 +131,7 @@ test('Invitation par e-mail d\'un proche déjà inscrit : l\'invitation, puis la
   await julie.page.locator('#invite-email-card').waitFor({ state: 'visible' });
   await julie.page.fill('#invite-email', 'paul@exemple.fr');
   await julie.page.click('#form-invite button[type=submit]');
+  await g.repondre(julie, 'Inviter'); // « Inviter cette personne ? »
   await g.toast(julie, 'Invitation envoyée à');
   const mail = g.dernierMail('paul@exemple.fr');
   const lien = /https?:\/\/\S+(\?code=[A-Z0-9-]+&pour=[^\s"<>]+)/.exec(mail.texte);

@@ -128,6 +128,7 @@ test('Textes longs : nom de la tablette, prénoms, e-mails, Wi-Fi, communes pass
   await g.attendreVue(julie, 'view-invite');
   await julie.page.fill('#invite-email', `invitee.${EMAIL_LONG}`);
   await julie.page.click('#form-invite button[type=submit]');
+  await g.repondre(julie, 'Inviter'); // « Inviter cette personne ? »
   await julie.page.locator('#invitations-sent li', { hasText: 'invitee.' }).waitFor();
   await debordements(julie, 'Inviter');
   await julie.page.click('#view-invite .back');

@@ -18,6 +18,7 @@ test('Invitation par e-mail : le proche invité voit l\'invitation et entre dire
   await julie.page.locator('#invite-email-card').waitFor({ state: 'visible' });
   await julie.page.fill('#invite-email', 'Paul@Exemple.fr');
   await julie.page.click('#form-invite button[type=submit]');
+  await g.repondre(julie, 'Inviter'); // « Inviter cette personne ? »
   await g.toast(julie, 'Invitation envoyée à');
   await julie.page.locator('#invitations-sent li', { hasText: 'paul@exemple.fr' }).waitFor();
   const mail = g.dernierMail('paul@exemple.fr');
@@ -135,6 +136,48 @@ test('Code faux, puis responsable désigné, membre retiré, départ d\'un proch
 
 // Tanguy, 20/11 : une invitation par e-mail vaut 30 jours. Passé ce délai, le responsable la voit « expirée »
 // et peut la renvoyer ; le proche ne la voit plus, et ne peut plus entrer avec.
+test('Invitation par e-mail : « Inviter cette personne ? » avant l\'envoi, « Annuler » demande confirmation, l\'adresse tient sur une ligne', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await julie.page.click('#btn-invite');
+  await g.attendreVue(julie, 'view-invite');
+  await julie.page.locator('#invite-email-card').waitFor({ state: 'visible' });
+  const adresse = 'christophe.delacroix@exemple.fr';
+
+  // « Annuler » dans la fenêtre : rien ne part, l'adresse reste dans le champ.
+  await julie.page.fill('#invite-email', adresse);
+  await julie.page.click('#form-invite button[type=submit]');
+  const question = await g.texteFenetre(julie);
+  assert.match(question, /Inviter cette personne \?/);
+  assert.ok(question.includes(adresse), `l'adresse est dans la fenêtre : ${question}`);
+  await g.repondre(julie, 'Annuler');
+  assert.strictEqual((await g.liste(`families/${fid}/invitations`)).length, 0);
+  assert.strictEqual(g.dernierMail(adresse), null, 'aucun e-mail parti');
+  assert.strictEqual(await julie.page.inputValue('#invite-email'), adresse);
+
+  // « Inviter » : l'e-mail part, la ligne arrive avec « Envoyée à l'instant », l'adresse sur une seule ligne.
+  await julie.page.click('#form-invite button[type=submit]');
+  await g.repondre(julie, 'Inviter');
+  await g.toast(julie, 'Invitation envoyée à');
+  const ligne = julie.page.locator('#invitations-sent li', { hasText: adresse });
+  await ligne.waitFor();
+  assert.match(await ligne.innerText(), /Envoyée à l’instant/);
+  const h = await ligne.locator('.invitation-email').evaluate((el) => ({ h: el.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(el).lineHeight) }));
+  assert.ok(h.h < h.lh * 1.5, `adresse sur une ligne (${h.h} px pour une ligne de ${h.lh} px)`);
+  await g.verifierLargeur(julie, 'invitation en attente');
+
+  // « Annuler » sur la ligne : « Garder » ne change rien, « Oui, annuler » efface l'invitation.
+  await ligne.locator('button', { hasText: 'Annuler' }).click();
+  assert.match(await g.texteFenetre(julie), /Annuler l'invitation \?/);
+  await g.repondre(julie, 'Garder');
+  assert.strictEqual((await g.liste(`families/${fid}/invitations`)).length, 1);
+  await ligne.locator('button', { hasText: 'Annuler' }).click();
+  await g.repondre(julie, 'Oui, annuler');
+  await g.toast(julie, 'Invitation annulée');
+  await ligne.waitFor({ state: 'detached' });
+  assert.strictEqual((await g.liste(`families/${fid}/invitations`)).length, 0);
+});
+
 test('Invitation par e-mail de plus de 30 jours : « Invitation expirée » chez le responsable, « Renvoyer » la remet en route', async () => {
   const julie = await banc.telephone('Julie');
   const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
@@ -143,6 +186,7 @@ test('Invitation par e-mail de plus de 30 jours : « Invitation expirée » chez
   await julie.page.locator('#invite-email-card').waitFor({ state: 'visible' });
   await julie.page.fill('#invite-email', 'paul@exemple.fr');
   await julie.page.click('#form-invite button[type=submit]');
+  await g.repondre(julie, 'Inviter'); // « Inviter cette personne ? »
   await g.toast(julie, 'Invitation envoyée à');
   const ligne = julie.page.locator('#invitations-sent li', { hasText: 'paul@exemple.fr' });
   await ligne.waitFor();

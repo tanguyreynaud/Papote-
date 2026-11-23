@@ -3641,9 +3641,99 @@ function requestCard(m) {
   return card;
 }
 
+// Invitations par e-mail pas encore utilisées (refonte du 23/11, Tanguy) : l'adresse tient sur une ligne, la date
+// d'envoi dessous, « Annuler » demande confirmation, et une invitation qui part n'apparaît qu'une fois l'e-mail
+// envoyé, en douceur (avant : la ligne surgissait pendant que le bouton tournait encore).
+let invitationsRecues = null; // dernières invitations lues dans la base, la plus récente en tête
+let invitationsAffichees = null; // adresses déjà à l'écran : une nouvelle arrive en glissant
+const envoisEnCours = new Set(); // adresses dont l'e-mail est en train de partir : leur ligne attend la fin
+const invitationsFraiches = new Map(); // adresse → « Envoyée à l'instant » (ou « Renvoyée ») pendant quelques secondes
+const SANS_ANIMATION = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+function invitationQuand(inv) {
+  const t = inv.createdAt?.toMillis?.();
+  if (!t) return 'Envoyée';
+  const minuit = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const jours = Math.round((minuit(new Date()) - minuit(new Date(t))) / 86400000);
+  return jours <= 0 ? 'Envoyée aujourd’hui' : jours === 1 ? 'Envoyée hier' : `Envoyée il y a ${jours} jours`;
+}
+
+function ligneInvitation(inv) {
+  const email = (inv.email || '').toLowerCase();
+  const li = document.createElement('li');
+  li.className = 'invitation';
+  li.dataset.email = email;
+  const rond = document.createElement('span');
+  rond.className = 'avatar invitation-rond';
+  rond.setAttribute('aria-hidden', 'true');
+  rond.textContent = (inv.email || '?').charAt(0).toUpperCase();
+  const name = document.createElement('span');
+  name.className = 'invitation-email';
+  name.textContent = inv.email;
+  name.title = inv.email;
+  const etat = document.createElement('span');
+  etat.className = 'invitation-etat';
+  const expiree = invitationExpiree(inv);
+  const fraiche = invitationsFraiches.get(email);
+  if (fraiche) {
+    etat.classList.add('invitation-ok');
+    etat.append(icon('check'), fraiche);
+  } else {
+    etat.textContent = expiree ? 'Invitation expirée' : invitationQuand(inv);
+  }
+  const actions = document.createElement('span');
+  actions.className = 'invitation-actions';
+  // Plus de 30 jours : elle ne fait plus entrer (firestore.rules). On le dit, avec « Renvoyer » (Tanguy, 20/11).
+  if (expiree) {
+    li.classList.add('invitation-expiree');
+    const renvoyer = document.createElement('button');
+    renvoyer.type = 'button';
+    renvoyer.className = 'link small invitation-renvoyer';
+    renvoyer.textContent = 'Renvoyer';
+    renvoyer.addEventListener('click', async () => {
+      renvoyer.disabled = true;
+      renvoyer.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Envoi…');
+      try { await envoyerInvitation(inv.email, 'Renvoyée à l’instant'); } finally { dessinerInvitations(); }
+    });
+    actions.append(renvoyer);
+  }
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'link small invitation-annuler';
+  cancel.textContent = 'Annuler';
+  cancel.setAttribute('aria-label', `Annuler l'invitation de ${inv.email}`);
+  cancel.addEventListener('click', () => annulerInvitation(inv, li));
+  actions.append(cancel);
+  li.append(rond, name, etat, actions);
+  return li;
+}
+
+function dessinerInvitations() {
+  if (!invitationsRecues) return;
+  // Une adresse dont l'e-mail part encore n'est pas montrée (sauf si elle y était déjà : renvoi).
+  const visibles = invitationsRecues.filter((inv) => {
+    const email = (inv.email || '').toLowerCase();
+    return !envoisEnCours.has(email) || invitationsAffichees?.has(email);
+  });
+  const avant = invitationsAffichees;
+  const titreCache = $('invitations-titre').hidden;
+  $('invitations-titre').hidden = !visibles.length;
+  $('invitations-sent').replaceChildren(...visibles.map((inv) => {
+    const li = ligneInvitation(inv);
+    // Nouvelle depuis le dernier dessin (pas à l'ouverture de la page) : elle glisse et s'éclaire un instant.
+    if (avant && !avant.has(li.dataset.email)) li.classList.add('invitation-arrive');
+    else if (invitationsFraiches.has(li.dataset.email)) li.classList.add('invitation-eclaire');
+    return li;
+  }));
+  $('invitations-titre').classList.toggle('invitation-arrive', !!avant && titreCache && visibles.length > 0);
+  invitationsAffichees = new Set(visibles.map((inv) => (inv.email || '').toLowerCase()));
+}
+
 function watchInvitations() {
   stopInvitations?.();
   stopInvitations = null;
+  invitationsRecues = null;
+  invitationsAffichees = null;
   if (!amFamilyAdmin()) return;
   stopInvitations = onSnapshot(collection(db, 'families', session.fid, 'invitations'), (snap) => {
     // Une personne invitée qui est déjà dans la famille (arrivée par le code, par exemple) :
@@ -3655,42 +3745,29 @@ function watchInvitations() {
       cancelInvitation(session.fid, email).catch((err) => console.warn('Invitation non effacée', err));
       return false;
     });
-    // Invitations pas encore utilisées, la plus récente en haut : l'initiale, l'adresse, « Annuler ».
+    // Invitations pas encore utilisées, la plus récente en haut.
     restantes.sort((a, b) => (b.data().createdAt?.toMillis?.() || 0) - (a.data().createdAt?.toMillis?.() || 0));
-    $('invitations-titre').hidden = !restantes.length;
-    $('invitations-sent').replaceChildren(...restantes.map((d) => {
-      const inv = d.data();
-      const li = document.createElement('li');
-      const rond = document.createElement('span');
-      rond.className = 'avatar invitation-rond';
-      rond.textContent = (inv.email || '?').charAt(0).toUpperCase();
-      const name = document.createElement('span');
-      name.className = 'member-name invitation-email';
-      name.textContent = inv.email;
-      const cancel = document.createElement('button');
-      cancel.type = 'button';
-      cancel.className = 'link small';
-      cancel.textContent = 'Annuler';
-      cancel.addEventListener('click', () => cancelInvitation(session.fid, inv.email).catch(console.error));
-      // Plus de 30 jours : elle ne fait plus entrer (firestore.rules). On le dit, avec « Renvoyer » (Tanguy, 20/11).
-      if (!invitationExpiree(inv)) { li.append(rond, name, cancel); return li; }
-      li.classList.add('invitation-expiree');
-      const etat = document.createElement('span');
-      etat.className = 'invitation-etat';
-      etat.textContent = 'Invitation expirée';
-      name.append(etat);
-      const renvoyer = document.createElement('button');
-      renvoyer.type = 'button';
-      renvoyer.className = 'link small';
-      renvoyer.textContent = 'Renvoyer';
-      renvoyer.addEventListener('click', async () => {
-        renvoyer.disabled = true;
-        try { await envoyerInvitation(inv.email); } finally { renvoyer.disabled = false; }
-      });
-      li.append(rond, name, renvoyer, cancel);
-      return li;
-    }));
+    invitationsRecues = restantes.map((d) => d.data());
+    dessinerInvitations();
   }, (err) => console.warn('Invitations illisibles', err));
+}
+
+// « Annuler » une invitation : on demande d'abord, puis la ligne se replie avant de disparaître.
+async function annulerInvitation(inv, li) {
+  if (!await askConfirm("Annuler l'invitation ? Cette personne ne pourra plus entrer dans la famille sans l'accord d'un responsable.", 'Oui, annuler', 'Garder', inv.email)) return;
+  li.style.height = `${li.offsetHeight}px`;
+  li.offsetHeight; // la hauteur de départ est posée avant le repli
+  li.classList.add('invitation-part');
+  if (!SANS_ANIMATION()) await new Promise((r) => setTimeout(r, 260));
+  try {
+    await cancelInvitation(session.fid, inv.email);
+    toast('Invitation annulée');
+  } catch (err) {
+    console.error(err);
+    li.classList.remove('invitation-part');
+    li.style.height = '';
+    notice("L'invitation n'a pas pu être annulée. Vérifiez la connexion, puis réessayez.");
+  }
 }
 
 $('form-invite').addEventListener('submit', async (e) => {
@@ -3698,22 +3775,47 @@ $('form-invite').addEventListener('submit', async (e) => {
   const email = $('invite-email').value.trim();
   if (familyFull) { notice('La famille est complète : 30 proches au maximum.'); return; }
   if (adresseIncomplete(email)) { notice(ADRESSE_INCOMPLETE); return; }
-  // Le temps d'enregistrer l'invitation et d'envoyer l'e-mail : bouton « Un instant… », champ figé.
   const bouton = $('form-invite').querySelector('button[type=submit]');
+  if (bouton.disabled) return;
+  // On demande avant d'écrire à quelqu'un : une faute de frappe se voit ici (Tanguy, 23/11).
+  if (!await askConfirm('Inviter cette personne ? Papote lui envoie un e-mail avec un lien pour entrer dans la famille.', 'Inviter', 'Annuler', email)) return;
+  // Le temps d'enregistrer l'invitation et d'envoyer l'e-mail : le bouton garde sa taille et tourne, le champ est figé.
   const libelle = bouton.textContent;
+  bouton.style.minWidth = `${bouton.offsetWidth}px`;
   bouton.disabled = true;
   $('invite-email').disabled = true;
-  bouton.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }), 'Un instant…');
+  bouton.replaceChildren(Object.assign(document.createElement('span'), { className: 'spinner-inline' }));
+  bouton.setAttribute('aria-label', 'Envoi en cours');
   try {
     await envoyerInvitation(email);
   } finally {
     bouton.disabled = familyFull;
     $('invite-email').disabled = familyFull;
     bouton.textContent = libelle;
+    bouton.removeAttribute('aria-label');
+    bouton.style.minWidth = '';
   }
 });
 
-async function envoyerInvitation(email) {
+// mot : ce que la ligne dit quelques secondes une fois l'e-mail parti (« Envoyée à l'instant »).
+async function envoyerInvitation(email, mot = 'Envoyée à l’instant') {
+  const cle = email.toLowerCase();
+  envoisEnCours.add(cle);
+  let partie = false;
+  try {
+    partie = await envoyerInvitationVraiment(email);
+  } finally {
+    envoisEnCours.delete(cle);
+    if (partie) {
+      invitationsFraiches.set(cle, mot);
+      setTimeout(() => { if (invitationsFraiches.delete(cle)) dessinerInvitations(); }, 6000);
+    }
+    dessinerInvitations();
+  }
+}
+
+/** Enregistre l'invitation et envoie l'e-mail. Rend true si l'e-mail est parti. */
+async function envoyerInvitationVraiment(email) {
   try {
     await inviteByEmail(session.fid, session.family, email, session.member.name);
   } catch (err) {
@@ -3725,7 +3827,7 @@ async function envoyerInvitation(email) {
     if (!deja) {
       console.error(err);
       notice("L'invitation n'a pas pu être enregistrée.");
-      return;
+      return false;
     }
   }
   // Un vrai e-mail part de Papote ; si l'envoi n'est pas possible, on partage le lien soi-même.
@@ -3733,11 +3835,12 @@ async function envoyerInvitation(email) {
     await inviterParEmail(session.fid, email);
     $('invite-email').value = '';
     toast(`Invitation envoyée à ${email}`, 4000);
+    return true;
   } catch (err) {
     console.warn('E-mail d\'invitation non envoyé', err);
     const code = err.code || '';
-    if (code.endsWith('invalid-argument')) { notice("Cette adresse e-mail ne semble pas correcte."); return; }
-    if (code.endsWith('resource-exhausted')) { notice("Trop d'invitations aujourd'hui. Réessayez demain."); return; }
+    if (code.endsWith('invalid-argument')) { notice("Cette adresse e-mail ne semble pas correcte."); return false; }
+    if (code.endsWith('resource-exhausted')) { notice("Trop d'invitations aujourd'hui. Réessayez demain."); return false; }
     $('invite-email').value = '';
     toast(`Invitation prête : ${email} peut se connecter à Papote`, 4000);
     if (navigator.share) {
@@ -3747,6 +3850,7 @@ async function envoyerInvitation(email) {
         url: inviteLink(),
       }).catch(() => {});
     }
+    return false;
   }
 }
 

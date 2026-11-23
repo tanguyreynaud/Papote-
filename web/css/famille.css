@@ -1600,13 +1600,39 @@ a { text-decoration: none; }
 .app-android body::after { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: env(safe-area-inset-bottom); background: #7a756f; z-index: 2147483647; pointer-events: none; }
 @media (prefers-color-scheme: dark) { .app-android body::after { background: #2a2826; } }
 
-/* Invitations par e-mail pas encore utilisées */
+/* Invitations par e-mail pas encore utilisées (refonte du 23/11) : l'adresse seule sur sa ligne (jamais coupée en
+   deux, « … » si elle est vraiment trop longue), la date d'envoi dessous, les actions à droite de la date. */
 .invitations-titre { margin: 18px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
-.invitations li { gap: 12px; flex-wrap: nowrap; }
-.invitation-rond { width: 36px; height: 36px; font-weight: 700; font-size: 15px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
-.invitation-email { display: block; min-width: 0; overflow-wrap: anywhere; }
-.invitation-etat { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
+.invitations li.invitation { position: relative; z-index: 0; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: "rond email email" "rond etat actions"; align-items: center; gap: 0 12px; padding: 13px 0 11px; overflow-x: visible; overflow-y: clip; }
+.invitation-rond { grid-area: rond; width: 36px; height: 36px; font-weight: 700; font-size: 15px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+.invitation-email { grid-area: email; display: block; min-width: 0; font-size: 16px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.invitation-etat { grid-area: etat; display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 14px; color: var(--muted); }
+.invitation-etat svg { flex: none; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.invitation-ok { color: var(--ok); font-weight: 600; }
+.invitation-expiree .invitation-etat { font-weight: 600; }
+.invitation-actions { grid-area: actions; display: flex; align-items: center; gap: 18px; }
+.invitation-actions .link { min-height: 44px; margin: -8px 0; padding: 0; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.invitation-renvoyer { color: var(--accent); }
+.invitation-annuler { color: var(--danger); }
+.invitation-actions .spinner-inline { width: 12px; height: 12px; margin-right: 6px; }
 .invitation-expiree .invitation-rond { opacity: .55; }
+/* Le bouton « Inviter » pendant l'envoi : même taille, la roue seule (blanche sur l'indigo). */
+#form-invite button[type=submit] .spinner-inline { margin: 0; border-color: color-mix(in srgb, #fff 35%, transparent); border-top-color: #fff; }
+/* Une invitation qui vient de partir glisse à sa place et s'éclaire un instant ; une invitation annulée se replie. */
+@keyframes invitation-arrive { from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; } to { opacity: 1; max-height: 90px; } }
+/* L'éclat déborde un peu de chaque côté de la ligne, pour ne pas coller au texte. */
+.invitations li.invitation::before { content: ''; position: absolute; inset: 3px -10px; z-index: -1; border-radius: 12px; pointer-events: none; }
+@keyframes invitation-eclaire { from { background: color-mix(in srgb, var(--accent) 12%, transparent); } to { background: transparent; } }
+@keyframes invitation-titre { from { opacity: 0; } to { opacity: 1; } }
+.invitations li.invitation-arrive { animation: invitation-arrive .38s cubic-bezier(.2, .8, .2, 1) both; }
+.invitations li.invitation-arrive::before { animation: invitation-eclaire 3s ease-out .15s both; }
+.invitations li.invitation-eclaire::before { animation: invitation-eclaire 3s ease-out both; }
+.invitations-titre.invitation-arrive { animation: invitation-titre .38s ease-out both; }
+.invitations li.invitation-part { overflow: hidden; height: 0 !important; padding-top: 0; padding-bottom: 0; opacity: 0; border-bottom-color: transparent; transition: height .26s ease, padding .26s ease, opacity .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .invitations li.invitation-arrive, .invitations li.invitation-arrive::before, .invitations li.invitation-eclaire::before, .invitations-titre.invitation-arrive { animation: none; }
+  .invitations li.invitation-part { transition: none; }
+}
 #form-invite button[disabled] { opacity: 1; }
 
 /* Annuler ma commande / Résilier : un lien gris discret en bas de la carte, pas un bouton mis en avant. */
@@ -1867,6 +1893,8 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .dialog p.dialog-msg { margin: 0 0 20px; line-height: 0; }
 .dialog-q, .dialog-d { display: inline-block; width: 100%; }
 .dialog-q { font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 25px; text-wrap: balance; }
+.dialog-adresse { display: inline-block; box-sizing: border-box; max-width: 100%; margin-top: 12px; padding: 7px 14px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 9%, var(--bg)); color: var(--text); font-size: 15px; font-weight: 600; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+.dialog-adresse + .dialog-d { margin-top: 12px; }
 .dialog-d { margin-top: 8px; font-size: 16px; line-height: 23px; color: var(--muted); text-wrap: pretty; }
 .dialog p.dialog-msg.seul { font-size: 18px; font-weight: 600; line-height: 1.4; text-wrap: balance; }
 .dialog-buttons button { min-height: 46px; padding: 8px 12px; font-size: 16px; border-radius: 13px; }

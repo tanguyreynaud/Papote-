@@ -164,11 +164,13 @@ test('Même adresse invitée deux fois (renvoi, ou deux responsables au même in
     await t.page.fill('#invite-email', 'lea@exemple.fr');
   }
   await Promise.all([julie.page.click('#form-invite button[type=submit]'), paul.page.click('#form-invite button[type=submit]')]);
+  await Promise.all([g.repondre(julie, 'Inviter'), g.repondre(paul, 'Inviter')]);
   await g.toast(julie, 'Invitation envoyée à lea@exemple.fr');
   await g.toast(paul, 'Invitation envoyée à lea@exemple.fr');
   // Plus tard, Julie la renvoie parce que Léa ne l'a pas reçue.
   await julie.page.fill('#invite-email', 'Lea@exemple.fr');
   await julie.page.click('#form-invite button[type=submit]');
+  await g.repondre(julie, 'Inviter'); // « Inviter cette personne ? »
   await g.toast(julie, 'Invitation envoyée');
   assert.strictEqual(s.boite.filter((m) => m.a === 'lea@exemple.fr').length, 3, 'un e-mail par envoi');
   assert.deepStrictEqual((await g.liste(`families/${fid}/invitations`)).map((i) => i.id), ['lea@exemple.fr']);

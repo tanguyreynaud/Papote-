@@ -35,6 +35,15 @@ function dialog(message, buttons, extra = null) {
         d.className = 'dialog-d';
         d.textContent = m[2];
         text.replaceChildren(q, ' ', d);
+        // Une adresse e-mail dont parle la question : seule sur sa ligne, entre la question et l'explication,
+        // jamais coupée en deux (« … » si elle est vraiment trop longue).
+        if (extra?.adresse) {
+          const a = document.createElement('span');
+          a.className = 'dialog-adresse';
+          a.textContent = extra.adresse;
+          a.title = extra.adresse;
+          d.before(a, ' ');
+        }
       }
       text.hidden = !t;
     };
@@ -185,17 +194,19 @@ function iconeDe(message) {
   const m = [
     [/^Supprimer|^Effacer/, 'trash'], [/^Appeler/, 'video'], [/^Redémarrer/, 'tablette'],
     [/^Quitter|^Se déconnecter/, 'sortie'], [/^Retirer|^Refuser|^Rendre|^Mettre|^Accepter/, 'user'],
-    [/^Changer le code|^Inviter/, 'famille'],
+    [/^Changer le code/, 'famille'],
+    [/^Inviter|^Annuler l'invitation/, 'mail'],
   ].find(([r]) => r.test(message));
   return m ? m[1] : 'help';
 }
 
-export function askConfirm(message, okLabel = actionLabel(message)) {
-  const danger = /^(Supprimer|Quitter|Retirer|Refuser|Se déconnecter|Changer)/.test(message);
+/** nonLabel : le mot du bouton qui renonce ; adresse : une adresse e-mail montrée seule sur sa ligne sous la question. */
+export function askConfirm(message, okLabel = actionLabel(message), nonLabel = 'Annuler', adresse = null) {
+  const danger = /^(Supprimer|Quitter|Retirer|Refuser|Se déconnecter|Changer|Annuler l'invitation)/.test(message);
   return dialog(message, [
-    { label: 'Annuler', value: false, cls: 'secondary' },
+    { label: nonLabel, value: false, cls: 'secondary' },
     { label: okLabel, value: true, cls: danger ? 'primary danger-btn' : 'primary' },
-  ], { icone: iconeDe(message), danger });
+  ], { icone: iconeDe(message), danger, adresse });
 }
 
 /** Étape « Avant de partir » avant une résiliation : garder (principal) ou résilier quand même. */
