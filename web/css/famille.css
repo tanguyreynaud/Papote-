@@ -2169,13 +2169,10 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .rg-qui-photo .face-buttons .photo-retirer-btn svg { color: var(--danger); stroke: var(--danger); }
 
 /* ---------- Cohérence de toute l'app (23/11) : mêmes règles sur chaque page et chaque fenêtre ---------- */
-/* Un bouton tient sur une ligne. Dans une fenêtre à deux boutons, celui qui renonce (« Annuler ») prend moins de
-   place quand l'autre a un mot long (« Rendre responsable », « Annuler ma commande »). */
-.dialog-buttons:not(.stack) { display: flex; }
-.dialog-buttons:not(.stack) button { flex: 1 1 0; min-width: max-content; white-space: nowrap; }
-.contact-actions button, .guide button, .intro button { white-space: nowrap; }
-.contact-actions { flex-wrap: nowrap; gap: 8px; }
-.contact-actions button { flex: 1 1 auto; min-width: 0; padding-left: 8px; padding-right: 8px; font-size: 15px; }
+/* Un bouton tient sur une ligne. Dans une fenêtre à deux boutons, ils gardent la même largeur tant que les deux mots
+   tiennent ; sinon celui qui renonce (« Annuler ») cède de la place au mot long (« Rendre responsable »). */
+.dialog-buttons:not(.stack) { grid-auto-columns: minmax(max-content, 1fr); }
+.dialog-buttons:not(.stack) button { white-space: nowrap; }
 .sans-coupure { white-space: nowrap; }
 /* Le bouton qui a la main : le même anneau indigo partout (avant, l'anneau noir du navigateur sur les fenêtres
    ouvertes sans toucher : « Voulez-vous quitter ? », « Abonnement activé »). */
