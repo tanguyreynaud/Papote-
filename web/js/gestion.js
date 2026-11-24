@@ -62,6 +62,40 @@ function h(tag, attrs = {}, ...enfants) {
   return el;
 }
 
+// Rien ne surgit (24/11, comme l'app famille) : une liste redessinée en entier à chaque lecture des données n'anime
+// que la ligne vraiment nouvelle (jamais vue dans cette liste depuis l'ouverture de l'admin), et seulement si la liste
+// s'allonge. Premier dessin, filtre changé, plus de 3 nouvelles lignes d'un coup : rien ne bouge, rien ne clignote.
+// Une ligne est reconnue à son texte. Les fondus eux-mêmes sont dans admin-ui.css (.arrive, .arrive-tout).
+const listesVues = new WeakMap();
+const DUREE_ARRIVEE = 300; // ms, comme .arrive dans admin-ui.css
+function fonduNouveaux(liste, lignes) {
+  const cles = lignes.map((e) => e.textContent.replace(/\s+/g, ' ').trim());
+  const avant = listesVues.get(liste);
+  if (!avant) { listesVues.set(liste, { vues: new Set(cles), n: lignes.length, arrivees: new Map() }); return; }
+  const maintenant = performance.now();
+  const nouvelles = lignes.filter((_, i) => !avant.vues.has(cles[i]));
+  if (lignes.length > avant.n && nouvelles.length <= 3) nouvelles.forEach((e) => avant.arrivees.set(cles[lignes.indexOf(e)], maintenant));
+  cles.forEach((c) => avant.vues.add(c));
+  avant.n = lignes.length;
+  // La liste est souvent redessinée deux ou trois fois de suite (données, puis chiffres du mois) : une ligne en train
+  // d'arriver reprend son fondu là où il en était, au lieu de recommencer ou de s'arrêter net.
+  lignes.forEach((e, i) => {
+    const t = avant.arrivees.get(cles[i]);
+    if (t == null) return;
+    const ecoule = maintenant - t;
+    if (ecoule >= DUREE_ARRIVEE) { avant.arrivees.delete(cles[i]); return; }
+    e.classList.add('arrive');
+    e.style.animationDelay = `-${Math.round(ecoule)}ms`;
+  });
+}
+// Cartes « chargement » remplacées par les vrais chiffres ou la vraie liste : le bloc entier arrive en fondu, une fois.
+function remplaceFantomes(zone) {
+  return !!zone.querySelector('.fantome, .fantome-ligne');
+}
+function fonduApresFantomes(zone, etaitFantome) {
+  if (etaitFantome) zone.classList.add('arrive-tout');
+}
+
 // Tableau : colonnes [{ titre, n (nombre aligné à droite) }], lignes de cellules (texte ou Node).
 // lignes peut contenir { cellules, onclick } pour une ligne cliquable.
 function remplirTable(table, colonnes, lignes, { total, vide = 'Rien sur cette période.' } = {}) {
@@ -78,6 +112,7 @@ function remplirTable(table, colonnes, lignes, { total, vide = 'Rien sur cette p
       lignes.length ? lignes.map(ligne) : h('tr', {}, h('td', { class: 'vide', colSpan: colonnes.length }, vide)),
       total ? h('tr', { class: 'total' }, total.map((v, i) => h('td', { class: colonnes[i].n ? 'n' : null }, v ?? ''))) : null),
   );
+  fonduNouveaux(table, [...table.querySelectorAll('tbody > tr:not(.total)')].filter((tr) => !tr.querySelector('td.vide')));
 }
 
 function stat(valeur, texte, detail, classe) {
@@ -949,11 +984,14 @@ function afficherAccueil() {
   };
   const vues = tachesToutes ? montrees : montrees.slice(0, COURT);
   const reste = montrees.length - vues.length;
+  const tachesFantomes = remplaceFantomes($('a-faire'));
   $('a-faire').replaceChildren(...(taches.length ? vues.map(ligneTache) : [h('li', { class: 'vide' }, 'Rien à faire pour le moment.')]),
     ...(reste > 0 ? [h('li', { class: 'voir-plus' }, h('button', { type: 'button', class: 'link', onclick: () => { tachesToutes = true; afficherAccueil(); } },
       `Voir ${reste > 1 ? `les ${reste} autres` : 'la dernière'}`))] : []),
     ...(nMasquees ? [h('li', { class: 'muted small masquees' }, `${pluriel(nMasquees, 'ligne')} masquée${nMasquees > 1 ? 's' : ''} pour 7 jours · `,
       h('button', { type: 'button', class: 'link', onclick: () => masquer(null, 0) }, 'Tout réafficher'))] : []));
+  fonduApresFantomes($('a-faire'), tachesFantomes);
+  fonduNouveaux($('a-faire'), [...$('a-faire').querySelectorAll(':scope > li.ligne-tache')]);
   // Sous le titre : la date du jour et ce qui presse.
   const ceJour = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   if (pageCourante() === 'accueil' && prenomAdmin) $('titre-page').textContent = `Bonjour ${prenomAdmin}`;
@@ -1002,6 +1040,7 @@ function afficherAccueil() {
       changerPeriode();
       location.hash = '#compta/bilan';
     };
+    const kpiFantomes = remplaceFantomes($('kpi-mois'));
     $('kpi-mois').replaceChildren(
       cliquable(stat(String(payants), payants > 1 ? 'abonnés' : 'abonné', [offerts ? `+ ${offerts} offert${offerts > 1 ? 's' : ''}` : null,
         attente ? `+ ${attente} tablette${attente > 1 ? 's' : ''} pas encore installée${attente > 1 ? 's' : ''}` : null].filter(Boolean).join(', ') || null),
@@ -1015,6 +1054,7 @@ function afficherAccueil() {
       cliquable(stat(euros(t.resultat), 'résultat ce mois', `${euros(t.encaisse)} encaissés, ${euros(t.depenses)} dépensés`, t.resultat < 0 ? 'neg' : null), argent('bilan')),
       tTotal ? cliquable(stat(euros(tTotal.resultat), 'résultat total', 'depuis le début de Papote', tTotal.resultat < 0 ? 'neg' : null), depuisLeDebut) : null,
     );
+    fonduApresFantomes($('kpi-mois'), kpiFantomes);
   }
 }
 

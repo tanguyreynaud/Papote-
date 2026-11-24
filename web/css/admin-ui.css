@@ -827,3 +827,24 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 @media (max-width: 480px) { .admin-body dl.fiche.kv > dt:has(+ dd .iccid) + dd.modifiable { border-top: 0; } }
 /* Tableau en fiches dans une carte, sur téléphone : pas de flèche posée sur le dernier chiffre. */
 @media (max-width: 760px) { .admin-body .card .table.cartes tbody tr[tabindex] td:last-child::after { content: none; } }
+
+/* Rien ne surgit (24/11, comme l'app famille) : des fondus courts, seulement sur ce qui vient d'apparaître.
+   Une page ou un onglet qu'on ouvre, une fenêtre, un menu, un bloc qu'on déplie, la liste qui remplace les cartes
+   « chargement », et dans une liste la ligne vraiment nouvelle (fonduNouveaux dans gestion.js). Rien au premier
+   affichage d'une liste, rien qui clignote, et aucune animation si l'ordinateur ou le téléphone demande moins
+   de mouvements. Les pages ne glissent pas : un simple fondu (un décalage gênerait les menus « ⋮ » ouverts). */
+@media (prefers-reduced-motion: no-preference) {
+  .admin-body [data-panneau]:not([hidden]),
+  .admin-body [data-panneau] [data-onglet]:not(button):not([hidden]) { animation: admin-fondu .2s ease-out; }
+  .admin-body dialog[open] { animation: admin-fenetre .2s ease-out; }
+  .admin-body dialog[open]::backdrop { animation: admin-fondu .2s ease-out; }
+  .admin-body .menu-points-liste:not([hidden]) { animation: admin-menu .15s ease-out; }
+  .admin-body .nav.ouvert nav, .admin-body .nav.ouvert .nav-pied { animation: admin-menu .15s ease-out; }
+  .admin-body details.repli[open] > :not(summary) { animation: admin-fondu .2s ease-out; }
+  .admin-body .arrive-tout { animation: admin-fondu .25s ease-out; }
+  .admin-body .arrive { animation: admin-arrive .3s ease-out; }
+}
+@keyframes admin-fondu { from { opacity: 0; } }
+@keyframes admin-fenetre { from { opacity: 0; transform: scale(.97); } }
+@keyframes admin-menu { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes admin-arrive { from { opacity: 0; transform: translateY(4px); } }
