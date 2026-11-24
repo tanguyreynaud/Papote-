@@ -40,7 +40,8 @@ p b { color: var(--text); }
 [hidden] { display: none !important; }
 .btn { justify-self: start; font: inherit; font-weight: 700; min-height: 3.25rem; padding: .7rem 1.5rem; border-radius: 999px; border: 2px solid var(--accent); background: var(--accent); color: var(--accent-text); cursor: pointer; }
 .btn:disabled { opacity: .6; cursor: progress; }
-.erreur { color: var(--erreur); font-weight: 700; }
+.erreur { color: var(--text); }
+.erreur strong { color: var(--erreur); }
 .carte { display: grid; gap: .6rem; padding: 1rem 1.25rem; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
 .carte ul { margin: 0; padding-left: 1.25rem; color: var(--muted); }
 a { color: var(--accent); text-decoration: none; }
@@ -74,7 +75,7 @@ main a:not([class]) { font-weight: 700; }
 
   <section class="etape" id="fait" hidden>
     <div class="carte" role="status">
-      <p><b id="fait-titre">C'est fait : vous ne recevrez plus les e&#8209;mails d'information de Papote.</b></p>
+      <p id="fait-titre"><strong>C'est fait.</strong> Vous ne recevrez plus les e&#8209;mails d'information de Papote.</p>
       <p id="fait-texte">Les e&#8209;mails de service (livraison, factures, paiements, SOS) continuent d'arriver.</p>
     </div>
     <p>Vous changez d'avis ? <button type="button" class="ps-lien" data-ouvrir-chat>Écrivez-nous dans le chat</button>.</p>
@@ -100,7 +101,9 @@ main a:not([class]) { font-weight: 700; }
     var j = q.get('j') || '';
     var valide = /^[0-9a-f]{32}$/.test(c) && /^[0-9a-f]{32}$/.test(j);
     function montrer(id) { ['demander', 'fait', 'inconnu'].forEach(function (x) { $(x).hidden = x !== id; }); }
-    function erreur(texte) { $('erreur').textContent = texte; $('erreur').hidden = !texte; }
+    // Le fait en gras, la suite en écriture normale (revue mesurée du 24/11) : plus de pavé tout en gras.
+    function faitEnGras(el, texte) { var m = /^(.*?[.!?:])\s+(\S[\s\S]*)$/.exec(texte); el.textContent = ''; if (!texte) return; var s = document.createElement('strong'); s.textContent = m ? m[1] : texte; el.appendChild(s); if (m) el.appendChild(document.createTextNode(' ' + m[2])); }
+    function erreur(texte) { faitEnGras($('erreur'), texte); $('erreur').hidden = !texte; }
     if (!valide && !test) { montrer('inconnu'); return; }
 
     $('valider').addEventListener('click', function () {
@@ -116,7 +119,7 @@ main a:not([class]) { font-weight: 700; }
         .then(function (d) {
           if (d.ok) {
             if (d.test) {
-              $('fait-titre').textContent = 'Lien de test : rien n\'a changé.';
+              faitEnGras($('fait-titre'), 'Lien de test : rien n\'a changé.');
               $('fait-texte').textContent = 'C\'est ici que les destinataires se désinscrivent des e-mails d\'information.';
             }
             montrer('fait');

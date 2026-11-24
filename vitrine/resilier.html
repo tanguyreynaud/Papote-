@@ -48,7 +48,8 @@ input:focus { outline: 3px solid var(--accent); outline-offset: 1px; border-colo
 .boutons { display: flex; flex-wrap: wrap; gap: .75rem; }
 /* Les deux choix ont la même taille (règle du site) : côte à côte sur ordinateur, l'un sous l'autre sur téléphone. */
 .boutons .btn { flex: 1 1 14rem; padding-inline: .8rem; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; text-align: center; }
-.erreur { color: var(--erreur); font-weight: 700; }
+.erreur { color: var(--text); }
+.erreur strong { color: var(--erreur); }
 .carte { display: grid; gap: .6rem; padding: 1rem 1.25rem; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
 a { color: var(--accent); text-decoration: none; }
 main a:not([class]) { font-weight: 700; }
@@ -117,7 +118,9 @@ main a:not([class]) { font-weight: 700; }
     if (code) $('code').value = code;
 
     function dateFr(ms) { return new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); }
-    function erreur(id, texte) { $(id).textContent = texte; $(id).hidden = !texte; }
+    // Le fait en gras, la suite en écriture normale (revue mesurée du 24/11) : plus de pavé tout en gras.
+    function faitEnGras(el, texte) { var m = /^(.*?[.!?:])\s+(\S[\s\S]*)$/.exec(texte); el.textContent = ''; if (!texte) return; var s = document.createElement('strong'); s.textContent = m ? m[1] : texte; el.appendChild(s); if (m) el.appendChild(document.createTextNode(' ' + m[2])); }
+    function erreur(id, texte) { faitEnGras($(id), texte); $(id).hidden = !texte; }
     function demander(corps) {
       return fetch(ADRESSE, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corps) })
         .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { d.statut = r.status; return d; }); });

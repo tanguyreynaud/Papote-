@@ -239,7 +239,7 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .attente .muted { font-weight: 400; color: var(--muted); }
 .attente .attente-accord { display: flex; gap: .6rem; align-items: flex-start; font-weight: 400; color: var(--muted); cursor: pointer; }
 .attente-accord input { width: 1.5rem; height: 1.5rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
-.attente-msg { margin: 0; font-weight: 700; }
+.attente-msg { margin: 0; }
 .attente [hidden] { display: none; }
 /* Champ piège anti-robot (audit sécurité 11/11, L1) : hors de l'écran, jamais vu ni atteint au clavier par une personne. */
 .attente-piege { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
@@ -706,7 +706,9 @@ footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-t
 
     var form = document.getElementById('attente');
     var msg = document.getElementById('attente-msg');
-    function dire(texte) { msg.textContent = texte; msg.hidden = false; }
+    // Le fait en gras, la suite en écriture normale (revue mesurée du 24/11) : plus de pavé tout en gras.
+    function faitEnGras(el, texte) { var m = /^(.*?[.!?:])\s+(\S[\s\S]*)$/.exec(texte); el.textContent = ''; if (!texte) return; var s = document.createElement('strong'); s.textContent = m ? m[1] : texte; el.appendChild(s); if (m) el.appendChild(document.createTextNode(' ' + m[2])); }
+    function dire(texte) { faitEnGras(msg, texte); msg.hidden = false; }
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var email = form.email.value.trim();
