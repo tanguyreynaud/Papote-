@@ -273,6 +273,38 @@ footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-t
   .pied-groupe:last-child a:last-child { border-bottom: 0; } /* un seul trait au-dessus du « © » */
   footer { padding-bottom: 6rem; } /* la bulle du chat ne cache pas le bas */
 }
+/* Animations douces (Tanguy, 24/11) : rien ne surgit d'un coup. Fondus courts (0,2 à 0,3 s), jamais sur ce qui est
+   déjà là à l'ouverture de la page, et rien du tout si le téléphone demande moins d'animations. */
+@keyframes apparait { from { opacity: 0; } to { opacity: 1; } }
+@keyframes deroule { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 -2rem 0); } }
+/* Écran crème sous la capture tant qu'elle charge (jamais un écran noir), puis l'image arrive en fondu. */
+.tel picture, .tab picture { display: block; background: var(--bg); }
+.tel picture { border-radius: 1.25rem; }
+.tab picture { border-radius: 6px; }
+@media (prefers-reduced-motion: no-preference) {
+  /* Bouton : s'enfonce un tout petit peu sous le doigt, pour sentir qu'il a été touché. */
+  .btn { transition: background-color .15s, color .15s, border-color .15s, transform .1s; }
+  .btn:active { transform: scale(.97); }
+  .menu-bouton:active, .faq-plus:active { transform: scale(.95); }
+  /* Menu ☰ : il se déroule vers le bas comme un store (opaque tout du long : le texte dessous ne transparaît jamais). */
+  .top.ouvert nav { animation: deroule .22s ease-out; }
+  /* Questions : la réponse arrive en fondu ; les questions suivantes aussi. */
+  .faq details[open] > p { animation: apparait .3s ease-out; }
+  .faq.ouverte .suite > details { animation: apparait .3s ease-out; }
+  /* Messages qui s'affichent après coup. */
+  .prevenir:not([hidden]), .attente-msg, .mel-suggestion { animation: apparait .25s ease-out; }
+  /* Captures des étapes : fondu quand elles finissent de charger (classe posée en bas de page). */
+  img.charge { opacity: 0; }
+  .tel img, .tab img { transition: opacity .3s ease-out; }
+}
+/* Chrome récent (Android, ordinateur) : la réponse s'ouvre et se referme en glissant, le texte dessous ne saute plus. */
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+    .faq { interpolate-size: allow-keywords; }
+    .faq details::details-content { height: 0; overflow: clip; transition: height .25s ease-out, content-visibility .25s allow-discrete; }
+    .faq details[open]::details-content { height: auto; }
+  }
+}
 /* Bulle du chat (chat-support.js) : sur téléphone, un simple rond pour ne pas recouvrir le texte. */
 @media (max-width: 760px) { body .ps-bouton span { display: none; } body .ps-bouton { padding: .95rem; } }
 </style>
@@ -719,6 +751,20 @@ footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-t
     // pointerdown et pas click : sur iPhone (Safari), toucher un texte ou une image ne déclenche aucun « click ».
     document.addEventListener('pointerdown', function (e) { if (ouvert() && !haut.contains(e.target)) fermer(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ouvert()) { fermer(false); bouton.focus(); } });
+  })();
+</script>
+<script>
+  // Images plus bas dans la page (chargées au défilement) : elles arrivent en fondu au lieu de surgir.
+  // Une image déjà là, ou un téléphone qui demande moins d'animations : rien ne change.
+  (function () {
+    if (!matchMedia('(prefers-reduced-motion: no-preference)').matches) return;
+    document.querySelectorAll('img[loading="lazy"]').forEach(function (img) {
+      if (img.complete) return;
+      img.classList.add('charge');
+      var montrer = function () { img.classList.remove('charge'); };
+      img.addEventListener('load', montrer, { once: true });
+      img.addEventListener('error', montrer, { once: true });
+    });
   })();
 </script>
 <script>compter('accueil');</script>

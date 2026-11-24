@@ -101,6 +101,13 @@
     '.ps-attente span:nth-child(2){animation-delay:.15s}.ps-attente span:nth-child(3){animation-delay:.3s}' +
     '@keyframes ps-point{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-.35rem);opacity:1}}' +
     '@media (prefers-reduced-motion:reduce){.ps-attente span{animation:none;opacity:.7}}' +
+    // Animations douces (Tanguy, 24/11) : la fenêtre du chat s'ouvre en montant un peu (ordinateur) ou glisse du bas
+    // de l'écran, sans transparence (téléphone, plein écran) ; chaque nouveau message arrive en fondu. Rien si le
+    // téléphone demande moins d'animations.
+    '@keyframes ps-monte{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}' +
+    '@keyframes ps-glisse{from{transform:translateY(100%)}to{transform:none}}' +
+    '@media (prefers-reduced-motion:no-preference){.ps-panneau.ps-ouvert{animation:ps-monte .2s ease-out}.ps-msg{animation:ps-monte .25s ease-out}.ps-bouton{transition:background-color .15s,transform .1s}.ps-bouton:active{transform:scale(.95)}}' +
+    '@media (prefers-reduced-motion:no-preference) and (max-width:600px){.ps-panneau.ps-ouvert{animation:ps-glisse .25s ease-out}}' +
     '.ps-idees{display:flex;flex-wrap:wrap;gap:.4rem}' +
     '.ps-idees button{border:1px solid var(--ps-indigo);background:var(--ps-doux);color:var(--ps-indigo-fonce);border-radius:999px;padding:.45rem .8rem;font:inherit;font-size:.95rem;cursor:pointer}' +
     '.ps-saisie{display:flex;gap:.5rem;padding:.75rem;background:var(--ps-carte);border-top:1px solid var(--ps-ligne)}' +

@@ -110,6 +110,16 @@ p { margin: 0; }
 .point.fantome .coche { border-style: dashed; }
 @keyframes respire { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .point.fantome { animation: none; opacity: .7; } }
+/* Animations douces (Tanguy, 24/11) : ce qui s'affiche après coup (vérification de la 4G, points relais, coche
+   d'une étape faite, messages) arrive en fondu court au lieu de surgir. Rien si le téléphone demande moins d'animations. */
+@keyframes apparait { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .verdict, .erreur, .choisi, .reprise, .etape .ok, .mel-suggestion, .barre .manque, .point:not(.fantome), .pays-ville { animation: apparait .25s ease-out; }
+  /* « Payer » passe du gris au bleu en douceur quand tout est rempli ; s'enfonce un peu sous le doigt. */
+  .btn { transition: background-color .2s, transform .1s; }
+  .btn:active, .point:active, .opt:active { transform: scale(.98); }
+  .point, .opt { transition: border-color .15s, background-color .15s, transform .1s; }
+}
 .reessayer { justify-self: start; border: 1.5px solid var(--accent); background: var(--surface); color: var(--accent-strong); border-radius: 999px; padding: .5rem 1rem; font: inherit; font-weight: 700; cursor: pointer; margin-top: .5rem; }
 .reessayer[hidden] { display: none; }
 .verdict .reessayer { display: inline-block; margin-top: .5rem; }
