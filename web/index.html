@@ -1218,9 +1218,22 @@
 
   <!-- Photo ou vidéo en grand -->
   <div id="viewer" class="viewer" hidden>
+    <!-- Fond : la même image, floutée et assombrie (comme l'appel vidéo), au lieu d'un fond noir. -->
+    <img id="viewer-fond" class="viewer-fond" alt="" aria-hidden="true" hidden>
     <button type="button" class="viewer-close" id="viewer-close"><svg><use href="#i-close"/></svg>Fermer</button>
     <img id="viewer-img" alt="" hidden>
-    <video id="viewer-video" controls playsinline hidden></video>
+    <!-- Vidéo en grand : nos boutons, aux couleurs de Papote, plutôt que ceux du téléphone (Tanguy, 24/11). -->
+    <div class="viewer-boite">
+      <div class="viewer-image">
+        <video id="viewer-video" playsinline hidden></video>
+        <button type="button" id="viewer-play" class="video-play" aria-label="Lire la vidéo" hidden><svg><use href="#i-play"/></svg></button>
+      </div>
+      <div class="viewer-barre">
+        <input type="range" id="viewer-temps" class="viewer-temps" min="0" max="1000" value="0" step="1" aria-label="Avancer dans la vidéo">
+        <span id="viewer-duree" class="viewer-duree">0:00</span>
+        <button type="button" id="viewer-plein" class="viewer-rond" aria-label="Plein écran"><svg><use href="#i-expand"/></svg></button>
+      </div>
+    </div>
     <p id="viewer-caption" class="viewer-caption"></p>
     <div class="viewer-actions">
       <button type="button" id="viewer-save" class="viewer-btn"><svg><use href="#i-download"/></svg>Enregistrer</button>

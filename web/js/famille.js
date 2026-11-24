@@ -853,6 +853,10 @@ function openViewer(post) {
   viewerPost = post;
   $('viewer-delete').hidden = !canDelete(post);
   entrer($('viewer'), $('viewer').hidden);
+  // Fond flou : la vignette de la photo ou de la vidéo (déjà chargée), jamais une adresse autre qu'une image.
+  const vignette = post.thumb || post.image || '';
+  $('viewer-fond').hidden = !vignette;
+  if (vignette) $('viewer-fond').src = vignette; else $('viewer-fond').removeAttribute('src');
   $('viewer').hidden = false;
   couleurBarres();
   $('viewer-caption').textContent = post.text || '';
@@ -898,6 +902,34 @@ async function openVideo(post) {
 }
 
 $('viewer-close').addEventListener('click', () => history.back());
+
+// Vidéo en grand : nos boutons plutôt que ceux du téléphone (Tanguy, 24/11), comme pour l'aperçu avant envoi.
+// Toucher la vidéo la lance ou la met en pause ; la barre avance avec la vidéo et se déplace au doigt.
+{
+  const v = $('viewer-video');
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const duree = () => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0);
+  const basculer = () => { if (v.paused) { if (v.ended) v.currentTime = 0; v.play().catch(() => {}); } else v.pause(); };
+  const maj = () => {
+    const arret = v.paused;
+    $('viewer-play').hidden = !arret || v.hidden;
+    const d = duree();
+    const part = d ? Math.min(1, v.currentTime / d) : 0;
+    $('viewer-temps').value = String(Math.round(part * 1000));
+    $('viewer-temps').style.setProperty('--part', `${part * 100}%`);
+    $('viewer-duree').textContent = d ? `${mmss(v.currentTime)} / ${mmss(d)}` : mmss(v.currentTime || 0);
+  };
+  for (const ev of ['play', 'pause', 'ended', 'emptied', 'timeupdate', 'loadedmetadata', 'durationchange', 'seeked']) v.addEventListener(ev, maj);
+  v.addEventListener('click', basculer);
+  $('viewer-play').addEventListener('click', basculer);
+  $('viewer-temps').addEventListener('input', () => { const d = duree(); if (d) v.currentTime = (Number($('viewer-temps').value) / 1000) * d; });
+  $('viewer-plein').addEventListener('click', () => {
+    // iPhone : seul le plein écran propre à la vidéo existe (webkitEnterFullscreen).
+    const ouvrir = v.requestFullscreen ? v.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve(v.webkitEnterFullscreen?.());
+    Promise.resolve(ouvrir).catch((err) => console.warn('Plein écran refusé', err));
+  });
+  maj();
+}
 
 $('viewer-delete').addEventListener('click', async () => {
   const post = viewerPost;
@@ -3938,7 +3970,7 @@ function couleurBarres() {
   const force = document.documentElement.dataset.theme;
   const noir = !document.getElementById('viewer').hidden;
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
-    m.content = noir ? '#000000' : COULEUR_BARRE[force || (m.media.includes('dark') ? 'dark' : 'light')];
+    m.content = noir ? '#16142b' : COULEUR_BARRE[force || (m.media.includes('dark') ? 'dark' : 'light')];
   });
 }
 
