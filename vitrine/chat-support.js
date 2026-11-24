@@ -500,7 +500,15 @@
       e.preventDefault();
       ouvrir(true);
     });
-    window.papoteChat = { ouvrir: function () { ouvrir(true); } };
+    // L'appli peut ouvrir le chat avec une demande déjà envoyée (« Besoin d'aide ? », Tanguy, 24/11) : la personne
+    // n'a pas à retaper ce qu'elle vient de voir. La même demande n'est pas posée deux fois de suite.
+    window.papoteChat = { ouvrir: function (question) {
+      ouvrir(true);
+      if (typeof question !== 'string' || !question.trim()) return;
+      var dernierePosee = null;
+      for (var i = historique.length - 1; i >= 0; i--) if (historique[i].role === 'user') { dernierePosee = historique[i].content; break; }
+      if (dernierePosee !== question.trim()) poser(question.slice(0, 300));
+    } };
     fermer.onclick = function () { ouvrir(false); };
     panneau.addEventListener('keydown', function (e) { if (e.key === 'Escape') ouvrir(false); });
     saisie.onsubmit = function (e) { e.preventDefault(); poser(zone.value); };
