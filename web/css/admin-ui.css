@@ -880,3 +880,10 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 /* La première phrase est mise en <strong> par faitEnGras() (dialogue.js). */
 .admin-body .error:has(> strong), .admin-body .bandeau-erreur:has(> strong) { font-weight: 400; color: var(--text); }
 .admin-body .error strong, .admin-body .bandeau-erreur strong { font-weight: 700; color: var(--danger); }
+
+.admin-body #dt-releves .alerte-reseau > p.error:has(> strong) { font-weight: 400; }
+/* Listes de parcours et d'écrans : le titre en noir, le détail en gris (Tanguy, 24/11). */
+.admin-body [data-panneau] a.v-ligne:not(.retour):not(.stat) { color: var(--text); }
+.admin-body [data-panneau] a.v-ligne:not(.retour):not(.stat) .v-ligne-texte > .small { color: var(--muted); }
+/* Sur le fond rose de l'alerte réseau, un rouge plus foncé pour rester lisible (contraste). */
+.admin-body #dt-releves .alerte-reseau > p.error strong { color: #b91c1c; }

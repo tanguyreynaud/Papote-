@@ -374,13 +374,12 @@ function vueParcours(boite, [id]) {
     const n = { ok: 0, revoir: 0, change: 0, avoir: 0 };
     for (const x of FLUX) n[etatFlux(x)]++;
     mettre(boite, 
-      h('p', { class: 'muted' }, 'Chaque parcours, de la commande au retour de la tablette : qui fait quoi, quel e-mail part, ce que ça coûte et si c\'est essayé. Valide-les un par un.'),
-      h('p', { class: 'small' }, `${n.ok} validés · ${n.revoir + n.change} à revoir · ${n.avoir} à lire, sur ${FLUX.length}`),
+            h('p', { class: 'small' }, `${n.ok} validés · ${n.revoir + n.change} à revoir · ${n.avoir} à lire, sur ${FLUX.length}`),
       h('div', { class: 'v-liste' }, FLUX.map((x) => {
         const non = x.etapes.filter((e) => e.test && e.test[0] !== 'auto').length;
         return h('a', { class: 'card v-ligne', href: `#validation/parcours/${x.id}` },
-          h('div', { class: 'v-ligne-texte' }, h('strong', {}, x.titre), h('span', { class: 'muted small' }, x.resume),
-            h('span', { class: 'small' }, `${x.etapes.length} étapes${non ? ` · ${non} pas couvertes par un essai automatique` : ' · toutes essayées automatiquement'}`)),
+          h('div', { class: 'v-ligne-texte' }, h('strong', {}, x.titre),
+            h('span', { class: 'small' }, `${x.etapes.length} étapes${non ? ` · ${non} sans essai automatique` : ''}`)),
           badgeEtat(etatFlux(x)));
       })));
     return;

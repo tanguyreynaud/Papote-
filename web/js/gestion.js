@@ -285,6 +285,14 @@ let stripeTotal = null; // gestionStripe depuis le début de Papote (résultat t
 const DEBUT_PAPOTE = new Date(2026, 0, 1).getTime();
 let periode = null; // { debut, fin } en millisecondes, fin exclue
 
+// Une alerte : la première phrase en gras, la suite en noir, puis son bouton (épuration du 24/11).
+function alerteEnGras(texte, bouton) {
+  const p = h('p', { class: 'error' });
+  faitEnGras(p, texte);
+  if (bouton) p.append(' ', bouton);
+  return p;
+}
+
 function erreur(e) {
   console.error(e);
   faitEnGras($('erreur'), messageErreur(e));
@@ -2872,7 +2880,7 @@ function blocReseau(r, { vu = null, fid = null, uid = null } = {}) {
   }
   return h('div', { class: 'reseau-mobile' },
     h('h3', {}, 'Réseau mobile chez le client'),
-    r.alerte && aVoir ? h('p', { class: 'error' }, r.alerte, bouton ? ' ' : null, bouton) : null,
+    r.alerte && aVoir ? alerteEnGras(r.alerte, bouton) : null,
     r.alerte && !aVoir ? h('p', { class: 'small' }, r.alerte,
       h('span', { class: 'muted' }, ` · vu${quand ? ` le ${quand}` : ''}, l'alerte ne revient que si le réseau empire`)) : null,
     r.service ? h('p', { class: 'small' }, `Carte SIM : ${r.service}`) : null,
@@ -3800,7 +3808,7 @@ function remplirPageDepense(id) {
         ], `Actions pour « ${d.libelle} »`)))),
     h('p', { class: 'sous-fiche muted' }, [achat ? d.libelle : d.fournisseur, jour(d.date), donnees.categories[d.categorie] || d.categorie].filter(Boolean).join(' · ')),
     d.aVerifier ? h('div', { class: 'bandeau a-verifier' }, h('ul', { class: 'bandeau-liste' },
-      h('li', {}, sourceDepense(d), ' : vérifiez le montant, la date et le vendeur, puis validez.'),
+      h('li', {}, sourceDepense(d), ' : vérifiez le montant, la date et le vendeur.'),
       d.remarque ? h('li', {}, d.remarque) : null)) : null,
     h('div', { class: 'card' }, h('div', { class: 'tuiles trois' },
       stat(euros(d.montant), 'montant TTC', d.recurrence ? 'chaque mois' : null),

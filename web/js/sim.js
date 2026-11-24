@@ -121,7 +121,7 @@ export function reseauMobile(sim) {
   let alerte = null;
   let niveau = 0;
   if (sim.bloquee) { alerte = texteBloquee(sim); niveau = 3; }
-  else if (sim.service === 'urgences') { alerte = `Aucune antenne de l'opérateur de la carte chez le client${mieux} : changer de carte SIM`; niveau = 3; }
+  else if (sim.service === 'urgences') { alerte = `Changer de carte SIM. Son opérateur n'a aucune antenne chez le client${mieux}.`; niveau = 3; }
   else if (sim.service === 'hors service') { alerte = `Tablette sans réseau mobile${mieux}`; niveau = 3; }
   else if (sim.service === 'eteint') { alerte = 'Réseau mobile coupé sur la tablette (mode avion ?)'; niveau = 3; }
   else if (utilisee && ['2G', '3G'].includes(utilisee.type)) { alerte = `Seulement en ${utilisee.type} chez le client : appels vidéo difficiles${mieux}`; niveau = 2; }
