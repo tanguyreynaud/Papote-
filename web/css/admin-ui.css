@@ -842,6 +842,14 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
   .admin-body .nav.ouvert nav, .admin-body .nav.ouvert .nav-pied { animation: admin-menu .15s ease-out; }
   .admin-body details.repli[open] > :not(summary) { animation: admin-fondu .2s ease-out; }
   .admin-body .arrive-tout { animation: admin-fondu .25s ease-out; }
+  /* Le grand titre change avec la page : même fondu qu'elle (classe posée par afficherPage quand la page change). */
+  .admin-body #titre-page.change { animation: admin-fondu .2s ease-out; }
+  /* Survol et choix : la couleur glisse au lieu de sauter (menu, lignes, tuiles, onglets, boutons). */
+  .admin-body .nav nav a, .admin-body .a-faire li.ligne-tache, .admin-body .table tbody tr[tabindex], .admin-body .tuiles .stat.onglet,
+  .admin-body .orders > li.cliquable, .admin-body .liste-courte .ligne, .admin-body .menu-points-item, .admin-body .menu-points-bouton,
+  .admin-body .onglets a, .admin-body .onglets button, .admin-body .filtres button, .admin-body .secondary, .admin-body .primary {
+    transition: background-color .12s ease, color .12s ease, border-color .12s ease, filter .12s ease;
+  }
   .admin-body .arrive { animation: admin-arrive .3s ease-out; }
 }
 @keyframes admin-fondu { from { opacity: 0; } }

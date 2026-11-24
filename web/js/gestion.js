@@ -385,6 +385,7 @@ document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) =
 // Adresses qui ouvrent une page sur un bloc précis (id de l'élément) plutôt qu'en haut.
 const ANCRES = { 'compta/depenses/releve': 'courrier', 'compta/bilan/rentabilite': 'rentabilite', 'compta/urssaf/registres': 'registres' };
 
+let pageVue = null; // dernière page affichée (afficherPage), pour n'animer le titre que quand on en change
 function afficherPage() {
   const morceaux = location.hash.slice(1).split('/');
   const ancienne = ANCIENNES[morceaux.slice(0, 2).join('/')] || ANCIENNES[morceaux[0]];
@@ -407,7 +408,15 @@ function afficherPage() {
     nav.querySelectorAll('a').forEach((a) => a.classList.toggle('actif', a.dataset.page === page && (!a.dataset.versOnglet || a.dataset.versOnglet === ongletVu)));
   });
   const titre = page === 'clients' && onglet === 'familles' && fiche ? 'Famille' : menu === 'statistiques' ? 'Site' : TITRES[page];
-  $('titre-page').textContent = page === 'accueil' ? `Bonjour${prenomAdmin ? ` ${prenomAdmin}` : ''}` : titre;
+  const texteTitre = page === 'accueil' ? `Bonjour${prenomAdmin ? ` ${prenomAdmin}` : ''}` : titre;
+  // Le grand titre arrive en fondu avec sa page, seulement quand il change vraiment (pas au premier affichage).
+  if ($('titre-page').textContent !== texteTitre && pageVue && pageVue !== page) {
+    $('titre-page').classList.remove('change');
+    void $('titre-page').offsetWidth; // relance le fondu
+    $('titre-page').classList.add('change');
+  }
+  pageVue = page;
+  $('titre-page').textContent = texteTitre;
   document.title = `Papote · ${titre}`;
   // Fiche (commande, tablette, carte SIM…) : son propre titre suffit, le lien « ‹ Clients » remonte à la place du grand titre.
   document.querySelector('.contenu').classList.toggle('page-fiche', !!document.querySelector(`[data-panneau="${page}"] > p > a.retour`));
