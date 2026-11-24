@@ -22,6 +22,27 @@ let reminders = [];
 // sur ce téléphone n'hérite de rien. vuIci : passage de cette session, le temps que la fiche revienne de la base.
 let vuIci = 0;
 let envoisLus = false;
+let dessinee = null; // la liste affichée, pour ne pas la redessiner à l'identique
+// Déjà vu ailleurs que sur la cloche (Tanguy, 24/11 : « le badge ne doit compter que ce que je n'ai pas vu, où que ce
+// soit ») : ouvrir Messages, Photos, Vidéos, Rappels ou Réglages (par la tuile, la barre ou une notification du
+// téléphone) vaut lecture de ce qui y mène. L'heure de chaque page est gardée sur ce téléphone, pour ce compte et cette
+// famille ; la cloche, elle, reste gardée sur la fiche (tous les téléphones).
+const PAGES_LUES = ['photos', 'videos', 'messages', 'agenda', 'settings'];
+let vuPages = {};
+const clePages = () => `papote.notifsPages.${session.fid}.${session.uid}`;
+function lirePages() {
+  vuPages = {};
+  try {
+    const lu = JSON.parse(localStorage.getItem(clePages()) || '{}');
+    if (lu && typeof lu === 'object') for (const p of PAGES_LUES) if (Number.isFinite(lu[p])) vuPages[p] = lu[p];
+  } catch (e) { /* stockage indisponible : la cloche seule */ }
+}
+export function pageVue(page) {
+  if (!session || !PAGES_LUES.includes(page)) return;
+  vuPages[page] = Date.now();
+  try { localStorage.setItem(clePages(), JSON.stringify(vuPages)); } catch (e) { /* rien */ }
+  render();
+}
 
 const heure = (ts) => toDate(ts)?.getTime() || 0;
 function lastRead() {
@@ -34,7 +55,7 @@ function lastRead() {
 export function markNotifsRead() {
   if (!session) return;
   const avant = lastRead();
-  const nouveau = !envoisLus || !avant || events().some((e) => !e.mine && e.date.getTime() > avant);
+  const nouveau = !envoisLus || !avant || events().some((e) => !e.mine && !e.info && e.date.getTime() > avant);
   vuIci = Date.now();
   render();
   if (!nouveau) return;
@@ -54,7 +75,14 @@ function events() {
   const list = [];
   // mine : ce que vous avez fait vous-même ne compte pas comme nouveau.
   // missed : appel manqué, affiché en rouge.
-  const add = (date, icon, text, mine = false, missed = false, page = PAGE[icon]) => { if (date) list.push({ date, icon, text, mine, missed, page }); };
+  // info : simple nouvelle (« Mamie a vu… », appel décroché, rappel confirmé) : dans la liste, mais pas dans le chiffre
+  // de la cloche. Avant, tout comptait : quelques envois vus par Mamie dans la journée et la cloche affichait « 9+ » à
+  // chaque ouverture de l'app, sans rien à lire (Tanguy, 24/11). Le chiffre ne compte plus que ce qui vous attend :
+  // réponse de Mamie, envoi d'un autre proche, appel manqué ou SOS, nouveau proche.
+  const add = (date, icon, text, mine = false, missed = false, page = PAGE[icon], info = false) => {
+    if (date) list.push({ date, icon, text, mine, missed, page, info });
+  };
+  const addInfo = (date, icon, text, page = PAGE[icon]) => add(date, icon, text, false, false, page, true);
   for (const p of posts) {
     if (p.type === 'reply') {
       add(toDate(p.createdAt), 'message', `${grand} a répondu : « ${p.text} »`);
@@ -71,7 +99,7 @@ function events() {
       const of = p.authorUid === session.uid
         ? `que vous avez ${p.type === 'message' ? 'envoyé' : 'envoyée'}`
         : `de ${p.authorName}`;
-      add(toDate(p.seenAt), 'seen', `${grand} a vu ${WHAT_OF[p.type]} ${of}`, false, false, PAGE[p.type]);
+      addInfo(toDate(p.seenAt), 'seen', `${grand} a vu ${WHAT_OF[p.type]} ${of}`, PAGE[p.type]);
     }
   }
   // La tablette appelle un proche (calleeUid), ou toute la famille et le SOS (sans calleeUid, comme les appels
@@ -87,19 +115,19 @@ function events() {
       const qui = c.answer?.uid ? who(c.answer.uid, c.answer.name) : null;
       const repondu = qui && (qui === 'Vous' ? 'vous avez répondu' : `${qui} a répondu`);
       if (/^SOS/.test(c.calleeName || '')) add(date, 'call', `${grand} a appuyé sur SOS : ${repondu || 'personne n\'a pu répondre'}`, false, !repondu);
-      else if (repondu) add(date, 'call', `${grand} a appelé toute la famille : ${repondu}`);
+      else if (repondu) addInfo(date, 'call', `${grand} a appelé toute la famille : ${repondu}`);
       else if (manque) add(date, 'call', `Appel manqué de ${grand}`, false, true);
     } else if (fromTablet) {
       if (c.state === 'ringing') continue;
       const to = who(c.calleeUid, c.calleeName);
       if (manque) add(date, 'call', `Appel manqué de ${grand}${to === 'Vous' ? '' : ` pour ${to}`}`, false, true);
-      else add(date, 'call', `${grand} a appelé ${to === 'Vous' ? 'vous' : to}`);
+      else addInfo(date, 'call', `${grand} a appelé ${to === 'Vous' ? 'vous' : to}`);
     } else {
       const from = who(c.callerUid, c.callerName);
       const verb = from === 'Vous' ? 'avez' : 'a';
       if (c.state === 'missed') add(date, 'call', `${grand} n'a pas répondu à l'appel de ${from === 'Vous' ? 'vous' : from}`, false, true);
       else if (c.state === 'declined') add(date, 'call', `${grand} a refusé l'appel de ${from === 'Vous' ? 'vous' : from}`, false, true);
-      else if (c.state !== 'ringing') add(date, 'call', `${from} ${verb} appelé ${grand}`, from === 'Vous');
+      else if (c.state !== 'ringing') add(date, 'call', `${from} ${verb} appelé ${grand}`, from === 'Vous', false, PAGE.call, true);
     }
   }
   for (const m of members) {
@@ -109,7 +137,7 @@ function events() {
   for (const r of reminders) {
     if (!r.lastAck) continue;
     const date = new Date(`${r.lastAck.slice(0, 10)}T${r.lastAck.slice(11, 16) || '00:00'}`);
-    if (!Number.isNaN(date.getTime())) add(date, 'agenda', `${grand} a confirmé le rappel « ${r.title} »`);
+    if (!Number.isNaN(date.getTime())) addInfo(date, 'agenda', `${grand} a confirmé le rappel « ${r.title} »`);
   }
   return list.sort((a, b) => b.date - a.date).slice(0, 50);
 }
@@ -128,11 +156,22 @@ function render() {
   if (!session) return;
   const list = events();
   const read = lastRead();
-  const isFresh = (e) => !e.mine && e.date.getTime() > read;
+  // Arrivé pendant qu'on regarde la page où il s'affiche (réponse de Mamie, Messages ouvert) : vu aussi.
+  const ouverte = PAGES_LUES.find((p) => document.getElementById(`view-${p}`)?.hidden === false);
+  if (ouverte && document.visibilityState === 'visible') {
+    vuPages[ouverte] = Date.now();
+    try { localStorage.setItem(clePages(), JSON.stringify(vuPages)); } catch (e) { /* rien */ }
+  }
+  const isFresh = (e) => !e.mine && !e.info && e.date.getTime() > Math.max(read, vuPages[e.page] || 0);
   const fresh = list.filter(isFresh).length;
   $('nav-badge').textContent = fresh > 9 ? '9+' : String(fresh);
   $('nav-badge').hidden = fresh === 0;
   $('notifs-empty').hidden = list.length > 0;
+  // À l'ouverture de l'app, chaque arrivée (envois, appels, membres, rappels, puis leur version du serveur) redemandait
+  // toute la liste : elle n'est redessinée que si elle a changé.
+  const cle = list.map((e) => `${e.date.getTime()}|${e.text}|${isFresh(e)}|${e.missed}`).join('\n');
+  if (cle === dessinee) return;
+  dessinee = cle;
   $('notifs').replaceChildren(...list.map((e) => {
     const li = document.createElement('li');
     li.className = `notif n-${e.icon}${isFresh(e) ? ' fresh' : ''}${e.missed ? ' missed' : ''}`;
@@ -160,6 +199,7 @@ export function startNotifs(current) {
   stopNotifs();
   session = current;
   vuIci = 0;
+  lirePages();
   const base = (name) => collection(db, 'families', session.fid, name);
   const read = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
   stops.push(onSnapshot(query(base('posts'), orderBy('createdAt', 'desc'), limit(30)),
@@ -177,4 +217,6 @@ export function stopNotifs() {
   calls = [];
   vuIci = 0;
   envoisLus = false;
+  dessinee = null;
+  vuPages = {};
 }

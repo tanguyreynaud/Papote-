@@ -225,8 +225,15 @@ export async function leaveFamily(fid, uid) {
 
 /** Membres en temps réel ; fromCache dit si les données viennent du cache (pas encore du serveur). */
 export function watchMembers(fid, callback, onError) {
+  // includeMetadataChanges : pour savoir quand le serveur a répondu (fromCache passe à false). Les autres changements
+  // de « métadonnées » (une écriture sur ma fiche en cours puis confirmée) ne changent rien aux fiches : l'accueil
+  // n'est plus redessiné pour rien.
+  let dejaServeur = null;
   return onSnapshot(collection(db, 'families', fid, 'members'), { includeMetadataChanges: true }, (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })), snap.metadata.fromCache);
+    const fromCache = snap.metadata.fromCache;
+    if (dejaServeur !== null && fromCache === dejaServeur && !snap.docChanges().length) return;
+    dejaServeur = fromCache;
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })), fromCache);
   }, onError);
 }
 

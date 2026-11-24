@@ -141,3 +141,82 @@ test('Autre compte sur le même téléphone : ses propres notifications, rien de
   assert.strictEqual(await badge(julie), null, 'Julie retrouve ses notifications vues');
   assert.strictEqual((await s.lire(`families/${fid}/members/${uidMarc}`)).notifsVues, undefined, 'Marc n\'a toujours rien vu');
 });
+
+// Tanguy, 24/11 : « 9+ » à chaque retour dans l'app, sans rien de nouveau à lire. Tout comptait dans le chiffre, même
+// « Mamie a vu votre photo », les appels décrochés et les rappels confirmés. Ces nouvelles restent dans la liste, mais
+// le chiffre ne compte plus que ce qui attend le proche : réponse de Mamie, envoi d'un autre proche, appel manqué.
+test('Cloche : « Mamie a vu », appels décrochés et rappels confirmés ne comptent pas dans le chiffre', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const marc = await banc.telephone('Marc');
+  await g.rejoindre(julie, fid, marc, { email: 'marc@exemple.fr', prenom: 'Marc' });
+  await marc.context.close();
+  await voirLesNotifs(julie);
+  const membres = await g.liste(`families/${fid}/members`);
+  const uJulie = membres.find((m) => m.email === 'julie@exemple.fr').id;
+  const uMarc = membres.find((m) => m.email === 'marc@exemple.fr').id;
+  await julie.page.waitForTimeout(1500);
+  const maintenant = s.FieldValue.serverTimestamp();
+  // Douze envois de Julie vus par Mamie, deux appels décrochés, un rappel confirmé : rien à lire.
+  for (let i = 0; i < 12; i++) {
+    await s.db.collection(`families/${fid}/posts`).add({
+      type: 'message', text: `Coucou ${i}`, authorUid: uJulie, authorName: 'Julie', createdAt: maintenant, seenAt: maintenant,
+    });
+  }
+  await s.db.collection(`families/${fid}/calls`).add({
+    callerUid: uJulie, callerName: 'Julie', state: 'ended', answer: { uid: tab.tabletUid }, createdAt: maintenant, endedAt: maintenant,
+  });
+  await s.db.collection(`families/${fid}/calls`).add({
+    callerUid: tab.tabletUid, callerName: 'Mamie Emma', calleeUid: uMarc, calleeName: 'Marc', state: 'ended',
+    answer: { uid: uMarc, name: 'Marc' }, createdAt: maintenant, endedAt: maintenant,
+  });
+  const ici = new Date(Date.now() + 60_000);
+  const pad = (n) => String(n).padStart(2, '0');
+  await s.db.collection(`families/${fid}/reminders`).add({
+    title: 'Pharmacie', lastAck: `${ici.getFullYear()}-${pad(ici.getMonth() + 1)}-${pad(ici.getDate())}T${pad(ici.getHours())}:${pad(ici.getMinutes())}`,
+  });
+  await notifsArrivees(julie, ['Mamie Emma a vu le message que vous avez envoyé', 'Mamie Emma a appelé Marc', 'a confirmé le rappel « Pharmacie »']);
+  assert.strictEqual(await badge(julie), null, 'rien qui attend Julie : pas de chiffre');
+  await julie.page.reload();
+  await g.attendreVue(julie, 'view-home');
+  await notifsArrivees(julie, ['Mamie Emma a appelé Marc']);
+  assert.strictEqual(await badge(julie), null, 'toujours rien après rechargement');
+
+  // Ce qui attend Julie compte : un message de Marc, une réponse de Mamie, un appel manqué.
+  await s.db.collection(`families/${fid}/posts`).add({
+    type: 'message', text: 'Je passe dimanche', authorUid: uMarc, authorName: 'Marc', createdAt: s.FieldValue.serverTimestamp(),
+  });
+  await reponseDeMamie(fid, tab, 'Merci ma chérie');
+  await s.db.collection(`families/${fid}/calls`).add({
+    callerUid: tab.tabletUid, callerName: 'Mamie Emma', calleeUid: uJulie, calleeName: 'Julie', state: 'missed',
+    createdAt: s.FieldValue.serverTimestamp(), endedAt: s.FieldValue.serverTimestamp(),
+  });
+  await notifsArrivees(julie, ['Je passe dimanche', 'Merci ma chérie', 'Appel manqué de Mamie Emma']);
+  assert.strictEqual(await badge(julie), '3', 'message de Marc, réponse de Mamie, appel manqué');
+  await voirLesNotifs(julie);
+});
+
+// Tanguy, 24/11 : « le badge ne doit compter que ce qui n'a pas été vu, où que ce soit ». La réponse de Mamie lue dans
+// Messages n'est plus comptée sur la cloche ; pas plus celle qui arrive pendant que Messages est ouvert.
+test('Cloche : ce qui a été vu dans Messages n\'est plus compté, même après rechargement', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  await reponseDeMamie(fid, tab, 'Merci ma chérie');
+  await notifsArrivees(julie, ['Merci ma chérie']);
+  assert.strictEqual(await badge(julie), '1', 'une réponse non lue');
+  await g.ouvrirTuile(julie, 'messages');
+  await julie.page.waitForTimeout(800);
+  await reponseDeMamie(fid, tab, 'Il fait beau ici');
+  await julie.page.locator('#view-messages').getByText('Il fait beau ici').waitFor({ timeout: 15_000 });
+  await julie.page.click('#view-messages .back');
+  await g.attendreVue(julie, 'view-home');
+  await notifsArrivees(julie, ['Il fait beau ici']);
+  assert.strictEqual(await badge(julie), null, 'vues dans Messages : plus de chiffre');
+  await julie.page.reload();
+  await g.attendreVue(julie, 'view-home');
+  await notifsArrivees(julie, ['Merci ma chérie', 'Il fait beau ici']);
+  assert.strictEqual(await badge(julie), null, 'toujours rien après rechargement');
+  await reponseDeMamie(fid, tab, 'Bisous');
+  await notifsArrivees(julie, ['Bisous']);
+  assert.strictEqual(await badge(julie), '1', 'la suivante compte');
+});
