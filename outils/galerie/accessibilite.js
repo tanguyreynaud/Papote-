@@ -71,6 +71,8 @@ async function balayer({ browser, base, partie, progression }) {
       await page.addScriptTag({ content: AXE });
       const r = await page.evaluate(async ([tags, locale]) => {
         window.axe.configure({ locale });
+        // Fondus en cours (0,2 à 0,3 s) : menés à leur fin, sinon un texte à moitié apparu est jugé trop pâle.
+        document.getAnimations().forEach((a) => { const t = a.effect && a.effect.getTiming(); if (t && t.iterations !== Infinity) { try { a.finish(); } catch (_) {} } });
         // Les écrans cachés derrière une fenêtre ouverte sont inertes : on ne juge que ce qui est visible.
         return window.axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations'], elementRef: false });
       }, [TAGS, LOCALE]).catch((e) => ({ violations: [{ id: 'axe en erreur', impact: 'outil', help: e.message.split('\n')[0], helpUrl: '', nodes: [{ target: [''], html: '' }] }] }));
