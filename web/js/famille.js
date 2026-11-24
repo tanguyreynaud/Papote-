@@ -938,7 +938,18 @@ $('viewer-close').addEventListener('click', () => history.back());
   const v = $('viewer-video');
   const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   const duree = () => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0);
-  const basculer = () => { if (v.paused) { if (v.ended) v.currentTime = 0; v.play().catch(() => {}); } else v.pause(); };
+  // Le bouton répond tout de suite (il s'estompe le temps que la vidéo parte) ; si elle ne peut pas être lue, on le dit
+  // au lieu de laisser un bouton muet (balayage des boutons du 24/11).
+  const attendre = (oui) => { $('viewer-play').classList.toggle('attend', oui); $('viewer-play').setAttribute('aria-busy', String(oui)); };
+  const basculer = () => {
+    if (!v.paused) { v.pause(); return; }
+    if (v.ended) v.currentTime = 0;
+    attendre(true);
+    v.play().then(() => attendre(false), (err) => {
+      attendre(false);
+      if (err?.name !== 'AbortError') toast("La vidéo ne peut pas être lue pour l'instant.");
+    });
+  };
   const maj = () => {
     const arret = v.paused;
     $('viewer-play').hidden = !arret || v.hidden;
@@ -955,8 +966,10 @@ $('viewer-close').addEventListener('click', () => history.back());
   $('viewer-plein').addEventListener('click', () => {
     // iPhone : seul le plein écran propre à la vidéo existe (webkitEnterFullscreen).
     const ouvrir = v.requestFullscreen ? v.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve(v.webkitEnterFullscreen?.());
-    Promise.resolve(ouvrir).catch((err) => console.warn('Plein écran refusé', err));
+    if (!v.requestFullscreen && !v.webkitEnterFullscreen) { toast("Le plein écran n'existe pas sur ce téléphone."); return; }
+    Promise.resolve(ouvrir).catch((err) => { console.warn('Plein écran refusé', err); toast("Le plein écran n'a pas pu s'ouvrir."); });
   });
+  document.addEventListener('fullscreenchange', () => $('viewer').classList.toggle('en-plein', document.fullscreenElement === v));
   maj();
 }
 

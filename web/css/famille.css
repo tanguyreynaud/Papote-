@@ -2275,3 +2275,6 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 /* Alertes et erreurs : le fait en gras, la suite en texte normal (voir faitPuisSuite). */
 .alerte-suite { font-weight: 400; color: var(--text); }
 .activity .alerte-suite { display: block; margin-top: 2px; color: var(--muted); }
+
+/* « Lire » touché : le bouton s'estompe le temps que la vidéo parte. */
+.viewer .video-play.attend { opacity: .55; }
