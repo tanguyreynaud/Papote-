@@ -816,6 +816,37 @@ test('envoi de 3 photos : « Suivante » montre la suivante, double toucher comp
   } finally { await b.fermer(); }
 });
 
+// Tanguy (24/11) : toucher n'importe où (sauf un bouton) montre la photo suivante, sans jamais fermer ni compter « vu ».
+test('envoi de 3 photos : un toucher sur la photo montre la suivante, en boucle, sans fermer ; le haut-parleur ne fait rien passer', async () => {
+  const b = await ouvrir();
+  try {
+    const e = envoi({ text: 'Trois photos' });
+    e.images = [`${e.image}?2`, `${e.image}?3`];
+    await b.android('onPosts', lot([e]));
+    await b.avancer(500);
+    const premiere = await affichee(b);
+    await b.page.evaluate(() => { const o = document.querySelector('#overlay .ln-media'); o.click(); o.click(); });
+    await b.avancer(300);
+    assert.strictEqual(await affichee(b), e.images[0], 'double toucher : 2e photo, pas la 3e');
+    await b.avancer(1200);
+    await b.page.evaluate(() => { const l = document.querySelector('#overlay-actions .listen'); if (l) l.click(); });
+    await b.avancer(300);
+    assert.strictEqual(await affichee(b), e.images[0], 'le haut-parleur ne change pas de photo');
+    await b.avancer(1200);
+    await b.toucher('#overlay-text');
+    await b.avancer(300);
+    assert.strictEqual(await affichee(b), e.images[1], '3e photo en touchant le mot');
+    assert.strictEqual(await b.texte('#overlay-close'), 'OK');
+    await b.avancer(1200);
+    await b.toucher('#overlay .ln-media');
+    await b.avancer(300);
+    assert.strictEqual(await affichee(b), premiere, 'retour à la 1re : en boucle');
+    assert.ok(await b.visible('#overlay'), 'jamais fermé par un toucher hors bouton');
+    assert.deepStrictEqual((await b.appels('markSeen')).map((a) => a.args[0]).filter((id) => id === e.id), [], 'pas compté vu par ce toucher');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
 // Audit « mauvais jours » (5/11) : Mamie ne lit jamais un mot d'argent ou de problème à régler, et après un arrêt
 // (déménagement, fin voulue) l'écran ne promet pas que « tout reviendra ». Le bouton SOS reste sur l'écran (F-a).
 test('pause : jamais « réglé » sous les yeux de Mamie ; après un arrêt, pas de « tout reviendra » ; SOS présent', async () => {

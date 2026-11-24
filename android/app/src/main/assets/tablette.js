@@ -4035,6 +4035,19 @@
       nextOverlay();
     });
 
+    // Plusieurs photos (Tanguy, 24/11) : toucher la photo ou le mot, n'importe où sauf sur un bouton, montre la
+    // suivante, en boucle. Ce toucher ne ferme jamais l'envoi et ne le compte pas « vu » : seul OK le fait.
+    on($('overlay'), 'click', function (ev) {
+      var e = overlayPhotos, c = ev.target;
+      if (!e || overlayPost !== e.post) return;
+      for (; c && c !== this; c = c.parentNode) if (c.tagName === 'BUTTON' || c.id === 'overlay-actions') return;
+      var now = Date.now();
+      if (now - e.dernierOk < 1000) return; // double toucher : une seule photo passée
+      e.dernierOk = now;
+      montrerPhotoEnvoi((e.n + 1) % e.liste.length);
+      relancerTourPhotos();
+    });
+
     // Veille : on signale à l'app que Mamie utilise la tablette (au plus une fois par minute).
     var lastTouch = 0;
     on(document, 'touchstart', function () {
