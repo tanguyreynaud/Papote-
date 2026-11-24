@@ -31,6 +31,9 @@
 //                                        serveur bloqué, et liste ceux qui ne montrent rien (sortie/boutons.txt)
 //   --iphone [vitrine famille admin]     au lieu des captures : chaque écran dans WebKit (moteur de Safari) en iPhone SE
 //                                        et iPhone 15 : erreurs de page, page trop large, texte écrasé (iphone.js)
+//   --mesures [vitrine admin famille]    au lieu des captures : chaque écran mesuré en téléphone et en ordinateur (boutons d'un
+//                                        groupe de hauteurs différentes, blocs collés ou décalés, pavés en gras, explications
+//                                        longues, boutons sur deux lignes, doublons) ; écarts acceptés : mesures-acceptes.txt (mesures.js)
 //   --appui [vitrine famille tablette admin]  au lieu des captures : garde le doigt 1,2 s sur chaque bouton, serveur
 //                                        bloqué : une action au plus, rien de sélectionné, pas de menu (appui.js)
 //
@@ -63,6 +66,7 @@ async function main() {
   if (args.includes('--courriels')) return courriels(args.filter((a) => a !== '--courriels'));
   if (args.includes('--iphone')) return double(args.filter((a) => a !== '--iphone'), require('./iphone'), ['vitrine', 'famille', 'admin'], 'webkit');
   if (args.includes('--accessibilite')) return double(args.filter((a) => a !== '--accessibilite'), require('./accessibilite'), ['famille', 'vitrine', 'admin', 'tablette']);
+  if (args.includes('--mesures')) return double(args.filter((a) => a !== '--mesures'), require('./mesures'), ['vitrine', 'admin', 'famille']);
   if (args.includes('--appui')) return double(args.filter((a) => a !== '--appui'), require('./appui'), ['vitrine', 'famille', 'tablette', 'admin']);
   const choix = args.filter((a) => !a.startsWith('--'));
   for (const a of args.filter((a) => a.startsWith('--'))) {

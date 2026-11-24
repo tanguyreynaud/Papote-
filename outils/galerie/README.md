@@ -82,6 +82,7 @@ Même mécanique (serveur bloqué, premier écran où chaque bouton apparaît), 
 | `--gestes [famille vitrine]` | chaque écran en paysage, zoom 130 %, texte +30 %, mode sombre, noms très longs ; bouton retour ; retour après paiement | `gestes.txt` |
 | `--identifiants [admin famille]` | chaque bouton qui agit sur une commande ou un abonnement envoie bien l'identifiant de la page ouverte | `identifiants.txt` |
 | `--accessibilite [famille vitrine admin tablette]` | axe-core (WCAG A/AA) + texte trop petit, cible trop petite ; les défauts WCAG acceptés sont dans `acceptes.txt` | `accessibilite.txt` |
+| `--mesures [vitrine admin famille]` | chaque écran mesuré en téléphone ET en ordinateur : boutons d'un même groupe de hauteurs différentes, blocs décalés ou collés sans espace, gras sur 3 lignes ou plus, explication de 4 lignes ou plus, bouton sur deux lignes, même phrase deux fois ; les écarts regardés et acceptés sont dans `mesures-acceptes.txt` | `mesures.txt`, captures dans `sortie/mesures/` |
 | `--courriels` | chaque e-mail de 320 à 1000 px sans police ni image ; simulé dans Gmail sans styles, Outlook bureau (Word, approché), mode sombre partiel et total, images bloquées ; relecture du code d'après caniemail ; poids, liens, texte brut, contraste | `courriels.txt`, captures dans `courriels.html` |
 
 ### E-mails : ce que `--courriels` simule, et ce qu'il ne voit pas

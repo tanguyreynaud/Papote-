@@ -21,6 +21,8 @@ function git(args, opts = {}) {
  */
 function extraire(source, dossier) {
   if (source === 'ici') return { dir: path.join(RACINE, dossier), version: 'fichiers du disque' };
+  // Un autre dossier du disque (une copie de travail d'une autre branche) : --admin=/chemin/vers/la/copie
+  if (path.isAbsolute(source)) return { dir: path.join(source, dossier), version: `dossier ${source}` };
   if (source.startsWith('origin/')) {
     try { git(['fetch', '--quiet', 'origin', source.slice('origin/'.length)]); } catch (e) {
       console.warn(`  (pas de réseau pour mettre à jour ${source}, on prend la copie locale)`);
