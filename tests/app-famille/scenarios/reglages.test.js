@@ -75,7 +75,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await julie.page.locator('#radio-card').waitFor({ state: 'visible' });
   // Accueil de la tablette : radio FIP ; prochain rappel enlevé d'un toucher.
   await modifier(julie, 'radio-card');
-  await julie.page.locator('#form-radio', { hasText: 'Fonctionne seulement en Wi-Fi' }).waitFor();
+  await julie.page.locator('#form-radio', { hasText: 'Seulement en Wi-Fi' }).waitFor();
   await julie.page.locator('#opt-radio').setChecked(true);
   await julie.page.selectOption('#opt-radio-station', { label: 'FIP' });
   await enregistrer(julie, 'radio-card');

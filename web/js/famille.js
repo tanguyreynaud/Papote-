@@ -5660,12 +5660,6 @@ function dessinerSosOrdre(focus) {
     prenom.className = 'sos-ordre-prenom';
     prenom.textContent = m.name || 'Proche';
     nom.append(prenom);
-    if (estResponsable(uid)) {
-      const r = document.createElement('span');
-      r.className = 'sos-ordre-role';
-      r.textContent = 'Responsable';
-      nom.append(r);
-    }
     const fleches = document.createElement('span');
     fleches.className = 'sos-ordre-fleches';
     for (const [sens, haut] of [[-1, true], [1, false]]) {

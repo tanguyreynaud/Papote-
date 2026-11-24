@@ -507,7 +507,7 @@
                 <input id="in-tface-gallery" type="file" accept="image/*" hidden>
               </div>
               <label class="choice-titre" for="family-name">Nom de la tablette</label>
-              <p class="muted small">Souvent celui de la personne qui l'a (« Mamie », « Jeanne »…). Il apparaît partout dans l'app.</p>
+              <p class="muted small">Par exemple « Mamie » ou « Jeanne ».</p>
               <input id="family-name" maxlength="40" required aria-describedby="family-name-error">
               <p id="family-name-error" class="error small" hidden></p>
               <div class="setting-actions">
@@ -523,7 +523,7 @@
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-son"/></svg></span><h2>Volumes</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <p id="volume-text" class="setting-value"></p>
             <form id="form-volume" class="setting-edit" hidden>
-              <p class="muted small">Touchez « Écouter » pour entendre le son sur la tablette.</p>
+              
               <div class="setup-son-ligne">
                 <div class="setup-son-tete">
                   <strong>Sonnerie</strong>
@@ -551,7 +551,7 @@
                   <strong>Appels</strong>
                   <span id="volume-appel-val" class="setup-son-val"></span>
                 </div>
-                <p class="muted small volume-aide">La voix du proche, en visio et au téléphone. Elle change au prochain appel.</p>
+                <p class="muted small volume-aide">La voix du proche pendant les appels</p>
                 <div class="setup-son-ctrl">
                   <input id="volume-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
                   <button type="button" class="setup-essai volume-essai" data-essai="appel" aria-label="Écouter la voix d'un appel"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
@@ -567,7 +567,7 @@
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-bell"/></svg></span><h2>Sonneries</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <p id="sons-value" class="setting-value"></p>
             <form id="form-sons" class="setting-edit" hidden>
-              <p class="muted small">Touchez « Écouter » pour entendre le son sur la tablette.</p>
+              
               <fieldset class="son-groupe">
                 <legend>Quand on l'appelle</legend>
                 <div id="sons-appel" class="son-choix"></div>
@@ -610,7 +610,7 @@
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-lune"/></svg></span><h2>Nuit</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <p id="sleep-value" class="setting-value"></p>
             <form id="form-sleep" class="setting-edit" hidden>
-              <p class="muted small">La nuit, l'écran s'éteint ; un toucher le rallume, et un appel ou un rappel le réveille.</p>
+              <p class="muted small">Un toucher, un appel ou un rappel rallume l'écran.</p>
               <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Éteindre l'écran la nuit</strong></span><input type="checkbox" class="toggle" id="sleep-on"></label></div>
               <div id="sleep-hours" class="sleep-hours">
                 <label>L'écran s'éteint à <select id="sleep-from"></select></label>
@@ -672,7 +672,7 @@
             <p id="radio-value" class="setting-value"></p>
             <form id="form-radio" class="setting-edit" hidden>
             <div class="toggle-list">
-            <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton «&nbsp;Radio&nbsp;» à côté de « Appeler ». Fonctionne seulement en Wi-Fi.</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
+            <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Seulement en Wi-Fi</span></span><input type="checkbox" class="toggle" id="opt-radio"></label>
               <div id="opt-radio-wrap" class="station">
                 <label for="opt-radio-station">Station</label>
                 <div class="station-row">
@@ -694,14 +694,14 @@
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-sos"/></svg></span><h2>SOS famille</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <div id="sos-ordre-value" class="setting-value sos-ordre-value"></div>
             <form id="form-sos-ordre" class="setting-edit" hidden>
-              <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Bouton SOS sur la tablette</strong><span>Un appui sur « SOS famille » prévient toute la famille par SMS, puis la tablette appelle les proches un par un. Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="opt-sos"></label></div>
+              <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Bouton SOS sur la tablette</strong><span>Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="opt-sos"></label></div>
               <div id="sos-ordre-zone">
               <p class="choice-titre">Ordre d'appel</p>
-              <p class="muted small">Quand votre proche appuie sur SOS, la tablette envoie un SMS à toute la famille, puis appelle les proches un par un, dans cet ordre, jusqu'à ce que quelqu'un réponde. Touchez ↑ ou ↓ pour changer la place d'un proche.</p>
+              <p class="muted small">Un appui sur SOS prévient toute la famille par SMS, puis la tablette appelle dans cet ordre, jusqu'à ce que quelqu'un réponde.</p>
               <ol id="sos-ordre-liste" class="sos-ordre-liste"></ol>
               <p id="sos-ordre-annonce" class="sos-ordre-annonce" aria-live="polite"></p>
               <p id="sos-ordre-sans" class="muted small" hidden></p>
-              <button type="button" id="sos-ordre-defaut" class="secondary sos-ordre-defaut">Revenir à l'ordre par défaut</button>
+              <button type="button" id="sos-ordre-defaut" class="link sos-ordre-defaut">Revenir à l'ordre par défaut</button>
               </div>
               <div class="setting-actions">
                 <button type="button" class="secondary setting-cancel">Annuler</button>

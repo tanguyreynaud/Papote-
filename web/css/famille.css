@@ -1751,8 +1751,8 @@ a { text-decoration: none; }
 .sos-ordre-btn:active:not(:disabled) { background: var(--accent); color: var(--accent-text); }
 .sos-ordre-btn:disabled { border-color: var(--line); color: var(--muted); opacity: .5; }
 .sos-ordre-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 2px; }
-.sos-ordre-annonce { min-height: 4.2em; margin: 10px 0 0; font-size: 15px; font-weight: 600; color: var(--accent); overflow-wrap: anywhere; }
-.sos-ordre-defaut { width: 100%; justify-content: center; min-height: 50px; margin-top: 4px; touch-action: manipulation; }
+.sos-ordre-annonce { min-height: 2.8em; line-height: 1.4; margin: 10px 0 0; font-size: 15px; font-weight: 600; color: var(--accent); overflow-wrap: anywhere; }
+.sos-ordre-defaut { display: block; min-height: 40px; margin: 0 0 4px; font-size: 15px; touch-action: manipulation; }
 
 /* Téléphone tenu à l'horizontale (banc d'utilisateurs du 19/11) : la fenêtre « Réglons la tablette » était si basse
    que les heures de la nuit tombaient sous les boutons et que les options étaient coupées. Quand la hauteur manque,
