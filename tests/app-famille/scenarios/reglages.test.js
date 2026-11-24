@@ -252,7 +252,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   assert.strictEqual((await g.liste(`families/${fid}/commands`)).some((c) => c.type === 'restart'), false);
   await julie.page.click('#remote-card [data-cmd="restart"]');
   // Tablette hors ligne (aucune vraie tablette ici) : la fenêtre le dit avant d'envoyer (tests IA du 21/11).
-  assert.match(await g.texteFenetre(julie), /La tablette est hors ligne : elle ne redémarrera qu'une fois reconnectée/);
+  assert.match(await g.texteFenetre(julie), /Elle est hors ligne et ne redémarrera qu'une fois reconnectée/);
   await g.repondre(julie, 'Envoyer la demande');
   await g.attendreBase(async () => (await g.liste(`families/${fid}/commands`)).some((c) => c.type === 'restart'), 'redémarrage demandé');
 });

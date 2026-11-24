@@ -4715,7 +4715,9 @@ document.querySelectorAll('[data-cmd]').forEach((btn) => btn.addEventListener('c
   // Hors ligne, on le dit avant (tests IA du 21/11 : « une minute » faisait croire que la tablette redémarrait tout de suite).
   const question = tabletteEnLigne()
     ? 'Redémarrer la tablette ? Elle sera indisponible une minute.'
-    : "La tablette est hors ligne : elle ne redémarrera qu'une fois reconnectée. Vérifiez d'abord, sur place, qu'elle est branchée. Envoyer quand même la demande ?";
+    : "Redémarrer la tablette ? Elle est hors ligne et ne redémarrera qu'une fois reconnectée. Vérifiez d'abord, sur place, qu'elle est branchée.";
+  // Une ancienne réponse (« Demande envoyée… ») ne reste pas affichée derrière la nouvelle question.
+  if (btn.dataset.cmd === 'restart') showRemote('');
   if (btn.dataset.cmd === 'restart' && !await askConfirm(question, tabletteEnLigne() ? 'Redémarrer' : 'Envoyer la demande')) return;
   // Attendue : le bouton tourne et ne se touche plus tant que l'ordre part (sinon un double clic envoyait 2 ordres).
   await sendCommand(btn.dataset.cmd);
@@ -5005,7 +5007,7 @@ function renderWifi() {
   $('wifi-current').textContent = enLigne
     ? (wifiCourant() || 'Réseau actuel pas encore connu')
     // Même diagnostic que le bandeau de l'accueil (banc du 19/11 : les deux messages se contredisaient).
-    : 'Tablette hors ligne : le Wi-Fi se change ici quand elle est connectée. Si la box ou son code a changé, réglez-le directement sur la tablette, dans ses réglages.';
+    : 'Tablette hors ligne : le Wi-Fi se règle sur la tablette.';
 }
 
 
@@ -5037,8 +5039,10 @@ function renderRemote() {
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
     // Hors ligne : dit que les actions attendront son retour (banc du 19/11 : on croyait qu'elles agissaient tout de suite).
+    // Hors ligne, une seule explication : celle qui dit ce qui va se passer (Tanguy, 24/11 : deux textes à la suite).
+    $('remote-intro').hidden = !tabletteEnLigne();
     $('remote-tablet').textContent = !tabletteEnLigne()
-      ? `Tablette hors ligne${online ? ` (vue ${ago(online.getTime())})` : ''} : ces actions partiront dès qu'elle sera de nouveau connectée.`
+      ? `Tablette hors ligne${online ? ` (vue ${ago(online.getTime())})` : ''} : ces actions partiront à son retour.`
       : online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
   }
 }
@@ -5883,13 +5887,10 @@ function renderLuminosite() {
   const v = luminositeReglee();
   $('luminosite-value').textContent = v == null ? 'Pas encore réglée' : `${v} % le jour`;
 }
-// Curseur bougé mais pas validé : dit à côté du pourcentage (tests du 21/11 : Thomas et Marc repartaient en croyant
-// la luminosité changée, sans avoir touché « Enregistrer »).
+// Pas de phrase « pas encore enregistré » sous le curseur (Tanguy, 24/11 : le bouton Enregistrer est juste dessous) ;
+// quitter sans enregistrer reste signalé par le petit message commun à tous les réglages.
 const majLuminositeVal = () => {
-  const v = Number($('luminosite').value);
-  const change = v !== (luminositeReglee() ?? LUMINOSITE_DEFAUT);
-  $('luminosite-val').textContent = `${v} %`;
-  $('luminosite-attente').hidden = !change;
+  $('luminosite-val').textContent = `${Number($('luminosite').value)} %`;
 };
 $('luminosite').addEventListener('input', majLuminositeVal);
 SETTINGS['luminosite-card'] = {
@@ -6453,7 +6454,8 @@ function renderActivity() {
   const online = latest('lastOnline');
   // Dernier signe de vie : toucher ou visage vu (Tanguy, 21/11 : ne pas toucher n'est pas grave si rien n'a été reçu).
   const active = Math.max(latest('lastActive'), latest('lastSeen'));
-  const copies = ['support-status', 'notifs-status'];
+  // L'Aide ne montre plus l'état de la tablette (Tanguy, 24/11 : « ça n'a rien à faire ici »).
+  const copies = ['notifs-status'];
   if (!online) { el.hidden = true; copies.forEach((id) => { $(id).hidden = true; }); return; }
   const name = session.family.name;
   const now = Date.now();
@@ -6517,17 +6519,27 @@ function renderActivity() {
     // 3 envois ou rappels de suite pas vus (functions/alertes.js alerteNonVus, qui a aussi prévenu les responsables).
     el.classList.add('warn');
     el.textContent = `${name} n'a pas vu vos ${session.family.alerteNonVus.nombre || 3} derniers envois. Un petit appel ?`;
+  } else if (active && now - active >= joursPasVue() * 86400_000) {
+    // Aucun signe de vie depuis le nombre de jours réglé (« Tablette pas utilisée », 5 par défaut) : la même règle que
+    // l'alerte envoyée aux responsables.
+    el.classList.add('warn');
+    el.textContent = `Aucun signe de ${name} sur la tablette depuis ${joursTexte(Math.floor((now - active) / 86400_000))}. Un petit appel ?`;
   } else {
-    el.textContent = active
-      ? `Tablette en ligne. ${name} était devant la tablette ${ago(active)}.`
-      : 'Tablette en ligne.';
+    // Tout va bien : rien à dire (Tanguy, 24/11 : « il vaut mieux aucune info »). Avant : « Tablette en ligne.
+    // Mamie était devant la tablette hier à 20:22 », qui inquiétait pour rien.
+    el.hidden = true;
+    copies.forEach((id) => { $(id).hidden = true; });
+    return;
   }
-  // Même état de la tablette en haut de Notifications et dans Support.
+  // Même état de la tablette en haut de Notifications, sans les mots du bouton « Que faire ? » (là-bas ce n'est pas
+  // un bouton : ils restaient collés au bout de la phrase).
+  const sansBouton = el.cloneNode(true);
+  sansBouton.querySelectorAll('button').forEach((b) => b.remove());
   for (const id of copies) {
     $(id).hidden = false;
     $(id).classList.toggle('warn', el.classList.contains('warn'));
     $(id).classList.toggle('calme', el.classList.contains('calme'));
-    $(id).textContent = el.textContent;
+    $(id).textContent = sansBouton.textContent.trim();
   }
 }
 

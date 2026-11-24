@@ -32,7 +32,7 @@ test('Forfait de la tablette : rien avant 80 %, puis l\'accueil explique calmeme
     sim: { operateur: 'Lyca', dataMoisMo: dataCycleMo, dataCycleMo, plafondMo: 1000, niveau, cycleDebut: debut, vuLe: s.Timestamp.now() },
   });
   await sim(750, 1);
-  await julie.page.locator('#activity', { hasText: 'Tablette en ligne' }).waitFor();
+  await julie.page.locator('#activity').waitFor({ state: 'hidden' });
   await sim(820, 1);
   await julie.page.locator('#activity.calme', { hasText: 'forfait internet de la tablette de Mamie Emma est utilisé à 82 %' }).waitFor();
   assert.ok(!(await julie.page.locator('#activity').evaluate((e) => e.classList.contains('warn'))), 'pas d\'alerte rouge pour le forfait');

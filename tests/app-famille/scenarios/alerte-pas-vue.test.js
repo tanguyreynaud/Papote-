@@ -114,14 +114,16 @@ test('Accueil : plus de « pas touché » ; « n\'a pas vu vos 3 derniers envois
   const ilYa = (h) => s.Timestamp.fromMillis(Date.now() - h * 3600_000);
   // Ni touchée ni vue depuis 20 h, en ligne : avant, bandeau orange « pas touché » ; maintenant, tout va bien.
   await ref.update({ lastOnline: s.Timestamp.now(), lastActive: ilYa(30), lastSeen: ilYa(20) });
-  await julie.page.locator('#activity', { hasText: 'était devant la tablette il y a 20 h' }).waitFor();
-  assert.ok(!(await julie.page.locator('#activity').evaluate((e) => e.classList.contains('warn'))), 'pas d\'alerte');
-  assert.doesNotMatch(await julie.page.locator('#activity').innerText(), /touché/);
+  // Tout va bien : plus aucun bandeau (Tanguy, 24/11).
+  await julie.page.locator('#activity').waitFor({ state: 'hidden' });
   // Le serveur a compté 3 envois pas vus depuis le dernier signe de vie.
   await s.db.doc(`families/${fid}`).update({ alerteNonVus: { le: s.Timestamp.now(), depuis: ilYa(20), nombre: 3 } });
   await julie.page.locator('#activity.warn', { hasText: "n'a pas vu vos 3 derniers envois. Un petit appel ?" }).waitFor();
   // Elle passe devant la tablette : l'alerte disparaît.
   await ref.update({ lastSeen: s.Timestamp.now() });
-  await julie.page.locator('#activity', { hasText: "était devant la tablette à l'instant" }).waitFor();
-  assert.ok(!(await julie.page.locator('#activity').evaluate((e) => e.classList.contains('warn'))));
+  await julie.page.locator('#activity').waitFor({ state: 'hidden' });
+  // Aucun signe de vie depuis 5 jours (réglage par défaut) : le bandeau le dit.
+  await s.db.doc(`families/${fid}`).update({ alerteNonVus: s.FieldValue.delete() });
+  await ref.update({ lastActive: ilYa(6 * 24), lastSeen: ilYa(6 * 24) });
+  await julie.page.locator('#activity.warn', { hasText: 'Aucun signe de Mamie Emma sur la tablette depuis 6 jours. Un petit appel ?' }).waitFor();
 });

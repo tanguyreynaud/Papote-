@@ -601,7 +601,6 @@
                   <input id="luminosite" type="range" min="40" max="100" step="5" aria-label="Luminosité de l'écran le jour">
                 </div>
               </div>
-              <p id="luminosite-attente" class="pas-enregistre" role="status" hidden>Pas encore enregistré : touchez « Enregistrer ».</p>
               <div class="setting-actions">
                 <button type="button" class="secondary setting-cancel">Annuler</button>
                 <button type="submit" class="primary">Enregistrer</button>
@@ -740,7 +739,7 @@
           <details id="remote-card" class="card rg" hidden>
             <summary class="rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-outil"/></svg></span><span class="rg-texte"><strong class="rg-titre">Dépanner</strong><span class="rg-valeur">État, redémarrage</span></span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
             <div class="rg-corps">
-            <p class="muted small">À utiliser si la tablette ne répond plus ou se comporte bizarrement.</p>
+            <p id="remote-intro" class="muted small">À utiliser si la tablette ne répond plus ou se comporte bizarrement.</p>
             <p id="remote-tablet" class="muted small"></p>
             <div class="remote-buttons">
               <button type="button" class="primary" data-cmd="status">Obtenir l'état</button>
@@ -1005,7 +1004,6 @@
       <header class="page-head"><button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button><h1>Aide</h1></header>
       <div class="page-pad support-pad">
         <button type="button" id="support-assistant" class="primary wide" data-aide>Poser une question à l'assistant</button>
-        <p id="support-status" class="activity" hidden></p>
         <div class="faq">
           <details>
             <summary>Installer l'app sur mon téléphone</summary>
@@ -1236,7 +1234,7 @@
     </div>
     <p id="viewer-caption" class="viewer-caption"></p>
     <div class="viewer-actions">
-      <button type="button" id="viewer-save" class="viewer-btn"><svg><use href="#i-download"/></svg>Enregistrer</button>
+      <button type="button" id="viewer-save" class="viewer-btn"><svg><use href="#i-download"/></svg>Télécharger</button>
       <button type="button" id="viewer-delete" class="viewer-btn"><svg><use href="#i-trash"/></svg>Supprimer</button>
     </div>
   </div>
