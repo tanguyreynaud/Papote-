@@ -243,7 +243,8 @@
       pauseScreen.innerHTML = '<div class="pause-box"><p class="pause-title">' + TEXTES_PAUSE[cle][0] + '</p>' +
         '<p class="pause-text">' + TEXTES_PAUSE[cle][1] + '</p></div>';
       // Le SOS reste possible pendant la pause (audit F-a, 5/11).
-      var sos = el2('button', 'big-btn pause-sos', 'SOS');
+      var sos = el2('button', 'big-btn pause-sos', '');
+      sos.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z"/></svg><span>SOS</span>';
       on(sos, 'click', showSosCountdown);
       pauseScreen.firstChild.appendChild(sos);
       showSosButton();
@@ -1941,7 +1942,7 @@
 
   function heureEssai(a) {
     var d = new Date(a);
-    return d.getHours() + ' h ' + pad(d.getMinutes());
+    return d.getHours() + 'h' + pad(d.getMinutes());
   }
 
   function afficherEssais() {
@@ -2499,7 +2500,7 @@
       } else if (etat.cause === 'erreur') {
         gsmFinish('L’appel n’a pas pu partir', 'Réessayez dans un moment.', true, false);
       } else {
-        gsmFinish(who + ' n’a pas pu répondre', 'Réessayez plus tard.', true, false);
+        gsmFinish(who + ' n’a pas pu répondre', 'Réessayez dans un moment.', true, false);
       }
     }
   }
@@ -3515,6 +3516,7 @@
       if (ok) return; // la tablette s'éteint dans un instant, puis se rallume
       titre.textContent = 'Le redémarrage n’a pas marché.';
       detail.textContent = '';
+      redemarrerEl.classList.add('rate'); // plus de boutons grisés : le message seul, bien au milieu
       redemarrerTimer = setTimeout(function () { cacherRedemarrer(); }, 4000);
     });
     on(non, 'click', function () {
@@ -3548,6 +3550,7 @@
     $('redemarrer-titre').textContent = REDEMARRER_TITRE;
     $('redemarrer-detail').textContent = REDEMARRER_DETAIL;
     $('redemarrer-oui').disabled = false;
+    redemarrerEl.classList.remove('rate');
     $('redemarrer-non').disabled = false;
     wakeScreen(); // la nuit, l'écran se rallume pour la fenêtre
     show(redemarrerEl, true);
@@ -3560,6 +3563,7 @@
     if (!redemarrerEl || redemarrerEl.hasAttribute('hidden')) return;
     $('redemarrer-titre').textContent = 'Le redémarrage n’a pas marché.';
     $('redemarrer-detail').textContent = '';
+    redemarrerEl.classList.add('rate');
     clearTimeout(redemarrerTimer);
     redemarrerTimer = setTimeout(function () { cacherRedemarrer(); }, 4000);
   }

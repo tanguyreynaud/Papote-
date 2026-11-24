@@ -2137,9 +2137,21 @@ html #reminder-done .icon { width: 1.05em; height: 1.05em; margin-right: 2vmin; 
 
 /* ---------- Revue mesurée du 24/11 ---------- */
 /* « Suivante » (envoi de plusieurs photos) à côté d'une photo en largeur : le bouton dépassait de la carte. */
-.overlay.papier.wide #overlay-actions .ln-btn.suivante { padding: 0 4vmin; }
+.overlay.papier.wide #overlay-actions .ln-btn.suivante { padding: 0 3.5vmin; font-size: 5.2vmin; }
 /* « Qui voulez-vous appeler ? » avec un prénom sur deux lignes : tout tient dans l'écran. */
 html .call-out.picker .call-strip.noms-longs .call-person-face { width: 27vmin; height: 27vmin; font-size: 13vmin; }
 html .call-out.picker .call-strip.noms-longs .call-person-name { font-size: 7vmin; }
 /* Anniversaire d'un prénom long (texte sur 3 lignes) : gâteau plus petit, la carte ne touche plus « OK ». */
 html .overlay.bday .ln-note:has(.ln-text.size-m) .bday-gateau { width: 10vmin; height: 10vmin; margin-bottom: 1vmin; }
+
+/* Validé par Tanguy le 24/11 : SOS de la pause comme à l'accueil, fenêtre Redémarrer en boutons arrondis. */
+html .pause-screen .pause-sos {
+  min-width: 0; min-height: 10.5vmin; padding: 0 6vmin; border: .5vmin solid #fbcfd4; border-radius: 99vmin; background: #fff1f2; color: #be123c;
+  font-family: 'Bricolage Grotesque', 'Atkinson Hyperlegible', sans-serif; font-size: 5.6vmin; font-weight: 800; width: -webkit-fit-content; width: fit-content;
+}
+html .pause-screen .pause-sos .icon { width: 6vmin; height: 6vmin; margin-right: 2.5vmin; flex-shrink: 0; }
+html .pause-screen .pause-sos[hidden] { display: none; }
+html .redemarrer-btn { border-radius: 99vmin; }
+html .redemarrer-btn.non { background: #fff; color: #3730a3; box-shadow: inset 0 0 0 .5vmin #e8e6fd; }
+/* Redémarrage raté : ni boutons ni ligne vide, le message est seul au milieu de la carte. */
+html .redemarrer.rate .redemarrer-detail, html .redemarrer.rate .redemarrer-boutons { display: none; }

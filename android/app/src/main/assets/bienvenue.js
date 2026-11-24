@@ -230,8 +230,7 @@
     else sayGuide('wifi-choisir', 'Choisissez le wifi de votre box.');
     if (echec) {
       box.appendChild(el('p', 'welcome-notice', 'La tablette n’a pas trouvé internet.')); // calme, jamais en rouge
-      box.appendChild(el('p', 'welcome-sub', 'Choisissez le wifi de votre box. Elle continue aussi de chercher le réseau de sa carte SIM.'));
-      box.appendChild(el('p', 'welcome-sub', 'Si ça dure, Papote est prévenu et vous recontacte.'));
+      box.appendChild(el('p', 'welcome-sub welcome-suite', 'Choisissez le wifi de votre box. Sans box, laissez-la allumée : Papote est prévenu et vous recontacte.'));
     }
     if (connected) {
       box.appendChild(el('p', 'welcome-ok', 'Connectée à «\u00a0' + st.wifi + '\u00a0»'));
@@ -379,7 +378,8 @@
         setTimeout(finishWifi, 1500);
       } else if (tries > 20) {
         clearInterval(wifiTimer);
-        box.appendChild(el('p', 'welcome-error', 'La connexion n\'a pas marché. Vérifiez le mot de passe.'));
+        box.appendChild(el('p', 'welcome-error', 'La connexion n\'a pas marché.'));
+        box.appendChild(el('p', 'welcome-sub welcome-suite', 'Vérifiez le mot de passe.'));
         box.appendChild(button('Réessayer', 'primary', function () { askPassword(chosen); }));
         box.appendChild(button('Choisir un autre réseau', '', function () { current = ''; showWifi(); }));
       }
