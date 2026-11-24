@@ -4,6 +4,7 @@
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import { appeler, messageErreur } from './gestion-api.js';
+import { faitEnGras } from './dialogue.js';
 
 const $ = (id) => document.getElementById(id);
 function h(tag, attrs = {}, ...enfants) {
@@ -135,7 +136,7 @@ function charger(forcer = false) {
   rendre();
   appeler('gestionStatistiques', { jours: demande })
     .then((r) => { lus.set(demande, { ...r, lu: Date.now() }); })
-    .catch((e) => { $('stats-erreur').textContent = messageErreur(e); $('stats-erreur').hidden = false; })
+    .catch((e) => { faitEnGras($('stats-erreur'), messageErreur(e)); $('stats-erreur').hidden = false; })
     .finally(() => { if (enCours === demande) enCours = null; rendre(); });
 }
 

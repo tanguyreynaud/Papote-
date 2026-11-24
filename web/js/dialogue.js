@@ -272,3 +272,12 @@ export function menusDansLaPage(racine = document) {
     zone.append(boite);
   }
 }
+
+// Une erreur ou une alerte : la première phrase en gras, la suite en écriture normale (épuration du 24/11).
+export function faitEnGras(el, texte) {
+  const t = String(texte == null ? '' : texte);
+  const m = t.match(/^(.+?[.!?…])(\s+)(\S[\s\S]*)$/);
+  const fort = document.createElement('strong');
+  fort.textContent = m ? m[1] : t;
+  el.replaceChildren(fort, m ? ' ' + m[3] : '');
+}

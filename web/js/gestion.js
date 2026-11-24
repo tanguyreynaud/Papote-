@@ -6,7 +6,7 @@
 import './retour.js';
 import { silenceTolereMs } from './silence.js';
 import './declarations.js';
-import { demander, saisir, prevenir, menuPoints, menusDansLaPage, annoncer, boutonCharge, patienter, ligneModifiable } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints, menusDansLaPage, annoncer, boutonCharge, patienter, ligneModifiable, faitEnGras } from './dialogue.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
@@ -287,7 +287,7 @@ let periode = null; // { debut, fin } en millisecondes, fin exclue
 
 function erreur(e) {
   console.error(e);
-  $('erreur').textContent = messageErreur(e);
+  faitEnGras($('erreur'), messageErreur(e));
   $('erreur').hidden = false;
 }
 
@@ -1419,7 +1419,7 @@ function blocCouverture(c) {
   } }, 'Copier l\'adresse') : null;
   const vu = !!c.couvertureVueLe;
   const coche = h('input', { type: 'checkbox', checked: vu, 'aria-label': 'Couverture vérifiée sur la carte' });
-  const libelle = h('span', {}, vu ? `Vu le ${jour(c.couvertureVueLe)} : la couverture est bonne` : 'Vu : la couverture est bonne à cette adresse');
+  const libelle = h('span', {}, vu ? `Couverture 4G vérifiée le ${jour(c.couvertureVueLe)}` : 'La couverture est bonne');
   coche.addEventListener('change', async () => {
     const voulu = coche.checked;
     coche.disabled = true;
@@ -1433,19 +1433,22 @@ function blocCouverture(c) {
     } catch (e) {
       coche.checked = !voulu;
       coche.disabled = false;
-      libelle.textContent = vu ? `Vu le ${jour(c.couvertureVueLe)} : la couverture est bonne` : 'Vu : la couverture est bonne à cette adresse';
+      libelle.textContent = vu ? `Couverture 4G vérifiée le ${jour(c.couvertureVueLe)}` : 'La couverture est bonne';
       prevenir(messageErreur(e));
     }
   });
-  return h('div', { class: `alerte-couverture${vu ? ' vue' : ''}`, role: vu ? null : 'status' },
-    h('strong', {}, vu ? 'Couverture 4G vérifiée' : 'Couverture 4G à vérifier avant l\'envoi'),
-    h('p', {}, `Pourquoi : ${raisons.join(' ; ')}.`),
-    adresse ? h('p', {}, 'Adresse du proche : ', h('b', { class: 'selectionnable' }, adresse)) : h('p', {}, 'Adresse du proche inconnue.'),
+  // Épuration du 24/11 : une fois vérifiée, il ne reste qu'une ligne (la case, à décocher pour revoir le détail).
+  if (vu) return h('div', { class: 'alerte-couverture vue' }, h('label', { class: 'case' }, coche, ' ', libelle));
+  const pourquoi = raisons.join(', ');
+  return h('div', { class: 'alerte-couverture', role: 'status' },
+    h('strong', {}, 'Couverture 4G à vérifier avant l\'envoi'),
+    pourquoi ? h('p', {}, pourquoi.charAt(0).toUpperCase() + pourquoi.slice(1) + '.') : null,
+    adresse ? h('p', {}, h('b', { class: 'selectionnable' }, adresse)) : h('p', {}, 'Adresse du proche inconnue.'),
     h('div', { class: 'boutons-couverture' },
       h('a', { class: 'secondary small-btn', href: v.carte || 'https://monreseaumobile.arcep.fr/', target: '_blank', rel: 'noopener' }, 'Carte de l\'ARCEP'),
       copier,
       h('a', { class: 'secondary small-btn', href: 'https://www.cartoradio.fr/', target: '_blank', rel: 'noopener' }, 'Antennes')),
-    h('p', { class: 'small' }, 'Sur la carte : opérateur Bouygues Telecom, 4G, puis collez l\'adresse dans la recherche.'),
+    h('p', { class: 'small' }, 'Sur la carte : Bouygues Telecom, 4G, puis collez l\'adresse.'),
     h('label', { class: 'case' }, coche, ' ', libelle));
 }
 

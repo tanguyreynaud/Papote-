@@ -875,3 +875,8 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 /* Validation, listes de parcours et d'écrans : seul le titre est en gras, pas la description. */
 .admin-body [data-panneau] a.v-ligne:not(.retour):not(.stat) { font-weight: 400; }
 .admin-body [data-panneau] a.v-ligne strong { font-weight: 700; }
+
+/* ---------- Épuration du 24/11, PROPOSITION : une erreur = une ligne en gras (rouge), puis du texte normal en noir ---------- */
+/* La première phrase est mise en <strong> par faitEnGras() (dialogue.js). */
+.admin-body .error:has(> strong), .admin-body .bandeau-erreur:has(> strong) { font-weight: 400; color: var(--text); }
+.admin-body .error strong, .admin-body .bandeau-erreur strong { font-weight: 700; color: var(--danger); }

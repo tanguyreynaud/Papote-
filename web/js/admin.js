@@ -5,7 +5,7 @@
 import './retour.js';
 import './clavier.js';
 import { BLOCAGES_SIM, blocagesFaits, CASE_HORS_FORFAIT, horsForfaitBloque } from './sim.js';
-import { demander, saisir, prevenir, menuPoints, patienter, annoncer, boutonCharge, ligneModifiable } from './dialogue.js';
+import { demander, saisir, prevenir, menuPoints, patienter, annoncer, boutonCharge, ligneModifiable, faitEnGras } from './dialogue.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut,
@@ -82,7 +82,7 @@ $('btn-signin').addEventListener('click', async () => {
     await signInWithPopup(auth, new GoogleAuthProvider());
   } catch (err) {
     console.error(err);
-    $('signin-error').textContent = 'La connexion a échoué. Réessayez.';
+    faitEnGras($('signin-error'), 'La connexion a échoué. Réessayez.');
     $('signin-error').hidden = false;
   }
 });
@@ -107,7 +107,7 @@ onAuthStateChanged(auth, async (user) => {
   if (user && !(await estAdmin(user))) {
     $('dashboard').hidden = true;
     $('signin').hidden = false;
-    $('signin-error').textContent = `Le compte ${user.email || ''} n'a pas accès à l'administration. Connectez-vous avec le compte administrateur.`;
+    faitEnGras($('signin-error'), `Le compte ${user.email || ''} n'a pas accès à l'administration. Connectez-vous avec le compte administrateur.`);
     $('signin-error').hidden = false;
     await signOut(auth);
     return;
