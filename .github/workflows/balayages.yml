@@ -49,6 +49,9 @@ jobs:
           - '--appui vitrine'
           - '--gestes vitrine'
           - '--accessibilite vitrine'
+          # Revue mesurée (mesures.js) : hauteurs des boutons d'un groupe, blocs collés, pavés en gras, explications
+          # longues, boutons sur deux lignes, doublons, sur chaque écran du site en téléphone et en ordinateur.
+          - '--mesures vitrine'
           - '--courriels'
           - 'vitrine emails'
           # Site dans WebKit (moteur de Safari) en iPhone SE et iPhone 15 : simulé, pas un vrai iPhone.

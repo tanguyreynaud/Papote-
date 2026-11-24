@@ -1,0 +1,32 @@
+# Écarts de la revue mesurée (mesures.js) regardés un par un, capture à l'appui, et acceptés. Une ligne par écart :
+#   partie | mesure | taille (tel, pc ou *) | début de la signature | pourquoi
+# Tout autre écart fait échouer « node galerie.js --mesures ». Revue du 24/11/2026 (site vitrine et admin).
+
+vitrine | long | tel | div.hero-text > p.lead|Les photos des petits, les mots doux et | texte de présentation de la page d'accueil : 4 lignes sur téléphone, relu le 24/11
+vitrine | long | * | div.step > p|La tablette sonne, et l'appel démarre dè | texte de présentation de la page d'accueil : 4 lignes sur téléphone, relu le 24/11
+vitrine | long | tel | span > small|Environ N h d'appels vidéo en pleine qua | texte de présentation de la page d'accueil : 4 lignes sur téléphone, relu le 24/11
+vitrine | gras | * | #verdict|Désolé, notre carte SIM ne capte pas ass | carte du verdict 4G : le fait en gras, son explication en dessous en écriture normale ; formulation prudente voulue (carte de l'ARCEP)
+vitrine | gras | * | #verdict|✓ D'après la carte de l'ARCEP, la NG est | carte du verdict 4G : le fait en gras, son explication en dessous en écriture normale ; formulation prudente voulue (carte de l'ARCEP)
+vitrine | long | tel | #maintenant|Vous recevez un e-mail de confirmation d | explication utile avant un geste qui engage (payer, résilier, se désinscrire) : 4 à 5 lignes sur téléphone, relue le 24/11
+vitrine | long | tel | ol > li|Ouvrez l'appli Papote avec le bouton ci- | explication utile avant un geste qui engage (payer, résilier, se désinscrire) : 4 à 5 lignes sur téléphone, relue le 24/11
+vitrine | long | tel | ol > li|Branchez-la et touchez « Commencer ». El | explication utile avant un geste qui engage (payer, résilier, se désinscrire) : 4 à 5 lignes sur téléphone, relue le 24/11
+vitrine | gras | * | #recap-liste > dd|Marie-Christine Dupont-Lefebvre · mariec | valeur du récapitulatif de commande (nom, e-mail, adresse du point relais) : une donnée, pas une phrase
+vitrine | gras | * | #recap-liste > dd|Offerte, point relais Pressing des Terre | valeur du récapitulatif de commande (nom, e-mail, adresse du point relais) : une donnée, pas une phrase
+vitrine | long | tel | #identifier > p|Pas besoin de vous connecter. Indiquez l | explication utile avant un geste qui engage (payer, résilier, se désinscrire) : 4 à 5 lignes sur téléphone, relue le 24/11
+vitrine | long | tel | #erreur|Aucune commande ne correspond à cette ad | explication utile avant un geste qui engage (payer, résilier, se désinscrire) : 4 à 5 lignes sur téléphone, relue le 24/11
+vitrine | long | tel | div.carte > p|Il s'arrêtera le N décembre N. Jusqu | explication utile avant un geste qui engage (payer, résilier, se désinscrire) : 4 à 5 lignes sur téléphone, relue le 24/11
+vitrine | long | tel | div.carte > p|Ce bouton vous retire des e‑mails d'info | explication utile avant un geste qui engage (payer, résilier, se désinscrire) : 4 à 5 lignes sur téléphone, relue le 24/11
+vitrine | long | tel | #demander > p|Les e‑mails de service continuent d'arri | explication utile avant un geste qui engage (payer, résilier, se désinscrire) : 4 à 5 lignes sur téléphone, relue le 24/11
+admin | doublon | pc | Envoi ou main propre ? | préparation de l'envoi : le nom de l'étape en cours est rappelé dans la liste des étapes, voulu
+admin | doublon | pc | La tablette dans le carton | préparation de l'envoi : le nom de l'étape en cours est rappelé dans la liste des étapes, voulu
+admin | doublon | * | Mis en route par le client | même mention sur plusieurs commandes de la liste, pas un doublon de rédaction
+admin | doublon | * | Le Village N Jaunac | la même donnée dans le titre ou l'alerte et dans la fiche (adresse, libellé, montant) : voulu
+admin | doublon | * | N,N € à rembourser depuis Stripe | la même donnée dans le titre ou l'alerte et dans la fiche (adresse, libellé, montant) : voulu
+admin | gras | * | #f-installer > p.large.avertissement-qr|Sans wifi, l'installation pass | avertissement volontairement fort avant d'afficher le QR code (carte SIM sans code PIN)
+admin | long | tel | div.bloc-hors-forfait > p.small|Tant que cette case n'est pas cochée, | consigne de sécurité sous la case « Hors-forfait bloqué », 4 lignes sur téléphone
+admin | long | * | #courrier|Dernier relevé le N octobre N à N:N | compte rendu du dernier passage automatique (une liste de ce qui a été fait), pas une explication
+admin | doublon | * | Supports de tablette | la même donnée dans le titre ou l'alerte et dans la fiche (adresse, libellé, montant) : voulu
+admin | doublon | * | Activation d'une carte SIM Sosh (forfait N Go à N,N €/mois) | la même donnée dans le titre ou l'alerte et dans la fiche (adresse, libellé, montant) : voulu
+admin | doublon | * | Ajouter un commentaire | un bouton par bloc de l'écran de validation
+admin | long | tel | #automatique|Dernier passage le N octobre N à N: | compte rendu du dernier passage automatique (une liste de ce qui a été fait), pas une explication
+admin | gras | tel | div > strong|Activation d'une carte SIM Sosh (forfait | libellé d'un achat (une donnée saisie) : il passe sur 3 lignes dans la liste des dépenses sur téléphone
