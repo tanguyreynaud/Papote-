@@ -337,3 +337,19 @@ export function demanderQuitter() {
     { label: 'Quitter', value: true, cls: 'primary' },
   ], { icone: 'sortie' });
 }
+
+/**
+ * Rien ne surgit (cohérence, 24/11) : dans une liste que l'app redessine en entier à chaque nouveauté, seule la ligne
+ * vraiment nouvelle arrive en fondu. cles : une clé par enfant, dans l'ordre (null = jamais animée, par exemple mon
+ * propre message, déjà à l'écran en gris). Premier dessin, ou plus de 3 nouvelles lignes d'un coup (ouverture, changement
+ * de famille) : rien ne bouge, pour que la liste ne clignote jamais.
+ */
+const dejaVues = new WeakMap();
+export function fonduNouveaux(liste, cles) {
+  const avant = dejaVues.get(liste);
+  dejaVues.set(liste, new Set(cles.filter((c) => c != null)));
+  if (!avant) return;
+  const nouvelles = [...liste.children].filter((_, i) => cles[i] != null && !avant.has(cles[i]));
+  if (nouvelles.length > 3) return;
+  for (const e of nouvelles) e.classList.add('arrive');
+}

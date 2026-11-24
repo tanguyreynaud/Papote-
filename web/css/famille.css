@@ -2206,3 +2206,9 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 /* Affichage très agrandi (zoom 130 % : écran de 300 px) : « Vidéo » et « Raccrocher » côte à côte n'ont plus la place
    du dessin, « Raccrocher » garde son mot seul pour rester en entier dans l'écran. */
 @media (max-width: 340px) { .call.audio .call-hangup svg { display: none; } }
+
+/* Rien ne surgit (24/11) : la ligne vraiment nouvelle d'une liste (message reçu, rappel ajouté, photo, demande pour
+   rejoindre) arrive en fondu ; les autres lignes ne bougent pas (voir fonduNouveaux dans ui.js). */
+.arrive { animation: arrive .3s ease-out; }
+@keyframes arrive { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .arrive { animation: none; } }
