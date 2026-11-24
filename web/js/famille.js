@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, fonduNouveaux } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, fonduNouveaux, partir } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import { silenceTolereMs } from './silence.js';
 import {
@@ -179,11 +179,22 @@ for (const type of ['pointerup', 'pointercancel']) {
 }
 
 let splashNoteTimer = null;
+// Fondu d'entrée d'une page, d'un panneau de Réglages ou de la photo en grand : la classe repart à chaque ouverture.
+function entrer(el, oui = true) {
+  el.classList.remove('entre');
+  if (!oui) return;
+  el.offsetWidth; // repart de zéro si la même page se rouvre vite
+  el.classList.add('entre');
+}
+
 function show(view) {
   // L'accueil ou un écran de parcours (connexion, rejoindre…) : on redescend sur l'entrée de l'accueil,
   // sinon « retour » rouvrirait la page quittée (ex. le Profil après « Rejoindre une autre famille »).
   if (view === 'view-home' || view === 'view-sans-abo' || VUES_PARCOURS.includes(view)) redescendreSurAccueil();
+  // Rien ne surgit (24/11) : la page qui s'ouvre arrive en fondu très court (pas l'écran de démarrage, ni la même page).
+  const change = $(view).hidden && view !== 'loading';
   for (const id of VIEWS) $(id).hidden = id !== view;
+  entrer($(view), change);
   // Écran de démarrage revu (changement de famille…) : « On y est presque… » repart de zéro après 4 s.
   clearTimeout(splashNoteTimer);
   $('splash-note').textContent = '';
@@ -455,7 +466,12 @@ function majReglagesChoix(view = $('view-profile').hidden ? 'view-settings' : 'v
     b.setAttribute('aria-pressed', String(b.dataset.reglagesChoix === actif));
     if (b.dataset.reglagesChoix === 'tablette') b.hidden = !admin;
   });
-  document.querySelectorAll('[data-reglages-panneau]').forEach((p) => { p.hidden = p.dataset.reglagesPanneau !== panneauReglages(); });
+  document.querySelectorAll('[data-reglages-panneau]').forEach((p) => {
+    const montre = p.dataset.reglagesPanneau === panneauReglages();
+    // Le panneau qui remplace l'autre arrive en fondu (pas à l'ouverture de la page : elle a déjà le sien).
+    if (montre && p.hidden && !$('view-settings').hidden) entrer(p);
+    p.hidden = !montre;
+  });
 }
 function ouvrirReglages(choix = 'tablette') {
   if (choix === 'profil') { ouvrirOnglet('profile'); return; }
@@ -675,12 +691,15 @@ function amFamilyAdmin() {
   return !!f && (f.createdBy === session.uid || (f.admins || []).includes(session.uid));
 }
 
-async function confirmDelete(post, what) {
+async function confirmDelete(post, what, ligne = null) {
   if (!await askConfirm(`Supprimer ${what} de la tablette ?`)) return;
+  const depart = partir(ligne);
   try {
+    await depart.fini;
     await removePost(post);
     toast(post.type === 'video' ? 'Vidéo supprimée' : 'Photo supprimée');
   } catch (err) {
+    depart.revenir();
     console.error(err);
     notice("La suppression a échoué. Vérifiez la connexion.");
   }
@@ -788,7 +807,7 @@ function galleryItem(post, what, onOpen) {
     del.className = 'icon-btn del';
     del.setAttribute('aria-label', `Supprimer ${what}`);
     del.append(icon('trash'));
-    del.addEventListener('click', () => confirmDelete(post, what));
+    del.addEventListener('click', () => confirmDelete(post, what, del.closest('li')));
     meta.append(del);
   }
   // La carte : qui et quand en haut, l'image, puis la légende dessous s'il y en a une.
@@ -833,6 +852,7 @@ let viewerPost = null;
 function openViewer(post) {
   viewerPost = post;
   $('viewer-delete').hidden = !canDelete(post);
+  entrer($('viewer'), $('viewer').hidden);
   $('viewer').hidden = false;
   couleurBarres();
   $('viewer-caption').textContent = post.text || '';
@@ -969,7 +989,7 @@ function renderMessages(posts) {
       del.className = 'bubble-del';
       del.setAttribute('aria-label', 'Supprimer ce message');
       del.append(icon('trash'));
-      del.addEventListener('click', () => confirmDelete(post, 'ce message'));
+      del.addEventListener('click', () => confirmDelete(post, 'ce message', del.closest('li')));
       foot.prepend(del);
     }
     li.append(foot);

@@ -2212,3 +2212,10 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 .arrive { animation: arrive .3s ease-out; }
 @keyframes arrive { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { .arrive { animation: none; } }
+
+/* Animations de confort (24/11, « on fait tout ») : la page, le panneau de Réglages ou la photo en grand qui s'ouvre
+   arrive en fondu très court ; la ligne supprimée s'efface et se referme. Opacité seulement à l'entrée : aucune
+   taille ni position ne change, rien ne bouge sous le doigt. */
+.entre { animation: fade-in .16s ease-out; }
+.part { overflow: hidden; opacity: 0; margin-top: 0 !important; margin-bottom: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; border-width: 0 !important; min-height: 0 !important; pointer-events: none; transition: opacity .2s ease-out, height .2s ease-out, margin .2s ease-out, padding .2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .entre { animation: none; } .part { transition: none; } }

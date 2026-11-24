@@ -100,9 +100,12 @@ test('Fondu des listes : seule la ligne nouvelle s\'anime, chez l\'autre proche 
     await paul.page.locator('#messages li:not(.en-route)', { hasText: texte }).waitFor();
     await julie.page.waitForTimeout(600);
   }
-  const chezJulie = await arrivees(julie);
-  assert.strictEqual(chezJulie.length, 3, `chez Julie, chaque message de Paul arrive une fois en fondu : ${JSON.stringify(chezJulie)}`);
-  ['Premier', 'Deuxième', 'Troisième'].forEach((m, i) => assert.ok(chezJulie[i].includes(m), `le ${i + 1}e fondu est le ${i + 1}e message : ${chezJulie[i]}`));
+  // Une liste redessinée pendant le fondu le reprend là où il en était : plusieurs débuts possibles pour la même
+  // ligne, mais jamais pour une ligne plus ancienne que la dernière arrivée (ce serait un clignotement).
+  const rangs = (liste, mots) => liste.map((t) => mots.findIndex((m) => t.includes(m)));
+  const chezJulie = rangs(await arrivees(julie), ['Premier', 'Deuxième', 'Troisième']);
+  assert.deepStrictEqual([...new Set(chezJulie)], [0, 1, 2], `chez Julie, chaque message de Paul arrive en fondu, dans l'ordre : ${chezJulie}`);
+  assert.deepStrictEqual(chezJulie, chezJulie.slice().sort(), `aucune ligne déjà là ne se ranime : ${chezJulie}`);
   assert.deepStrictEqual(await arrivees(paul), [], 'chez Paul, ses propres messages ne se ranimant pas');
 
   // Rappels : Julie en ajoute deux ; chez Paul, chacun arrive une fois, le premier ne se ranime pas au second.
@@ -118,7 +121,7 @@ test('Fondu des listes : seule la ligne nouvelle s\'anime, chez l\'autre proche 
     await julie.page.locator('#sheet-reminder').waitFor({ state: 'hidden' });
     await paul.page.waitForTimeout(600);
   }
-  const chezPaul = await arrivees(paul);
-  assert.strictEqual(chezPaul.length, 2, `chez Paul, chaque rappel arrive une fois : ${JSON.stringify(chezPaul)}`);
-  assert.ok(chezPaul[0].includes('Arroser') && chezPaul[1].includes('courrier'), JSON.stringify(chezPaul));
+  const chezPaul = rangs(await arrivees(paul), ['Arroser', 'courrier']);
+  assert.deepStrictEqual([...new Set(chezPaul)], [0, 1], `chez Paul, chaque rappel arrive en fondu, dans l'ordre : ${chezPaul}`);
+  assert.deepStrictEqual(chezPaul, chezPaul.slice().sort(), `le premier rappel ne se ranime pas au second : ${chezPaul}`);
 });
