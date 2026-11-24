@@ -52,6 +52,14 @@ input:focus { outline: 3px solid var(--accent); outline-offset: 1px; border-colo
 .carte { display: grid; gap: .6rem; padding: 1rem 1.25rem; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
 a { color: var(--accent); text-decoration: none; }
 main a:not([class]) { font-weight: 700; }
+/* Animations douces (Tanguy, 24/11) : tout ce qui se touche s'enfonce un tout petit peu sous le doigt, et ce qui s'affiche après coup arrive en fondu.
+   Rien si le téléphone demande moins d'animations. */
+@keyframes apparait { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  :is(button, .btn, [role="button"]):not(:disabled):active { scale: .97; }
+  :is(summary, .point, .opt, .option):active { scale: .985; }
+  #confirmer, #fait, .erreur { animation: apparait .25s ease-out; }
+}
 </style>
 </head>
 <body>

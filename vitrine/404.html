@@ -38,6 +38,12 @@ h1 { margin: 0 0 .75rem; font: 800 clamp(1.8rem, 6vw, 2.4rem)/1.15 "Bricolage Gr
 p { margin: 0 0 1.75rem; color: var(--muted); }
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 3.25rem; padding: .75rem 1.6rem; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; font-size: 1.05rem; text-decoration: none; }
 .btn:hover { background: var(--accent-strong); }
+/* Animations douces (Tanguy, 24/11) : tout ce qui se touche s'enfonce un tout petit peu sous le doigt.
+   Rien si le téléphone demande moins d'animations. */
+@media (prefers-reduced-motion: no-preference) {
+  :is(button, .btn, [role="button"]):not(:disabled):active { scale: .97; }
+  :is(summary, .point, .opt, .option):active { scale: .985; }
+}
 </style>
 </head>
 <body>

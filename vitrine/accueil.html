@@ -142,9 +142,9 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
   .menu-bouton { display: inline-grid; place-items: center; order: 2; width: 2.75rem; height: 2.75rem; margin-left: .6rem; border: 2px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); font-size: 1.35rem; line-height: 1; cursor: pointer; }
   .top .brand { order: 0; }
   .top nav { order: 1; margin-left: auto; }
-  .top.ouvert nav { position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; margin: 0; padding: .4rem 16px 1rem; background: var(--bg); border-bottom: 1px solid var(--line); box-shadow: 0 12px 24px rgba(0, 0, 0, .06); }
-  .top.ouvert nav a:not(.btn) { display: flex; align-items: center; min-height: 3rem; font-size: 1.05rem; color: var(--text); border-bottom: 1px solid var(--line); }
-  .top.ouvert nav .btn { margin-top: .8rem; min-height: 3rem; justify-content: center; }
+  .top:is(.ouvert, .ferme) nav { position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; margin: 0; padding: .4rem 16px 1rem; background: var(--bg); border-bottom: 1px solid var(--line); box-shadow: 0 12px 24px rgba(0, 0, 0, .06); }
+  .top:is(.ouvert, .ferme) nav a:not(.btn) { display: flex; align-items: center; min-height: 3rem; font-size: 1.05rem; color: var(--text); border-bottom: 1px solid var(--line); }
+  .top:is(.ouvert, .ferme) nav .btn { margin-top: .8rem; min-height: 3rem; justify-content: center; }
 }
 /* En-tête */
 .hero { padding-block: clamp(2rem, 5vw, 4rem) clamp(2.5rem, 6vw, 4.5rem); }
@@ -273,23 +273,30 @@ footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-t
   .pied-groupe:last-child a:last-child { border-bottom: 0; } /* un seul trait au-dessus du « © » */
   footer { padding-bottom: 6rem; } /* la bulle du chat ne cache pas le bas */
 }
-/* Animations douces (Tanguy, 24/11) : rien ne surgit d'un coup. Fondus courts (0,2 à 0,3 s), jamais sur ce qui est
-   déjà là à l'ouverture de la page, et rien du tout si le téléphone demande moins d'animations. */
+/* Animations douces (Tanguy, 24/11) : rien ne surgit ni ne disparaît d'un coup. Mouvements courts (0,2 à 0,3 s) qui
+   ralentissent en arrivant, jamais sur ce qui est déjà là à l'ouverture de la page, et rien du tout si le téléphone
+   demande moins d'animations. */
+:root { --doux: cubic-bezier(.2, .7, .2, 1); }
 @keyframes apparait { from { opacity: 0; } to { opacity: 1; } }
 @keyframes deroule { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 -2rem 0); } }
+@keyframes couche { from { rotate: -90deg; } to { rotate: 0deg; } }
 /* Écran crème sous la capture tant qu'elle charge (jamais un écran noir), puis l'image arrive en fondu. */
 .tel picture, .tab picture { display: block; background: var(--bg); }
 .tel picture { border-radius: 1.25rem; }
 .tab picture { border-radius: 6px; }
+/* Menu qui se replie (classe « ferme », posée 0,2 s par le script du menu) : plus rien ne s'y touche. */
+.top.ferme nav { pointer-events: none; }
 @media (prefers-reduced-motion: no-preference) {
-  /* Bouton : s'enfonce un tout petit peu sous le doigt, pour sentir qu'il a été touché. */
-  .btn { transition: background-color .15s, color .15s, border-color .15s, transform .1s; }
-  .btn:active { transform: scale(.97); }
-  .menu-bouton:active, .faq-plus:active { transform: scale(.95); }
-  /* Menu ☰ : il se déroule vers le bas comme un store (opaque tout du long : le texte dessous ne transparaît jamais). */
-  .top.ouvert nav { animation: deroule .22s ease-out; }
-  /* Questions : la réponse arrive en fondu ; les questions suivantes aussi. */
+  /* Bouton : s'enfonce en douceur sous le doigt (règle commune plus bas). */
+  .btn { transition: background-color .15s, color .15s, border-color .15s, scale .1s; }
+  .top nav a { transition: color .15s; }
+  /* Menu ☰ : il se déroule vers le bas comme un store (opaque tout du long : le texte dessous ne transparaît jamais),
+     et se replie de même (script du menu). Refermé, « Commander » revient dans la barre en fondu. */
+  .top.ouvert nav { animation: deroule .24s var(--doux); }
+  .top.deja:not(.ouvert, .ferme) nav .btn { animation: apparait .2s ease-out; }
+  /* Questions : la réponse arrive en fondu, le « + » se couche pour devenir « – » ; les questions suivantes en fondu. */
   .faq details[open] > p { animation: apparait .3s ease-out; }
+  .faq details[open] summary::after { animation: couche .25s var(--doux); }
   .faq.ouverte .suite > details { animation: apparait .3s ease-out; }
   /* Messages qui s'affichent après coup. */
   .prevenir:not([hidden]), .attente-msg, .mel-suggestion { animation: apparait .25s ease-out; }
@@ -301,12 +308,18 @@ footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-t
 @supports (interpolate-size: allow-keywords) {
   @media (prefers-reduced-motion: no-preference) {
     .faq { interpolate-size: allow-keywords; }
-    .faq details::details-content { height: 0; overflow: clip; transition: height .25s ease-out, content-visibility .25s allow-discrete; }
+    .faq details::details-content { height: 0; overflow: clip; transition: height .28s var(--doux), content-visibility .28s allow-discrete; }
     .faq details[open]::details-content { height: auto; }
   }
 }
 /* Bulle du chat (chat-support.js) : sur téléphone, un simple rond pour ne pas recouvrir le texte. */
 @media (max-width: 760px) { body .ps-bouton span { display: none; } body .ps-bouton { padding: .95rem; } }
+/* Animations douces (Tanguy, 24/11) : tout ce qui se touche s'enfonce un tout petit peu sous le doigt.
+   Rien si le téléphone demande moins d'animations. */
+@media (prefers-reduced-motion: no-preference) {
+  :is(button, .btn, [role="button"]):not(:disabled):active { scale: .97; }
+  :is(summary, .point, .opt, .option):active { scale: .985; }
+}
 </style>
 </head>
 <body>
@@ -728,7 +741,22 @@ footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-t
     var haut = document.querySelector('.top');
     var bouton = document.getElementById('menu-bouton');
     var ouvert = function () { return haut.classList.contains('ouvert'); };
-    function ouvrir(oui) { haut.classList.toggle('ouvert', oui); bouton.setAttribute('aria-expanded', oui ? 'true' : 'false'); bouton.textContent = oui ? '✕' : '☰'; }
+    var menu = document.getElementById('menu');
+    var repli = null; // animation du menu qui se replie, s'il y en a une en cours
+    function ouvrir(oui) {
+      var etait = ouvert();
+      if (repli) { repli.cancel(); repli = null; haut.classList.remove('ferme'); }
+      haut.classList.toggle('ouvert', oui);
+      bouton.setAttribute('aria-expanded', oui ? 'true' : 'false');
+      bouton.textContent = oui ? '✕' : '☰';
+      if (oui) { haut.classList.add('deja'); return; }
+      // Fermeture en douceur (24/11) : le menu est déjà « fermé » pour tout le reste (classe « ouvert » retirée), il
+      // reste seulement dessiné 0,2 s, le temps de se replier. Sans animation possible ou voulue : il part tout de suite.
+      if (!etait || !menu.animate || !matchMedia('(prefers-reduced-motion: no-preference)').matches || getComputedStyle(bouton).display === 'none') return;
+      haut.classList.add('ferme');
+      var a = repli = menu.animate([{ clipPath: 'inset(0 0 -2rem 0)' }, { clipPath: 'inset(0 0 100% 0)' }], { duration: 180, easing: 'ease-in' });
+      a.onfinish = a.oncancel = function () { if (repli === a) repli = null; haut.classList.remove('ferme'); };
+    }
     // Ouvert : une étape dans l'historique, que le bouton Retour retire en fermant le menu.
     function fermer(parRetour) {
       if (!ouvert()) return;

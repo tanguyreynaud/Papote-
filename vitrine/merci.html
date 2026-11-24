@@ -68,6 +68,14 @@ a { text-decoration: none; }
 main a:not([class]), footer a:not([class]), .rassure a { font-weight: 700; }
 /* Bulle du chat (chat-support.js) : sur téléphone, un simple rond pour ne pas recouvrir le code de commande. */
 @media (max-width: 760px) { body .ps-bouton span { display: none; } body .ps-bouton { padding: .95rem; } }
+/* Animations douces (Tanguy, 24/11) : tout ce qui se touche s'enfonce un tout petit peu sous le doigt, et ce qui s'affiche après coup arrive en fondu.
+   Rien si le téléphone demande moins d'animations. */
+@keyframes apparait { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  :is(button, .btn, [role="button"]):not(:disabled):active { scale: .97; }
+  :is(summary, .point, .opt, .option):active { scale: .985; }
+  .recap, .code, #imprimer { animation: apparait .25s ease-out; }
+}
 </style>
 </head>
 <body>

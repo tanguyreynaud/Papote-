@@ -102,12 +102,15 @@
     '@keyframes ps-point{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-.35rem);opacity:1}}' +
     '@media (prefers-reduced-motion:reduce){.ps-attente span{animation:none;opacity:.7}}' +
     // Animations douces (Tanguy, 24/11) : la fenêtre du chat s'ouvre en montant un peu (ordinateur) ou glisse du bas
-    // de l'écran, sans transparence (téléphone, plein écran) ; chaque nouveau message arrive en fondu. Rien si le
-    // téléphone demande moins d'animations.
+    // de l'écran, sans transparence (téléphone, plein écran), et se referme de même (classe ps-ferme, posée 0,2 s par
+    // ouvrir) ; la bulle revient en fondu ; chaque nouveau message arrive en fondu ; tout bouton s'enfonce un peu sous
+    // le doigt. Rien si le téléphone demande moins d'animations.
+    '.ps-panneau.ps-ferme{display:flex;pointer-events:none}' +
     '@keyframes ps-monte{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}' +
     '@keyframes ps-glisse{from{transform:translateY(100%)}to{transform:none}}' +
-    '@media (prefers-reduced-motion:no-preference){.ps-panneau.ps-ouvert{animation:ps-monte .2s ease-out}.ps-msg{animation:ps-monte .25s ease-out}.ps-bouton{transition:background-color .15s,transform .1s}.ps-bouton:active{transform:scale(.95)}}' +
-    '@media (prefers-reduced-motion:no-preference) and (max-width:600px){.ps-panneau.ps-ouvert{animation:ps-glisse .25s ease-out}}' +
+    '@keyframes ps-fondu{from{opacity:0}to{opacity:1}}' +
+    '@media (prefers-reduced-motion:no-preference){.ps-panneau.ps-ouvert{animation:ps-monte .22s cubic-bezier(.2,.7,.2,1)}.ps-msg{animation:ps-monte .25s ease-out}.ps-bouton{animation:ps-fondu .2s ease-out;transition:background-color .15s,scale .1s}.ps-bouton:active,.ps-panneau button:not(:disabled):active,.ps-panneau .ps-aller:active{scale:.96}}' +
+    '@media (prefers-reduced-motion:no-preference) and (max-width:600px){.ps-panneau.ps-ouvert{animation:ps-glisse .28s cubic-bezier(.2,.7,.2,1)}}' +
     '.ps-idees{display:flex;flex-wrap:wrap;gap:.4rem}' +
     '.ps-idees button{border:1px solid var(--ps-indigo);background:var(--ps-doux);color:var(--ps-indigo-fonce);border-radius:999px;padding:.45rem .8rem;font:inherit;font-size:.95rem;cursor:pointer}' +
     '.ps-saisie{display:flex;gap:.5rem;padding:.75rem;background:var(--ps-carte);border-top:1px solid var(--ps-ligne)}' +
@@ -416,11 +419,23 @@
       fil.scrollTop = fil.scrollHeight;
     }
 
+    var depart = null; // animation de la fenêtre qui se referme, s'il y en a une en cours
     function ouvrir(oui) {
+      var etait = panneau.classList.contains('ps-ouvert');
+      if (depart) { var d = depart; depart = null; d.cancel(); panneau.classList.remove('ps-ferme'); }
       panneau.classList.toggle('ps-ouvert', oui);
-      bouton.style.display = oui ? 'none' : '';
       bouton.setAttribute('aria-expanded', String(oui));
-      if (oui) { afficher(); zone.focus(); } else { bouton.focus(); }
+      if (oui) { bouton.style.display = 'none'; afficher(); zone.focus(); return; }
+      var finir = function () { bouton.style.display = ''; bouton.focus(); };
+      // Fermeture en douceur (24/11) : la fenêtre est déjà « fermée » pour tout le reste (ps-ouvert retiré) ; elle
+      // reste seulement dessinée 0,2 s, le temps de repartir comme elle est venue. Puis la bulle revient.
+      if (!etait || !panneau.animate || !window.matchMedia || !matchMedia('(prefers-reduced-motion: no-preference)').matches) { finir(); return; }
+      var plein = matchMedia('(max-width:600px)').matches;
+      panneau.classList.add('ps-ferme');
+      var a = depart = panneau.animate(plein
+        ? [{ transform: 'none' }, { transform: 'translateY(100%)' }]
+        : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(8px)' }], { duration: plein ? 200 : 160, easing: 'ease-in' });
+      a.onfinish = function () { if (depart !== a) return; depart = null; panneau.classList.remove('ps-ferme'); finir(); };
     }
 
     function poser(question) {

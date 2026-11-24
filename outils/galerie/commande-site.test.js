@@ -457,7 +457,8 @@ test('Menu ☰ : un toucher ailleurs sur la page le ferme', async () => {
   await page.touchscreen.tap(180, 700); // bas de l'écran, sous le menu ouvert
   assert.strictEqual(await menuOuvert(page), false);
   assert.strictEqual((await page.locator('#menu-bouton').innerText()).trim(), '☰');
-  assert.ok(!(await page.locator('#menu a[href="#tarifs"]').isVisible()));
+  // Le menu se replie en 0,2 s (animations douces, 24/11) : ses liens ne sont plus là juste après.
+  await page.locator('#menu a[href="#tarifs"]').waitFor({ state: 'hidden', timeout: 1000 });
   assert.deepStrictEqual(erreurs, []);
   await ctx.close();
 });
