@@ -2199,3 +2199,7 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 .dialog.dialog-menu-croix { padding-bottom: 14px; }
 .shot-meta .shot-info { flex: 1 1 0; min-width: 0; }
 .shot-quand { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Lot 2 (validé par Tanguy le 24/11) : « Raccrocher » avec son téléphone, comme « Refuser » et « Répondre ». */
+.call-hangup { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.call-hangup svg { width: 26px; height: 26px; flex: none; }

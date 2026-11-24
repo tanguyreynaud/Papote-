@@ -4475,7 +4475,7 @@ $('btn-reprendre').addEventListener('click', async () => {
   const formule = 'sim'; // offre unique (29/10/2026)
   const rembourse = finInfo?.restitution?.statut === 'facturee' && finInfo.restitution.preleve
     ? ` Les ${euros(finInfo.restitution.preleve)} prélevés pour le matériel vous sont remboursés.` : '';
-  if (!await askConfirm(`Garder la tablette et reprendre l'abonnement (25 € par mois, tout compris) ? Pas de nouvelle mise en service à payer, et plus besoin de nous la renvoyer.${rembourse}`, 'Reprendre')) return;
+  if (!await askConfirm(`Garder la tablette ? L'abonnement reprend (25 € par mois, tout compris). Pas de nouvelle mise en service à payer, et plus besoin de nous la renvoyer.${rembourse}`, 'Reprendre')) return;
   await withAboError(() => payer(session.fid, formule, abo.tablette || 'incluse'));
 });
 

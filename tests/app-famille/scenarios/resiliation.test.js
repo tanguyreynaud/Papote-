@@ -282,7 +282,7 @@ test('Résilié, tablette pas rendue : « Garder la tablette et reprendre », re
 
   // Retour d'Android sur la question : rien ne part.
   await julie.page.click('#btn-reprendre');
-  assert.match(await g.texteFenetre(julie), /Garder la tablette et reprendre l'abonnement/);
+  assert.match(await g.texteFenetre(julie), /Garder la tablette \?[\s\S]*L'abonnement reprend \(25 € par mois, tout compris\)/);
   await julie.page.goBack();
   await julie.page.locator('.dialog-back').waitFor({ state: 'detached' });
   await g.attendreVue(julie, 'view-profile');

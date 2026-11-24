@@ -292,7 +292,7 @@ export function choisirPhoto(titre) {
 }
 
 export function notice(message) {
-  return dialog(message, [{ label: 'OK', value: true, cls: 'primary' }]);
+  return dialog(message, [{ label: 'OK', value: true, cls: 'primary' }], { icone: /échoué|n'a pas pu|n'ont pas pu|ne répond pas|n'est pas parti|refusé/.test(message) ? 'outil' : 'help' });
 }
 
 /**
