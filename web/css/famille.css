@@ -2203,3 +2203,6 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 /* Lot 2 (validé par Tanguy le 24/11) : « Raccrocher » avec son téléphone, comme « Refuser » et « Répondre ». */
 .call-hangup { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
 .call-hangup svg { width: 26px; height: 26px; flex: none; }
+/* Affichage très agrandi (zoom 130 % : écran de 300 px) : « Vidéo » et « Raccrocher » côte à côte n'ont plus la place
+   du dessin, « Raccrocher » garde son mot seul pour rester en entier dans l'écran. */
+@media (max-width: 340px) { .call.audio .call-hangup svg { display: none; } }
