@@ -35,7 +35,7 @@ import {
   inviteByEmail, cancelInvitation, invitationExpiree, acceptMember, changeFamilyCode,
 } from './compte.js';
 import {
-  startNotifs, stopNotifs, markNotifsRead, setNotifMembers, setNotifReminders,
+  startNotifs, stopNotifs, markNotifsRead, setNotifMembers, setNotifReminders, pageVue,
 } from './notifs.js';
 
 const $ = (id) => document.getElementById(id);
@@ -329,6 +329,7 @@ function openPage(name, push = true, onglet = false) {
   stopPage?.();
   stopPage = PAGES[name]();
   page = name;
+  pageVue(name); // ce qui y mène n'est plus compté sur la cloche
   // D'un onglet à l'autre, on remplace l'entrée d'historique : « retour » ramène à l'accueil.
   if (push && onglet && dejaOnglet) remplacer({ page: name, onglet });
   else if (push) empiler({ page: name, onglet });
