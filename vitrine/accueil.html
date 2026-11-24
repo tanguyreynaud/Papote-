@@ -240,6 +240,7 @@ section { padding-block: clamp(3rem, 7vw, 5rem); }
 .attente .attente-accord { display: flex; gap: .6rem; align-items: flex-start; font-weight: 400; color: var(--muted); cursor: pointer; }
 .attente-accord input { width: 1.5rem; height: 1.5rem; margin-top: .2rem; flex: none; accent-color: var(--accent); }
 .attente-msg { margin: 0; }
+.attente-msg.sous-champ { margin-top: -.5rem; font-size: 1rem; color: var(--erreur, #b4233c); }
 .attente [hidden] { display: none; }
 /* Champ piège anti-robot (audit sécurité 11/11, L1) : hors de l'écran, jamais vu ni atteint au clavier par une personne. */
 .attente-piege { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
@@ -708,14 +709,20 @@ footer { padding-block: 2.5rem; color: var(--muted); font-size: .95rem; border-t
     var msg = document.getElementById('attente-msg');
     // Le fait en gras, la suite en écriture normale (revue mesurée du 24/11) : plus de pavé tout en gras.
     function faitEnGras(el, texte) { var m = /^(.*?[.!?:])\s+(\S[\s\S]*)$/.exec(texte); el.textContent = ''; if (!texte) return; var s = document.createElement('strong'); s.textContent = m ? m[1] : texte; el.appendChild(s); if (m) el.appendChild(document.createTextNode(' ' + m[2])); }
-    function dire(texte) { faitEnGras(msg, texte); msg.hidden = false; }
+    // Une erreur s'affiche sous le champ qu'elle concerne (épuration du 24/11) ; le résultat de l'envoi, sous le bouton.
+    function dire(texte, champ) {
+      var ou = champ ? champ.closest('label') : form.querySelector('button[type="submit"]');
+      ou.after(msg);
+      msg.classList.toggle('sous-champ', !!champ);
+      faitEnGras(msg, texte); msg.hidden = false;
+    }
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var email = form.email.value.trim();
       var tel = form.telephone.value.replace(/[\s.()-]/g, '').replace(/^(\+|00)33/, '0');
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { dire('Indiquez votre e-mail.'); form.email.focus(); return; }
-      if (tel && !/^0[67]\d{8}$/.test(tel)) { dire('Un numéro de portable français, en 06 ou 07.'); form.telephone.focus(); return; }
-      if (!form.accord.checked) { dire('Cochez la case pour être prévenu.'); form.accord.focus(); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { dire('Indiquez votre e-mail.', form.email); form.email.focus(); return; }
+      if (tel && !/^0[67]\d{8}$/.test(tel)) { dire('Un numéro de portable français, en 06 ou 07.', form.telephone); form.telephone.focus(); return; }
+      if (!form.accord.checked) { dire('Cochez la case pour être prévenu.', form.accord); form.accord.focus(); return; }
       var bouton = form.querySelector('button[type="submit"]');
       bouton.disabled = true;
       msg.hidden = true;

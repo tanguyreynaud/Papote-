@@ -143,6 +143,8 @@ p { margin: 0; }
 .reprise { padding: .6rem .9rem; border-radius: 12px; background: var(--accent-soft); color: var(--accent-strong); }
 .erreur { color: #b91c1c; }
 .verdict { margin: 0; padding: .8rem 1rem; border-radius: 14px; font-weight: 700; }
+/* Le verdict de la 4G est affiché : la phrase « Nous vérifions… » ne le répète plus (épuration du 24/11). */
+#etape-proche:has(#verdict:not([hidden])) #adresse-aide { display: none; }
 .verdict small { display: block; font-weight: 400; margin-top: .2rem; }
 .verdict.oui { background: var(--accent-soft); color: var(--accent-strong); }
 .verdict.non { background: #fdecec; color: #8a1c1c; }
