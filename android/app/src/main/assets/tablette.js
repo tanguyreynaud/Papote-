@@ -1044,6 +1044,8 @@
   function majBoutonPhotos() {
     var e = overlayPhotos;
     $('overlay-close').textContent = e && e.nbVues < e.liste.length ? 'Suivante' : 'OK';
+    // « Suivante » est plus large que « OK » : bouton resserré, il dépassait de la carte à côté d'une photo en largeur (24/11).
+    $('overlay-close').classList.toggle('suivante', $('overlay-close').textContent === 'Suivante');
   }
 
   // « Suivante » : la photo d'après ; renvoie false quand toutes ont été vues (OK ferme alors).
@@ -1701,6 +1703,8 @@
       if (alreadyShown(today[i])) continue;
       var b = today[i];
       $('bday-text').textContent = "Aujourd'hui, c'est l'anniversaire " + deName(b.name) + ' !';
+      // Prénom long (« Marie-Françoise ») : le texte passait sur 3 lignes et la carte recouvrait « OK » (revue mesurée, 24/11).
+      $('bday-text').className = 'ln-text ' + ($('bday-text').textContent.length > 48 ? 'size-m' : 'size-l');
       $('bday-age').textContent = ageLabel(b);
       show($('bday-age'), !!ageLabel(b));
       $('bday-alert').setAttribute('data-id', b.id);
@@ -2136,6 +2140,9 @@
     // Plus de 4 personnes : une grande flèche de chaque côté des visages (demande de Tanguy, 26/10).
     // Au bout de la liste, la flèche est cachée mais garde sa place : les visages ne bougent pas.
     var strip = el2('div', 'call-strip');
+    // Un prénom long (« Marie-Françoise ») tient sur deux lignes : visages un peu plus petits, sinon le titre
+    // et « Accueil » touchaient les bords de l'écran (revue mesurée, 24/11).
+    for (var n = 0; n < list.length; n++) if (String(list[n].name || '').length > 10) { strip.className += ' noms-longs'; break; }
     if (pages > 1) strip.appendChild(pageArrow('left', pickerPage === 0, -1));
     strip.appendChild(grid);
     if (pages > 1) strip.appendChild(pageArrow('right', pickerPage >= pages - 1, 1));

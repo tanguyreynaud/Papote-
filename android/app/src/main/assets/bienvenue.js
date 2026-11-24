@@ -234,7 +234,7 @@
       box.appendChild(el('p', 'welcome-sub', 'Si ça dure, Papote est prévenu et vous recontacte.'));
     }
     if (connected) {
-      box.appendChild(el('p', 'welcome-ok', 'Connectée à « ' + st.wifi + ' »'));
+      box.appendChild(el('p', 'welcome-ok', 'Connectée à «\u00a0' + st.wifi + '\u00a0»'));
       box.appendChild(button('Continuer', 'primary', finishWifi));
       box.appendChild(button('Choisir un autre réseau', '', openNetworks));
     } else {
@@ -351,7 +351,7 @@
     clearInterval(wifiTimer); // mot de passe en cours : la carte SIM ne coupe pas la saisie
     chosen = net;
     if (!net.secure) { connect(''); return; }
-    var box = screen('« ' + net.ssid + ' »', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
+    var box = screen('«\u00a0' + net.ssid + '\u00a0»', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
     sayGuide('wifi-mdp', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
@@ -366,7 +366,7 @@
   }
 
   function connect(password) {
-    var box = screen('Connexion…', 'La tablette se connecte à « ' + chosen.ssid + ' ».');
+    var box = screen('Connexion…', 'La tablette se connecte à «\u00a0' + chosen.ssid + '\u00a0».');
     android().wifiConnect(chosen.ssid, password);
     var tries = 0;
     clearInterval(wifiTimer);
@@ -375,7 +375,7 @@
       tries++;
       if (st.wifi === chosen.ssid && st.internet) {
         clearInterval(wifiTimer);
-        box.appendChild(el('p', 'welcome-ok', 'C\'est bon, la tablette a internet !'));
+        box.appendChild(el('p', 'welcome-ok', 'C\'est bon, la tablette a internet\u00a0!'));
         setTimeout(finishWifi, 1500);
       } else if (tries > 20) {
         clearInterval(wifiTimer);
