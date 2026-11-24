@@ -145,7 +145,7 @@ p { margin: 0; }
 .verdict { margin: 0; padding: .8rem 1rem; border-radius: 14px; font-weight: 700; }
 /* Le verdict de la 4G est affiché : la phrase « Nous vérifions… » ne le répète plus (épuration du 24/11). */
 #etape-proche:has(#verdict:not([hidden])) #adresse-aide { display: none; }
-.verdict small { display: block; font-weight: 400; margin-top: .2rem; }
+.verdict small { display: block; font-weight: 400; margin-top: .2rem; color: var(--text); }
 .verdict.oui { background: var(--accent-soft); color: var(--accent-strong); }
 .verdict.non { background: #fdecec; color: #8a1c1c; }
 .verdict[hidden], #suggestions[hidden] { display: none; }
@@ -207,11 +207,11 @@ body .ps-bouton { bottom: 6.5rem; }
     <h2><span class="n">1</span>Où vit votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
     <label class="champ"><span id="adresse-titre">Sa ville</span>
       <input id="adresse" autocomplete="off" maxlength="200" placeholder="Ville de votre proche" aria-describedby="adresse-aide">
-      <small id="adresse-aide">Nous vérifions que la 4G passe bien chez votre proche.</small>
+      <small id="adresse-aide">Pour vérifier que la tablette y captera bien.</small>
     </label>
     <button class="lien" type="button" id="autre-ville" hidden>Changer de ville</button>
     <div class="points" id="suggestions" hidden></div>
-    <p class="muted" id="verification" hidden>Vérification de la 4G…</p>
+    <p class="muted" id="verification" hidden>Vérification…</p>
     <p class="verdict" id="verdict" hidden></p>
   </section>
 
@@ -312,8 +312,8 @@ body .ps-bouton { bottom: 6.5rem; }
     titreAdresse.textContent = v ? 'Sa rue, à ' + v.nom : 'Sa ville';
     champAdresse.placeholder = v ? 'Rue (et numéro si vous le connaissez)' : 'Ville de votre proche';
     autreVille.hidden = !v;
-    aideAdresse.textContent = v ? 'À ' + v.nom + ', la 4G ne passe pas partout : nous la vérifions à sa rue.'
-      : 'Nous vérifions que la 4G passe bien chez votre proche.';
+    aideAdresse.textContent = v ? 'À ' + v.nom + ', cela dépend des rues.'
+      : 'Pour vérifier que la tablette y captera bien.';
     champAdresse.value = '';
     suggestions.hidden = true;
   }
@@ -337,7 +337,7 @@ body .ps-bouton { bottom: 6.5rem; }
         .catch(function () {
           if (ici !== tapeLe) return;
           suggestions.hidden = true;
-          dire(false, 'Les adresses ne s\'affichent pas pour l\'instant.', 'Réessayez dans un instant, ou posez votre question dans le chat, en bas de l\'écran.');
+          dire(false, 'Les adresses ne s\'affichent pas.', 'Réessayez dans un instant.');
         });
     }, 250);
   });
@@ -408,7 +408,7 @@ body .ps-bouton { bottom: 6.5rem; }
       })
       .catch(function () {
         verification.hidden = true;
-        dire(false, 'La vérification de la 4G ne répond pas pour l\'instant.', 'Réessayez dans un instant, ou posez votre question dans le chat, en bas de l\'écran.', function () { choisirAdresse(derniereAdresse); });
+        dire(false, 'La vérification ne répond pas.', null, function () { choisirAdresse(derniereAdresse); });
       });
   }
   // reessayer : une fonction à relancer, montrée comme un bouton « Réessayer » (Tanguy, 2/11 : un bouton, jamais « rechargez la page »).
@@ -429,11 +429,11 @@ body .ps-bouton { bottom: 6.5rem; }
   function montrerVerdict() {
     if (proche.eligible) {
       // Carte ARCEP : « bonne » = dehors, et seulement parfois dans la maison (couverture.js) : on le dit sans promettre.
-      dire(true, proche.insee ? 'D\'après la carte de l\'ARCEP, la 4G est bonne dans toute la commune.' : proche.niveau === 'TBC' ? 'D\'après la carte de l\'ARCEP, la 4G est très bonne chez votre proche.' : 'D\'après la carte de l\'ARCEP, la 4G est bonne chez votre proche.',
-        'La tablette s\'y connectera toute seule, sans box ni réglage. Si elle capte mal dans la maison, vous avez 30 jours pour la renvoyer.');
+      // Une seule phrase (Tanguy, 24/11 : « ARCEP et tout ça perd plus qu'autre chose »). La prudence reste dans la 2e ligne.
+      dire(true, 'La 4G passe bien chez votre proche.', 'Si la tablette capte mal dans la maison, vous avez 30 jours pour la renvoyer.');
     } else {
-      dire(false, 'Désolé, notre carte SIM ne capte pas assez bien à cette adresse pour l\'instant.',
-        'Dans la maison, la tablette risquerait de rester sans internet : nous préférons ne pas vous la livrer. Une question ? Le chat, en bas de l\'écran, vous répond tout de suite.');
+      dire(false, 'Désolé, la 4G ne passe pas assez bien à cette adresse.',
+        'La tablette risquerait de rester sans internet : nous préférons ne pas vous la livrer.');
     }
   }
   var q = new URLSearchParams(location.search);
