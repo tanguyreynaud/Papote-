@@ -404,21 +404,23 @@ document.querySelectorAll('.bell-btn[data-tab]').forEach((b) => b.addEventListen
 // En haut de Réglages, sous les erreurs de connexion, dans les messages d'échec (envoi, appel). Connecté : la page Aide
 // (questions fréquentes) avec l'assistant ouvert par-dessus ; pas encore connecté : l'assistant seul, sur la page où
 // l'on est. Sans assistant (pas de réseau, script pas chargé) : les questions fréquentes, ou l'adresse e-mail.
-function ouvrirAssistant() {
+// La demande part toute seule (Tanguy, 24/11 : « ça envoie direct c'est mieux ») : la page d'où l'on vient dit déjà
+// de quoi il s'agit. Sans demande (page Aide), le chat s'ouvre simplement. Un ancien chat ignore la demande.
+function ouvrirAssistant(demande) {
   const connecte = !!session?.family && $('call').hidden && !VUES_PARCOURS.some((v) => !$(v).hidden) && $('loading').hidden;
   const dejaSurAide = !$('view-support').hidden;
   if (connecte) ouvrirOnglet('support');
   else document.body.classList.add('chat-libre');
-  try { if (window.papoteChat) { window.papoteChat.ouvrir(); return; } } catch (e) { /* plus bas */ }
+  try { if (window.papoteChat) { window.papoteChat.ouvrir(typeof demande === 'string' ? demande : undefined); return; } } catch (e) { /* plus bas */ }
   // Assistant pas chargé (hors ligne, ou chat-support.js pas encore là) : connecté, la page Aide qui s'ouvre est le
   // retour visible ; déjà sur l'Aide (« Poser une question à l'assistant »), rien ne bougeait : on le dit
   // (banc du 21/11 : 4 proches ont abandonné sur ce bouton muet).
   if (!connecte || dejaSurAide) notice("L'assistant ne répond pas pour l'instant. Écrivez-nous à contact@mapapote.fr, nous vous répondons vite.");
 }
 async function noticeAvecAide(message) {
-  if (await noticeAide(message) === 'aide') ouvrirAssistant();
+  if (await noticeAide(message) === 'aide') ouvrirAssistant(`J'ai ce message : « ${message} » Que faire ?`);
 }
-document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', ouvrirAssistant));
+document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', () => ouvrirAssistant(b.dataset.aide || undefined)));
 
 // Un message d'alerte ou d'erreur ne s'affiche plus en un pavé tout en gras (contrôle mesuré du 24/11 : jusqu'à 5
 // lignes) : la première phrase, le fait, reste en gras ; la suite passe en texte normal. Fait une fois pour tous les
