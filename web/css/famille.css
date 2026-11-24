@@ -855,7 +855,6 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 /* « Mon profil » partage le haut de Réglages (titre, « Besoin d'aide ? », La tablette / La famille / Mon profil) :
    mêmes marges que Réglages ouvert depuis la barre, rien ne saute d'un choix à l'autre (Tanguy, 23/11). */
 #view-profile .page-head { padding-left: 16px; padding-top: calc(8px + env(safe-area-inset-top)); }
-.notifs-status { margin: 4px 16px 8px; }
 .contact-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; border-radius: 14px; font-weight: 600; text-decoration: none; }
 
 /* ---------- Photos de profil ---------- */
@@ -1752,8 +1751,8 @@ a { text-decoration: none; }
 .sos-ordre-btn:active:not(:disabled) { background: var(--accent); color: var(--accent-text); }
 .sos-ordre-btn:disabled { border-color: var(--line); color: var(--muted); opacity: .5; }
 .sos-ordre-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 2px; }
-.sos-ordre-annonce { min-height: 4.2em; margin: 10px 0 0; font-size: 15px; font-weight: 600; color: var(--accent); overflow-wrap: anywhere; }
-.sos-ordre-defaut { width: 100%; justify-content: center; min-height: 50px; margin-top: 4px; touch-action: manipulation; }
+.sos-ordre-annonce { min-height: 2.8em; line-height: 1.4; margin: 10px 0 0; font-size: 15px; font-weight: 600; color: var(--accent); overflow-wrap: anywhere; }
+.sos-ordre-defaut { display: block; min-height: 40px; margin: 0 0 4px; font-size: 15px; touch-action: manipulation; }
 
 /* Téléphone tenu à l'horizontale (banc d'utilisateurs du 19/11) : la fenêtre « Réglons la tablette » était si basse
    que les heures de la nuit tombaient sous les boutons et que les options étaient coupées. Quand la hauteur manque,
@@ -2067,7 +2066,6 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 .intro { max-height: 100%; }
 
 /* ---------- Corrections après les tests du 21/11 ---------- */
-.pas-enregistre { margin: 10px 0 0; font-size: 15px; font-weight: 700; color: var(--accent); }
 /* Écran court : les boutons d'une fenêtre restent visibles en bas pendant que son texte défile. */
 @media (max-height: 700px) {
   .dialog-back { padding: 12px; }
@@ -2212,3 +2210,68 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 .arrive { animation: arrive .3s ease-out; }
 @keyframes arrive { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { .arrive { animation: none; } }
+
+/* Animations de confort (24/11, « on fait tout ») : la page, le panneau de Réglages ou la photo en grand qui s'ouvre
+   arrive en fondu très court ; la ligne supprimée s'efface et se referme. Opacité seulement à l'entrée : aucune
+   taille ni position ne change, rien ne bouge sous le doigt. */
+.entre { animation: fade-in .16s ease-out; }
+.part { overflow: hidden; opacity: 0; margin-top: 0 !important; margin-bottom: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; border-width: 0 !important; min-height: 0 !important; pointer-events: none; transition: opacity .2s ease-out, height .2s ease-out, margin .2s ease-out, padding .2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .entre { animation: none; } .part { transition: none; } }
+
+/* Photo ou vidéo en grand aux couleurs de Papote (Tanguy, 24/11 : « un peu vieillot, pas Papote ») : la même image
+   floutée et assombrie en fond (bleu nuit dessous, si elle manque) au lieu du noir, la vidéo sur toute la largeur,
+   « Enregistrer » en bleu Papote, et pour la vidéo nos boutons à la place de ceux du téléphone : un gros bouton
+   lecture au milieu, une barre fine dessous (avancer, durée, plein écran). */
+.viewer { background: #16142b; overflow: hidden; }
+.viewer > * { position: relative; }
+.viewer > .viewer-close { position: absolute; }
+.viewer { isolation: isolate; }
+.viewer > .viewer-fond { position: absolute; z-index: -2; inset: -60px; width: calc(100% + 120px); height: calc(100% + 120px); max-width: none; max-height: none; object-fit: cover; filter: blur(32px) brightness(.4) saturate(1.1); pointer-events: none; }
+/* Voile bleu nuit par-dessus le flou : le texte et les boutons restent lisibles même sur une photo toute blanche. */
+.viewer::before { content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: linear-gradient(to bottom, rgba(22, 20, 43, .45), rgba(22, 20, 43, .2) 30%, rgba(22, 20, 43, .2) 55%, rgba(22, 20, 43, .82)); }
+.viewer-close { background: rgba(22, 20, 43, .72); border: 0; }
+.viewer-caption { color: #f1f0fa; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+.viewer-btn { background: rgba(22, 20, 43, .72); font-weight: 600; }
+#viewer-save { background: #4f46e5; color: #fff; }
+#viewer-delete { color: #fecdd3; }
+.viewer-boite { display: flex; flex-direction: column; align-items: stretch; min-height: 0; width: 100%; flex: 0 1 auto; }
+.viewer-boite:has(#viewer-video[hidden]) { display: none; }
+.viewer-image { position: relative; display: flex; justify-content: center; min-height: 0; width: 100%; }
+.viewer .viewer-image video { width: 100%; max-height: 72vh; }
+.viewer-barre { display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box; padding: 10px 16px 0; }
+.viewer-rond { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 50%; color: #fff; background: rgba(22, 20, 43, .72); }
+.viewer-rond svg { width: 22px; height: 22px; }
+.viewer-duree { flex: none; color: #f1f0fa; font-size: 14px; white-space: nowrap; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+.viewer-temps { flex: 1 1 auto; min-width: 0; height: 28px; margin: 0; padding: 0; background: none; border: 0; box-shadow: none; -webkit-appearance: none; appearance: none; --part: 0%; }
+.viewer-temps::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: linear-gradient(to right, #a5b4fc var(--part), rgba(255, 255, 255, .3) var(--part)); }
+.viewer-temps::-moz-range-track { height: 5px; border-radius: 3px; background: linear-gradient(to right, #a5b4fc var(--part), rgba(255, 255, 255, .3) var(--part)); }
+.viewer-temps::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -5.5px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.viewer-temps::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.viewer .video-play { box-shadow: 0 6px 22px rgba(0, 0, 0, .45); background: #4f46e5; color: #fff; }
+
+/* Plein écran (Tanguy, 24/11 : « c'est mieux en full ») : la photo ou la vidéo occupe tout l'écran, bord à bord,
+   entière (jamais rognée). Le texte, la barre de lecture et les boutons sont posés en bas, sur un dégradé sombre
+   qui les garde lisibles sur n'importe quelle image. */
+.viewer { justify-content: flex-end; }
+.viewer > #viewer-img, .viewer .viewer-image { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; }
+.viewer > #viewer-img { object-fit: contain; }
+.viewer .viewer-image video { width: 100%; height: 100%; max-height: none; object-fit: contain; }
+.viewer-boite { display: contents; }
+.viewer-boite:has(#viewer-video[hidden]) { display: none; }
+.viewer::after { content: ""; position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; height: 42%; pointer-events: none; background: linear-gradient(to bottom, rgba(22, 20, 43, 0), rgba(22, 20, 43, .7) 55%, rgba(22, 20, 43, .92)); }
+.viewer > .viewer-close, .viewer .viewer-barre, .viewer > .viewer-caption, .viewer > .viewer-actions { z-index: 2; }
+.viewer .viewer-barre { position: relative; padding-top: 0; }
+.viewer-caption { text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+/* « Supprimer » garde sa forme de bouton sur le dégradé sombre : fond clair translucide et liseré. */
+.viewer .viewer-btn, .viewer .viewer-rond { background: rgba(255, 255, 255, .16); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .34); }
+.viewer #viewer-save { background: #4f46e5; box-shadow: none; }
+/* Aide : de l'air entre « Poser une question à l'assistant » et la première question. */
+.support-pad > .faq { margin-top: 16px; }
+/* Dépanner : les trois boutons ont la même hauteur, en petit (Tanguy, 24/11). Le bleu reste sur « Obtenir l'état ». */
+.remote-buttons .primary, .remote-buttons .secondary { min-height: 46px; padding: 8px 14px; font-size: 15px; justify-content: center; border: 1px solid var(--line); }
+.remote-buttons .primary { border-color: transparent; }
+/* Accueil : « Inviter » à la même hauteur que la cloche juste à côté (contrôle mesuré du 24/11 : 38 px contre 40). */
+.invite-btn { min-height: 40px; box-sizing: border-box; }
+/* Alertes et erreurs : le fait en gras, la suite en texte normal (voir faitPuisSuite). */
+.alerte-suite { font-weight: 400; color: var(--text); }
+.activity .alerte-suite { display: block; margin-top: 2px; color: var(--muted); }

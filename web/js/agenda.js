@@ -3,7 +3,7 @@
 import {
   db, doc, getDoc, collection, onSnapshot, serverTimestamp, writeBatch, bumpRev, deleteField,
 } from './firebase.js';
-import { askConfirm, notice, chooseAction, fonduNouveaux } from './ui.js';
+import { askConfirm, notice, chooseAction, fonduNouveaux, partir } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const JOURS_COURTS = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
@@ -183,7 +183,7 @@ function renderReminders() {
     bPause.addEventListener('click', () => pause(r).catch((err) => { console.error(err); notice('La modification a échoué. Vérifiez la connexion.'); }));
     body.append(bPause);
     li.append(deleteButton('Supprimer ce rappel', async () => {
-      if (await askConfirm(`Supprimer le rappel « ${r.title} » ?`)) await remove('reminders', r.id);
+      if (await askConfirm(`Supprimer le rappel « ${r.title} » ?`)) { const depart = partir(li); await depart.fini; await remove('reminders', r.id).catch((e) => { depart.revenir(); throw e; }); }
     }));
     ul.append(li);
   }
@@ -215,7 +215,7 @@ function renderBirthdays() {
     body.append(s);
     body.append(editButton(`Modifier l'anniversaire de ${b.name}`, () => openEdit('birthdays', b)));
     li.append(deleteButton("Supprimer l'anniversaire", async () => {
-      if (await askConfirm(`Supprimer l'anniversaire de ${b.name} ?`)) await remove('birthdays', b.id);
+      if (await askConfirm(`Supprimer l'anniversaire de ${b.name} ?`)) { const depart = partir(li); await depart.fini; await remove('birthdays', b.id).catch((e) => { depart.revenir(); throw e; }); }
     }));
     ul.append(li);
   }

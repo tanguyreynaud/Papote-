@@ -345,11 +345,43 @@ export function demanderQuitter() {
  * de famille) : rien ne bouge, pour que la liste ne clignote jamais.
  */
 const dejaVues = new WeakMap();
+const enArrivee = new WeakMap(); // liste → Map(clé → heure de début du fondu)
+const DUREE_ARRIVEE = 300;
 export function fonduNouveaux(liste, cles) {
   const avant = dejaVues.get(liste);
   dejaVues.set(liste, new Set(cles.filter((c) => c != null)));
   if (!avant) return;
-  const nouvelles = [...liste.children].filter((_, i) => cles[i] != null && !avant.has(cles[i]));
-  if (nouvelles.length > 3) return;
-  for (const e of nouvelles) e.classList.add('arrive');
+  const debuts = enArrivee.get(liste) || new Map();
+  enArrivee.set(liste, debuts);
+  const maintenant = performance.now();
+  for (const [c, t] of debuts) if (maintenant - t >= DUREE_ARRIVEE) debuts.delete(c);
+  const enfants = [...liste.children];
+  const nouvelles = enfants.map((e, i) => [e, cles[i]]).filter(([, c]) => c != null && !avant.has(c));
+  // Liste pas à l'écran (autre page ouverte) : rien à animer, sinon le fondu partirait plus tard, à l'ouverture de la page.
+  if (nouvelles.length <= 3 && liste.offsetParent !== null) for (const [, c] of nouvelles) debuts.set(c, maintenant);
+  // La liste est parfois redessinée 2 ou 3 fois de suite (heure du serveur, « Vu ») : la ligne en train d'arriver
+  // reprend son fondu là où il en était, au lieu d'être coupée net.
+  enfants.forEach((e, i) => {
+    const t = debuts.get(cles[i]);
+    if (t == null) return;
+    e.classList.add('arrive');
+    if (maintenant > t) e.style.animationDelay = `-${Math.round(maintenant - t)}ms`;
+  });
+}
+
+/**
+ * Rien ne disparaît d'un coup (24/11) : la ligne qu'on vient de supprimer s'efface et se referme en 0,2 s avant que la
+ * liste soit redessinée. revenir() la remet si la suppression échoue. Sans animation si le téléphone les a coupées.
+ */
+export function partir(ligne) {
+  if (!ligne || !ligne.isConnected || matchMedia('(prefers-reduced-motion: reduce)').matches) return { fini: Promise.resolve(), revenir() {} };
+  const avant = ligne.getAttribute('style');
+  ligne.style.height = `${ligne.offsetHeight}px`;
+  ligne.offsetHeight; // la hauteur de départ est prise en compte avant de la réduire
+  ligne.classList.add('part');
+  ligne.style.height = '0px';
+  return {
+    fini: new Promise((r) => setTimeout(r, 220)),
+    revenir() { ligne.classList.remove('part'); if (avant === null) ligne.removeAttribute('style'); else ligne.setAttribute('style', avant); },
+  };
 }

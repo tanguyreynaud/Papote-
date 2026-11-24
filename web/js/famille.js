@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, fonduNouveaux } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, fonduNouveaux, partir } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import { silenceTolereMs } from './silence.js';
 import {
@@ -179,11 +179,22 @@ for (const type of ['pointerup', 'pointercancel']) {
 }
 
 let splashNoteTimer = null;
+// Fondu d'entrée d'une page, d'un panneau de Réglages ou de la photo en grand : la classe repart à chaque ouverture.
+function entrer(el, oui = true) {
+  el.classList.remove('entre');
+  if (!oui) return;
+  el.offsetWidth; // repart de zéro si la même page se rouvre vite
+  el.classList.add('entre');
+}
+
 function show(view) {
   // L'accueil ou un écran de parcours (connexion, rejoindre…) : on redescend sur l'entrée de l'accueil,
   // sinon « retour » rouvrirait la page quittée (ex. le Profil après « Rejoindre une autre famille »).
   if (view === 'view-home' || view === 'view-sans-abo' || VUES_PARCOURS.includes(view)) redescendreSurAccueil();
+  // Rien ne surgit (24/11) : la page qui s'ouvre arrive en fondu très court (pas l'écran de démarrage, ni la même page).
+  const change = $(view).hidden && view !== 'loading';
   for (const id of VIEWS) $(id).hidden = id !== view;
+  entrer($(view), change);
   // Écran de démarrage revu (changement de famille…) : « On y est presque… » repart de zéro après 4 s.
   clearTimeout(splashNoteTimer);
   $('splash-note').textContent = '';
@@ -394,21 +405,50 @@ document.querySelectorAll('.bell-btn[data-tab]').forEach((b) => b.addEventListen
 // En haut de Réglages, sous les erreurs de connexion, dans les messages d'échec (envoi, appel). Connecté : la page Aide
 // (questions fréquentes) avec l'assistant ouvert par-dessus ; pas encore connecté : l'assistant seul, sur la page où
 // l'on est. Sans assistant (pas de réseau, script pas chargé) : les questions fréquentes, ou l'adresse e-mail.
-function ouvrirAssistant() {
+// La demande part toute seule (Tanguy, 24/11 : « ça envoie direct c'est mieux ») : la page d'où l'on vient dit déjà
+// de quoi il s'agit. Sans demande (page Aide), le chat s'ouvre simplement. Un ancien chat ignore la demande.
+function ouvrirAssistant(demande) {
   const connecte = !!session?.family && $('call').hidden && !VUES_PARCOURS.some((v) => !$(v).hidden) && $('loading').hidden;
   const dejaSurAide = !$('view-support').hidden;
   if (connecte) ouvrirOnglet('support');
   else document.body.classList.add('chat-libre');
-  try { if (window.papoteChat) { window.papoteChat.ouvrir(); return; } } catch (e) { /* plus bas */ }
+  try { if (window.papoteChat) { window.papoteChat.ouvrir(typeof demande === 'string' ? demande : undefined); return; } } catch (e) { /* plus bas */ }
   // Assistant pas chargé (hors ligne, ou chat-support.js pas encore là) : connecté, la page Aide qui s'ouvre est le
   // retour visible ; déjà sur l'Aide (« Poser une question à l'assistant »), rien ne bougeait : on le dit
   // (banc du 21/11 : 4 proches ont abandonné sur ce bouton muet).
   if (!connecte || dejaSurAide) notice("L'assistant ne répond pas pour l'instant. Écrivez-nous à contact@mapapote.fr, nous vous répondons vite.");
 }
 async function noticeAvecAide(message) {
-  if (await noticeAide(message) === 'aide') ouvrirAssistant();
+  if (await noticeAide(message) === 'aide') ouvrirAssistant(`J'ai ce message : « ${message} » Que faire ?`);
 }
-document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', ouvrirAssistant));
+document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', () => ouvrirAssistant(b.dataset.aide || undefined)));
+
+// Un message d'alerte ou d'erreur ne s'affiche plus en un pavé tout en gras (contrôle mesuré du 24/11 : jusqu'à 5
+// lignes) : la première phrase, le fait, reste en gras ; la suite passe en texte normal. Fait une fois pour tous les
+// messages, quel que soit l'endroit qui les écrit ; le texte lu (textContent) ne change pas.
+const ALERTES = '.error, .activity.warn, .seen, .abo-banner > p';
+function faitPuisSuite(el) {
+  if (!el || el.children.length) return;
+  const m = /^(.+?[.!?])(\s+\S[\s\S]*)$/.exec(el.textContent);
+  el.dataset.suite = el.textContent;
+  if (!m) return;
+  const suite = document.createElement('span');
+  suite.className = 'alerte-suite';
+  suite.textContent = m[2];
+  el.replaceChildren(m[1], suite);
+  el.dataset.suite = el.textContent;
+}
+new MutationObserver((ms) => {
+  for (const m of ms) {
+    const el = (m.target.nodeType === 1 ? m.target : m.target.parentElement)?.closest?.(ALERTES);
+    if (el && !el.querySelector(':scope > :not(.alerte-suite)')) {
+      if (el.children.length && el.dataset.suite === el.textContent) continue;
+      if (el.children.length) el.textContent = el.textContent; // réécrit par-dessus notre découpe : on repart du texte
+      faitPuisSuite(el);
+    }
+  }
+}).observe(document.body, { subtree: true, childList: true, characterData: true });
+document.querySelectorAll(ALERTES).forEach(faitPuisSuite);
 
 // Notifications n'en est plus un : page à part avec une flèche retour, sans barre du bas (Tanguy, 23/11).
 const VUES_ONGLETS = ['profile'];
@@ -456,7 +496,12 @@ function majReglagesChoix(view = $('view-profile').hidden ? 'view-settings' : 'v
     b.setAttribute('aria-pressed', String(b.dataset.reglagesChoix === actif));
     if (b.dataset.reglagesChoix === 'tablette') b.hidden = !admin;
   });
-  document.querySelectorAll('[data-reglages-panneau]').forEach((p) => { p.hidden = p.dataset.reglagesPanneau !== panneauReglages(); });
+  document.querySelectorAll('[data-reglages-panneau]').forEach((p) => {
+    const montre = p.dataset.reglagesPanneau === panneauReglages();
+    // Le panneau qui remplace l'autre arrive en fondu (pas à l'ouverture de la page : elle a déjà le sien).
+    if (montre && p.hidden && !$('view-settings').hidden) entrer(p);
+    p.hidden = !montre;
+  });
 }
 function ouvrirReglages(choix = 'tablette') {
   if (choix === 'profil') { ouvrirOnglet('profile'); return; }
@@ -676,12 +721,15 @@ function amFamilyAdmin() {
   return !!f && (f.createdBy === session.uid || (f.admins || []).includes(session.uid));
 }
 
-async function confirmDelete(post, what) {
+async function confirmDelete(post, what, ligne = null) {
   if (!await askConfirm(`Supprimer ${what} de la tablette ?`)) return;
+  const depart = partir(ligne);
   try {
+    await depart.fini;
     await removePost(post);
     toast(post.type === 'video' ? 'Vidéo supprimée' : 'Photo supprimée');
   } catch (err) {
+    depart.revenir();
     console.error(err);
     notice("La suppression a échoué. Vérifiez la connexion.");
   }
@@ -789,7 +837,7 @@ function galleryItem(post, what, onOpen) {
     del.className = 'icon-btn del';
     del.setAttribute('aria-label', `Supprimer ${what}`);
     del.append(icon('trash'));
-    del.addEventListener('click', () => confirmDelete(post, what));
+    del.addEventListener('click', () => confirmDelete(post, what, del.closest('li')));
     meta.append(del);
   }
   // La carte : qui et quand en haut, l'image, puis la légende dessous s'il y en a une.
@@ -834,6 +882,11 @@ let viewerPost = null;
 function openViewer(post) {
   viewerPost = post;
   $('viewer-delete').hidden = !canDelete(post);
+  entrer($('viewer'), $('viewer').hidden);
+  // Fond flou : la vignette de la photo ou de la vidéo (déjà chargée), jamais une adresse autre qu'une image.
+  const vignette = post.thumb || post.image || '';
+  $('viewer-fond').hidden = !vignette;
+  if (vignette) $('viewer-fond').src = vignette; else $('viewer-fond').removeAttribute('src');
   $('viewer').hidden = false;
   couleurBarres();
   $('viewer-caption').textContent = post.text || '';
@@ -879,6 +932,34 @@ async function openVideo(post) {
 }
 
 $('viewer-close').addEventListener('click', () => history.back());
+
+// Vidéo en grand : nos boutons plutôt que ceux du téléphone (Tanguy, 24/11), comme pour l'aperçu avant envoi.
+// Toucher la vidéo la lance ou la met en pause ; la barre avance avec la vidéo et se déplace au doigt.
+{
+  const v = $('viewer-video');
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const duree = () => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0);
+  const basculer = () => { if (v.paused) { if (v.ended) v.currentTime = 0; v.play().catch(() => {}); } else v.pause(); };
+  const maj = () => {
+    const arret = v.paused;
+    $('viewer-play').hidden = !arret || v.hidden;
+    const d = duree();
+    const part = d ? Math.min(1, v.currentTime / d) : 0;
+    $('viewer-temps').value = String(Math.round(part * 1000));
+    $('viewer-temps').style.setProperty('--part', `${part * 100}%`);
+    $('viewer-duree').textContent = d ? `${mmss(v.currentTime)} / ${mmss(d)}` : mmss(v.currentTime || 0);
+  };
+  for (const ev of ['play', 'pause', 'ended', 'emptied', 'timeupdate', 'loadedmetadata', 'durationchange', 'seeked']) v.addEventListener(ev, maj);
+  v.addEventListener('click', basculer);
+  $('viewer-play').addEventListener('click', basculer);
+  $('viewer-temps').addEventListener('input', () => { const d = duree(); if (d) v.currentTime = (Number($('viewer-temps').value) / 1000) * d; });
+  $('viewer-plein').addEventListener('click', () => {
+    // iPhone : seul le plein écran propre à la vidéo existe (webkitEnterFullscreen).
+    const ouvrir = v.requestFullscreen ? v.requestFullscreen({ navigationUI: 'hide' }) : Promise.resolve(v.webkitEnterFullscreen?.());
+    Promise.resolve(ouvrir).catch((err) => console.warn('Plein écran refusé', err));
+  });
+  maj();
+}
 
 $('viewer-delete').addEventListener('click', async () => {
   const post = viewerPost;
@@ -970,7 +1051,7 @@ function renderMessages(posts) {
       del.className = 'bubble-del';
       del.setAttribute('aria-label', 'Supprimer ce message');
       del.append(icon('trash'));
-      del.addEventListener('click', () => confirmDelete(post, 'ce message'));
+      del.addEventListener('click', () => confirmDelete(post, 'ce message', del.closest('li')));
       foot.prepend(del);
     }
     li.append(foot);
@@ -1217,7 +1298,7 @@ function showIntroTablette() {
         <h2>Les options</h2>
         <div class="toggle-list">
           <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton « Écouter »</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, 5 secondes pour annuler, puis un SMS à toute la famille et la tablette appelle les proches un par un. Ce n\'est pas un service d\'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un appui sur « SOS famille » prévient toute la famille par SMS, puis la tablette appelle les proches un par un. Ce n\'est pas un service d\'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="intro-radio"></label>
           <label class="station" id="intro-station-wrap" hidden>Station <select id="intro-station"></select></label>
         </div>
@@ -3919,7 +4000,7 @@ function couleurBarres() {
   const force = document.documentElement.dataset.theme;
   const noir = !document.getElementById('viewer').hidden;
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
-    m.content = noir ? '#000000' : COULEUR_BARRE[force || (m.media.includes('dark') ? 'dark' : 'light')];
+    m.content = noir ? '#16142b' : COULEUR_BARRE[force || (m.media.includes('dark') ? 'dark' : 'light')];
   });
 }
 
@@ -4664,7 +4745,9 @@ document.querySelectorAll('[data-cmd]').forEach((btn) => btn.addEventListener('c
   // Hors ligne, on le dit avant (tests IA du 21/11 : « une minute » faisait croire que la tablette redémarrait tout de suite).
   const question = tabletteEnLigne()
     ? 'Redémarrer la tablette ? Elle sera indisponible une minute.'
-    : "La tablette est hors ligne : elle ne redémarrera qu'une fois reconnectée. Vérifiez d'abord, sur place, qu'elle est branchée. Envoyer quand même la demande ?";
+    : "Redémarrer la tablette ? Elle est hors ligne et ne redémarrera qu'une fois reconnectée. Vérifiez d'abord, sur place, qu'elle est branchée.";
+  // Une ancienne réponse (« Demande envoyée… ») ne reste pas affichée derrière la nouvelle question.
+  if (btn.dataset.cmd === 'restart') showRemote('');
   if (btn.dataset.cmd === 'restart' && !await askConfirm(question, tabletteEnLigne() ? 'Redémarrer' : 'Envoyer la demande')) return;
   // Attendue : le bouton tourne et ne se touche plus tant que l'ordre part (sinon un double clic envoyait 2 ordres).
   await sendCommand(btn.dataset.cmd);
@@ -4954,7 +5037,7 @@ function renderWifi() {
   $('wifi-current').textContent = enLigne
     ? (wifiCourant() || 'Réseau actuel pas encore connu')
     // Même diagnostic que le bandeau de l'accueil (banc du 19/11 : les deux messages se contredisaient).
-    : 'Tablette hors ligne : le Wi-Fi se change ici quand elle est connectée. Si la box ou son code a changé, réglez-le directement sur la tablette, dans ses réglages.';
+    : 'Tablette hors ligne : le Wi-Fi se règle sur la tablette.';
 }
 
 
@@ -4986,8 +5069,10 @@ function renderRemote() {
   if (tablet) {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
     // Hors ligne : dit que les actions attendront son retour (banc du 19/11 : on croyait qu'elles agissaient tout de suite).
+    // Hors ligne, une seule explication : celle qui dit ce qui va se passer (Tanguy, 24/11 : deux textes à la suite).
+    $('remote-intro').hidden = !tabletteEnLigne();
     $('remote-tablet').textContent = !tabletteEnLigne()
-      ? `Tablette hors ligne${online ? ` (vue ${ago(online.getTime())})` : ''} : ces actions partiront dès qu'elle sera de nouveau connectée.`
+      ? `Tablette hors ligne${online ? ` (vue ${ago(online.getTime())})` : ''} : ces actions partiront à son retour.`
       : online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
   }
 }
@@ -5576,12 +5661,6 @@ function dessinerSosOrdre(focus) {
     prenom.className = 'sos-ordre-prenom';
     prenom.textContent = m.name || 'Proche';
     nom.append(prenom);
-    if (estResponsable(uid)) {
-      const r = document.createElement('span');
-      r.className = 'sos-ordre-role';
-      r.textContent = 'Responsable';
-      nom.append(r);
-    }
     const fleches = document.createElement('span');
     fleches.className = 'sos-ordre-fleches';
     for (const [sens, haut] of [[-1, true], [1, false]]) {
@@ -5832,13 +5911,10 @@ function renderLuminosite() {
   const v = luminositeReglee();
   $('luminosite-value').textContent = v == null ? 'Pas encore réglée' : `${v} % le jour`;
 }
-// Curseur bougé mais pas validé : dit à côté du pourcentage (tests du 21/11 : Thomas et Marc repartaient en croyant
-// la luminosité changée, sans avoir touché « Enregistrer »).
+// Pas de phrase « pas encore enregistré » sous le curseur (Tanguy, 24/11 : le bouton Enregistrer est juste dessous) ;
+// quitter sans enregistrer reste signalé par le petit message commun à tous les réglages.
 const majLuminositeVal = () => {
-  const v = Number($('luminosite').value);
-  const change = v !== (luminositeReglee() ?? LUMINOSITE_DEFAUT);
-  $('luminosite-val').textContent = `${v} %`;
-  $('luminosite-attente').hidden = !change;
+  $('luminosite-val').textContent = `${Number($('luminosite').value)} %`;
 };
 $('luminosite').addEventListener('input', majLuminositeVal);
 SETTINGS['luminosite-card'] = {
@@ -6242,7 +6318,7 @@ function texteForfait(f, name) {
   }
   // Paliers de la tablette (Forfait.java) : 70 % image réduite, 88 % très réduite, 95 % son seul.
   const image = f.niveau >= 2 ? 'très réduite' : 'réduite';
-  return `${debut} : les appels vidéo sont en image ${image} ${jusqua}, et passeront sans image à 95 %. Photos et messages passent toujours.${coupe}`;
+  return `${debut} : appels vidéo en image ${image} ${jusqua}. Photos et messages passent toujours.${coupe}`;
 }
 
 function renderTabletChip() {
@@ -6368,8 +6444,8 @@ function renderContact() {
   const numero = document.createElement('span');
   numero.className = 'numero';
   numero.textContent = tel;
-  $('contact-texte').replaceChildren(`Quand ${nom} vous appelle depuis sa tablette, votre téléphone affiche le `, numero,
-    `. Enregistrez-le dans vos contacts : vous saurez tout de suite que c'est ${nom}.`);
+  $('contact-texte').replaceChildren(`Quand ${nom} vous appelle, votre téléphone affiche le `, numero,
+    '. Enregistrez-le dans vos contacts.');
 }
 $('contact-oui').addEventListener('click', () => {
   const tel = numeroTablette();
@@ -6402,7 +6478,8 @@ function renderActivity() {
   const online = latest('lastOnline');
   // Dernier signe de vie : toucher ou visage vu (Tanguy, 21/11 : ne pas toucher n'est pas grave si rien n'a été reçu).
   const active = Math.max(latest('lastActive'), latest('lastSeen'));
-  const copies = ['support-status', 'notifs-status'];
+  // Ni l'Aide ni Notifications ne répètent l'état de la tablette (Tanguy, 24/11) : il est sur l'accueil.
+  const copies = [];
   if (!online) { el.hidden = true; copies.forEach((id) => { $(id).hidden = true; }); return; }
   const name = session.family.name;
   const now = Date.now();
@@ -6427,7 +6504,7 @@ function renderActivity() {
     const piste = document.createElement('span');
     piste.className = 'activity-piste';
     piste.textContent = battery?.charging === true
-      ? 'Elle était branchée : elle se reconnecte toute seule.'
+      ? 'Sans doute une coupure d\'internet : elle revient toute seule.'
       : `Peut-être éteinte : demandez à ${name} de la brancher.`;
     el.append(piste);
     const quoi = document.createElement('button');
@@ -6466,17 +6543,27 @@ function renderActivity() {
     // 3 envois ou rappels de suite pas vus (functions/alertes.js alerteNonVus, qui a aussi prévenu les responsables).
     el.classList.add('warn');
     el.textContent = `${name} n'a pas vu vos ${session.family.alerteNonVus.nombre || 3} derniers envois. Un petit appel ?`;
+  } else if (active && now - active >= joursPasVue() * 86400_000) {
+    // Aucun signe de vie depuis le nombre de jours réglé (« Tablette pas utilisée », 5 par défaut) : la même règle que
+    // l'alerte envoyée aux responsables.
+    el.classList.add('warn');
+    el.textContent = `Aucun signe de ${name} sur la tablette depuis ${joursTexte(Math.floor((now - active) / 86400_000))}. Un petit appel ?`;
   } else {
-    el.textContent = active
-      ? `Tablette en ligne. ${name} était devant la tablette ${ago(active)}.`
-      : 'Tablette en ligne.';
+    // Tout va bien : rien à dire (Tanguy, 24/11 : « il vaut mieux aucune info »). Avant : « Tablette en ligne.
+    // Mamie était devant la tablette hier à 20:22 », qui inquiétait pour rien.
+    el.hidden = true;
+    copies.forEach((id) => { $(id).hidden = true; });
+    return;
   }
-  // Même état de la tablette en haut de Notifications et dans Support.
+  // Même état de la tablette en haut de Notifications, sans les mots du bouton « Que faire ? » (là-bas ce n'est pas
+  // un bouton : ils restaient collés au bout de la phrase).
+  const sansBouton = el.cloneNode(true);
+  sansBouton.querySelectorAll('button').forEach((b) => b.remove());
   for (const id of copies) {
     $(id).hidden = false;
     $(id).classList.toggle('warn', el.classList.contains('warn'));
     $(id).classList.toggle('calme', el.classList.contains('calme'));
-    $(id).textContent = el.textContent;
+    $(id).textContent = sansBouton.textContent.trim();
   }
 }
 
@@ -6550,9 +6637,16 @@ async function telALEntree() {
   stopSession();
   showMoi();
   $('moi-tel').value = tel.replace(/ /g, '');
-  showError($('moi-error'), telDouble(pris, true));
+  erreurMoi(telDouble(pris, true), '#moi-tel');
   moiComplet();
   return true;
+}
+// L'erreur de « Vos informations » s'affiche juste sous le champ concerné (Tanguy, 24/11 : « numéro incomplet » était
+// tout en bas, sous « Continuer »).
+function erreurMoi(texte, sous) {
+  const cible = typeof sous === 'string' ? document.querySelector(sous) : sous;
+  if (cible) cible.after($('moi-error'));
+  showError($('moi-error'), texte);
 }
 const TEL_INVALIDE = 'Numéro incomplet : 10 chiffres (06 ou 07), ou +33 suivi de 9 chiffres.';
 const TEL_ETRANGER = 'Pas de portable français ? Cochez « Je n\'ai pas de numéro, ou un numéro étranger ».';
@@ -6686,13 +6780,13 @@ $('form-moi').addEventListener('submit', (e) => {
     $('moi-prenom').focus();
     return;
   }
-  if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
-  if (!visageGarde()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
+  if (!genreDe($('form-moi'))) { erreurMoi(GENRE_MANQUANT, '#form-moi .genre-choix'); return; }
+  if (!visageGarde()) { erreurMoi('Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.', '#moi-visage'); return; }
   const sansTel = $('moi-sans-tel').checked;
-  if (!sansTel && !$('moi-tel').value.trim()) { showError($('moi-error'), `${TEL_MANQUANT} ${TEL_ETRANGER}`); return; }
-  if (!sansTel && !telPropre($('moi-tel').value)) { showError($('moi-error'), `${TEL_INVALIDE} ${TEL_ETRANGER}`); return; }
+  if (!sansTel && !$('moi-tel').value.trim()) { erreurMoi(`${TEL_MANQUANT} ${TEL_ETRANGER}`, '#moi-tel'); return; }
+  if (!sansTel && !telPropre($('moi-tel').value)) { erreurMoi(`${TEL_INVALIDE} ${TEL_ETRANGER}`, '#moi-tel'); return; }
   if (!$('moi-jour').value || !$('moi-mois').value || !$('moi-annee').value) {
-    showError($('moi-error'), 'Indiquez votre date de naissance : jour, mois et année.');
+    erreurMoi('Indiquez votre date de naissance : jour, mois et année.', '#form-moi .moi-date');
     return;
   }
   rememberAnniv({ day: Number($('moi-jour').value), month: Number($('moi-mois').value), year: Number($('moi-annee').value) });
@@ -6775,7 +6869,7 @@ $('moi-in').addEventListener('change', async (e) => {
     moiComplet();
   } catch (err) {
     console.error(err);
-    showError($('moi-error'), 'Cette photo ne peut pas être lue. Essayez-en une autre.');
+    erreurMoi('Cette photo ne peut pas être lue. Essayez-en une autre.', '#moi-visage');
   }
 });
 

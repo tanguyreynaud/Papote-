@@ -32,14 +32,14 @@ test('Forfait de la tablette : rien avant 80 %, puis l\'accueil explique calmeme
     sim: { operateur: 'Lyca', dataMoisMo: dataCycleMo, dataCycleMo, plafondMo: 1000, niveau, cycleDebut: debut, vuLe: s.Timestamp.now() },
   });
   await sim(750, 1);
-  await julie.page.locator('#activity', { hasText: 'Tablette en ligne' }).waitFor();
+  await julie.page.locator('#activity').waitFor({ state: 'hidden' });
   await sim(820, 1);
   await julie.page.locator('#activity.calme', { hasText: 'forfait internet de la tablette de Mamie Emma est utilisé à 82 %' }).waitFor();
   assert.ok(!(await julie.page.locator('#activity').evaluate((e) => e.classList.contains('warn'))), 'pas d\'alerte rouge pour le forfait');
-  assert.ok((await julie.page.locator('#activity').textContent()).includes(`image réduite jusqu'au ${fin}, et passeront sans image à 95 %`));
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`image réduite jusqu'au ${fin}. Photos et messages passent toujours.`));
   await sim(900, 2);
   await julie.page.locator('#activity.calme', { hasText: 'utilisé à 90 %' }).waitFor();
-  assert.ok((await julie.page.locator('#activity').textContent()).includes(`image très réduite jusqu'au ${fin}, et passeront sans image à 95 %`));
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`image très réduite jusqu'au ${fin}. Photos et messages passent toujours.`));
   await sim(960, 3);
   await julie.page.locator('#activity.calme', { hasText: 'utilisé à 96 %' }).waitFor();
   assert.ok((await julie.page.locator('#activity').textContent()).includes(`jusqu'au ${fin}, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours. Branchez-la au wifi si vous pouvez.`));
