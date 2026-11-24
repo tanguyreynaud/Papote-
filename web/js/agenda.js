@@ -3,7 +3,7 @@
 import {
   db, doc, getDoc, collection, onSnapshot, serverTimestamp, writeBatch, bumpRev, deleteField,
 } from './firebase.js';
-import { askConfirm, notice, chooseAction } from './ui.js';
+import { askConfirm, notice, chooseAction, fonduNouveaux } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const JOURS_COURTS = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
@@ -187,6 +187,7 @@ function renderReminders() {
     }));
     ul.append(li);
   }
+  fonduNouveaux(ul, reminders.map((r) => r.id));
   syncEmpty();
 }
 
@@ -218,6 +219,7 @@ function renderBirthdays() {
     }));
     ul.append(li);
   }
+  fonduNouveaux(ul, list.map((b) => b.id));
   syncEmpty();
 }
 

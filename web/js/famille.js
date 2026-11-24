@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, fonduNouveaux } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import { silenceTolereMs } from './silence.js';
 import {
@@ -813,6 +813,7 @@ function visionneuseSuivre(posts) {
 function renderPhotos(posts) {
   visionneuseSuivre(posts);
   $('photos').replaceChildren(...posts.map((p) => galleryItem(p, 'cette photo', () => openPhoto(p))));
+  fonduNouveaux($('photos'), posts.map((p) => p.id));
   $('photos-empty').hidden = posts.length > 0;
   // Rien à télécharger sur une page vide (testeur, V14 du 17/11) : le bouton revient avec la première photo.
   $('btn-photos-zip').hidden = !posts.length;
@@ -821,6 +822,7 @@ function renderPhotos(posts) {
 function renderVideos(posts) {
   visionneuseSuivre(posts);
   $('videos').replaceChildren(...posts.map((p) => galleryItem(p, 'cette vidéo', () => openVideo(p))));
+  fonduNouveaux($('videos'), posts.map((p) => p.id));
   $('videos-empty').hidden = posts.length > 0;
 }
 
@@ -980,6 +982,8 @@ function renderMessages(posts) {
     if (arrive) retirerBulleEnRoute(b);
   }
   list.replaceChildren(...items);
+  // Mon propre message était déjà là en gris (« en route ») : seuls ceux des autres arrivent en fondu.
+  fonduNouveaux(list, shown.slice().reverse().map((p) => (p.authorUid === session.uid && p.type !== 'reply' ? null : p.id)));
   $('messages-empty').hidden = shown.length > 0;
   montrerBullesEnRoute();
   requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
@@ -3596,6 +3600,7 @@ function renderRequests(pending) {
   if (!admin) return;
   // Accueil : une carte par demande, bien en vue, avec Refuser / Accepter. Même chose dans Réglages.
   $('pending-banner').replaceChildren(...pending.map(requestCard));
+  fonduNouveaux($('pending-banner'), pending.map((m) => m.id));
   $('requests').replaceChildren(...pending.map(requestCard));
 }
 

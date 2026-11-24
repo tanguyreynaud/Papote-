@@ -80,3 +80,45 @@ test('Le même message supprimé par deux proches en même temps : disparu une f
   await new Promise((r) => setTimeout(r, 2000));
   assert.strictEqual((await g.liste(`families/${fid}/posts`)).filter((p) => p.text === 'À effacer').length, 0);
 });
+
+// Rien ne surgit (cohérence, 24/11) : dans une liste, seule la ligne vraiment nouvelle arrive en fondu. Les listes sont
+// redessinées en entier à chaque nouveauté : les lignes déjà là ne doivent jamais se ranimer (pas de clignotement), et
+// mon propre message, déjà à l'écran, non plus.
+test('Fondu des listes : seule la ligne nouvelle s\'anime, chez l\'autre proche ; les lignes déjà là ne clignotent pas', async () => {
+  const { julie, paul } = await famille();
+  const ecouter = (t) => t.page.evaluate(() => {
+    window.__arrivees = [];
+    document.addEventListener('animationstart', (e) => { if (e.animationName === 'arrive') window.__arrivees.push(e.target.textContent); });
+  });
+  const arrivees = (t) => t.page.evaluate(() => window.__arrivees);
+  for (const t of [julie, paul]) { await g.ouvrirTuile(t, 'messages'); await ecouter(t); }
+
+  for (const texte of ['Premier message', 'Deuxième message', 'Troisième message']) {
+    await paul.page.fill('#message-text', texte);
+    await paul.page.click('#btn-message');
+    await julie.page.locator('#messages li', { hasText: texte }).waitFor();
+    await paul.page.locator('#messages li:not(.en-route)', { hasText: texte }).waitFor();
+    await julie.page.waitForTimeout(600);
+  }
+  const chezJulie = await arrivees(julie);
+  assert.strictEqual(chezJulie.length, 3, `chez Julie, chaque message de Paul arrive une fois en fondu : ${JSON.stringify(chezJulie)}`);
+  ['Premier', 'Deuxième', 'Troisième'].forEach((m, i) => assert.ok(chezJulie[i].includes(m), `le ${i + 1}e fondu est le ${i + 1}e message : ${chezJulie[i]}`));
+  assert.deepStrictEqual(await arrivees(paul), [], 'chez Paul, ses propres messages ne se ranimant pas');
+
+  // Rappels : Julie en ajoute deux ; chez Paul, chacun arrive une fois, le premier ne se ranime pas au second.
+  for (const t of [julie, paul]) { await g.retourAccueil(t).catch(() => t.page.click('#view-messages .back')); await g.attendreVue(t, 'view-home'); await g.ouvrirTuile(t, 'agenda'); }
+  await paul.page.evaluate(() => { window.__arrivees.length = 0; });
+  for (const [titre, heure] of [['Arroser les fleurs', '09:00'], ['Prendre le courrier', '11:00']]) {
+    await julie.page.click('#add-reminder');
+    await julie.page.locator('#sheet-reminder').waitFor({ state: 'visible' });
+    await julie.page.fill('#rem-title', titre);
+    await julie.page.fill('#rem-time', heure);
+    await julie.page.click('#btn-reminder');
+    await paul.page.locator('#reminders li', { hasText: titre }).waitFor();
+    await julie.page.locator('#sheet-reminder').waitFor({ state: 'hidden' });
+    await paul.page.waitForTimeout(600);
+  }
+  const chezPaul = await arrivees(paul);
+  assert.strictEqual(chezPaul.length, 2, `chez Paul, chaque rappel arrive une fois : ${JSON.stringify(chezPaul)}`);
+  assert.ok(chezPaul[0].includes('Arroser') && chezPaul[1].includes('courrier'), JSON.stringify(chezPaul));
+});
