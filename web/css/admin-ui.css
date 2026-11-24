@@ -856,3 +856,22 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 @keyframes admin-fenetre { from { opacity: 0; transform: scale(.97); } }
 @keyframes admin-menu { from { opacity: 0; transform: translateY(-4px); } }
 @keyframes admin-arrive { from { opacity: 0; transform: translateY(4px); } }
+
+/* ---------- Revue mesurée du 24/11 (outils/galerie/mesures.js) : défauts mécaniques ---------- */
+/* Pièce jointe : son nom reste sur une ligne (coupé par « … » s'il est trop long), toutes de la même hauteur. */
+.admin-body .piece { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* Livres archivés : « Recettes » et « Achats » côte à côte, avec un espace entre les deux. */
+.admin-body td > span:has(> .piece) { display: inline-flex; gap: 6px; }
+@media (max-width: 700px) { .admin-body td > span:has(> .piece) { flex-direction: column; align-items: flex-start; gap: 4px; } }
+/* Carte SIM, « À la fin du forfait » : sur téléphone, les deux choix passent sous leur titre, chacun sur une ligne. */
+.admin-body .choix-fin-forfait { white-space: nowrap; }
+@media (max-width: 700px) {
+  .admin-body dl.fiche.kv dt:has(+ dd .fins-forfait) { grid-column: 1 / -1; padding-bottom: 0; }
+  .admin-body dl.fiche.kv dd:has(.fins-forfait) { grid-column: 1 / -1; border-top: 0; padding-top: 4px; }
+  .admin-body dl.fiche.kv dd .fins-forfait { margin-left: auto; }
+}
+/* Tablette installée par QR : « Garder quand même » décollé du texte au-dessus. */
+.admin-body dd > div > .small + button.small-btn { margin-top: 8px; }
+/* Validation, listes de parcours et d'écrans : seul le titre est en gras, pas la description. */
+.admin-body [data-panneau] a.v-ligne:not(.retour):not(.stat) { font-weight: 400; }
+.admin-body [data-panneau] a.v-ligne strong { font-weight: 700; }
