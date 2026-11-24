@@ -207,7 +207,7 @@ body .ps-bouton { bottom: 6.5rem; }
     <h2><span class="n">1</span>Où vit votre proche ?<span class="ok" id="ok1" hidden>✓</span></h2>
     <label class="champ"><span id="adresse-titre">Sa ville</span>
       <input id="adresse" autocomplete="off" maxlength="200" placeholder="Ville de votre proche" aria-describedby="adresse-aide">
-      <small id="adresse-aide">Pour vérifier que la tablette y captera bien.</small>
+      <small id="adresse-aide" hidden></small>
     </label>
     <button class="lien" type="button" id="autre-ville" hidden>Changer de ville</button>
     <div class="points" id="suggestions" hidden></div>
@@ -312,8 +312,9 @@ body .ps-bouton { bottom: 6.5rem; }
     titreAdresse.textContent = v ? 'Sa rue, à ' + v.nom : 'Sa ville';
     champAdresse.placeholder = v ? 'Rue (et numéro si vous le connaissez)' : 'Ville de votre proche';
     autreVille.hidden = !v;
-    aideAdresse.textContent = v ? 'À ' + v.nom + ', cela dépend des rues.'
-      : 'Pour vérifier que la tablette y captera bien.';
+    // Sous « Sa ville », plus de phrase (Tanguy, 24/11). Elle ne revient que pour expliquer pourquoi la rue est demandée.
+    aideAdresse.textContent = v ? 'À ' + v.nom + ', cela dépend des rues.' : '';
+    aideAdresse.hidden = !v;
     champAdresse.value = '';
     suggestions.hidden = true;
   }
