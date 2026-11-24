@@ -420,6 +420,33 @@ async function noticeAvecAide(message) {
 }
 document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', ouvrirAssistant));
 
+// Un message d'alerte ou d'erreur ne s'affiche plus en un pavé tout en gras (contrôle mesuré du 24/11 : jusqu'à 5
+// lignes) : la première phrase, le fait, reste en gras ; la suite passe en texte normal. Fait une fois pour tous les
+// messages, quel que soit l'endroit qui les écrit ; le texte lu (textContent) ne change pas.
+const ALERTES = '.error, .activity.warn, .seen, .abo-banner > p';
+function faitPuisSuite(el) {
+  if (!el || el.children.length) return;
+  const m = /^(.+?[.!?])(\s+\S[\s\S]*)$/.exec(el.textContent);
+  el.dataset.suite = el.textContent;
+  if (!m) return;
+  const suite = document.createElement('span');
+  suite.className = 'alerte-suite';
+  suite.textContent = m[2];
+  el.replaceChildren(m[1], suite);
+  el.dataset.suite = el.textContent;
+}
+new MutationObserver((ms) => {
+  for (const m of ms) {
+    const el = (m.target.nodeType === 1 ? m.target : m.target.parentElement)?.closest?.(ALERTES);
+    if (el && !el.querySelector(':scope > :not(.alerte-suite)')) {
+      if (el.children.length && el.dataset.suite === el.textContent) continue;
+      if (el.children.length) el.textContent = el.textContent; // réécrit par-dessus notre découpe : on repart du texte
+      faitPuisSuite(el);
+    }
+  }
+}).observe(document.body, { subtree: true, childList: true, characterData: true });
+document.querySelectorAll(ALERTES).forEach(faitPuisSuite);
+
 // Notifications n'en est plus un : page à part avec une flèche retour, sans barre du bas (Tanguy, 23/11).
 const VUES_ONGLETS = ['profile'];
 
@@ -1268,7 +1295,7 @@ function showIntroTablette() {
         <h2>Les options</h2>
         <div class="toggle-list">
           <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton « Écouter »</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, 5 secondes pour annuler, puis un SMS à toute la famille et la tablette appelle les proches un par un. Ce n\'est pas un service d\'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un appui sur « SOS famille » prévient toute la famille par SMS, puis la tablette appelle les proches un par un. Ce n\'est pas un service d\'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
           <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="intro-radio"></label>
           <label class="station" id="intro-station-wrap" hidden>Station <select id="intro-station"></select></label>
         </div>
@@ -6294,7 +6321,7 @@ function texteForfait(f, name) {
   }
   // Paliers de la tablette (Forfait.java) : 70 % image réduite, 88 % très réduite, 95 % son seul.
   const image = f.niveau >= 2 ? 'très réduite' : 'réduite';
-  return `${debut} : les appels vidéo sont en image ${image} ${jusqua}, et passeront sans image à 95 %. Photos et messages passent toujours.${coupe}`;
+  return `${debut} : appels vidéo en image ${image} ${jusqua}. Photos et messages passent toujours.${coupe}`;
 }
 
 function renderTabletChip() {
@@ -6420,8 +6447,8 @@ function renderContact() {
   const numero = document.createElement('span');
   numero.className = 'numero';
   numero.textContent = tel;
-  $('contact-texte').replaceChildren(`Quand ${nom} vous appelle depuis sa tablette, votre téléphone affiche le `, numero,
-    `. Enregistrez-le dans vos contacts : vous saurez tout de suite que c'est ${nom}.`);
+  $('contact-texte').replaceChildren(`Quand ${nom} vous appelle, votre téléphone affiche le `, numero,
+    '. Enregistrez-le dans vos contacts.');
 }
 $('contact-oui').addEventListener('click', () => {
   const tel = numeroTablette();
@@ -6454,8 +6481,8 @@ function renderActivity() {
   const online = latest('lastOnline');
   // Dernier signe de vie : toucher ou visage vu (Tanguy, 21/11 : ne pas toucher n'est pas grave si rien n'a été reçu).
   const active = Math.max(latest('lastActive'), latest('lastSeen'));
-  // L'Aide ne montre plus l'état de la tablette (Tanguy, 24/11 : « ça n'a rien à faire ici »).
-  const copies = ['notifs-status'];
+  // Ni l'Aide ni Notifications ne répètent l'état de la tablette (Tanguy, 24/11) : il est sur l'accueil.
+  const copies = [];
   if (!online) { el.hidden = true; copies.forEach((id) => { $(id).hidden = true; }); return; }
   const name = session.family.name;
   const now = Date.now();
@@ -6480,7 +6507,7 @@ function renderActivity() {
     const piste = document.createElement('span');
     piste.className = 'activity-piste';
     piste.textContent = battery?.charging === true
-      ? 'Elle était branchée : elle se reconnecte toute seule.'
+      ? 'Sans doute une coupure d\'internet : elle revient toute seule.'
       : `Peut-être éteinte : demandez à ${name} de la brancher.`;
     el.append(piste);
     const quoi = document.createElement('button');
@@ -6613,9 +6640,16 @@ async function telALEntree() {
   stopSession();
   showMoi();
   $('moi-tel').value = tel.replace(/ /g, '');
-  showError($('moi-error'), telDouble(pris, true));
+  erreurMoi(telDouble(pris, true), '#moi-tel');
   moiComplet();
   return true;
+}
+// L'erreur de « Vos informations » s'affiche juste sous le champ concerné (Tanguy, 24/11 : « numéro incomplet » était
+// tout en bas, sous « Continuer »).
+function erreurMoi(texte, sous) {
+  const cible = typeof sous === 'string' ? document.querySelector(sous) : sous;
+  if (cible) cible.after($('moi-error'));
+  showError($('moi-error'), texte);
 }
 const TEL_INVALIDE = 'Numéro incomplet : 10 chiffres (06 ou 07), ou +33 suivi de 9 chiffres.';
 const TEL_ETRANGER = 'Pas de portable français ? Cochez « Je n\'ai pas de numéro, ou un numéro étranger ».';
@@ -6749,13 +6783,13 @@ $('form-moi').addEventListener('submit', (e) => {
     $('moi-prenom').focus();
     return;
   }
-  if (!genreDe($('form-moi'))) { showError($('moi-error'), GENRE_MANQUANT); return; }
-  if (!visageGarde()) { showError($('moi-error'), 'Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.'); return; }
+  if (!genreDe($('form-moi'))) { erreurMoi(GENRE_MANQUANT, '#form-moi .genre-choix'); return; }
+  if (!visageGarde()) { erreurMoi('Ajoutez une photo de vous : votre proche vous reconnaîtra sur la tablette.', '#moi-visage'); return; }
   const sansTel = $('moi-sans-tel').checked;
-  if (!sansTel && !$('moi-tel').value.trim()) { showError($('moi-error'), `${TEL_MANQUANT} ${TEL_ETRANGER}`); return; }
-  if (!sansTel && !telPropre($('moi-tel').value)) { showError($('moi-error'), `${TEL_INVALIDE} ${TEL_ETRANGER}`); return; }
+  if (!sansTel && !$('moi-tel').value.trim()) { erreurMoi(`${TEL_MANQUANT} ${TEL_ETRANGER}`, '#moi-tel'); return; }
+  if (!sansTel && !telPropre($('moi-tel').value)) { erreurMoi(`${TEL_INVALIDE} ${TEL_ETRANGER}`, '#moi-tel'); return; }
   if (!$('moi-jour').value || !$('moi-mois').value || !$('moi-annee').value) {
-    showError($('moi-error'), 'Indiquez votre date de naissance : jour, mois et année.');
+    erreurMoi('Indiquez votre date de naissance : jour, mois et année.', '#form-moi .moi-date');
     return;
   }
   rememberAnniv({ day: Number($('moi-jour').value), month: Number($('moi-mois').value), year: Number($('moi-annee').value) });
@@ -6838,7 +6872,7 @@ $('moi-in').addEventListener('change', async (e) => {
     moiComplet();
   } catch (err) {
     console.error(err);
-    showError($('moi-error'), 'Cette photo ne peut pas être lue. Essayez-en une autre.');
+    erreurMoi('Cette photo ne peut pas être lue. Essayez-en une autre.', '#moi-visage');
   }
 });
 

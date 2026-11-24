@@ -332,7 +332,7 @@
         <p id="nom-prepare-error" class="error" hidden></p>
         <button type="submit" class="primary wide" id="nom-prepare-btn">Enregistrer</button>
       </form>
-      <p id="tablette-en-route" class="card small" hidden>La tablette est en route. À son arrivée, il suffira de la brancher : elle retrouvera la famille toute seule, avec les photos déjà envoyées. Vous pouvez déjà inviter vos proches.</p>
+      <p id="tablette-en-route" class="card small" hidden>La tablette est en route. À son arrivée, branchez-la : elle retrouve la famille toute seule. Vous pouvez déjà inviter vos proches.</p>
       <p id="activity" class="activity" hidden></p>
       <p id="outbox" class="outbox" hidden></p>
       <!-- Invitations de l'accueil (Tanguy 13/11) : une seule visible à la fois, la plus importante d'abord, au-dessus
@@ -357,7 +357,7 @@
           <h2 id="contact-titre"></h2>
           <p id="contact-texte"></p>
           <div class="contact-actions">
-            <button type="button" id="contact-oui" class="primary">Enregistrer le numéro</button>
+            <button type="button" id="contact-oui" class="primary">Enregistrer</button>
             <button type="button" id="contact-fait" class="secondary">C'est déjà fait</button>
           </div>
         </section>
@@ -695,7 +695,7 @@
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-sos"/></svg></span><h2>SOS famille</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <div id="sos-ordre-value" class="setting-value sos-ordre-value"></div>
             <form id="form-sos-ordre" class="setting-edit" hidden>
-              <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Bouton SOS sur la tablette</strong><span>Un bouton « SOS famille » en haut de la tablette : un appui, 5 secondes pour annuler, puis un SMS à toute la famille et la tablette appelle les proches un par un. Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="opt-sos"></label></div>
+              <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Bouton SOS sur la tablette</strong><span>Un appui sur « SOS famille » prévient toute la famille par SMS, puis la tablette appelle les proches un par un. Ce n'est pas un service d'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="opt-sos"></label></div>
               <div id="sos-ordre-zone">
               <p class="choice-titre">Ordre d'appel</p>
               <p class="muted small">Quand votre proche appuie sur SOS, la tablette envoie un SMS à toute la famille, puis appelle les proches un par un, dans cet ordre, jusqu'à ce que quelqu'un réponde. Touchez ↑ ou ↓ pour changer la place d'un proche.</p>
@@ -994,7 +994,6 @@
     <!-- Page à part, comme Inviter : pas de barre du bas, une flèche retour (Tanguy, 23/11). -->
     <section id="view-notifs" class="page" hidden>
       <header class="page-head"><button type="button" class="icon-btn back" aria-label="Retour"><svg><use href="#i-back"/></svg></button><h1>Notifications</h1></header>
-      <p id="notifs-status" class="activity notifs-status" hidden></p>
       <ul id="notifs" class="notifs"></ul>
       <p id="notifs-empty" class="empty" hidden>Rien de nouveau pour l'instant.</p>
     </section>

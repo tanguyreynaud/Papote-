@@ -855,7 +855,6 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 /* « Mon profil » partage le haut de Réglages (titre, « Besoin d'aide ? », La tablette / La famille / Mon profil) :
    mêmes marges que Réglages ouvert depuis la barre, rien ne saute d'un choix à l'autre (Tanguy, 23/11). */
 #view-profile .page-head { padding-left: 16px; padding-top: calc(8px + env(safe-area-inset-top)); }
-.notifs-status { margin: 4px 16px 8px; }
 .contact-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; border-radius: 14px; font-weight: 600; text-decoration: none; }
 
 /* ---------- Photos de profil ---------- */
@@ -2273,3 +2272,6 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 .remote-buttons .primary { border-color: transparent; }
 /* Accueil : « Inviter » à la même hauteur que la cloche juste à côté (contrôle mesuré du 24/11 : 38 px contre 40). */
 .invite-btn { min-height: 40px; box-sizing: border-box; }
+/* Alertes et erreurs : le fait en gras, la suite en texte normal (voir faitPuisSuite). */
+.alerte-suite { font-weight: 400; color: var(--text); }
+.activity .alerte-suite { display: block; margin-top: 2px; color: var(--muted); }
