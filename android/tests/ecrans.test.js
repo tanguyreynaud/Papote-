@@ -806,7 +806,7 @@ test('envoi de 3 photos : « Suivante » montre la suivante, double toucher comp
     assert.strictEqual(await affichee(b), e.images[1], '3e photo');
     assert.strictEqual(await b.texte('#overlay-close'), 'OK');
     assert.ok(await b.visible('#overlay'), 'toujours ouvert sur la dernière');
-    assert.deepStrictEqual((await b.appels('markSeen')).map((a) => a.args[0]).filter((id) => id === e.id), [], 'pas compté vu avant OK… sauf par la caméra');
+    assert.deepStrictEqual((await b.appels('markSeen')).map((a) => a.args[0]).filter((id) => id === e.id), [e.id], 'un toucher sur « Suivante » compte vu (Tanguy, 24/11)');
     // Double toucher sur la dernière « Suivante » : le second toucher ne ferme pas aussitôt.
     await b.avancer(1200);
     await b.toucher('#overlay-close');
@@ -816,7 +816,7 @@ test('envoi de 3 photos : « Suivante » montre la suivante, double toucher comp
   } finally { await b.fermer(); }
 });
 
-// Tanguy (24/11) : toucher n'importe où (sauf un bouton) montre la photo suivante, sans jamais fermer ni compter « vu ».
+// Tanguy (24/11) : toucher n'importe où (sauf un bouton) montre la photo suivante, sans jamais fermer ; ce toucher compte « vu ».
 test('envoi de 3 photos : un toucher sur la photo montre la suivante, en boucle, sans fermer ; le haut-parleur ne fait rien passer', async () => {
   const b = await ouvrir();
   try {
@@ -842,7 +842,7 @@ test('envoi de 3 photos : un toucher sur la photo montre la suivante, en boucle,
     await b.avancer(300);
     assert.strictEqual(await affichee(b), premiere, 'retour à la 1re : en boucle');
     assert.ok(await b.visible('#overlay'), 'jamais fermé par un toucher hors bouton');
-    assert.deepStrictEqual((await b.appels('markSeen')).map((a) => a.args[0]).filter((id) => id === e.id), [], 'pas compté vu par ce toucher');
+    assert.deepStrictEqual((await b.appels('markSeen')).map((a) => a.args[0]).filter((id) => id === e.id), [e.id], 'un toucher compte vu, une seule fois');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
