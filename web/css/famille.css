@@ -1177,7 +1177,8 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 /* Pas de bulle flottante : l'assistant s'ouvre par « Besoin d'aide ? » (Réglages, erreurs ; Tanguy, 20/11). */
 .ps-bouton { display: none !important; }
 /* « Besoin d'aide ? » sous un message d'erreur de la connexion : seulement quand l'erreur est là. */
-.error[hidden] + .lien-aide { display: none; }
+/* L'erreur est sous son champ, le lien d'aide plus bas, après le bouton (2e épuration, 26/11). */
+.error[hidden] ~ .lien-aide { display: none; }
 .lien-aide { display: block; margin: 6px auto 0; }
 /* Place sous le dernier élément pour la barre du bas et le bouton du chat. */
 .support-pad { padding-bottom: calc(170px + env(safe-area-inset-bottom)); }
@@ -2274,7 +2275,11 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 .invite-btn { min-height: 40px; box-sizing: border-box; }
 /* Alertes et erreurs : le fait en gras, la suite en texte normal (voir faitPuisSuite). */
 .alerte-suite { font-weight: 400; color: var(--text); }
-.activity .alerte-suite { display: block; margin-top: 2px; color: var(--muted); }
+.activity .alerte-suite { display: block; margin-top: 2px; }
+/* 2e épuration (26/11) : une alerte = une ligne en gras, puis la suite en texte normal, en noir (pas en gris). */
+.activity.calme, .hors-ligne-bandeau, .doublon { font-weight: 600; }
+.activity .activity-piste { color: var(--text); }
+.hors-ligne-bandeau .alerte-suite { display: block; }
 
 /* « Lire » touché : le bouton s'estompe le temps que la vidéo parte. */
 .viewer .video-play.attend { opacity: .55; }

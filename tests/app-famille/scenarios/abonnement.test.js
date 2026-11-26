@@ -122,7 +122,7 @@ test('Tablette installée sans commande : 48 h pour relier la commande payée pa
   const abo = (await famille(fid)).abonnement;
   assert.strictEqual(abo.statut, 'installation');
   assert.ok(abo.toleranceJusqua, 'fin de la tolérance notée');
-  await julie.page.locator('#abo-banner', { hasText: 'Entrez le code de votre commande' }).waitFor();
+  await julie.page.locator('#abo-banner', { hasText: 'Reliez votre commande à cette tablette.' }).waitFor();
   assert.strictEqual(await julie.page.locator('#abo-banner-btn').isVisible(), false, 'rien à régler');
   const champ = '#abo-banner-paid .order-code';
   await julie.page.fill(champ, 'ZZZZZZZZ');
@@ -210,6 +210,6 @@ test('En pause (paiement non réglé) : envois et appels bloqués avec une expli
   await paul.page.click('#tile-call');
   assert.match(await g.texteFenetre(paul), /Papote est en pause/);
   await g.repondre(paul, 'OK');
-  await julie.page.locator('#abo-banner', { hasText: 'Tout reviendra automatiquement' }).waitFor();
+  await julie.page.locator('#abo-banner', { hasText: "Papote est en pause. Réglez l'abonnement : tout revient tout seul." }).waitFor();
   assert.strictEqual((await g.liste(`families/${fid}/posts`)).some((p) => p.text === 'Coucou'), false);
 });

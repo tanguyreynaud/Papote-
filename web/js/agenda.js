@@ -450,7 +450,7 @@ function prevenirDoublon(data) {
     const o = origine(b);
     return `${b.name}, le ${quand(b)}${o ? ` (${o})` : ''}`;
   });
-  $('bday-doublon').textContent = `Déjà dans l'agenda : ${lignes.join(' ; ')}. Vérifiez que ce n'est pas le même, sinon touchez de nouveau le bouton.`;
+  $('bday-doublon').textContent = `Déjà dans l'agenda : ${lignes.join(' ; ')}.`;
   $('bday-doublon').hidden = false;
   $('btn-reminder').textContent = editing ? 'Enregistrer quand même' : 'Ajouter quand même';
   return true;

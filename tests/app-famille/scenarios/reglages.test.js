@@ -266,7 +266,7 @@ test('Un proche (pas propriétaire) : réglages de la tablette réservés, profi
   // Un proche n'a que deux choix : « La famille » (où il arrive) et « Mon profil ».
   await g.ouvrirTuile(paul, 'settings');
   assert.deepStrictEqual(await paul.page.locator('#view-settings [data-reglages-choix]:visible').allInnerTexts(), ['La famille', 'Mon profil']);
-  await paul.page.locator('#tablet-owner-note', { hasText: 'depuis le téléphone de Julie' }).waitFor();
+  await paul.page.locator('#tablet-owner-note', { hasText: "depuis le téléphone d'un responsable : Julie." }).waitFor();
   await paul.page.locator('#btn-invite-famille').waitFor({ state: 'visible' });
   for (const carte of ['duree-card', 'radio-card', 'sons-card', 'sos-ordre-card', 'opt-lecture-ligne', 'volume-card', 'sleep-card', 'meteo-card', 'family-name-card', 'remote-card']) {
     assert.strictEqual(await paul.page.locator(`#${carte}`).isVisible(), false, `${carte} caché pour un proche`);

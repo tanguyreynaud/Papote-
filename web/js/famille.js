@@ -398,7 +398,6 @@ for (const quoi of ['deja', 'prendre']) {
     $(`sans-abo-panel-${quoi}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
-$('sans-abo-aide').addEventListener('click', () => ouvrirOnglet('support'));
 document.querySelectorAll('.bell-btn[data-tab]').forEach((b) => b.addEventListener('click', () => ouvrirOnglet(b.dataset.tab)));
 
 // ---------- « Besoin d'aide ? » : l'assistant (Tanguy, 20/11) ----------
@@ -421,12 +420,28 @@ function ouvrirAssistant(demande) {
 async function noticeAvecAide(message) {
   if (await noticeAide(message) === 'aide') ouvrirAssistant(`J'ai ce message : « ${message} » Que faire ?`);
 }
-document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', () => ouvrirAssistant(b.dataset.aide || undefined)));
+// La demande suit l'endroit exact où l'on est (2e épuration, 26/11) : le réglage ouvert, sinon le panneau de
+// Réglages, sinon la phrase du bouton. Dans Réglages, une tablette muette passe avant tout : c'est le vrai souci.
+function demandeDeLaPage(bouton) {
+  if (!bouton.classList.contains('aide-pastille')) return bouton.dataset.aide || undefined;
+  const ouvert = document.querySelector('.setting.editing .setting-head h2');
+  const surProfil = !$('view-profile').hidden;
+  if (ouvert) {
+    const titre = ouvert.closest('.rg-qui') ? (surProfil ? 'Ma photo et mon prénom' : 'Nom et photo de la tablette') : ouvert.textContent.trim();
+    return `J'ai besoin d'aide pour ce réglage : « ${titre} ».`;
+  }
+  if (surProfil) return "J'ai besoin d'aide pour mon profil ou mon abonnement.";
+  if (panneauReglages() === 'famille') return "J'ai besoin d'aide pour gérer la famille : inviter, retirer ou nommer un responsable.";
+  if ($('remote-card').open) return "La tablette ne marche pas bien. J'ai besoin d'aide pour la dépanner.";
+  if (targetTablet()?.lastOnline && !tabletteEnLigne()) return 'La tablette ne répond plus. Que faire ?';
+  return "J'ai besoin d'aide pour régler la tablette.";
+}
+document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', () => ouvrirAssistant(demandeDeLaPage(b))));
 
 // Un message d'alerte ou d'erreur ne s'affiche plus en un pavé tout en gras (contrôle mesuré du 24/11 : jusqu'à 5
 // lignes) : la première phrase, le fait, reste en gras ; la suite passe en texte normal. Fait une fois pour tous les
 // messages, quel que soit l'endroit qui les écrit ; le texte lu (textContent) ne change pas.
-const ALERTES = '.error, .activity.warn, .seen, .abo-banner > p';
+const ALERTES = '.error, .activity.warn, .activity.calme, .seen, .abo-banner > p, .doublon';
 function faitPuisSuite(el) {
   if (!el || el.children.length) return;
   const m = /^(.+?[.!?])(\s+\S[\s\S]*)$/.exec(el.textContent);
@@ -1281,7 +1296,7 @@ function showIntroTablette() {
       </div>
       <div class="intro-step" data-step="2" hidden>
         <h2>La nuit</h2>
-        <p class="muted">L'écran s'éteint la nuit ; un toucher le rallume, et un appel le réveille.</p>
+        <p class="muted">Un toucher, un appel ou un rappel rallume l'écran.</p>
         <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Éteindre l'écran la nuit</strong></span><input type="checkbox" class="toggle" id="intro-veille" checked></label></div>
         <div id="intro-heures" class="sleep-hours">
           <label>De <select id="intro-de">COUCHER</select></label>
@@ -1290,29 +1305,25 @@ function showIntroTablette() {
       </div>
       <div class="intro-step" data-step="3" hidden>
         <h2>Le son</h2>
-        <p class="muted">Trois volumes, comme dans Réglages.</p>
         <div class="intro-son">
           <div class="intro-son-tete"><strong>Sonnerie</strong><span id="intro-sonnerie-val" class="setup-son-val"></span></div>
-          <p class="muted small intro-son-aide">Les appels qui arrivent</p>
           <input id="intro-sonnerie" type="range" min="10" max="100" step="5" aria-label="Volume de la sonnerie">
         </div>
         <div class="intro-son">
           <div class="intro-son-tete"><strong>Vidéos et messages lus</strong><span id="intro-volume-val" class="setup-son-val"></span></div>
-          <p class="muted small intro-son-aide">Les vidéos, les messages lus à voix haute, la radio</p>
           <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume des vidéos et des messages">
         </div>
         <div class="intro-son">
-          <div class="intro-son-tete"><strong>Appels</strong><span id="intro-appel-val" class="setup-son-val"></span></div>
-          <p class="muted small intro-son-aide">La voix du proche, en visio et au téléphone</p>
+          <div class="intro-son-tete"><strong>Voix pendant les appels</strong><span id="intro-appel-val" class="setup-son-val"></span></div>
           <input id="intro-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
         </div>
       </div>
       <div class="intro-step" data-step="4" hidden>
         <h2>Les options</h2>
         <div class="toggle-list">
-          <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et rappels à voix haute quand elle est devant la tablette, avec un bouton « Écouter »</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Un appui sur « SOS famille » prévient toute la famille par SMS, puis la tablette appelle les proches un par un. Ce n\'est pas un service d\'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
-          <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Un bouton « Radio » à côté de « Appeler »</span></span><input type="checkbox" class="toggle" id="intro-radio"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Lecture à voix haute</strong><span>Lit les messages et les rappels</span></span><input type="checkbox" class="toggle" id="intro-lecture"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>SOS famille</strong><span>Prévient la famille par SMS, puis appelle les proches. Ce n\'est pas un service d\'urgence : 15 ou 112.</span></span><input type="checkbox" class="toggle" id="intro-sos"></label>
+          <label class="toggle-row"><span class="toggle-text"><strong>Radio</strong><span>Seulement en Wi-Fi</span></span><input type="checkbox" class="toggle" id="intro-radio"></label>
           <label class="station" id="intro-station-wrap" hidden>Station <select id="intro-station"></select></label>
         </div>
       </div>
@@ -1330,7 +1341,7 @@ function showIntroTablette() {
   const $i = (sel) => back.querySelector(sel);
   const steps = [...back.querySelectorAll('.intro-step')];
   $i('.guide-dots').innerHTML = steps.map(() => '<span></span>').join('');
-  $i('[data-step="0"] p').textContent = `Quelques questions pour que la tablette de ${nom} soit prête : nuit, son, options. Une minute, et tout reste modifiable dans Réglages.`;
+  $i('[data-step="0"] p').textContent = 'Une minute. Tout reste modifiable dans Réglages.';
   back.querySelectorAll('.intro-nom').forEach((e) => { e.textContent = nom; });
   $i('#intro-veille').checked = choix.veille.active !== false;
   $i('#intro-heures').hidden = !$i('#intro-veille').checked;
@@ -1365,7 +1376,7 @@ function showIntroTablette() {
     steps.forEach((s, k) => { s.hidden = k !== i; });
     requestAnimationFrame(suite);
     back.querySelectorAll('.guide-dots span').forEach((d, k) => d.classList.toggle('on', k === i));
-    $i('.intro-next').textContent = i === 0 ? 'Commencer' : i === steps.length - 1 ? 'Inviter la famille' : 'Suivant';
+    $i('.intro-next').textContent = i === 0 ? 'Commencer' : i === steps.length - 1 ? 'Inviter' : 'Suivant';
     $i('.intro-prev').textContent = i === 0 ? 'Plus tard' : i === steps.length - 1 ? 'Terminer' : 'Retour';
     $i('.intro-error').hidden = true;
     // Le dernier mot dit le vrai (testeur, V7 du 17/11) : « est réglée » seulement si la tablette est là ; en route,
@@ -1374,8 +1385,8 @@ function showIntroTablette() {
       const arrivee = tabletMembers.length > 0;
       $i('[data-step="5"] h2').textContent = arrivee ? "C'est prêt" : "C'est noté";
       $i('[data-step="5"] p').textContent = arrivee
-        ? `La tablette de ${nom} est réglée. Invitez maintenant la famille pour qu'elle envoie des photos.`
-        : `Les réglages sont enregistrés : la tablette de ${nom} les prendra dès son arrivée. Invitez maintenant la famille pour qu'elle envoie des photos.`;
+        ? "Invitez la famille pour qu'elle envoie des photos."
+        : `La tablette de ${nom} prendra ces réglages dès son arrivée. Invitez la famille pour qu'elle envoie des photos.`;
     }
   };
   // Une seule fenêtre au démarrage (testeur, V8 du 17/11 : 5 écrans de réglages puis 3 de guide) : après les
@@ -3459,8 +3470,8 @@ function renderTabletOwnerNote() {
   // Abonnement et réglages de la tablette : tout responsable (propriétaire et responsables nommés).
   $('tablet-owner-note').hidden = amFamilyAdmin();
   $('tablet-owner-text').textContent = owner?.name
-    ? `La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone de ${owner.name} ou d'un autre responsable de la famille. Demandez-leur si besoin.`
-    : "La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone d'un responsable de la famille.";
+    ? `Ils se changent depuis le téléphone d'un responsable : ${owner.name}.`
+    : "Ils se changent depuis le téléphone d'un responsable de la famille.";
 }
 
 // Qui la tablette peut appeler (Tanguy 17/11 : « 1 téléphone reçoit les appels » restait affiché après l'ajout d'un
@@ -3608,7 +3619,7 @@ function renderMembers(all) {
           if (choix === 'admin') {
             const msg = isAdmin
               ? `Retirer le rôle de responsable à ${m.name} ? Cette personne ne pourra plus accepter de membres, changer les réglages ni gérer l'abonnement.`
-              : `Rendre ${m.name} responsable ? Cette personne pourra accepter des membres, changer les réglages de la tablette et gérer l'abonnement (moyen de paiement, factures, résiliation).`;
+              : `Rendre ${m.name} responsable ? Cette personne pourra accepter des membres, changer les réglages de la tablette et gérer l'abonnement.`;
             if (await askConfirm(msg, isAdmin ? 'Retirer le rôle' : 'Rendre responsable')) setFamilyAdmin(m.id, !isAdmin);
           } else if (choix === 'tete') {
             const msg = m.enTete
@@ -4165,7 +4176,7 @@ document.querySelectorAll('[data-order-form]').forEach((form) => form.addEventLi
     const code = err.code || '';
     notice(code.endsWith('not-found')
       ? (input.value.trim()
-        ? 'Ce code de commande est inconnu. Vérifiez-le sur la page de confirmation ou la facture.'
+        ? "Ce code de commande est inconnu. Vérifiez-le dans l'e-mail de confirmation."
         : `Aucune commande trouvée pour ${myEmail()}. Entrez le code de commande, il est sur la page de confirmation et sur la facture.`)
       : code.endsWith('invalid-argument') ? 'Ce code de commande n\'a pas le bon format (8 lettres, comme ABCD-EFGH).'
         : code.endsWith('failed-precondition') ? 'Cette famille a déjà un abonnement.'
@@ -4661,16 +4672,16 @@ function renderAbonnement() {
     text = TEXTE_ARRETE;
   } else if (!abonnementOk(session.family)) {
     text = admin
-      ? "Papote est en pause : l'abonnement de la famille doit être réglé. Tout reviendra automatiquement."
+      ? "Papote est en pause. Réglez l'abonnement : tout revient tout seul."
       : `Papote est en pause. ${quiRegle()}`;
   }
   // Sans abonnement en cours : un responsable peut relier une commande déjà payée sur le site.
   const sansAbo = ['aucun', 'resilie', 'suspendu', 'installation'].includes(statut) && admin;
   // Fin d'installation sans commande reliée : dire quoi faire, pas seulement « en attente ».
-  if (statut === 'aucun' && admin) text = "Aucune commande n'est reliée à cette tablette. Vous l'avez commandée sur le site ? Entrez le code de commande ci-dessous. Sinon, choisissez un abonnement dans Réglages, « Mon profil ».";
+  if (statut === 'aucun' && admin) text = "Aucune commande n'est reliée à cette tablette. Pas encore commandé ? Choisissez un abonnement dans Réglages, « Mon profil ».";
   // Installation finie sans commande reliée (B3) : tout fonctionne 48 h, le temps d'entrer le code.
   if (statut === 'installation' && admin) {
-    text = `Entrez le code de votre commande (dans l'e-mail de confirmation) pour la relier à cette tablette.${abo.toleranceJusqua ? ` Papote fonctionne en attendant, jusqu'au ${dateLongue(abo.toleranceJusqua)}.` : ''}`;
+    text = `Reliez votre commande à cette tablette.${abo.toleranceJusqua ? ` Papote fonctionne en attendant, jusqu'au ${dateLongue(abo.toleranceJusqua)}.` : ''}`;
   }
   $('abo-banner').hidden = !text;
   $('abo-banner-text').textContent = text;
@@ -5083,7 +5094,6 @@ function renderRemote() {
     const online = tablet.lastOnline ? toDate(tablet.lastOnline) : null;
     // Hors ligne : dit que les actions attendront son retour (banc du 19/11 : on croyait qu'elles agissaient tout de suite).
     // Hors ligne, une seule explication : celle qui dit ce qui va se passer (Tanguy, 24/11 : deux textes à la suite).
-    $('remote-intro').hidden = !tabletteEnLigne();
     $('remote-tablet').textContent = !tabletteEnLigne()
       ? `Tablette hors ligne${online ? ` (vue ${ago(online.getTime())})` : ''} : ces actions partiront à son retour.`
       : online ? `Tablette vue en ligne ${ago(online.getTime())}.` : 'Tablette reliée.';
@@ -5505,7 +5515,6 @@ function renderOptions() {
   $('duree-value').textContent = `${m} minute${m > 1 ? 's' : ''}`;
   $('radio-value').textContent = o.radio?.active ? (o.radio.nom || 'Activée') : 'Désactivée';
   // Interrupteurs à effet immédiat : ils suivent la base, sauf pendant leur propre envoi.
-  $('opt-rappels-accueil-texte').textContent = o.rappelsAccueil !== false ? "Oui. Pour en créer un : case Rappels, sur l'accueil." : "Non. Pour en créer un : case Rappels, sur l'accueil.";
   for (const [id, on] of [['opt-lecture', o.lecture !== false], ['opt-rappels-accueil', o.rappelsAccueil !== false]]) {
     if (!$(id).disabled) $(id).checked = on;
   }
@@ -6320,18 +6329,19 @@ function numeroTablette() {
 }
 const enGoOuMo = (mo) => (mo >= 1000 ? `${(mo / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go` : `${Math.round(mo)} Mo`);
 function texteForfait(f, name) {
-  const debut = `Le forfait internet de la tablette de ${name} est utilisé à ${Math.min(f.pourCent, 100)} %`;
+  // Le fait en une ligne (en gras, voir faitPuisSuite), puis ce que ça change (2e épuration, 26/11).
+  const debut = `Forfait de la tablette utilisé à ${Math.min(f.pourCent, 100)} %.`;
   const jusqua = f.fin ? `jusqu'au ${f.fin}` : 'jusqu\'à sa recharge';
   // Forfait « internet coupé » au bout (Sosh 1 Go bloqué) : le dire simplement, avec la date et le geste utile.
-  const coupe = f.coupe && f.fin ? ` Une fois épuisé, internet sera coupé jusqu'au ${f.fin} ; branchez-la au wifi si vous pouvez.` : '';
+  const coupe = f.coupe && f.fin ? ` À 100 %, internet est coupé jusqu'au ${f.fin} : branchez-la au Wi-Fi si vous pouvez.` : '';
   if (f.niveau >= 3) {
     return f.coupe && f.fin
-      ? `${debut} : les appels passent sans image et les vidéos attendent le Wi-Fi.${coupe}`
-      : `${debut} : ${jusqua}, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours.${f.fin ? ' Branchez-la au wifi si vous pouvez.' : ''}`;
+      ? `${debut} Appels sans image, et les vidéos attendent le Wi-Fi.${coupe}`
+      : `${debut} Appels sans image ${jusqua}, et les vidéos attendent le Wi-Fi.${f.fin ? ' Branchez-la au Wi-Fi si vous pouvez.' : ''}`;
   }
   // Paliers de la tablette (Forfait.java) : 70 % image réduite, 88 % très réduite, 95 % son seul.
   const image = f.niveau >= 2 ? 'très réduite' : 'réduite';
-  return `${debut} : appels vidéo en image ${image} ${jusqua}. Photos et messages passent toujours.${coupe}`;
+  return `${debut} Appels vidéo en image ${image} ${jusqua}. Photos et messages passent toujours.${coupe}`;
 }
 
 function renderTabletChip() {
@@ -6507,7 +6517,7 @@ function renderActivity() {
   } else if (now - online > enLigneMs() && coupeeParForfait()) {
     // Forfait « internet coupé » épuisé : pas de panique « ne répond plus », la vraie raison et la date.
     el.classList.add('calme');
-    el.textContent = `La tablette de ${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au wifi si vous pouvez.`;
+    el.textContent = `La tablette n'a sans doute plus internet. Son forfait est épuisé jusqu'au ${coupeeParForfait().fin} : branchez-la au Wi-Fi si vous pouvez.`;
   } else if (now - online > enLigneMs()) {
     // Ce que l'app sait déjà (branchée) est utilisé.
     el.classList.add('warn');
@@ -6550,7 +6560,10 @@ function renderActivity() {
       const a = document.createElement('a');
       a.href = `tel:${tel.replace(/\s/g, '')}`;
       a.textContent = `Appeler ${name} par téléphone`;
-      el.append(' ', a);
+      // Le lien va dans la suite (texte normal), pas dans la ligne en gras.
+      faitPuisSuite(el);
+      (el.querySelector('.alerte-suite') || el).append(' ', a);
+      el.dataset.suite = el.textContent;
     }
   } else if (nonVusEnCours(active)) {
     // 3 envois ou rappels de suite pas vus (functions/alertes.js alerteNonVus, qui a aussi prévenu les responsables).
@@ -7189,7 +7202,7 @@ function showLogin(legacy) {
 }
 
 // Code famille : un responsable accepte l'arrivée.
-const JOIN_AIDE = "Entrez le code famille qu'on vous a envoyé : un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.";
+const JOIN_AIDE = 'Entrez le code famille reçu. Pas de code ? Demandez à un proche de vous inviter par e-mail.';
 
 // lienInconnu : lien ou QR code d'invitation dont le code ne correspond à aucune famille (code montré, avec le mot).
 function showJoin(canGoBack, { lienInconnu = false } = {}) {
@@ -7239,7 +7252,7 @@ function showInvitations(invitations) {
     // Famille préparée à la commande (functions/famille-preparee.js) : c'est l'espace de celui qui a payé.
     card.querySelector('h2').textContent = inv.preparee ? 'Votre espace famille Papote' : `Famille de ${inv.familyName}`;
     card.querySelector('p.muted').textContent = inv.preparee
-      ? 'Votre commande est enregistrée et votre famille vous attend : donnez le nom de votre proche, envoyez les premières photos et invitez vos proches.'
+      ? 'Votre commande est bien enregistrée.'
       : `${inv.invitedBy || 'Un responsable'} vous invite à rejoindre la famille.`;
     if (inv.preparee) card.querySelector('button[type=submit]').textContent = 'Entrer dans ma famille';
     card.addEventListener('submit', async (e) => {
