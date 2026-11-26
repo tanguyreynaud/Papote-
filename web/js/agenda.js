@@ -58,7 +58,7 @@ function describe(r) {
 }
 
 const POUR_TOUJOURS = '9999-12-31';
-const dateCourte = (j) => new Date(`${j}T00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+const dateCourte = (j) => new Date(`${j}T00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }).replace(/^1 /, '1er ');
 const enPause = (r) => !!r.enPauseJusquau && r.enPauseJusquau >= todayKey();
 const avanceTexte = (m) => (m === 0 ? 'à l\'heure seulement' : m >= 60 ? `${m / 60} h avant` : `${m} min avant`);
 

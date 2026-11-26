@@ -1444,7 +1444,7 @@ function messagesEnTexte(posts) {
   const grand = session.family.name;
   const lignes = posts.map((p) => {
     const quand = toDate(p.createdAt);
-    const date = quand ? `${quand.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à ${quand.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : '';
+    const date = quand ? `${quand.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).replace(/^1 /, '1er ')} à ${quand.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : '';
     return `${date}, ${p.type === 'reply' ? grand : (p.authorName || 'Papote')} : ${p.text}`;
   });
   return `Messages de la famille de ${grand} sur Papote\r\n\r\n${lignes.join('\r\n')}\r\n`;
@@ -4034,7 +4034,9 @@ applyTheme(currentTheme());
 // ---------- Abonnement ----------
 
 const ABO_OK_KEY = 'papote.retourPaiement';
-const dateLongue = (ts) => (ts ? toDate(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+// « 1er novembre », pas « 1 novembre » (relecture du 26/11).
+const avec1er = (date) => date.replace(/^1 /, '1er ');
+const dateLongue = (ts) => (ts ? avec1er(toDate(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })) : '');
 
 // Abonnement arrêté : la famille l'a voulu, jamais « doit être réglé » (lu par une famille en deuil).
 const TEXTE_ARRETE = "L'abonnement Papote est arrêté : la tablette ne reçoit plus de photos ni d'appels. Les photos, les vidéos et les messages restent ici quelque temps : vous pouvez tout télécharger depuis la page Photos.";
@@ -4321,7 +4323,7 @@ function enAttenteEnvoi(abo) {
 function dateArret(abo) {
   const fin = [abo.essaiJusqua, abo.finPeriode].map((t) => (t ? toDate(t) : null)).filter(Boolean)
     .sort((a, b) => b - a)[0];
-  return fin ? fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+  return fin ? avec1er(fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })) : null;
 }
 
 $('btn-resilier').addEventListener('click', async () => {
@@ -4451,7 +4453,7 @@ let finCle = null;
 let finInfo = null;
 let resilierPossible = false; // calculé par renderAbonnement
 const euros = (centimes) => `${(centimes / 100).toLocaleString('fr-FR', { minimumFractionDigits: centimes % 100 ? 2 : 0 })} €`;
-const jourMois = (ms) => new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+const jourMois = (ms) => avec1er(new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }));
 
 // Demandé au serveur une fois par état d'abonnement (pas à chaque mise à jour de la famille).
 async function renderFinDeContrat(abo) {
@@ -4890,7 +4892,7 @@ async function connecter(r, password, statut) {
       pris = true;
       dire(cmd.result || `La tablette essaie « ${r.ssid} »…`, 'attente');
       clearTimeout(timer);
-      timer = setTimeout(() => dire(`La tablette n'a pas encore répondu. Elle reste sur son ancien wifi tant que « ${r.ssid} » ne marche pas.`, 'attente'), WIFI_ESSAI_MS);
+      timer = setTimeout(() => dire(`La tablette n'a pas encore répondu. Elle reste sur son ancien Wi-Fi tant que « ${r.ssid} » ne marche pas.`, 'attente'), WIFI_ESSAI_MS);
       return;
     }
     clearTimeout(timer);
@@ -6296,7 +6298,7 @@ function forfaitTablette() {
   const pourCent = Math.round((sim.dataCycleMo * 100) / sim.plafondMo);
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sim.cycleDebut || '');
   const reglage = session?.family?.forfaitSim || {};
-  const jourMois = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const jourMois = (d) => avec1er(d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' }));
   const debut = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)) : null;
   const finMs = debut ? (reglage.debut ? Date.UTC(+m[1], +m[2] - 1, +m[3] + 30, 12) : Date.UTC(+m[1], +m[2], +m[3], 12)) : null;
   return {
@@ -6323,11 +6325,11 @@ function texteForfait(f, name) {
   const debut = `Le forfait internet de la tablette de ${name} est utilisé à ${Math.min(f.pourCent, 100)} %`;
   const jusqua = f.fin ? `jusqu'au ${f.fin}` : 'jusqu\'à sa recharge';
   // Forfait « internet coupé » au bout (Sosh 1 Go bloqué) : le dire simplement, avec la date et le geste utile.
-  const coupe = f.coupe && f.fin ? ` Une fois épuisé, internet sera coupé jusqu'au ${f.fin} ; branchez-la au wifi si vous pouvez.` : '';
+  const coupe = f.coupe && f.fin ? ` Une fois épuisé, internet sera coupé jusqu'au ${f.fin} ; branchez-la au Wi-Fi si vous pouvez.` : '';
   if (f.niveau >= 3) {
     return f.coupe && f.fin
       ? `${debut} : les appels passent sans image et les vidéos attendent le Wi-Fi.${coupe}`
-      : `${debut} : ${jusqua}, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours.${f.fin ? ' Branchez-la au wifi si vous pouvez.' : ''}`;
+      : `${debut} : ${jusqua}, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours.${f.fin ? ' Branchez-la au Wi-Fi si vous pouvez.' : ''}`;
   }
   // Paliers de la tablette (Forfait.java) : 70 % image réduite, 88 % très réduite, 95 % son seul.
   const image = f.niveau >= 2 ? 'très réduite' : 'réduite';
@@ -6507,7 +6509,7 @@ function renderActivity() {
   } else if (now - online > enLigneMs() && coupeeParForfait()) {
     // Forfait « internet coupé » épuisé : pas de panique « ne répond plus », la vraie raison et la date.
     el.classList.add('calme');
-    el.textContent = `La tablette de ${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au wifi si vous pouvez.`;
+    el.textContent = `La tablette de ${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au Wi-Fi si vous pouvez.`;
   } else if (now - online > enLigneMs()) {
     // Ce que l'app sait déjà (branchée) est utilisé.
     el.classList.add('warn');
