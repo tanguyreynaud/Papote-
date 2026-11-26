@@ -76,7 +76,7 @@ function gestionDonnees(o = {}) {
     { id: 'T-007', ref: 'T-007', numero: 'BV60P-0007', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-RS45', fid: 'f-odette', sim: '07 51 00 11 22', simId: 'S5', prixAchat: 12999, acheteeLe: il(80), depense: 'D-A0', creeLe: il(80) },
     { id: 'T-008', ref: 'T-008', numero: 'BV60P-0008', modele: 'Blackview Tab 60 Pro', etat: 'revenue', prixAchat: 12999, acheteeLe: il(80), depense: 'D-A0', creeLe: il(80), batterie: { niveau: 64, le: il(2) } },
     { id: 'T-009', ref: 'T-009', numero: 'BV60P-0009', modele: 'Blackview Tab 60 Pro', etat: 'revenue', usure: 'batterie usée (62 % de sa capacité)', prixAchat: 12999, acheteeLe: il(200), depense: 'D-A0', creeLe: il(200) },
-    { id: 'T-010', ref: 'T-010', numero: '', modele: 'Blackview Tab 60 Pro', etat: 'en-stock', creeLe: il(9) },
+    { id: 'T-010', ref: 'T-010', numero: '', modele: 'Blackview Tab 60 Pro', etat: 'en-stock', enVente: false, creeLe: il(9) },
     { id: 'T-011', ref: 'T-011', numero: 'BV60P-0011', modele: 'Blackview Tab 60 Pro', etat: 'a-reparer', notes: 'Écran fissuré au retour', prixAchat: 12999, acheteeLe: il(90), depense: 'D-A0', creeLe: il(90) },
     { id: 'T-012', ref: 'T-012', numero: 'BV60P-0012', modele: 'Blackview Tab 60 Pro', etat: 'chez-client', commande: 'CMD-OF01', fid: 'f-mamies', prixAchat: 12999, acheteeLe: il(25), depense: 'D-A0', creeLe: il(25) },
     // Installées par QR (functions/installation-qr.js) : hors critères avec une SIM à code PIN, et une tablette d'essai.

@@ -20,6 +20,12 @@ test('une tablette jumelée à une famille sans commande (tablette de test) n\'e
   assert.strictEqual(vendable(compter({ stock: [{ etat: 'en-stock', fid: 'famille-test' }] })), false);
 });
 
+test('une tablette pas mise en vente ne compte pas ; une fiche d\'avant (sans le champ) reste vendable (Tanguy, 25/11)', () => {
+  assert.strictEqual(compter({ stock: [{ etat: 'en-stock', enVente: false }, { etat: 'preparee', enVente: false }] }), 0);
+  assert.strictEqual(compter({ stock: [{ etat: 'preparee', enVente: false }, { etat: 'preparee', enVente: true }, { etat: 'en-stock' }] }), 2);
+  assert.strictEqual(vendable(compter({ stock: [{ etat: 'preparee', enVente: false }] })), false);
+});
+
 test('une commande payée sans fiche prend une tablette', () => {
   const stock = [{ etat: 'en-stock' }, { etat: 'en-stock' }];
   const commandes = [{ id: 'a', expedition: 'a-preparer' }, { id: 'b', expedition: 'envoyee' }, { id: 'c', expedition: 'annulee' }];

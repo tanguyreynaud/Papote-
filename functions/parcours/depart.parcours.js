@@ -67,6 +67,11 @@ test('tablette revenue : pas « En stock » sans remise à zéro confirmée ; la
   assert.strictEqual(f.fid, null, 'pas reprise par l\'ancienne famille');
   assert.strictEqual(f.tabletUid, null);
   assert.strictEqual(f.etat, 'en-stock');
+  // Revenue d'un client : le site ne la revend qu'une fois remise en vente à la main (Tanguy, 25/11).
+  assert.strictEqual(f.enVente, false);
+  assert.strictEqual((await s.requete('stockDisponible', {})).json.disponible, false, 'pas encore remise en vente');
+  await modifier(t, { enVente: true });
+  assert.strictEqual((await fiche(t)).historique.at(-1).motif, 'mise en vente');
   assert.strictEqual((await s.requete('stockDisponible', {})).json.disponible, true, 'le site la compte en stock');
   // Nouvelle cliente : la tablette se relie à sa commande et part.
   const { abonnement: id2 } = await a.commanderEtPayer({ email: 'lea@exemple.fr', nom: 'Léa Durand' });
@@ -112,6 +117,7 @@ test('ancien client qui a rendu sa tablette et reprend Papote dans l\'appli : un
   s.avancer(5);
   await materielRecu(id, t);
   await modifier(t, { etat: 'en-stock', remiseAZero: true });
+  await modifier(t, { enVente: true });
   s.avancer(3);
   const { url } = await s.appeler('creerPaiement', { fid, formule: 'sim' }, paul);
   const session = url.split('/').pop();

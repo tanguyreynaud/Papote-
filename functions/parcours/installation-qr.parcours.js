@@ -102,6 +102,9 @@ test('QR : tablette hors critères notée avec le détail (pas refusée) ; table
   const stock = require('../stock');
   assert.strictEqual(await stock.nombreDisponibles(s.db), 0);
   await s.appeler('gestionStock', { action: 'modifier', id: fiche.id, champs: { horsCriteres: null } }, TANGUY);
+  // Gardée, mais créée par l'installation : pas vendue tant qu'elle n'est pas mise en vente (Tanguy, 25/11).
+  assert.strictEqual(await stock.nombreDisponibles(s.db), 0);
+  await s.appeler('gestionStock', { action: 'modifier', id: fiche.id, champs: { enVente: true } }, TANGUY);
   assert.strictEqual(await stock.nombreDisponibles(s.db), 1);
   const gardee = await s.lire(`stock/${fiche.id}`);
   assert.deepStrictEqual(gardee.horsCriteresAccepte.detail, detail);

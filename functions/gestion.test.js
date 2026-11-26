@@ -929,3 +929,14 @@ test('schéma de lecture des factures : peu de champs à deux types, textes abse
   assert.strictEqual(r.cartesSim.finForfait, null);
   assert.strictEqual(r.cartesSim.identifiantClient, null);
 });
+
+test('mise en vente : seulement une tablette libre du stock (Tanguy, 25/11)', () => {
+  const r = g.refusMiseEnVente;
+  assert.strictEqual(r({ etat: 'en-stock' }), null);
+  assert.strictEqual(r({ etat: 'preparee' }), null);
+  assert.match(r({ etat: 'envoyee' }), /en stock ou préparée/);
+  assert.match(r({ etat: 'preparee', commande: 'sub_1' }), /réservée/);
+  assert.match(r({ etat: 'preparee', fid: 'f' }), /famille/);
+  assert.match(r({ etat: 'en-stock', essai: true }), /essai/);
+  assert.match(r({ etat: 'preparee', horsCriteres: { detail: [] } }), /Garder quand même/);
+});

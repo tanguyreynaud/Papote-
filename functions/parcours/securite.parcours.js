@@ -214,10 +214,13 @@ test('facture de tablettes reçue par e-mail : tablettes « commandées », pas 
   assert.strictEqual(fiches.length, 10);
   // (Page de paiement du site : fermée par ce même compte du stock ; ouverte ici seulement par la clé Stripe de test.)
   assert.strictEqual((await s.requete('stockDisponible')).json.disponible, false, 'rien à vendre tant que rien n\'est arrivé');
-  // Tanguy ouvre le parcours de réception d'une tablette arrivée : elle passe « En stock » et se vend.
+  // Tanguy ouvre le parcours de réception d'une tablette arrivée : elle passe « En stock », mais ne se vend qu'une
+  // fois « Mise en vente » (Tanguy, 25/11).
   await s.appeler('gestionParcours', { type: 'reception', id: fiches[0].id, reception: { etape: 1 } }, a.TANGUY);
   const apres = (await s.db.doc(`stock/${fiches[0].id}`).get()).data();
   assert.strictEqual(apres.etat, 'en-stock');
+  assert.strictEqual((await s.requete('stockDisponible')).json.disponible, false, 'reçue, pas encore mise en vente');
+  await s.appeler('gestionStock', { action: 'modifier', id: fiches[0].id, champs: { enVente: true } }, a.TANGUY);
   assert.strictEqual((await s.requete('stockDisponible')).json.disponible, true);
 });
 

@@ -11,7 +11,9 @@
 //
 // Disponibles = fiches du stock libres (en stock ou préparées, sans commande, ni d'essai ni hors critères, et pas
 //               jumelées à une famille : une tablette dans une famille, comme celle de la « famille test » de Tanguy,
-//               n'est jamais à vendre)
+//               n'est jamais à vendre), et mises en vente (Tanguy, 25/11 : une tablette ajoutée au stock n'est pas
+//               vendable tant qu'il ne l'a pas « Mise en vente » dans l'admin ; enVente: false. Les fiches d'avant,
+//               sans ce champ, restent vendables)
 //             - commandes payées pas encore reliées à une fiche
 //             - paiements en cours (reservations/{id}, une tablette mise de côté pendant le paiement Stripe).
 // Une réservation naît à l'ouverture du paiement, disparaît au paiement réussi (la commande prend le relais)
@@ -34,8 +36,9 @@ const ms = (v) => (v == null ? null : typeof v === 'number' ? v : v.toMillis ? v
 // { stock: [{ etat, commande, fid }], commandes: [{ id, expedition }], reservations: [{ expireLe }] } → tablettes du stock
 // encore libres, négatif quand des commandes attendent une tablette pas encore achetée.
 function solde({ stock, commandes, reservations, maintenant }) {
-  // Tablette d'essai, installée hors critères sans accord, ou jumelée à une famille : pas à vendre.
-  const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande && !t.fid && t.essai !== true && !t.horsCriteres).length;
+  // Tablette d'essai, installée hors critères sans accord, jumelée à une famille, ou pas mise en vente : pas à vendre.
+  const libres = stock.filter((t) => ETATS_LIBRES.includes(t.etat) && !t.commande && !t.fid && t.essai !== true && !t.horsCriteres
+    && t.enVente !== false).length;
   const reliees = new Set(stock.map((t) => t.commande).filter(Boolean));
   const enAttente = commandes.filter((c) => A_SERVIR.includes(c.expedition) && !reliees.has(c.id)).length;
   // Essai noté sans tablette mise de côté (plafond RESERVATIONS_MAX atteint) : ne compte pas dans le stock.

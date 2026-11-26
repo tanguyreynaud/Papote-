@@ -86,6 +86,15 @@ const SUITES = {
   'hors-service': [],
 };
 const transitionPermise = (de, vers) => de === vers || !de || (SUITES[de] || []).includes(vers);
+// Mise en vente refusée (texte affiché) ou null : seule une tablette libre du stock peut être vendue par le site.
+function refusMiseEnVente(t) {
+  if (!['en-stock', 'preparee'].includes(t.etat)) return 'Seule une tablette en stock ou préparée peut être mise en vente.';
+  if (t.commande) return 'Cette tablette est déjà réservée pour une commande.';
+  if (t.fid) return 'Cette tablette est dans une famille : elle n\'est pas à vendre.';
+  if (t.essai === true) return 'Une tablette d\'essai n\'est jamais vendue.';
+  if (t.horsCriteres) return 'Tablette hors critères : gardez-la d\'abord (« Garder quand même »).';
+  return null;
+}
 
 // Vie d'une tablette du parc.
 const ETATS = {
@@ -1042,6 +1051,8 @@ async function ajouterAchat(d, qui) {
       sim: null,
       notes: null,
       depense: depenseId,
+      // Pas vendable par le site tant que Tanguy ne l'a pas « Mise en vente » (25/11, stock.js).
+      enVente: false,
       historique: [{ le: Date.now(), etat: etatNeuve, par: qui }],
       majLe: FieldValue.serverTimestamp(),
     });
@@ -1185,7 +1196,7 @@ async function remplacerPanne(d, qui, kit, commande, motif) {
       historique: FieldValue.arrayUnion(trace('revenue', { ancienneRecue: true })),
     });
     tx.update(neuve.ref, {
-      etat: 'envoyee', commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
+      etat: 'envoyee', enVente: false, commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
       historique: FieldValue.arrayUnion(trace('envoyee')),
     });
   });
@@ -1236,7 +1247,7 @@ async function remplacer(d, qui) {
       historique: FieldValue.arrayUnion(trace('en-retour', { remplacement: true, raison })),
     });
     await neuve.ref.update({
-      etat: 'envoyee', commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
+      etat: 'envoyee', enVente: false, commande, accessoires: kit.get('accessoires') || [], majLe: FieldValue.serverTimestamp(),
       historique: FieldValue.arrayUnion(trace('envoyee', { remplacement: true, raison })),
     });
     if (perdue && kit.get('simId')) await enregistrerSim(kit.get('simId'), { statut: 'suspendue', tablette: null }, qui);
@@ -1291,7 +1302,7 @@ exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, a
   if (d.action === 'recue') {
     const ref = await db().collection('stock').add({
       numero: texte(d.numero, 80) || null, modele: texte(d.modele) || null, fournisseur: texte(d.fournisseur) || null,
-      prixAchat: null, acheteeLe: null, etat: 'en-stock', commande: null, sim: null,
+      prixAchat: null, acheteeLe: null, etat: 'en-stock', commande: null, sim: null, enVente: false,
       notes: 'Reçue avant sa facture : transférez la facture du vendeur à factures@mapapote.fr.',
       historique: [{ le: Date.now(), etat: 'en-stock', par: qui }],
       creeLe: FieldValue.serverTimestamp(), majLe: FieldValue.serverTimestamp(),
@@ -1318,6 +1329,7 @@ exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, a
     batch.set(neuve, {
       numero: null, modele, fournisseur: snap.get('fournisseur') || null, prixAchat: snap.get('prixAchat'),
       acheteeLe: snap.get('acheteeLe'), etat: 'en-stock', commande: null, sim: null, notes: null, depense: snap.get('depense'),
+      enVente: false,
       historique: [{ le: Date.now(), etat: 'en-stock', par: qui }],
       creeLe: FieldValue.serverTimestamp(), majLe: FieldValue.serverTimestamp(),
     });
@@ -1342,6 +1354,14 @@ exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, a
       if ((await dep.get()).exists) await dep.update({ fournisseur: maj.fournisseur, majLe: FieldValue.serverTimestamp() });
     }
     if ('simCout' in champs) maj.simCout = centimes(champs.simCout);
+    // « Mettre en vente » / « Retirer de la vente » (Tanguy, 25/11) : seule une tablette libre du stock se met en vente.
+    if ('enVente' in champs && (champs.enVente === true) !== (snap.get('enVente') !== false)) {
+      const enVente = champs.enVente === true;
+      const refus = enVente ? refusMiseEnVente(snap.data()) : null;
+      if (refus) throw new HttpsError('failed-precondition', refus);
+      maj.enVente = enVente;
+      maj.historique = FieldValue.arrayUnion({ le: Date.now(), etat: snap.get('etat'), par: qui, motif: enVente ? 'mise en vente' : 'retirée de la vente' });
+    }
     // Installée par QR hors critères (installation-qr.js) : l'administrateur la garde quand même.
     if (champs.horsCriteres === null && snap.get('horsCriteres')) {
       maj.horsCriteres = null;
@@ -1393,6 +1413,8 @@ exports.gestionStock = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, a
           const refusSim = await refusSimAvantDepart(commande, snap.data());
           if (refusSim) throw new HttpsError('failed-precondition', refusSim);
           sortis = await sortirAccessoires(commande);
+          // Partie chez un client : à son retour, elle ne se revend qu'une fois remise en vente à la main.
+          maj.enVente = false;
           // Le kit du client : ce qui est parti avec la tablette.
           maj.accessoires = sortis;
           // Carte SIM encore « en stock » dans la tablette qui part : elle est activée à la préparation.
@@ -4440,7 +4462,7 @@ exports.gestionParcours = onCall(async (request) => {
 
 exports.regles = {
   ETATS, CATEGORIES, sansEssaisEffaces, natureMouvement, mensuel, centimes, lien, nomFichier, moisSuivant, lectureVersFormulaire, SCHEMA_FACTURE, champsDeuxTypes, MAX_CHAMPS_DEUX_TYPES,
-  lireReglages, transitionPermise, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
+  lireReglages, transitionPermise, refusMiseEnVente, SUITES, simAResilier, fichesARattacher, sansFacture, stockAJour, releveBatterie, usureBatterie, incoherences, materielLu, memeAccessoire, coutLigne, alertesSim, finApresRecharge, simDeFacture, forfaitFamille, accessoiresAPrevoir, champsSim, aFaire, piecesFacture, debutMoisParis, moisPrecedent, csvTexte, livreDesRecettes,
   registreDesAchats, corpsDuMail, pagesPdf, reparerAccents, confirmationSelonTitre, confirmationARattacher, rangerFacture, memeFournisseur, destinataireDuMail, memeAchat, suiteJumelage, descriptionNonRendu, refusSuppression, fusionnerContacts, emailInformation, cleContact,
   avancementPropre, gardeFous, lireDocument, aReessayer,
 };

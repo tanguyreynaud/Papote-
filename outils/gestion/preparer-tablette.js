@@ -147,7 +147,7 @@ async function choisir(libres, serieTapee, enReception) {
   } else {
     await db.collection('stock').add({
       ref, serieAndroid: serie, numero: serie, modele: modele || null, etat: 'preparee', commande: null,
-      prixAchat: null, acheteeLe: null, preparee: Date.now(),
+      prixAchat: null, acheteeLe: null, preparee: Date.now(), enVente: false,
       notes: 'Créée à l\'installation : aucun achat en stock à rattacher (ajoutez la facture).',
       historique: [{ le: Date.now(), etat: 'preparee', par: 'installation' }],
       creeLe: FieldValue.serverTimestamp(),

@@ -230,6 +230,7 @@ function brancher({ db, logger, verifierAdmin, chercher }) {
     }
     const nouvelle = await stock.add({
       ...releve, ref, numero: serie, etat: 'preparee', preparee: maintenant, commande: null, prixAchat: null, acheteeLe: null, sim: null,
+      enVente: false,
       notes: choix.ambigu
         ? 'Installée par QR : plusieurs achats possibles. Reliez-la à son achat depuis « Recevoir une tablette ».'
         : 'Créée à l\'installation par QR : aucun achat en stock à rattacher (ajoutez la facture).',
