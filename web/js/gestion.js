@@ -1945,6 +1945,7 @@ function afficherStock() {
       const aSavoir = alertes.length ? h('span', { class: 'texte-ko' }, alertes.join(' · '))
         : t.essai === true ? h('span', { class: 'muted' }, 'tablette d\'essai')
           : DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? h('span', { class: 'muted' }, 'pas à vendre')
+          : tabletteLibre(t) && t.enVente === false ? h('span', { class: 'muted' }, 'pas en vente')
           : t.modele && !/tab 60 pro/i.test(t.modele) ? h('span', { class: 'muted' }, t.modele) : '';
       return {
         onclick: () => ouvrirTablette(t.id),
@@ -3220,6 +3221,7 @@ function remplirTablette(id) {
       // Attribuée à une commande par « Préparer l'envoi » (SIM, accessoires, étiquette), pas à la main.
       ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : dansUneFamille(t) ? null : h('span', { class: 'muted' }, 'pas encore attribuée')),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
+      ...ligne('Site', ligneVente(t)),
       ),
       groupe('La tablette',
       ...(fichesAchetees(t).length
@@ -3278,6 +3280,27 @@ function remplirTablette(id) {
   if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
   $('dt-actions').replaceChildren(actions.menu);
   f.querySelector('.f-msg').hidden = true;
+}
+
+// Vendable par le site ou pas (Tanguy, 25/11) : une tablette ajoutée au stock n'est pas vendue tant qu'il ne l'a
+// pas mise en vente (functions/stock.js). Seulement pour une tablette libre du stock.
+function ligneVente(t) {
+  if (!tabletteLibre(t)) return null;
+  const enVente = t.enVente !== false;
+  const bouton = h('button', { type: 'button', class: 'secondary small-btn', onclick: async (e) => {
+    const b = e.currentTarget;
+    if (b.disabled) return;
+    b.disabled = true;
+    boutonCharge(b, true);
+    try {
+      await enregistrerTablette(() => appeler('gestionStock', { action: 'modifier', id: t.id, champs: { enVente: !enVente } }),
+        enVente ? 'Retirée de la vente' : 'Mise en vente');
+    } finally {
+      b.disabled = false;
+      boutonCharge(b, false);
+    }
+  } }, enVente ? 'Retirer de la vente' : 'Mettre en vente');
+  return h('div', { class: 'ligne-vente' }, badge(enVente ? 'En vente' : 'Pas en vente', enVente ? 'ok' : 'neutre'), bouton);
 }
 
 // Installée par QR : critères manquants (la tablette n'est pas refusée, l'administrateur décide), SIM avec code PIN,
