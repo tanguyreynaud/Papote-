@@ -92,7 +92,7 @@ function etatAlerte(tablette, maintenant, veille) {
 function message(type, nom, coupee) {
   if (type === 'silence' && coupee) {
     const fin = require('./forfait-alerte').jourTexte(coupee);
-    return { titre: `La tablette de ${nom} n'a sans doute plus internet`, texte: `Son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au wifi si vous pouvez.` };
+    return { titre: `La tablette de ${nom} n'a sans doute plus internet`, texte: `Son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au Wi-Fi si vous pouvez.` };
   }
   return type === 'silence'
     ? { titre: `La tablette de ${nom} ne répond plus`, texte: 'Est-elle branchée et connectée au Wi-Fi ?' }

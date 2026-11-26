@@ -202,7 +202,7 @@ function relaisEnTexte(r) {
 }
 
 function dateEnClair(ms) {
-  return new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
+  return new Date(ms).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' }).replace(/(^| )1 /, '$11er ');
 }
 
 function euros(centimes) {
@@ -491,9 +491,9 @@ function appelSansTelephone({ nom, sos, lien }) {
     'Pour que les appels sonnent la prochaine fois :',
     { etapes: [
       'Ouvrez l\'appli Papote sur votre téléphone.',
-      'Touchez Réglages puis, sous « Ce téléphone », activez « Notifications ».',
+      'Touchez Réglages, « Mon profil » puis, sous « Ce téléphone », activez « Notifications ».',
       'Sur iPhone, ajoutez d\'abord l\'appli à l\'écran d\'accueil (bouton Partager, « Sur l\'écran d\'accueil ») : sinon, les notifications n\'arrivent pas.',
-      'Donnez votre numéro de portable dans l\'appli (Profil, « Mon numéro de portable ») : la tablette vous appellera alors comme un téléphone.',
+      'Donnez votre numéro de portable dans l\'appli (Réglages, « Mon profil », « Mon numéro de portable ») : la tablette vous appellera alors comme un téléphone.',
     ] },
   ], { texte: 'Ouvrir l\'appli Papote', lien });
 }
@@ -505,7 +505,7 @@ function sosSansProche({ nom, lien, le = Date.now() }) {
   const qui = echapper(nom || 'Votre proche');
   const d = new Date(le);
   const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).replace(':', ' h ');
-  const jour = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+  const jour = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' }).replace(/(^| )1 /, '$11er ');
   return message(`SOS : ${nom || 'votre proche'} a appuyé sur SOS à ${heure}, personne n'a pu être appelé`, [
     'Bonjour,',
     { encadre: `<b>${qui} a appuyé sur le bouton SOS</b> de sa tablette, ${jour} à <b>${heure}</b>. Appelez votre proche dès que possible.<br><b>S'il y a un danger, appelez tout de suite le 15 (Samu) ou le 112.</b>` },
@@ -535,13 +535,13 @@ function tabletteSansProche({ nom, lien, client }) {
 // type : 'reduit' (débit réduit au bout du forfait) ou 'bloque' (internet coupé) ; fin : jour où le forfait repart (ms).
 function forfaitPresqueEpuise({ nom, type, fin, lien }) {
   const qui = nom || 'votre proche';
-  const date = new Date(fin).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+  const date = new Date(fin).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' }).replace(/(^| )1 /, '$11er ');
   const suite = type === 'bloque'
     ? `internet sera coupé jusqu'au <b>${date}</b>`
     : `jusqu'au <b>${date}</b> les appels vidéo seront plus lents`;
   return message(`La tablette de ${qui} a presque utilisé son forfait internet du mois`, [
     'Bonjour,',
-    `La tablette de <b>${echapper(qui)}</b> a presque utilisé son forfait internet du mois : ${suite} ; branchez-la au wifi si vous pouvez.`,
+    `La tablette de <b>${echapper(qui)}</b> a presque utilisé son forfait internet du mois : ${suite} ; branchez-la au Wi-Fi si vous pouvez.`,
     type === 'bloque'
       ? `Rien n'est cassé : le forfait repart le ${date} et internet revient tout seul. Vous n'avez rien d'autre à faire.`
       : `Rien n'est cassé : photos et messages continuent d'arriver, et le forfait repart le ${date}. Vous n'avez rien d'autre à faire.`,
@@ -561,7 +561,7 @@ function paiementEchoue({ nom, famille, pauseLe, lien = LIEN_ABONNEMENT }) {
     { encadre: `Tout continue de fonctionner pour l'instant. Sans règlement, la tablette se mettra en pause le <b>${dateEnClair(pauseLe)}</b>.` },
     'Pour régler :',
     { etapes: [
-      'Ouvrez l\'appli Papote et touchez Profil.',
+      'Ouvrez l\'appli Papote, touchez Réglages puis « Mon profil ».',
       'Sous Abonnement, touchez « Régler le paiement ».',
       'Changez de carte ou de compte bancaire si besoin : le prélèvement est refait automatiquement.',
     ] },
@@ -572,9 +572,9 @@ function paiementEchoue({ nom, famille, pauseLe, lien = LIEN_ABONNEMENT }) {
 function papoteEnPause({ nom, famille, lien = LIEN_ABONNEMENT }) {
   return message('Papote est en pause', [
     bonjour(nom),
-    `L'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} n'a pas pu être prélevé, et le délai de sept jours est passé : la tablette est en pause. Elle n'affiche plus les photos ni les messages, et les appels sont coupés, bouton SOS compris.`,
+    `L'abonnement Papote${famille ? ` de <b>${echapper(famille)}</b>` : ''} n'a pas pu être prélevé, et le délai de sept jours est passé : la tablette est en pause. Elle n'affiche plus les photos ni les messages, et les appels sont coupés. Seul le bouton SOS continue de fonctionner.`,
     { encadre: 'Dès que le paiement est réglé, tout revient automatiquement, sans rien toucher à la tablette.' },
-    'Pour régler : ouvrez l\'appli Papote, touchez Profil puis, sous Abonnement, « Régler le paiement ».',
+    'Pour régler : ouvrez l\'appli Papote, touchez Réglages, « Mon profil » puis, sous Abonnement, « Régler le paiement ».',
   ], { texte: 'Régler le paiement', lien });
 }
 
@@ -959,7 +959,7 @@ function alerteSimHorsService({ nom, famille, ref, operateur, motif, hote, servi
   const quand = new Date(depuis).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).replace(':', ' h ');
   const tablette = `tablette ${ref ? `${ref} ` : ''}de ${nom || 'Mamie'}`;
   const qui = `La ${tablette}${famille ? ` (famille ${famille})` : ''}${operateur ? `, carte ${operateur}` : ''}`;
-  const cas = motif === 'antennes' ? `aucune antenne de son réseau${hote ? ` (${hote})` : ''}` : 'hors service';
+  const cas = motif === 'antennes' ? `sans antenne de son réseau${hote ? ` (${hote})` : ''}` : 'hors service';
   if (revenu) {
     return alerteAdmin({
       titre: `Carte SIM revenue : ${tablette}`,
@@ -1051,7 +1051,7 @@ function recapSemaine({ lignes, aFaire }) {
 
 // Livres comptables du mois (fichiers joints par gestion.js) : resume = [[titre, items], …].
 function livresComptables({ resume, titres }) {
-  return message(`Papote : livres comptables de ${titres.join(', ')}`, [
+  return message(`Papote : livres comptables (${titres.join(', ')})`, [
     'Le livre des recettes et le registre des achats sont joints (fichiers à ouvrir avec Excel) et rangés dans l\'espace admin, rubrique Comptabilité. Gardez cet e-mail : ce sont les registres obligatoires de la micro-entreprise.',
     ...resume.map(([titre, items]) => ({ section: { titre, items: items.map(echapper) } })),
   ], { texte: 'Ouvrir la comptabilité', lien: `${ADMIN}#compta` }, { interne: true });
