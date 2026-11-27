@@ -44,7 +44,7 @@
 .contenu-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
 .contenu-tete h1 { margin: 0; font-size: 28px; font-weight: 800; flex: 1; min-width: 180px; }
 .contenu-tete .periode { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.contenu-tete .periode select, .contenu-tete .periode input { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
+.contenu-tete .periode select, .contenu-tete .periode .liste-papote, .contenu-tete .periode input { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
 .contenu-tete .periode label { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; font-size: 15px; }
 .etat-periode { margin: -8px 0 14px; }
 

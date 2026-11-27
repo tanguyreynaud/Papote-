@@ -3,7 +3,7 @@
 .tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .tete h2 { margin: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.actions select { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
+.actions select, .actions .liste-papote { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
 
 .table { overflow-x: auto; margin: 10px 0 4px; }
 .table table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -11,7 +11,7 @@
 .table th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 .table td.n, .table th.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .table tr.total td { font-weight: 700; border-bottom: none; }
-.table select, .table input { margin: 0; padding: 6px 8px; font-size: 14px; min-width: 120px; }
+.table select, .table .liste-papote, .table input { margin: 0; padding: 6px 8px; font-size: 14px; min-width: 120px; }
 .table .neg { color: var(--danger); }
 .table .pos { color: var(--ok); }
 .table td:nth-child(2) { white-space: nowrap; }
@@ -57,7 +57,7 @@
   background: none; color: var(--muted); font-size: 15px; font-weight: 600; white-space: nowrap; box-shadow: none;
 }
 .onglets button.actif { color: var(--accent); background: #eef0ff; }
-.tete > select, .tete > input[type="search"] { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
+.tete > select, .tete > .liste-papote, .tete > input[type="search"] { width: auto; margin: 0; padding: 8px 12px; font-size: 15px; }
 
 @media print {
   .no-print, .nav, .periode, #btn-refresh { display: none !important; }
@@ -145,7 +145,8 @@ details.autres[open] > summary { color: var(--text); }
 .historique { list-style: none; margin: 0; padding: 0; }
 
 /* Lignes d'envoi : tablette du stock + n° de suivi. */
-.ship select.tablette, .ship select.sim { flex: 1; min-width: 0; margin: 0; padding: 8px 12px; }
+/* Lignes d'envoi : tablette du stock + n° de suivi. */
+.ship select.tablette, .ship .liste-papote.tablette, .ship select.sim, .ship .liste-papote.sim { flex: 1; min-width: 0; margin: 0; padding: 8px 12px; }
 
 /* ---------- Fenêtres ---------- */
 
@@ -168,7 +169,7 @@ details.autres[open] > summary { color: var(--text); }
   .fiche dd { margin-bottom: 8px; }
 }
 .ship { flex-wrap: wrap; }
-.ship select.tablette, .ship select.sim, .ship input { flex: 1 1 200px; }
+.ship select.tablette, .ship .liste-papote.tablette, .ship select.sim, .ship .liste-papote.sim, .ship input { flex: 1 1 200px; }
 .ship .kit { flex-basis: 100%; }
 .ship .kit:empty { display: none; }
 
@@ -243,7 +244,7 @@ body.depot-actif::after {
 
 /* Remplacement d'un élément du kit, dans la fiche commande. */
 .remplacement { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.remplacement select, .remplacement input { flex: 1 1 180px; min-width: 0; margin: 0; padding: 8px 12px; }
+.remplacement select, .remplacement .liste-papote, .remplacement input { flex: 1 1 180px; min-width: 0; margin: 0; padding: 8px 12px; }
 .remplacement p { flex-basis: 100%; margin: 0; }
 
 /* Clients et e-mails d'information */
@@ -279,7 +280,7 @@ body.depot-actif::after {
 .pc-texte { font-size: 17px; margin: 0 0 12px; }
 .pc-contenu { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .pc-contenu:empty { display: none; }
-.pc-contenu > select, .pc-contenu > input, .pc-champ input { margin: 0; font-size: 17px; }
+.pc-contenu > select, .pc-contenu > .liste-papote, .pc-contenu > input, .pc-champ input { margin: 0; font-size: 17px; }
 .pc-contenu > button { align-self: flex-start; }
 .pc-contenu .grille { gap: 0 14px; }
 .pc-champ { display: flex; flex-direction: column; gap: 6px; font-size: 16px; }
@@ -529,7 +530,7 @@ a, .link, button.link { text-decoration: none; }
   color: var(--muted); font-size: 15px; line-height: 1; box-shadow: none; opacity: .45; cursor: pointer; }
 .crayon:focus-visible { opacity: 1; color: var(--accent); background: #eef0ff; }
 .saisie-champ { display: flex; align-items: center; gap: 6px; width: 100%; }
-.saisie-champ input, .saisie-champ select, .saisie-champ textarea { flex: 1 1 auto; min-width: 0; width: auto; margin: 0; padding: 5px 10px; font-size: 15px; min-height: 0; height: 34px; background: #fff; }
+.saisie-champ input, .saisie-champ select, .saisie-champ .liste-papote, .saisie-champ textarea { flex: 1 1 auto; min-width: 0; width: auto; margin: 0; padding: 5px 10px; font-size: 15px; min-height: 0; height: 34px; background: #fff; }
 .saisie-champ textarea { height: auto; }
 .saisie-champ button.rond { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; box-shadow: none; }
 .saisie-champ button.rond.ok { background: var(--accent); color: #fff; border: none; }
@@ -614,7 +615,7 @@ button.secondary.charge::after, button.link.charge::after { border-color: rgba(7
 .fiche dd { min-width: 0; }
 @media (max-width: 640px) {
   .fiche { grid-template-columns: minmax(0, 1fr); }
-  .saisie-champ input, .saisie-champ select, .saisie-champ textarea { flex-basis: 0; }
+  .saisie-champ input, .saisie-champ select, .saisie-champ .liste-papote, .saisie-champ textarea { flex-basis: 0; }
 }
 
 /* Stock sur téléphone : chaque ligne devient une carte (titre de colonne à gauche, valeur à droite). */

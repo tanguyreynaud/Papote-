@@ -664,7 +664,17 @@ async function repondreSim(tablette, resultat = {}, { code = tablette.code, id =
   return ordre;
 }
 
+/** Liste déroulante Papote (listes.js) : ouvre la liste sous son bouton et touche le choix. */
+async function choisirDansListe(t, bouton, texte) {
+  await t.page.locator(bouton).first().click();
+  const menu = t.page.locator('.liste-papote-menu');
+  await menu.waitFor();
+  await menu.getByRole('option', { name: texte, exact: true }).click();
+  await menu.waitFor({ state: 'detached' });
+}
+
 module.exports = {
+  choisirDansListe,
   ordreSim, repondreSim, fermerTablettes,
   centre, doubleAppui, appuiLong, doigt, espionnerNavigation, reseau, tourner, clavier, fenetresOuvertes, attendreRetourVisible, nbAppels, serveurMuet, jamaisMainPropre,
   verifierLargeur,

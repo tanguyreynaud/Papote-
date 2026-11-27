@@ -57,3 +57,49 @@ test('Retour, balayage : chaque page ou feuille ouverte (même en double toucher
   }
   assert.deepStrictEqual(ecarts, []);
 });
+
+// Tanguy, 27/11 : la liste de durée d'affichage ouvrait la liste standard du téléphone (hors style Papote), et sur le
+// guide du premier lancement l'icône était décalée à gauche et « C'est parti » seul à droite.
+test('Style Papote : aucune liste standard du téléphone visible ; une liste Papote change bien le réglage', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie.listes@exemple.fr', prenom: 'Julie' });
+  await julie.page.click('#nav-reglages');
+  await g.attendreVue(julie, 'view-settings');
+  await julie.page.click('#duree-card .setting-modify');
+  // Tous les <select> de la page sont habillés : invisibles, avec un bouton Papote juste après.
+  const nus = await julie.page.evaluate(() => [...document.querySelectorAll('select')]
+    .filter((s) => !s.classList.contains('liste-native') || !s.nextElementSibling?.classList.contains('liste-papote') || getComputedStyle(s).opacity !== '0')
+    .map((s) => s.id || s.name));
+  assert.deepStrictEqual(nus, []);
+  // Le bouton montre la valeur, la liste s'ouvre juste sous lui (pas de fenêtre), et le choix s'enregistre comme avant.
+  const bouton = julie.page.locator('#duree-card .liste-papote');
+  assert.strictEqual((await bouton.innerText()).trim(), '3 minutes');
+  await bouton.click();
+  const menu = julie.page.locator('.liste-papote-menu');
+  await menu.waitFor();
+  assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing)').count(), 0, 'aucune fenêtre');
+  assert.deepStrictEqual(await menu.locator('.liste-papote-choix').allInnerTexts(), ['1 minute', '2 minutes', '3 minutes', '4 minutes', '5 minutes']);
+  assert.strictEqual((await menu.locator('[aria-selected="true"]').innerText()).trim(), '3 minutes');
+  const place = await julie.page.evaluate(() => {
+    const b = document.querySelector('#duree-card .liste-papote').getBoundingClientRect();
+    const m = document.querySelector('.liste-papote-menu').getBoundingClientRect();
+    return { dessous: Math.round(m.top - b.bottom), gauche: Math.round(m.left - b.left), large: Math.round(m.width - b.width), bas: Math.round(window.innerHeight - m.bottom) };
+  });
+  assert.ok(place.dessous >= 0 && place.dessous <= 8 && place.gauche === 0 && place.large === 0 && place.bas >= 0, `liste collée sous son champ, dans l'écran : ${JSON.stringify(place)}`);
+  await menu.getByRole('option', { name: '5 minutes' }).click();
+  await menu.waitFor({ state: 'detached' });
+  assert.strictEqual((await bouton.innerText()).trim(), '5 minutes');
+  await julie.page.click('#duree-card button[type=submit]');
+  await g.attendreBase(async () => (await g.lire(`families/${fid}`)).options?.dureeAffichage === 5, 'durée de 5 minutes enregistrée');
+  // Toucher à côté referme sans rien changer ; toucher le bouton une 2e fois aussi.
+  await julie.page.click('#duree-card .setting-modify');
+  await bouton.click();
+  await menu.waitFor();
+  await julie.page.locator('#duree-card h2').click();
+  await menu.waitFor({ state: 'detached' });
+  await bouton.click();
+  await menu.waitFor();
+  await bouton.click();
+  await menu.waitFor({ state: 'detached' });
+  assert.strictEqual((await bouton.innerText()).trim(), '5 minutes');
+});

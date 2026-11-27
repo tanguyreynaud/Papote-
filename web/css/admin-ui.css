@@ -17,9 +17,9 @@
 
 /* ---------- Boutons : taille de gestion (36 px), pas de pavés ---------- */
 
-.admin-body .contenu button:not(.menu-points-item):not(.piece):not(.link):not(.retour):not(.fermer):not(.onglets button),
-.admin-body .fenetre button:not(.fermer):not(.link):not(.piece),
-.admin-body .dialogue-papote button {
+.admin-body .contenu button:not(.menu-points-item):not(.piece):not(.link):not(.retour):not(.fermer):not(.onglets button):not(.liste-papote):not(.liste-papote-choix):not(.cal-nav):not(.cal-jour):not(.cal-lien),
+.admin-body .fenetre button:not(.fermer):not(.link):not(.piece):not(.liste-papote):not(.liste-papote-choix):not(.cal-nav):not(.cal-jour):not(.cal-lien),
+.admin-body .dialogue-papote button:not(.liste-papote):not(.liste-papote-choix):not(.cal-nav):not(.cal-jour):not(.cal-lien) {
   min-height: 36px; padding: 7px 14px; border-radius: var(--rayon-petit); font-size: 14px; line-height: 1.25; box-shadow: none;
 }
 .admin-body .primary { min-height: 36px; }
@@ -83,7 +83,7 @@
 .admin-body .tete { gap: 8px; margin-bottom: 10px; }
 .barre-liste { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
 .barre-liste .espace { flex: 1; }
-.barre-liste select { width: auto; margin: 0; padding: 7px 12px; font-size: 14px; }
+.barre-liste select, .barre-liste .liste-papote { width: auto; margin: 0; padding: 7px 12px; font-size: 14px; }
 
 /* ---------- Menus « ⋯ », « + Ajouter », « Actions » ---------- */
 
@@ -327,7 +327,7 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
   --line: #ece5d9; --muted: #6b6577; --rayon: 14px; --rayon-petit: 10px; --chevron: #b9b2c3;
   font: 15px/1.4 var(--body);
 }
-.admin-body button, .admin-body input, .admin-body select, .admin-body textarea { font-family: var(--body); }
+.admin-body button, .admin-body input, .admin-body select, .admin-body .liste-papote, .admin-body textarea { font-family: var(--body); }
 .admin-body h1, .admin-body h2, .admin-body h3 { font-family: var(--display); letter-spacing: 0; }
 
 /* ---------- Coquille : menu fin à gauche, sans icônes ---------- */
@@ -544,7 +544,7 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 .admin-body .pc-voir, .pc-barre { display: none; }
 .admin-body .pc-corps h3 { font: 700 22px var(--display); margin: 2px 0 6px; }
 .admin-body .pc-texte { font-size: 15px; color: var(--muted); }
-.admin-body .pc-contenu > select, .admin-body .pc-contenu > input, .admin-body .pc-champ input, .admin-body .pc-contenu select {
+.admin-body .pc-contenu > select, .admin-body .pc-contenu > .liste-papote, .admin-body .pc-contenu > input, .admin-body .pc-champ input, .admin-body .pc-contenu select, .admin-body .pc-contenu .liste-papote {
   min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background-color: var(--surface); font-size: 14px; box-shadow: none;
 }
 .admin-body .pc-champ { font-size: 13px; font-weight: 700; }
@@ -887,3 +887,7 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 .admin-body [data-panneau] a.v-ligne:not(.retour):not(.stat) .v-ligne-texte > .small { color: var(--muted); }
 /* Sur le fond rose de l'alerte réseau, un rouge plus foncé pour rester lisible (contraste). */
 .admin-body #dt-releves .alerte-reseau > p.error strong { color: #b91c1c; }
+
+/* Listes Papote (listes.js) dans les barres et les tableaux : la hauteur des boutons voisins, pas celle d'un champ de formulaire. */
+.admin-body .contenu-tete .liste-papote, .admin-body .barre-liste .liste-papote, .admin-body .actions .liste-papote,
+.admin-body .tete > .liste-papote, .admin-body .table .liste-papote, .admin-body .saisie-champ .liste-papote { min-height: 0; margin-top: 0; }

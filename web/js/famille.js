@@ -19,6 +19,8 @@ import {
 } from './firebase.js';
 import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, fonduNouveaux, partir } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
+import { habillerLesListes } from './listes.js';
+habillerLesListes();
 import { silenceTolereMs } from './silence.js';
 import {
   abonnementOk, FORMULES, LIBELLES, ouvrirPortail, payer, inciterSepa, passerAuSepa, rattacherCommande, resilier, annulerResiliation,
@@ -5402,13 +5404,12 @@ function renderAlertePasVue() {
 let alertePasVueEnCours = false;
 SETTINGS['alerte-pas-vue-card'] = {
   fill() {
-    const coche = document.querySelector(`input[name="alerte-pas-vue"][value="${joursPasVue()}"]`);
-    if (coche) coche.checked = true;
+    $('alerte-pas-vue-liste').value = String(joursPasVue());
   },
   async save() {
     // Double appui : le second envoi ne part jamais (le bouton est aussi désactivé pendant l'envoi).
     if (alertePasVueEnCours) return false;
-    const choisi = Number(document.querySelector('input[name="alerte-pas-vue"]:checked')?.value);
+    const choisi = Number($('alerte-pas-vue-liste').value);
     if (!Number.isInteger(choisi) || choisi < 1 || choisi > 5) return false;
     const message = `Alerte enregistrée : après ${joursTexte(choisi)}`;
     if (choisi === session.family?.alertePasVueJours) { toast(message); return true; }

@@ -18,7 +18,8 @@ async function modifier(t) {
   await t.page.click(`#${CARTE} .setting-modify`);
   await t.page.locator(`#${CARTE} .setting-edit`).waitFor({ state: 'visible' });
 }
-const coche = (t) => t.page.locator('input[name="alerte-pas-vue"]:checked').getAttribute('value');
+const coche = (t) => t.page.locator('#alerte-pas-vue-liste').inputValue();
+const LISTE = '#form-alerte-pas-vue .liste-papote';
 
 test('Alerte « pas vue » : 5 jours par défaut, 3 jours choisis (double appui = une écriture), gardés après actualisation', async () => {
   const julie = await banc.telephone('Julie');
@@ -31,17 +32,18 @@ test('Alerte « pas vue » : 5 jours par défaut, 3 jours choisis (double appui 
   await modifier(julie);
   const form = julie.page.locator('#form-alerte-pas-vue');
   assert.match(await form.innerText(), /Prévenir les responsables si la tablette n'est pas utilisée depuis :/);
-  assert.deepStrictEqual(await julie.page.locator('#alerte-pas-vue-choix label').allInnerTexts(),
+  // Une liste déroulante Papote (Tanguy, 27/11 : « pourquoi faire 5 choix »), ouverte sous le champ.
+  assert.strictEqual((await julie.page.locator(LISTE).innerText()).trim(), '5 jours', '5 jours par défaut');
+  await julie.page.click(LISTE);
+  assert.deepStrictEqual(await julie.page.locator('.liste-papote-menu .liste-papote-choix').allInnerTexts(),
     ['1 jour', '2 jours', '3 jours', '4 jours', '5 jours']);
-  assert.strictEqual(await coche(julie), '5', '5 jours coché par défaut');
-  // Les cinq choix ont la même taille.
-  const tailles = await julie.page.locator('#alerte-pas-vue-choix label').evaluateAll((ls) => ls.map((l) => Math.round(l.getBoundingClientRect().width)));
-  assert.ok(Math.max(...tailles) - Math.min(...tailles) <= 1, `même largeur : ${tailles}`);
+  await julie.page.keyboard.press('Escape');
+  assert.strictEqual(await coche(julie), '5', '5 jours choisi par défaut');
 
   // 3 jours, double appui sur Enregistrer : un message, une seule écriture (rev +1).
   await s.calme();
   const revAvant = (await g.lire(`families/${fid}`)).rev || 0;
-  await julie.page.click('#alerte-pas-vue-choix label:has-text("3 jours")');
+  await g.choisirDansListe(julie, LISTE, '3 jours');
   await g.doubleAppui(julie, `#${CARTE} .setting-edit button[type=submit]`);
   await g.toast(julie, 'Alerte enregistrée : après 3 jours');
   await g.attendreBase(async () => (await g.lire(`families/${fid}`)).alertePasVueJours === 3, '3 jours écrits');
@@ -59,7 +61,7 @@ test('Alerte « pas vue » : 5 jours par défaut, 3 jours choisis (double appui 
   await modifier(julie);
   assert.strictEqual(await coche(julie), '3');
   // Annuler ne change rien.
-  await julie.page.click('#alerte-pas-vue-choix label:has-text("5 jours")');
+  await g.choisirDansListe(julie, LISTE, '5 jours');
   await julie.page.click(`#${CARTE} .setting-cancel`);
   await julie.page.waitForTimeout(500);
   assert.strictEqual((await g.lire(`families/${fid}`)).alertePasVueJours, 3);
@@ -68,7 +70,7 @@ test('Alerte « pas vue » : 5 jours par défaut, 3 jours choisis (double appui 
   // 1 jour, au singulier.
   await modifier(julie);
   assert.strictEqual(await coche(julie), '3', 'rouverte sur la valeur enregistrée, pas sur le choix annulé');
-  await julie.page.click('#alerte-pas-vue-choix label:has-text("1 jour")');
+  await g.choisirDansListe(julie, LISTE, '1 jour');
   await julie.page.click(`#${CARTE} .setting-edit button[type=submit]`);
   await g.toast(julie, 'Alerte enregistrée : après 1 jour');
   await g.attendreBase(async () => (await g.lire(`families/${fid}`)).alertePasVueJours === 1, '1 jour écrit');

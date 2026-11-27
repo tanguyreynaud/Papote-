@@ -478,15 +478,19 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 .choice-ligne input { position: absolute; inset: 0; width: 100% !important; height: 100%; margin: 0; opacity: 0; cursor: pointer; } /* invisible mais couvre la case : un toucher n'importe où la choisit */
 .choice-ligne label:has(input:checked) { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .choice-ligne label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+/* « Je suis » (une femme, un homme) : les deux mêmes cases, côte à côte. */
+.choice-ligne.choice-deux { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Jours de la semaine d'un rappel : sept cases égales sur une ligne, sans la petite case à cocher standard du
+   téléphone (Tanguy, 27/11 : tout au style Papote) ; le jour choisi est plein. */
+.days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.days[hidden] { display: none; }
+.days label { position: relative; justify-content: center; padding: 12px 0; min-height: 48px; font-size: 15px; font-weight: 600; }
+.days input { position: absolute; inset: 0; width: 100% !important; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.days label:has(input:checked) { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.days label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
 /* Délai de l'alerte « pas vue » : cinq choix de la même taille, trois par ligne sur un petit écran. */
 .choice-titre { margin: 14px 0 0; font-weight: 600; }
-.choice-jours { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); margin-top: 8px; }
-.choice-jours { gap: 8px; }
-.choice-jours label, .setting-edit .choice-jours label { display: flex; align-items: center; margin: 0; position: relative; justify-content: center; text-align: center; min-height: 48px; padding: 12px 6px; font-size: 16px; font-weight: 600; white-space: nowrap; }
 /* Comme le type de rappel : le rond collé au texte serrait le bouton (Tanguy, 27/11). Case pleine = choisie. */
-.choice-jours input { position: absolute; inset: 0; width: 100% !important; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.choice-jours label:has(input:checked) { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-.choice-jours label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
 /* Communes de la météo : une par ligne, le nom entier, à la ligne s'il est long (jamais coupé). */
 .communes-titre { margin: 14px 0 0; font-weight: 600; }
 .communes-liste { flex-direction: column; flex-wrap: nowrap; margin-top: 8px; }
@@ -1075,7 +1079,7 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 
 .guide-back { position: fixed; inset: 0; z-index: 35; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0, 0, 0, .5); animation: fade-in .2s ease-out; }
 .guide { display: flex; flex-direction: column; width: 100%; max-width: 360px; height: min(440px, calc(100dvh - 48px)); overflow-y: auto; padding: 28px 22px 18px; border-radius: 24px; background: var(--surface); text-align: center; box-shadow: 0 20px 50px rgba(0, 0, 0, .25); animation: rise .2s ease-out; }
-.guide-icon { display: inline-flex; width: 72px; height: 72px; align-items: center; justify-content: center; border-radius: 22px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.guide-icon { align-self: center; flex: none; display: inline-flex; width: 72px; height: 72px; align-items: center; justify-content: center; border-radius: 22px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .guide-icon svg { width: 36px; height: 36px; }
 .guide h2 { margin: 16px 0 8px; font-size: 22px; }
 .guide p { margin: 0 0 18px; color: var(--muted); font-size: 17px; }
@@ -1088,6 +1092,8 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 .guide-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: auto; flex: none; }
 .guide-buttons button { min-height: 52px; padding: 0 12px; justify-content: center; text-align: center; font-size: 16px; font-weight: 700; }
 .guide-buttons .primary { grid-column: 2; }
+/* Dernière étape : « Passer » disparaît, le bouton prend toute la largeur (Tanguy, 27/11 : il restait seul à droite). */
+.guide-buttons .guide-skip[hidden] + .primary { grid-column: 1 / -1; }
 
 .remote-buttons #btn-logs { grid-column: 1 / -1; }
 .logs { max-height: 50vh; overflow: auto; margin: 6px 0 0; padding: 10px; border-radius: 10px; background: var(--bg); font-size: 11px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -1378,7 +1384,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .intro h2 { margin: 8px 0; }
 .intro .guide-icon { display: flex; margin: 0 auto 4px; }
 .intro .intro-step[data-step="0"], .intro .intro-step[data-step="5"] { text-align: center; }
-.intro input, .intro select { width: 100%; margin: 6px 0; }
+.intro input, .intro select, .intro .liste-papote { width: 100%; margin: 6px 0; }
 .intro .segmented { margin: 6px 0 14px; }
 .intro .switch-row { margin: 12px 0; }
 .intro .intro-son input[type=range] { padding: 0; border: none; background: none; accent-color: var(--accent); }
@@ -1396,7 +1402,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .toggle:checked::after { transform: translateX(20px); }
 .toggle:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 2px; }
 .toggle-list .station { display: block; margin: 0 !important; padding: 12px 16px 14px; font-size: 14px; font-weight: 600; color: var(--muted); }
-.toggle-list .station select { width: 100%; margin: 6px 0 0 !important; }
+.toggle-list .station select, .toggle-list .station .liste-papote { width: 100%; margin: 6px 0 0 !important; }
 .option-line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 16px; }
 .option-line + .option-line { border-top: 1px solid var(--line); }
 .option-state { flex: none; color: var(--muted); white-space: nowrap; text-align: right; } /* « 3 minutes » ne se coupe plus en deux lignes */
@@ -1404,7 +1410,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .options-value { gap: 0; margin-top: 8px; }
 
 .station-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
-.station-row select { flex: 1; min-width: 0; margin: 0 !important; }
+.station-row select, .station-row .liste-papote { flex: 1; min-width: 0; margin: 0 !important; }
 .station-row .small-btn { flex: none; min-height: 46px; padding: 0 14px; justify-content: center; font-weight: 700; color: var(--accent); }
 .toggle-list .station label { margin: 0; }
 .toggle-list .station .station-aide { display: block; margin-top: 6px; font-size: 13px; font-weight: 400; }
@@ -1493,7 +1499,7 @@ a { text-decoration: none; }
 .moi-badge svg { width: 16px; height: 16px; }
 #moi-visage-titre { color: var(--accent); margin-top: 6px; }
 .moi-date { display: grid; grid-template-columns: 1.2fr 1.5fr 1.3fr; gap: 8px; }
-.moi-date select { margin-top: 0; padding-left: 12px; padding-right: 8px; }
+.moi-date select, .moi-date .liste-papote { margin-top: 0; padding-left: 12px; padding-right: 8px; }
 #form-moi .primary { margin-top: 20px; }
 
 /* 50 messages écrits aujourd'hui (A12) : la barre d'écriture laisse place à un mot calme jusqu'à minuit. */
@@ -1778,7 +1784,7 @@ a { text-decoration: none; }
   .intro .guide-buttons { padding-top: 8px; }
   .intro .guide-buttons button { min-height: 46px; }
   .intro .sleep-hours label { margin: 0; }
-  .intro .sleep-hours select { margin: 2px 0; }
+  .intro .sleep-hours select, .intro .sleep-hours .liste-papote { margin: 2px 0; }
 }
 .intro .intro-step.suite { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
 /* Très petit téléphone (320 px) : la roue, la cloche et « Inviter » se serrent un peu pour laisser « Papote » entier. */
@@ -1934,7 +1940,7 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 #video-hint { margin: 10px 0 0; }
 .send-btn { min-height: 50px; }
 /* Rappel : l'heure et « Prévenir avant » côte à côte, tout tient sans défiler. */
-#rem-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); column-gap: 10px; }
+#rem-fields { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; }
 #rem-fields > * { grid-column: 1 / -1; }
 #rem-fields > label:has(#rem-time) { grid-column: 1; }
 #rem-fields > label:has(#rem-avance) { grid-column: 2; }
@@ -2291,3 +2297,62 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 
 /* « Lire » touché : le bouton s'estompe le temps que la vidéo parte. */
 .viewer .video-play.attend { opacity: .55; }
+
+/* Listes déroulantes au style Papote (listes.js) : le <select> reste dans la page, invisible ; ce bouton le remplace,
+   et la liste des choix s'ouvre juste sous lui. */
+/* !important : les règles « … select { width: 100% } » plus précises l'élargissaient, et la page débordait à droite. */
+select.liste-native { position: absolute; width: 1px !important; min-width: 0 !important; height: 1px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; opacity: 0; pointer-events: none; }
+.liste-papote { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 48px; margin-top: 6px; padding: 12px 12px 12px 14px; font: inherit; font-weight: 600; text-align: left; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; }
+.liste-papote[hidden] { display: none; }
+.liste-papote.vide .liste-papote-texte { color: var(--muted); }
+.liste-papote:disabled { opacity: .55; }
+.liste-papote.ouverte { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.liste-papote-texte { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.liste-papote-chevron { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
+.liste-papote.ouverte .liste-papote-chevron { transform: rotate(180deg); }
+.liste-papote-menu:focus { outline: none; }
+.liste-papote-menu { position: fixed; z-index: 2000; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 6px; overflow-y: auto; overscroll-behavior: contain; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 6px rgba(36, 33, 47, .08), 0 14px 34px rgba(36, 33, 47, .18); animation: liste-papote-ouvre .12s ease-out; transform-origin: top center; }
+.liste-papote-menu.vers-le-haut { transform-origin: bottom center; }
+@keyframes liste-papote-ouvre { from { opacity: 0; transform: scaleY(.96); } }
+@media (prefers-reduced-motion: reduce) { .liste-papote-menu { animation: none; } .liste-papote-chevron { transition: none; } }
+.liste-papote-choix { flex: none; display: block; width: 100%; min-height: 44px; margin: 0; padding: 10px 12px; font: inherit; font-weight: 400; text-align: left; color: var(--text); background: none; border: 0; border-radius: 10px; }
+.liste-papote-choix:hover, .liste-papote-choix:focus-visible { background: color-mix(in srgb, var(--accent) 7%, transparent); outline: none; }
+.liste-papote-choix[aria-selected="true"] { color: var(--accent); font-weight: 700; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.liste-papote-chevron.fixe { stroke-width: 2; }
+.liste-papote.ouverte .liste-papote-chevron.fixe { transform: none; }
+input.liste-native { position: absolute; width: 1px !important; min-width: 0 !important; height: 1px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; opacity: 0; pointer-events: none; }
+/* Heure (heures, minutes) et mois (mois, année) : deux listes côte à côte. */
+.duo-papote { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.duo-papote[hidden] { display: none; }
+.duo-papote .liste-papote { margin-top: 0; }
+.heure-papote { grid-template-columns: auto auto; gap: 6px; }
+.heure-papote .liste-papote { gap: 4px; padding-left: 12px; padding-right: 8px; }
+.heure-papote .liste-papote:first-child { min-width: 82px; }
+.heure-papote .liste-papote:last-child { min-width: 68px; }
+#rem-fields .liste-papote { gap: 6px; padding-left: 12px; padding-right: 8px; }
+.mois-papote { grid-template-columns: 3fr 2fr; }
+/* Calendrier sous le champ de date. */
+.calendrier-papote { gap: 0; padding: 10px; }
+.cal-tete { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal-mois { margin: 0; font-family: var(--display); font-size: 17px; font-weight: 700; color: var(--text); }
+.cal-nav { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: 0; padding: 0; color: var(--accent); background: none; border: 0; border-radius: 12px; }
+.cal-nav:hover, .cal-nav:focus-visible { background: color-mix(in srgb, var(--accent) 8%, transparent); outline: none; }
+.cal-nav:disabled { color: var(--muted); opacity: .35; }
+.cal-nav svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.cal-grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-top: 4px; }
+.cal-grille span { padding: 4px 0 6px; font-size: 13px; font-weight: 700; text-align: center; color: var(--muted); }
+.cal-jour { display: grid; place-items: center; width: 100%; min-width: 0; aspect-ratio: 1; min-height: 38px; margin: 0; padding: 0; font: inherit; font-size: 16px; font-weight: 400; color: var(--text); background: none; border: 0; border-radius: 50%; }
+.cal-jour:hover, .cal-jour:focus-visible { background: color-mix(in srgb, var(--accent) 10%, transparent); outline: none; }
+.cal-jour.auj { font-weight: 700; color: var(--accent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent); }
+.cal-jour[aria-pressed="true"] { font-weight: 700; color: var(--accent-text); background: var(--accent); box-shadow: none; }
+.cal-jour:disabled { color: var(--muted); opacity: .35; background: none; }
+.cal-pied { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.cal-lien { min-height: 40px; margin: 0; padding: 6px 10px; font: inherit; font-weight: 700; color: var(--accent); background: none; border: 0; border-radius: 10px; }
+.cal-lien:hover, .cal-lien:focus-visible { background: color-mix(in srgb, var(--accent) 8%, transparent); outline: none; }
+/* Petit guide du premier lancement : icône, titre et texte au milieu de la hauteur libre, au lieu d'un grand vide
+   sous le texte (vu sur le téléphone de Tanguy, 27/11). La fenêtre et les boutons gardent leur place d'une étape à l'autre. */
+.guide:not(.intro) > .guide-icon { margin-top: auto; }
+.guide:not(.intro) > .guide-dots { margin-top: auto; }
+.guide:not(.intro) > .guide-buttons { margin-top: 0; }
+.guide:not(.intro) > p { flex: none; }
+.station-row .liste-papote { min-height: 46px; padding-top: 10px; padding-bottom: 10px; }

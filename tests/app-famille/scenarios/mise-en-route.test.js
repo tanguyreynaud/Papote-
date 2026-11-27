@@ -355,10 +355,16 @@ test('V7, V8 : « C\'est prêt » seulement quand la tablette est là ; le petit
   await guide.locator('.guide-next').click();
   assert.strictEqual(await place(), depart, 'étape 2 : rien ne bouge');
   await guide.locator('.guide-next').click();
-  // Dernière étape : « Passer » s'efface, « C'est parti » reste à sa place.
+  // Dernière étape : « Passer » s'efface.
   assert.strictEqual(await guide.locator('.guide-skip').isVisible(), false);
   const fin = JSON.parse(await place());
-  assert.deepStrictEqual([fin[0], fin[2]], [JSON.parse(depart)[0], suivant], 'la fenêtre et « C\'est parti » ne bougent pas');
+  // Tanguy, 27/11 : « C'est parti » restait seul à droite. Il prend toute la largeur (de la gauche de « Passer » à la
+  // droite de « Suivant »), à la même hauteur ; la fenêtre ne bouge pas.
+  assert.deepStrictEqual(fin[0], JSON.parse(depart)[0], 'la fenêtre ne bouge pas');
+  assert.deepStrictEqual([fin[2][0], fin[2][1], fin[2][0] + fin[2][2], fin[2][3]], [skip[0], suivant[1], suivant[0] + suivant[2], suivant[3]], '« C\'est parti » sur toute la largeur');
+  // L'icône est au milieu de la fenêtre (elle était collée à gauche).
+  const milieux = await guide.evaluate((b) => { const f = b.querySelector('.guide').getBoundingClientRect(); const i = b.querySelector('.guide-icon').getBoundingClientRect(); return [Math.round(f.left + f.width / 2), Math.round(i.left + i.width / 2)]; });
+  assert.ok(Math.abs(milieux[0] - milieux[1]) <= 1, `icône au milieu : ${milieux}`);
   assert.strictEqual(await guide.locator('.guide-next').innerText(), "C'est parti");
   await guide.locator('.guide-next').click();
   await guide.waitFor({ state: 'detached' });

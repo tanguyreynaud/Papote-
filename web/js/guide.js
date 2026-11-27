@@ -40,8 +40,8 @@ export function showGuideOnce(name, { enRoute = false } = {}) {
     back.querySelector('p').textContent = step.text(name, enRoute);
     back.querySelectorAll('.guide-dots span').forEach((d, k) => d.classList.toggle('on', k === i));
     back.querySelector('.guide-next').textContent = i === STEPS.length - 1 ? "C'est parti" : 'Suivant';
-    // Dernière étape : « Passer » s'efface sans que « C'est parti » ne bouge (bouton fixe, V8 du 17/11).
-    back.querySelector('.guide-skip').style.visibility = i === STEPS.length - 1 ? 'hidden' : '';
+    // Dernière étape : « Passer » s'efface et « C'est parti » prend toute la largeur (Tanguy, 27/11 : seul à droite).
+    back.querySelector('.guide-skip').hidden = i === STEPS.length - 1;
   };
   const close = () => { guideVu(); back.remove(); };
   back.querySelector('.guide-next').addEventListener('click', () => {

@@ -4,6 +4,7 @@
 // Une app Firebase à part (« admin ») : la connexion Google ne touche pas à la famille de ce navigateur.
 import './retour.js';
 import './clavier.js';
+import { habillerLesListes } from './listes.js';
 import { BLOCAGES_SIM, blocagesFaits, CASE_HORS_FORFAIT, horsForfaitBloque } from './sim.js';
 import { demander, saisir, prevenir, menuPoints, patienter, annoncer, boutonCharge, ligneModifiable, faitEnGras } from './dialogue.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -22,6 +23,9 @@ import { refreshSim } from './sim.js';
 import { silenceTolereMs } from './silence.js';
 import { appeler, donnees, signalerChangement } from './gestion-api.js';
 import { ouvrirParcours } from './parcours.js';
+
+// Listes, dates et mois au style Papote, comme dans l'app (listes.js).
+habillerLesListes();
 
 // Version en ligne, écrite à la publication : « Version du 02/11 à 21 h 05 · d1e42b0 » (rien si absente).
 fetch('/version.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((v) => {

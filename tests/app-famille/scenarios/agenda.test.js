@@ -149,3 +149,63 @@ test('Anniversaires : ajout, date impossible, modification ; rappel passé effac
   await g.attendreBase(async () => !(await g.liste(`families/${fid}/reminders`)).length, 'rappel passé effacé');
   await julie.page.locator('#reminders li').waitFor({ state: 'detached' });
 });
+
+// Tanguy, 27/11 : « tout doit passer au style Papote ». La date d'un rappel s'ouvre en calendrier Papote sous le champ,
+// l'heure en deux listes (heures, minutes) ; plus aucune roue ni calendrier standard du téléphone.
+test('Rappel : date choisie dans le calendrier Papote, heure dans les listes, jours sans case à cocher', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie.dates@exemple.fr', prenom: 'Julie' });
+  await g.ouvrirTuile(julie, 'agenda');
+  await ouvrirAjout(julie);
+  await julie.page.fill('#rem-title', 'Dentiste');
+  await g.choisirDansListe(julie, '#rem-fields label:has(#rem-repeat) .liste-papote', 'Une seule fois');
+  // Aucun champ standard visible dans la fenêtre.
+  const nus = await julie.page.evaluate(() => [...document.querySelectorAll('#sheet-reminder select, #sheet-reminder input[type=date], #sheet-reminder input[type=time]')]
+    .filter((e) => !e.classList.contains('liste-native') || getComputedStyle(e).opacity !== '0').map((e) => e.id));
+  assert.deepStrictEqual(nus, []);
+
+  // Calendrier : sous (ou sur) le champ, dans l'écran ; hier ne peut pas être choisi ; après-demain est choisi.
+  const date = julie.page.locator('#rem-date-wrap .date-papote');
+  await date.click();
+  const cal = julie.page.locator('.calendrier-papote');
+  await cal.waitFor();
+  const place = await cal.evaluate((c) => { const r = c.getBoundingClientRect(); return { haut: Math.round(r.top), bas: Math.round(innerHeight - r.bottom), coupe: c.scrollHeight - c.clientHeight }; });
+  assert.ok(place.haut >= 0 && place.bas >= 0 && place.coupe <= 2, `calendrier entier dans l'écran : ${JSON.stringify(place)}`);
+  assert.strictEqual(await cal.getByRole('button', { name: 'Effacer' }).count(), 0, 'date obligatoire : pas de « Effacer »');
+  const hier = cal.locator(`[data-jour="${jour(-1)}"]`);
+  if (await hier.count()) assert.strictEqual(await hier.isDisabled(), true, 'hier ne se choisit pas');
+  const cible = jour(2);
+  if (!(await cal.locator(`[data-jour="${cible}"]`).count())) await cal.getByRole('button', { name: 'Mois suivant' }).click();
+  await cal.locator(`[data-jour="${cible}"]`).click();
+  await cal.waitFor({ state: 'detached' });
+  assert.strictEqual(await julie.page.inputValue('#rem-date'), cible);
+  await julie.page.locator('#rem-date-jour', { hasText: 'dans 2 jours' }).waitFor();
+
+  // Heure : 14 h, puis 30.
+  await g.choisirDansListe(julie, '.heure-papote .liste-papote >> nth=0', '14 h');
+  await g.choisirDansListe(julie, '.heure-papote .liste-papote >> nth=1', '30');
+  assert.strictEqual(await julie.page.inputValue('#rem-time'), '14:30');
+  await julie.page.click('#btn-reminder');
+  await julie.page.locator('#reminders li', { hasText: 'Dentiste' }).waitFor();
+  await g.attendreBase(async () => (await g.liste(`families/${fid}/reminders`)).some((x) => x.title === 'Dentiste'), 'rappel écrit');
+  const r = (await g.liste(`families/${fid}/reminders`)).find((x) => x.title === 'Dentiste');
+  assert.strictEqual(r.date, cible);
+  assert.strictEqual(r.time, '14:30');
+
+  // Rouvert en modification : le bouton montre la date et l'heure enregistrées.
+  await ouvrirAjout(julie);
+  await g.choisirDansListe(julie, '#rem-fields label:has(#rem-repeat) .liste-papote', 'Certains jours de la semaine');
+  const jours = await julie.page.locator('#rem-days label').evaluateAll((ls) => ls.map((l) => { const b = l.getBoundingClientRect(); return { w: Math.round(b.width), y: Math.round(b.top), case: getComputedStyle(l.querySelector('input')).opacity }; }));
+  assert.strictEqual(new Set(jours.map((j) => j.y)).size, 1, 'les sept jours sur une ligne');
+  assert.ok(jours.every((j) => j.case === '0' && j.w >= 40), `sept cases égales sans case à cocher : ${JSON.stringify(jours)}`);
+  await julie.page.locator('#rem-days label', { hasText: 'Mar' }).click();
+  assert.strictEqual(await julie.page.locator('#rem-days input[value="2"]').isChecked(), true);
+  // « Jusqu'au (facultatif) » : une date choisie peut être effacée.
+  await julie.page.locator('#rem-fin-wrap .date-papote').click();
+  await cal.waitFor();
+  await cal.locator('.cal-jour:not([disabled])').last().click();
+  assert.notStrictEqual(await julie.page.inputValue('#rem-fin'), '');
+  await julie.page.locator('#rem-fin-wrap .date-papote').click();
+  await cal.getByRole('button', { name: 'Effacer' }).click();
+  assert.strictEqual(await julie.page.inputValue('#rem-fin'), '');
+});
