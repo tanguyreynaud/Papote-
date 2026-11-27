@@ -887,3 +887,17 @@ details.repli-jours[open] > summary { margin-bottom: 12px; }
 .admin-body [data-panneau] a.v-ligne:not(.retour):not(.stat) .v-ligne-texte > .small { color: var(--muted); }
 /* Sur le fond rose de l'alerte réseau, un rouge plus foncé pour rester lisible (contraste). */
 .admin-body #dt-releves .alerte-reseau > p.error strong { color: #b91c1c; }
+
+/* Sur téléphone, plus rien ne dépasse (audit du 26/11, Tanguy 27/11).
+   Onglets : ils passent à la ligne au lieu de se cacher à droite (« Maintenance », « Validation », « Gestes humains »).
+   Bilan, « Mois par mois » : 7 colonnes ne tiennent pas dans 390 px ; « Remboursé » et « Frais Stripe » (déjà comptés
+   dans « Net ») ne s'affichent que sur un écran plus large, les 5 autres tiennent. */
+@media (max-width: 560px) {
+  .admin-body .onglets { flex-wrap: wrap; overflow: visible; row-gap: 0; }
+  .admin-body nav.onglets-liens:not([hidden]) + .onglets { row-gap: 6px; }
+  .admin-body .card #t-bilan { font-size: 12px; }
+  .admin-body .card #t-bilan th { font-size: 11px; }
+  .admin-body .card #t-bilan th, .admin-body .card #t-bilan td { padding-right: 4px; }
+  .admin-body .card #t-bilan th:nth-child(3), .admin-body .card #t-bilan td:nth-child(3),
+  .admin-body .card #t-bilan th:nth-child(4), .admin-body .card #t-bilan td:nth-child(4) { display: none; }
+}

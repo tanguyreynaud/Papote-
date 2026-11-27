@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, fonduNouveaux, partir } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, fonduNouveaux, partir, heureFr, deOuD } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import { silenceTolereMs } from './silence.js';
 import {
@@ -687,7 +687,7 @@ function watchType(types, max, callback) {
 function timeLabelCourt(date) {
   if (!date) return '';
   const now = new Date();
-  const hm = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const hm = heureFr(date);
   if (date.toDateString() === now.toDateString()) return `à ${hm}`;
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
@@ -698,7 +698,7 @@ function timeLabelCourt(date) {
 function timeLabel(date) {
   if (!date) return '';
   const now = new Date();
-  const hm = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const hm = heureFr(date);
   if (date.toDateString() === now.toDateString()) return `aujourd'hui à ${hm}`;
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
@@ -1330,7 +1330,7 @@ function showIntroTablette() {
   const $i = (sel) => back.querySelector(sel);
   const steps = [...back.querySelectorAll('.intro-step')];
   $i('.guide-dots').innerHTML = steps.map(() => '<span></span>').join('');
-  $i('[data-step="0"] p').textContent = `Quelques questions pour que la tablette de ${nom} soit prête : nuit, son, options. Une minute, et tout reste modifiable dans Réglages.`;
+  $i('[data-step="0"] p').textContent = `Quelques questions pour que la tablette ${deOuD(nom)}${nom} soit prête : nuit, son, options. Une minute, et tout reste modifiable dans Réglages.`;
   back.querySelectorAll('.intro-nom').forEach((e) => { e.textContent = nom; });
   $i('#intro-veille').checked = choix.veille.active !== false;
   $i('#intro-heures').hidden = !$i('#intro-veille').checked;
@@ -1374,8 +1374,8 @@ function showIntroTablette() {
       const arrivee = tabletMembers.length > 0;
       $i('[data-step="5"] h2').textContent = arrivee ? "C'est prêt" : "C'est noté";
       $i('[data-step="5"] p').textContent = arrivee
-        ? `La tablette de ${nom} est réglée. Invitez maintenant la famille pour qu'elle envoie des photos.`
-        : `Les réglages sont enregistrés : la tablette de ${nom} les prendra dès son arrivée. Invitez maintenant la famille pour qu'elle envoie des photos.`;
+        ? `La tablette ${deOuD(nom)}${nom} est réglée. Invitez maintenant la famille pour qu'elle envoie des photos.`
+        : `Les réglages sont enregistrés : la tablette ${deOuD(nom)}${nom} les prendra dès son arrivée. Invitez maintenant la famille pour qu'elle envoie des photos.`;
     }
   };
   // Une seule fenêtre au démarrage (testeur, V8 du 17/11 : 5 écrans de réglages puis 3 de guide) : après les
@@ -1444,10 +1444,10 @@ function messagesEnTexte(posts) {
   const grand = session.family.name;
   const lignes = posts.map((p) => {
     const quand = toDate(p.createdAt);
-    const date = quand ? `${quand.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).replace(/^1 /, '1er ')} à ${quand.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : '';
+    const date = quand ? `${quand.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).replace(/^1 /, '1er ')} à ${heureFr(quand)}` : '';
     return `${date}, ${p.type === 'reply' ? grand : (p.authorName || 'Papote')} : ${p.text}`;
   });
-  return `Messages de la famille de ${grand} sur Papote\r\n\r\n${lignes.join('\r\n')}\r\n`;
+  return `Messages de la famille ${deOuD(grand)}${grand} sur Papote\r\n\r\n${lignes.join('\r\n')}\r\n`;
 }
 
 $('btn-photos-zip').addEventListener('click', async () => {
@@ -2287,9 +2287,9 @@ async function menuPhoto(titre, prefixe) {
   if (choix === 'camera' || choix === 'gallery') $(`in-${prefixe}-${choix}`).click();
 }
 const photoTablette = () => tabletMembers.map((m) => m.face).find(Boolean) || null;
-const menuPhotoTablette = () => menuPhoto(`Photo de ${session.family.name}`, 'tface');
+const menuPhotoTablette = () => menuPhoto(`Photo ${deOuD(session.family.name)}${session.family.name}`, 'tface');
 $('tface-remove').addEventListener('click', async () => {
-  if (await askConfirm(`Retirer la photo de ${session.family.name} ?`, 'Retirer')) retirerPhotoTablette();
+  if (await askConfirm(`Retirer la photo ${deOuD(session.family.name)}${session.family.name} ?`, 'Retirer')) retirerPhotoTablette();
 });
 $('tface-changer').addEventListener('click', menuPhotoTablette);
 // La photo touchée : la carte s'ouvre (« Modifier ») ; déjà ouverte, le même menu (audit des touchers, 17/11).
@@ -2385,7 +2385,7 @@ async function renderPhoneCard() {
   push.checked = pushAllowed();
   push.disabled = false;
   if (nativeNotificationsOff()) {
-    $('phone-push-text').textContent = "Votre téléphone ne sonnera pas : Android bloque les notifications de l'app Papote. Touchez la carte indigo de l'accueil pour les autoriser.";
+    $('phone-push-text').textContent = "Votre téléphone ne sonnera pas : Android bloque les notifications de l'appli Papote. Touchez la carte indigo de l'accueil pour les autoriser.";
     push.disabled = true;
   } else if (pushAllowed()) {
     $('phone-push-text').textContent = isIos()
@@ -2397,7 +2397,7 @@ async function renderPhoneCard() {
     push.disabled = true;
   } else if (!await pushSupported()) {
     $('phone-push-text').textContent = isIos()
-      ? "Sur iPhone, les notifications ne marchent que dans l'app ajoutée à l'écran d'accueil (iOS 16.4 ou plus récent) : voir Support."
+      ? "Sur iPhone, les notifications ne marchent que dans l'appli ajoutée à l'écran d'accueil (iOS 16.4 ou plus récent) : voir Support."
       : 'Ce navigateur ne sait pas recevoir les notifications. Ouvrez Papote dans Chrome.';
     push.disabled = true;
   } else $('phone-push-text').textContent = `Pour que votre téléphone sonne quand ${nom} appelle, même app fermée.`;
@@ -2493,7 +2493,7 @@ $('btn-share').addEventListener('click', async () => {
 });
 
 $('btn-leave').addEventListener('click', async () => {
-  if (!await askConfirm(`Quitter la famille de ${session.family.name} ? Il faudra une nouvelle invitation pour revenir.`)) return;
+  if (!await askConfirm(`Quitter la famille ${deOuD(session.family.name)}${session.family.name} ? Il faudra une nouvelle invitation pour revenir.`)) return;
   const { fid, uid } = session;
   stopSession();
   await leaveFamily(fid, uid);
@@ -2670,7 +2670,7 @@ function debutVisio() {
     if (visio.reseau !== 'sim' || palier < FORFAIT_TOUTES_MIN || palier <= visio.deja) return;
     visio.deja = palier;
     const nom = (session && session.family && session.family.name) || 'la tablette';
-    $('call-forfait').textContent = `Déjà ${palier} minutes de visio sur le forfait de ${nom}`;
+    $('call-forfait').textContent = `Déjà ${palier} minutes de visio sur le forfait ${deOuD(nom)}${nom}`;
     $('call-forfait').hidden = false;
     clearTimeout(visio.cache);
     visio.cache = setTimeout(() => { $('call-forfait').hidden = true; }, 10_000);
@@ -3165,7 +3165,7 @@ async function rappelerTablette() {
   const nom = session.family.name;
   if (numeroTablette() && !$('tile-phone').classList.contains('tile-off')) { $('tile-phone').click(); return; }
   for (let i = 0; i < 60 && $('tile-call').disabled; i++) await new Promise((r) => { setTimeout(r, 250); });
-  if ($('tile-call').disabled) { notice(`La tablette de ${nom} ne peut pas recevoir d'appel pour le moment.`); return; }
+  if ($('tile-call').disabled) { notice(`La tablette ${deOuD(nom)}${nom} ne peut pas recevoir d'appel pour le moment.`); return; }
   if (currentCall || callStarting) return;
   appelConfirme = true;
   $('tile-call').click();
@@ -3313,7 +3313,7 @@ function sosDe(params) {
 function quandSos(ms) {
   if (!ms) return '';
   const d = new Date(ms);
-  const hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const hm = heureFr(d);
   const jour = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const ecart = Math.round((jour(new Date()) - jour(d)) / 86_400_000);
   if (ecart === 0) return `Aujourd'hui à ${hm}`;
@@ -3325,7 +3325,7 @@ function quandSos(ms) {
 async function appelerDesQuePossible() {
   for (let i = 0; i < 60 && $('tile-call').disabled; i++) await new Promise((r) => setTimeout(r, 250));
   if ($('tile-call').disabled) {
-    notice(`La tablette de ${session.family.name} ne peut pas recevoir d'appel pour le moment.`);
+    notice(`La tablette ${deOuD(session.family.name)}${session.family.name} ne peut pas recevoir d'appel pour le moment.`);
     finNatif();
     return;
   }
@@ -3459,7 +3459,7 @@ function renderTabletOwnerNote() {
   // Abonnement et réglages de la tablette : tout responsable (propriétaire et responsables nommés).
   $('tablet-owner-note').hidden = amFamilyAdmin();
   $('tablet-owner-text').textContent = owner?.name
-    ? `La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone de ${owner.name} ou d'un autre responsable de la famille. Demandez-leur si besoin.`
+    ? `La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone ${deOuD(owner.name)}${owner.name} ou d'un autre responsable de la famille. Demandez-leur si besoin.`
     : "La nuit, le son, les options et le Wi-Fi de la tablette se règlent depuis le téléphone d'un responsable de la famille.";
 }
 
@@ -3545,7 +3545,7 @@ function renderMembers(all) {
     }
     const name = document.createElement('span');
     name.className = 'member-name';
-    name.textContent = m.role === 'tablette' ? `Tablette de ${session.family.nomAChoisir ? 'votre proche' : session.family.name}` : m.name;
+    name.textContent = m.role === 'tablette' ? `Tablette ${deOuD(session.family.nomAChoisir ? 'votre proche' : session.family.name)}${session.family.nomAChoisir ? 'votre proche' : session.family.name}` : m.name;
     if (m.id === session.uid) { const v = document.createElement('span'); v.className = 'member-vous'; v.textContent = 'vous'; name.append(' ', v); }
     li.append(name);
     // Numéro de la tablette (carte SIM) : la famille peut l'appeler par téléphone ; les autres numéros sont refusés.
@@ -3639,7 +3639,7 @@ $('members').addEventListener('click', (e) => {
   if (m.id === session.uid) { toast('C\'est vous. Votre prénom, votre photo, votre numéro et « Quitter cette famille » sont dans « Mon profil ».'); return; }
   if (m.role === 'tablette') {
     if (!$('tablet-chip').hidden) $('tablet-chip').click();
-    else toast(`La tablette de ${session.family.name} n'a pas encore donné de nouvelles.`);
+    else toast(`La tablette ${deOuD(session.family.name)}${session.family.name} n'a pas encore donné de nouvelles.`);
     return;
   }
   const f = session.family;
@@ -3735,7 +3735,7 @@ function requestCard(m) {
   no.className = 'secondary join-no';
   no.textContent = 'Refuser';
   no.addEventListener('click', async () => {
-    if (!await askConfirm(`Refuser la demande de ${m.name} ?`, 'Refuser')) return;
+    if (!await askConfirm(`Refuser la demande ${deOuD(m.name)}${m.name} ?`, 'Refuser')) return;
     // Un autre responsable a pu accepter pendant que la question était ouverte (audit du 19/11) : on ne retire jamais
     // un proche déjà entré, seulement une demande encore en attente.
     const ref = doc(db, 'families', session.fid, 'members', m.id);
@@ -3747,7 +3747,7 @@ function requestCard(m) {
         tx.delete(ref);
         return 'refuse';
       });
-      toast(etat === 'entre' ? `La demande de ${m.name} a déjà été acceptée par un autre responsable.` : 'Demande refusée');
+      toast(etat === 'entre' ? `La demande ${deOuD(m.name)}${m.name} a déjà été acceptée par un autre responsable.` : 'Demande refusée');
     } catch (err) { console.error(err); notice("Le refus n'a pas pu être enregistré."); }
   });
   const ok = document.createElement('button');
@@ -3763,7 +3763,7 @@ function requestCard(m) {
       // Demande refusée entre-temps par un autre responsable : rien à accepter.
       const parti = err?.code === 'not-found'
         || !(await getDoc(doc(db, 'families', session.fid, 'members', m.id)).then((d) => d.exists()).catch(() => true));
-      if (parti) { toast(`La demande de ${m.name} a déjà été refusée par un autre responsable.`); return; }
+      if (parti) { toast(`La demande ${deOuD(m.name)}${m.name} a déjà été refusée par un autre responsable.`); return; }
       console.error(err); notice("L'acceptation a échoué."); ok.disabled = false;
     }
   });
@@ -4296,7 +4296,7 @@ function renderSepa() {
   badgeDu('sepa-encart', voir);
   if (!voir) return;
   const nom = fam?.name;
-  $('sepa-texte').textContent = `Une carte expire ou change, et le paiement échoue : la tablette${nom ? ` de ${nom}` : ''} risque alors une pause. Avec le prélèvement sur votre compte, plus rien à mettre à jour. Même montant, même date.`;
+  $('sepa-texte').textContent = `Une carte expire ou change, et le paiement échoue : la tablette${nom ? ` ${deOuD(nom)}${nom}` : ''} risque alors une pause. Avec le prélèvement sur votre compte, plus rien à mettre à jour. Même montant, même date.`;
 }
 $('sepa-oui').addEventListener('click', async () => {
   $('sepa-erreur').hidden = true;
@@ -4944,7 +4944,7 @@ function ligneReseau(r, actuel) {
       p1.textContent = `La tablette est connectée à « ${r.ssid} ». Pour changer de réseau, touchez-en un autre dans la liste : elle ne quitte celui-ci que si le nouveau marche.`;
       const p2 = document.createElement('p');
       p2.className = 'muted small';
-      p2.textContent = 'Lui faire oublier ce réseau n\'est pas encore possible depuis l\'app. Sans Wi-Fi, elle reste reliée par sa carte SIM.';
+      p2.textContent = 'Lui faire oublier ce réseau n\'est pas encore possible depuis l\'appli. Sans Wi-Fi, elle reste reliée par sa carte SIM.';
       info.append(p1, p2);
       li.append(info);
     });
@@ -6026,10 +6026,10 @@ SETTINGS['meteo-card'] = {
 
 // Suppression de la famille : sur demande au support, jamais en un bouton (c'est définitif pour tous).
 $('btn-delete-family').addEventListener('click', () => {
-  const sujet = `Suppression des données de la famille de ${session.family.name}`;
+  const sujet = `Suppression des données de la famille ${deOuD(session.family.name)}${session.family.name}`;
   const corps = `Bonjour,
 
-Je souhaite supprimer la famille de ${session.family.name} et toutes ses données.
+Je souhaite supprimer la famille ${deOuD(session.family.name)}${session.family.name} et toutes ses données.
 
 ---
 Code famille : ${session.family.code || session.fid}
@@ -6222,7 +6222,7 @@ function ago(ms) {
   const h = Math.floor(min / 60);
   if (h < 24) return `il y a ${h} h`;
   const d = new Date(ms);
-  return `le ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+  return `le ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à ${heureFr(d)}`;
 }
 
 // Petit indicateur de l'accueil : en ligne (Wi-Fi ou carte SIM), branchée, batterie.
@@ -6271,7 +6271,7 @@ async function quitterFamilleRetire(fid) {
   const nom = session.family?.name || '';
   stopSession();
   if (savedFamilyId() === fid) saveFamilyId(null);
-  await notice(`Vous ne faites plus partie de la famille${nom ? ` de ${nom}` : ''}. Un responsable vous a retiré.`);
+  await notice(`Vous ne faites plus partie de la famille${nom ? ` ${deOuD(nom)}${nom}` : ''}. Un responsable vous a retiré.`);
   quitteEnCours = false;
   enterApp();
 }
@@ -6322,7 +6322,7 @@ function numeroTablette() {
 }
 const enGoOuMo = (mo) => (mo >= 1000 ? `${(mo / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go` : `${Math.round(mo)} Mo`);
 function texteForfait(f, name) {
-  const debut = `Le forfait internet de la tablette de ${name} est utilisé à ${Math.min(f.pourCent, 100)} %`;
+  const debut = `Le forfait internet de la tablette ${deOuD(name)}${name} est utilisé à ${Math.min(f.pourCent, 100)} %`;
   const jusqua = f.fin ? `jusqu'au ${f.fin}` : 'jusqu\'à sa recharge';
   // Forfait « internet coupé » au bout (Sosh 1 Go bloqué) : le dire simplement, avec la date et le geste utile.
   const coupe = f.coupe && f.fin ? ` Une fois épuisé, internet sera coupé jusqu'au ${f.fin} ; branchez-la au Wi-Fi si vous pouvez.` : '';
@@ -6432,7 +6432,7 @@ function renderTuileTelephone() {
 $('tile-phone').addEventListener('click', (e) => {
   if (!$('tile-phone').classList.contains('tile-off')) return;
   e.preventDefault();
-  toast(`Ajoutez votre numéro de portable : la tablette de ${session?.family?.name || 'votre proche'} ne répond qu'aux numéros de la famille.`);
+  toast(`Ajoutez votre numéro de portable : la tablette ${deOuD(session?.family?.name || 'votre proche')}${session?.family?.name || 'votre proche'} ne répond qu'aux numéros de la famille.`);
   ouvrirReglages('profil');
   setTimeout(() => { const carte = $('my-tel-card'); if (carte && !carte.classList.contains('editing')) openSetting(carte); }, 300);
 });
@@ -6454,7 +6454,7 @@ function renderContact() {
   badgeDu('contact-encart', voir);
   if (!voir) return;
   const nom = session.family.name;
-  $('contact-titre').textContent = `Enregistrez le numéro de ${nom}`;
+  $('contact-titre').textContent = `Enregistrez le numéro ${deOuD(nom)}${nom}`;
   // Le numéro d'un seul tenant, jamais coupé en fin de ligne (testeur, V13 du 17/11).
   const numero = document.createElement('span');
   numero.className = 'numero';
@@ -6509,13 +6509,13 @@ function renderActivity() {
   } else if (now - online > enLigneMs() && coupeeParForfait()) {
     // Forfait « internet coupé » épuisé : pas de panique « ne répond plus », la vraie raison et la date.
     el.classList.add('calme');
-    el.textContent = `La tablette de ${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au Wi-Fi si vous pouvez.`;
+    el.textContent = `La tablette ${deOuD(name)}${name} n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${coupeeParForfait().fin}. Branchez-la au Wi-Fi si vous pouvez.`;
   } else if (now - online > enLigneMs()) {
     // Ce que l'app sait déjà (branchée) est utilisé.
     el.classList.add('warn');
     // Court (Tanguy, 20/11 : « le bloc de texte rouge est un peu long ») : le fait en rouge, la piste en dessous en
     // texte normal ; le détail est dans « Que faire ? ».
-    el.textContent = `La tablette de ${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. `;
+    el.textContent = `La tablette ${deOuD(name)}${name} ne répond plus depuis ${ago(online).replace('il y a ', '')}. `;
     const piste = document.createElement('span');
     piste.className = 'activity-piste';
     piste.textContent = battery?.charging === true
@@ -6536,12 +6536,12 @@ function renderActivity() {
     el.classList.add('warn');
     const depuis = ago(toDate(battery.unpluggedAt).getTime()).replace('il y a ', '');
     el.textContent = (depuis === "à l'instant"
-      ? `La tablette de ${name} vient d'être débranchée`
-      : `La tablette de ${name} est débranchée depuis ${depuis}`)
+      ? `La tablette ${deOuD(name)}${name} vient d'être débranchée`
+      : `La tablette ${deOuD(name)}${name} est débranchée depuis ${depuis}`)
       + `${Number.isFinite(battery.level) ? ` (${battery.level} %)` : ''}. Pensez à rebrancher son chargeur.`;
   } else if (battery && battery.level < 15 && !battery.charging) {
     el.classList.add('warn');
-    el.textContent = `Batterie faible sur la tablette de ${name} (${battery.level} %). Pensez à la brancher.`;
+    el.textContent = `Batterie faible sur la tablette ${deOuD(name)}${name} (${battery.level} %). Pensez à la brancher.`;
   } else if (forfaitTablette()?.pourCent >= FORFAIT_ALERTE) {
     // Ton calme (Tanguy, 5/11) : une information, pas une alerte rouge.
     el.classList.add('calme');
@@ -6562,7 +6562,7 @@ function renderActivity() {
     // Aucun signe de vie depuis le nombre de jours réglé (« Tablette pas utilisée », 5 par défaut) : la même règle que
     // l'alerte envoyée aux responsables.
     el.classList.add('warn');
-    el.textContent = `Aucun signe de ${name} sur la tablette depuis ${joursTexte(Math.floor((now - active) / 86400_000))}. Un petit appel ?`;
+    el.textContent = `Aucun signe ${deOuD(name)}${name} sur la tablette depuis ${joursTexte(Math.floor((now - active) / 86400_000))}. Un petit appel ?`;
   } else {
     // Tout va bien : rien à dire (Tanguy, 24/11 : « il vaut mieux aucune info »). Avant : « Tablette en ligne.
     // Mamie était devant la tablette hier à 20:22 », qui inquiétait pour rien.
@@ -6614,7 +6614,7 @@ const TEL_MANQUANT = 'Indiquez votre numéro de portable.';
 // Les règles Firestore ne peuvent pas le vérifier : l'appli lit les fiches de la famille avant d'écrire un numéro
 // (Profil, et juste après l'entrée dans la famille) ; l'admin montre un doublon resté (functions/tel-unique.js).
 // Le message dit quoi faire (Tanguy 17/11) : son propre numéro, ou, dans « Vos informations », la case sans numéro.
-const telDouble = (prenom, caseSansTel = false) => `Ce numéro est déjà celui de ${prenom} dans la famille. Indiquez votre propre numéro de portable${
+const telDouble = (prenom, caseSansTel = false) => `Ce numéro est déjà celui ${deOuD(prenom)}${prenom} dans la famille. Indiquez votre propre numéro de portable${
   caseSansTel ? ", ou cochez « Je n'ai pas de numéro, ou un numéro étranger »" : ''}.`;
 // Prénom de l'autre proche (pas la tablette, pas moi) qui a déjà ce numéro, sinon ''.
 function telPrisDans(membres, tel, uid) {
@@ -7114,7 +7114,7 @@ $('btn-copy-link').addEventListener('click', async () => {
     await navigator.clipboard.writeText(location.href);
     notice("Lien copié. Ouvrez Papote depuis l'écran d'accueil, touchez « Recevoir le lien » si besoin, puis collez-le.");
   } catch (e) {
-    notice("Touchez la barre d'adresse en haut, copiez l'adresse, puis collez-la dans l'app Papote.");
+    notice("Touchez la barre d'adresse en haut, copiez l'adresse, puis collez-la dans l'appli Papote.");
   }
 });
 
@@ -7173,7 +7173,7 @@ $('btn-skip-invites').addEventListener('click', () => { skipInvites = true; ente
 // Plusieurs familles : le nom en haut de l'accueil ouvre la liste, dans la page.
 $('family-switch').addEventListener('click', async () => {
   const autres = myFamilies.filter((f) => f.fid !== session?.fid);
-  const choix = await chooseAction('Changer de famille', autres.map((f) => ({ label: `Famille de ${f.name}`, value: f.fid })));
+  const choix = await chooseAction('Changer de famille', autres.map((f) => ({ label: `Famille ${deOuD(f.name)}${f.name}`, value: f.fid })));
   if (!choix) return;
   saveFamilyId(choix);
   enterApp();
@@ -7214,7 +7214,7 @@ function showJoin(canGoBack, { lienInconnu = false } = {}) {
   // Lien d'invitation d'un proche : le code est déjà là, il n'y a qu'à toucher « Rejoindre ».
   $('join-code-wrap').hidden = !!code;
   $('join-title').textContent = code
-    ? (pour ? `Rejoindre la famille de ${pour}` : 'Rejoindre la famille')
+    ? (pour ? `Rejoindre la famille ${deOuD(pour)}${pour}` : 'Rejoindre la famille')
     : 'Rejoindre une famille'; // pas « Vous êtes invité » : il ne l'est peut-être pas (V7 du 17/11)
   $('join-help').textContent = !code ? JOIN_AIDE
     : proposition
@@ -7239,7 +7239,7 @@ function showInvitations(invitations) {
     card.innerHTML = '<h2></h2><p class="muted"></p>'
       + '<button type="submit" class="primary wide">Rejoindre la famille</button><p class="error" hidden></p>';
     // Famille préparée à la commande (functions/famille-preparee.js) : c'est l'espace de celui qui a payé.
-    card.querySelector('h2').textContent = inv.preparee ? 'Votre espace famille Papote' : `Famille de ${inv.familyName}`;
+    card.querySelector('h2').textContent = inv.preparee ? 'Votre espace famille Papote' : `Famille ${deOuD(inv.familyName)}${inv.familyName}`;
     card.querySelector('p.muted').textContent = inv.preparee
       ? 'Votre commande est enregistrée et votre famille vous attend : donnez le nom de votre proche, envoyez les premières photos et invitez vos proches.'
       : `${inv.invitedBy || 'Un responsable'} vous invite à rejoindre la famille.`;
@@ -7390,7 +7390,7 @@ function annoncerDemande() {
   const demande = demandeEnvoyee;
   demandeEnvoyee = null;
   if (!demande || demande.fid === session?.fid) return;
-  const famille = demande.pour ? `la famille de ${demande.pour}` : 'cette famille';
+  const famille = demande.pour ? `la famille ${deOuD(demande.pour)}${demande.pour}` : 'cette famille';
   notice(demande.deja
     ? `Vous avez déjà demandé à rejoindre ${famille} : un responsable doit accepter votre arrivée.`
     : `Demande envoyée pour rejoindre ${famille} : un responsable va accepter votre arrivée. Elle apparaîtra ici, avec vos autres familles.`);
