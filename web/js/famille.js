@@ -3899,7 +3899,7 @@ function watchInvitations() {
 
 // « Annuler » une invitation : on demande d'abord, puis la ligne se replie avant de disparaître.
 async function annulerInvitation(inv, li) {
-  if (!await askConfirm("Annuler l'invitation ? Cette personne ne pourra plus entrer dans la famille sans l'accord d'un responsable.", 'Oui, annuler', 'Garder', inv.email)) return;
+  if (!await askConfirm("Annuler l'invitation ? Son lien ne marchera plus.", 'Oui, annuler', 'Garder', inv.email)) return;
   li.style.height = `${li.offsetHeight}px`;
   li.offsetHeight; // la hauteur de départ est posée avant le repli
   li.classList.add('invitation-part');
@@ -3923,7 +3923,7 @@ $('form-invite').addEventListener('submit', async (e) => {
   const bouton = $('form-invite').querySelector('button[type=submit]');
   if (bouton.disabled) return;
   // On demande avant d'écrire à quelqu'un : une faute de frappe se voit ici (Tanguy, 23/11).
-  if (!await askConfirm('Inviter cette personne ? Papote lui envoie un e-mail avec un lien pour entrer dans la famille.', 'Inviter', 'Annuler', email)) return;
+  if (!await askConfirm('Inviter cette personne ? Elle reçoit un e-mail avec un lien.', 'Inviter', 'Annuler', email)) return;
   // Le temps d'enregistrer l'invitation et d'envoyer l'e-mail : le bouton garde sa taille et tourne, le champ est figé.
   const libelle = bouton.textContent;
   bouton.style.minWidth = `${bouton.offsetWidth}px`;
