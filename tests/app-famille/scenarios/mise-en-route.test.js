@@ -371,7 +371,10 @@ test('V7, V8 : « C\'est prêt » seulement quand la tablette est là ; le petit
   // Tanguy, 27/11 : « C'est parti » restait seul à droite. Il prend toute la largeur (de la gauche de « Passer » à la
   // droite de « Suivant »), à la même hauteur ; la fenêtre ne bouge pas.
   assert.deepStrictEqual(fin[0], JSON.parse(depart)[0], 'la fenêtre ne bouge pas');
-  assert.deepStrictEqual([fin[2][0], fin[2][1], fin[2][0] + fin[2][2], fin[2][3]], [skip[0], suivant[1], suivant[0] + suivant[2], suivant[3]], '« C\'est parti » sur toute la largeur');
+  // À 1 px près : sur un écran de 375 px les largeurs tombent sur des demi-pixels, arrondis chacun de leur côté.
+  const large = [fin[2][0], fin[2][1], fin[2][0] + fin[2][2], fin[2][3]];
+  const voulu = [skip[0], suivant[1], suivant[0] + suivant[2], suivant[3]];
+  assert.ok(large.every((v, i) => Math.abs(v - voulu[i]) <= 1), `« C'est parti » sur toute la largeur : ${large} au lieu de ${voulu}`);
   // L'icône est au milieu de la fenêtre (elle était collée à gauche).
   const milieux = await guide.evaluate((b) => { const f = b.querySelector('.guide').getBoundingClientRect(); const i = b.querySelector('.guide-icon').getBoundingClientRect(); return [Math.round(f.left + f.width / 2), Math.round(i.left + i.width / 2)]; });
   assert.ok(Math.abs(milieux[0] - milieux[1]) <= 1, `icône au milieu : ${milieux}`);

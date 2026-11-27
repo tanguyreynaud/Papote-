@@ -54,6 +54,13 @@ function poser(bouton, panneau, { largeMin = 140, hautMax = HAUT_MAX, plein = fa
     panneau.style.left = `${Math.max(MARGE, Math.min(r.left, vw - MARGE - large))}px`;
     panneau.style.top = enBas ? `${r.bottom + 4}px` : `${Math.max(MARGE, r.top - 4 - Math.min(haut, entier))}px`;
     panneau.classList.toggle('vers-le-haut', !enBas);
+    // Petit écran (iPhone SE) : un calendrier qui ne tient ni dessous ni dessus se montre quand même en entier, calé
+    // en bas de l'écran, quitte à recouvrir son champ ; il ne défile jamais à l'intérieur.
+    if (plein && entier > Math.max(dessous, dessus)) {
+      const h = Math.min(entier, vh - 2 * MARGE);
+      panneau.style.maxHeight = `${h}px`;
+      panneau.style.top = `${Math.max(MARGE, Math.min(r.bottom + 4, vh - MARGE - h))}px`;
+    }
   };
   placer();
   const fermer = (rendreLaMain = true) => {
