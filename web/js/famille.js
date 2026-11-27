@@ -342,7 +342,10 @@ function openPage(name, push = true, onglet = false) {
   page = name;
   pageVue(name); // ce qui y mène n'est plus compté sur la cloche
   // D'un onglet à l'autre, on remplace l'entrée d'historique : « retour » ramène à l'accueil.
-  if (push && onglet && dejaOnglet) remplacer({ page: name, onglet });
+  // Déjà sur cette page (double toucher sur une tuile ou sur « Inviter ») : une seule entrée, sinon le premier
+  // « retour » ramenait sur la même page (balayage des retours, 27/11).
+  const dejaLa = history.state?.page === name && !history.state.sheet && !history.state.viewer && !$(`view-${name}`).hidden;
+  if (push && (dejaLa || (onglet && dejaOnglet))) remplacer({ page: name, onglet });
   else if (push) empiler({ page: name, onglet });
   show(`view-${name}`);
   document.body.classList.toggle('depuis-barre', onglet);
@@ -887,6 +890,7 @@ function renderVideos(posts) {
 let viewerPost = null;
 
 function openViewer(post) {
+  if (!$('viewer').hidden) return; // déjà ouvert (double toucher) : une seule entrée d'historique
   viewerPost = post;
   $('viewer-delete').hidden = !canDelete(post);
   entrer($('viewer'), $('viewer').hidden);
@@ -1586,7 +1590,7 @@ async function compressPhoto(file) {
 }
 
 function openAdd(kind, titre) {
-  if (paused()) return;
+  if (paused() || !$('sheet-post').hidden) return; // déjà ouverte (double toucher) : une seule entrée d'historique
   addMode = kind;
   pendingPhotos = [];
   pendingVideo = null;
@@ -1684,6 +1688,7 @@ function filmer() {
     $('in-video-camera').click();
     return;
   }
+  if (filmerOuvert()) return; // déjà ouverte (double toucher)
   empiler({ page, sheet: true, filmer: true });
   ouvrirFilmer({
     max: MAX_VIDEO_SECONDS,
@@ -4114,6 +4119,7 @@ window.addEventListener('pageshow', (e) => {
   for (const [id, texte] of Object.entries(TEXTES_PORTAIL)) { $(id).disabled = false; $(id).textContent = texte; }
 });
 $('btn-abo-page').addEventListener('click', () => {
+  if (!$('view-abonnement').hidden) return; // double toucher : déjà ouverte
   // « Retour » ramène au Profil, à la carte de l'abonnement.
   remplacer({ vue: 'profile', carte: 'abo-card' });
   openPage('abonnement');
