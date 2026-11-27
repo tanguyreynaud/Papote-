@@ -17,7 +17,7 @@ import {
   MAX_VIDEO_CHUNKS, VIDEO_CHUNK,
   choisirBase, bucketUrl, auth, viderCacheLocal,
 } from './firebase.js';
-import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, fonduNouveaux, partir, heureFr, deOuD } from './ui.js';
+import { askConfirm, notice, noticeAide, avantDePartir, chooseAction, choisirPhoto, fermerFenetre, demanderQuitter, fenetreSos, fenetreSosSuivie, queFaireTablette, etapesFicheContact, fonduNouveaux, partir, heureFr, deOuD } from './ui.js';
 import { showGuideOnce, guideVu } from './guide.js';
 import { silenceTolereMs } from './silence.js';
 import {
@@ -6397,11 +6397,9 @@ export function vcardTablette(nom, tel) {
     `TEL;TYPE=CELL:${intl}`, 'NOTE:Tablette Papote', 'END:VCARD', ''].join('\r\n');
 }
 // Un site ne peut pas écrire lui-même dans les contacts : c'est toujours le téléphone qui montre la fiche et demande
-// « Enregistrer ». Avant (bug signalé par Tanguy le 22/11) : un fichier téléchargé partout, puis notre fenêtre
-// « Fiche contact … prête : ouvrez-la », qui ne disait pas où la trouver.
-// Maintenant : iPhone, la fiche s'ouvre tout de suite (fiche Apple « Créer un contact ») ; Android, Chrome n'a pas
-// d'autre chemin que le fichier, mais il affiche lui-même « Ouvrir » en bas de l'écran : une phrase courte le
-// montre, sans fenêtre à fermer ; ordinateur, le fichier est téléchargé, rien d'autre.
+// « Enregistrer ». iPhone : la fiche Apple « Créer un contact » s'ouvre tout de suite. Android : Chrome n'a pas d'autre
+// chemin que le fichier ; sa barre « Ouvrir » n'apparaît pas partout (Tanguy, 27/11), donc 3 étapes qui passent par
+// la notification de téléchargement ou l'app Fichiers, présentes sur tous les Android. Ordinateur : le fichier seul.
 function enregistrerContact(nom, tel, bouton) {
   bouton.disabled = true;
   const texte = bouton.textContent;
@@ -6416,13 +6414,16 @@ function enregistrerContact(nom, tel, bouton) {
       // lieu de ranger un fichier dans « Fichiers ».
       location.href = url;
     } else {
+      const fichier = `${String(nom || 'Tablette').replace(/[^\p{L}\p{N} -]/gu, '').trim() || 'Tablette'}.vcf`;
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${String(nom || 'Tablette').replace(/[^\p{L}\p{N} -]/gu, '').trim() || 'Tablette'}.vcf`;
+      a.download = fichier;
       document.body.append(a);
       a.click();
       a.remove();
-      if (isAndroid()) toast('Touchez « Ouvrir » en bas de l\'écran, puis « Importer ».', 8000);
+      // Un instant après l'appui (le bouton dit « Un instant… ») : le 2e appui d'un double appui tombe sur le bouton
+      // désactivé, pas sur la fenêtre, qu'il refermait avant qu'on ait pu la lire.
+      if (isAndroid()) setTimeout(() => etapesFicheContact(nom, fichier), 450);
     }
   } catch (e) {
     console.error(e);

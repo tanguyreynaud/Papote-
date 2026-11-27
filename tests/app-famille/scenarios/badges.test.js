@@ -266,7 +266,10 @@ test('Navigateur : « Recevoir les appels » → numéro → prélèvement ; dou
   await surveiller(julie);
   await g.doubleAppui(julie, '#contact-oui');
   assert.strictEqual(await julie.page.locator('#contact-oui').innerText(), 'Un instant…', 'réaction visible tout de suite');
-  if (!banc.WEBKIT) await g.toast(julie, 'Touchez « Ouvrir » en bas de l\'écran');
+  if (!banc.WEBKIT) {
+    await g.texteFenetre(julie).then((txt) => assert.match(txt, /Ouvrez vos notifications/));
+    await g.repondre(julie, 'Compris');
+  }
   await remplacee(julie, 'sepa-encart', null, 'numéro → prélèvement');
   assert.strictEqual(fiches, 1, 'une seule fiche contact');
 
