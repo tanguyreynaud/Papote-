@@ -121,9 +121,12 @@
         <p id="sous-accueil" class="sous-titre"></p>
         <div class="deux-colonnes">
           <div>
-            <h2 class="titre-bloc">À faire</h2>
-            <div class="filtres no-print" id="filtres-taches" role="group" aria-label="Montrer" hidden></div>
-            <ul id="a-faire" class="a-faire liste-courte"></ul>
+            <!-- Dans une carte, comme « Ce mois-ci » et « Alertes » (Tanguy 27/11 : sur téléphone, « À faire » sortait du cadre). -->
+            <div class="card carte-taches">
+              <h2 class="titre-bloc">À faire</h2>
+              <div class="filtres no-print" id="filtres-taches" role="group" aria-label="Montrer" hidden></div>
+              <ul id="a-faire" class="a-faire liste-courte"></ul>
+            </div>
           </div>
           <div>
             <div class="card">
@@ -266,14 +269,13 @@
               <button type="button" id="btn-installer-qr" data-detail="Sur place, par QR code">Installer une tablette</button>
               <button type="button" id="btn-achat" data-detail="Une commande passée chez un vendeur">Ajouter un achat</button>
             </div>
-            <div class="menu-actions no-print" data-titre="Autres actions sur les tablettes">
-              <button type="button" id="x-stock" data-detail="Toute la liste, pour Excel">Exporter</button>
-            </div>
           </div>
           <select id="filtre-stock" aria-label="Filtrer" hidden><option value="">Toutes</option></select>
           <div class="table courte"><table id="t-stock"></table></div>
           <p id="stock-vide" class="muted small" hidden>Aucune tablette enregistrée. Ajoutez votre premier achat.</p>
           <p class="small muted kpi-suite" id="kpi-stock-suite"></p>
+          <!-- L'export seul ne mérite pas un bouton ⋮ en haut (Tanguy 27/11) : un lien discret sous la liste. -->
+          <p class="small no-print export-liste"><button type="button" class="link" id="x-stock">Exporter la liste pour Excel</button></p>
         </div>
         <div data-onglet="sim">
           <div class="barre-liste">
