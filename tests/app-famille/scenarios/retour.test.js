@@ -30,6 +30,15 @@ test('Retour : chaque écran ramène à celui d\'avant, une fenêtre se ferme sa
   await g.attendreVue(julie, 'view-profile');
   await julie.page.click('#view-profile .aide-pastille');
   await g.attendreVue(julie, 'view-support');
+  // « Poser une question à l'assistant », deux fois : toujours un seul retour pour quitter l'Aide (Tanguy, 27/11 :
+  // chaque toucher empilait une page Aide de plus, la flèche semblait ne pas marcher).
+  await julie.page.evaluate(() => { window.papoteChat = { ouvrir() {} }; });
+  await julie.page.click('#support-assistant');
+  await julie.page.click('#support-assistant');
+  await julie.page.click('#view-support .page-head .back');
+  await g.attendreVue(julie, 'view-profile');
+  await julie.page.click('#view-profile .aide-pastille');
+  await g.attendreVue(julie, 'view-support');
   await retour(julie, 'view-profile');
   await retour(julie, 'view-home');
 
