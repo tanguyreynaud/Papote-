@@ -194,14 +194,11 @@ const creer = (tag, attrs = {}, texte = '') => Object.assign(document.createElem
 // Étapes de l'envoi d'une commande. ctx : { stock, sims, accessoires } (vide pour seulement compter les étapes).
 function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
   // Offre unique (29/10/2026) : la carte SIM part dans chaque tablette, même pour une ancienne commande Wi-Fi de test.
-  // L'enceinte part seulement si on le choisit (e.enceinte = 'oui').
   const internet = true;
-  const avecEnceinte = (e) => e.enceinte === 'oui';
   const tablette = (e) => stock.find((t) => t.id === e.tablette);
   const nom = (e) => { const t = tablette(e); return t ? t.ref || t.numero || t.modele || 'choisie' : ''; };
   const simDe = (e) => { const t = tablette(e); return sims.find((l) => l.id === (e.sim || (t && t.simId))) || null; };
   const pour = (formule) => accessoires.filter((a) => a.parEnvoi === formule).map((a) => a.nom);
-  const enceinte = () => accessoires.find((a) => a.parEnvoi === 'option' && /enceinte|haut-parleur/i.test(a.nom))?.nom || 'L\'enceinte';
   const option = (valeur, texte, choisi) => creer('option', { value: valeur, selected: choisi }, texte);
   // Remise en main propre (A1, 2026-10-27) : ni étiquette ni relais, la commande est reçue le jour même.
   const enMain = (e) => e.mode === 'main';
@@ -217,7 +214,7 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
   };
   // Groupes montrés dans la liste des étapes (style du 20/11) : les noms se lisent en entier, rangés par moment.
   const GROUPES = { mode: 'Tablette et carte SIM', tablette: 'Tablette et carte SIM', sim: 'Tablette et carte SIM', 'sim-installer': 'Tablette et carte SIM',
-    'hors-forfait': 'Tablette et carte SIM', blocages: 'Tablette et carte SIM', carton: 'Le colis', 'enceinte-choix': 'Le colis', fermer: 'Le colis',
+    'hors-forfait': 'Tablette et carte SIM', blocages: 'Tablette et carte SIM', carton: 'Le colis', fermer: 'Le colis',
     feutre: 'Le colis', etiquette: 'L\'envoi', depot: 'L\'envoi', remise: 'L\'envoi' };
   return [    {
       cle: 'mode',
@@ -530,22 +527,6 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       ],
     },
     {
-      cle: 'enceinte-choix',
-      titre: 'Enceinte ?',
-      texte: 'L\'enceinte part-elle dans ce colis ? Elle ne sera facturée au client (10 €) que si elle était dans le colis et ne revient pas.',
-      contenu(zone, e, maj) {
-        const choix = (valeur, texte) => {
-          const r = creer('input', { type: 'radio', name: 'enceinte', value: valeur, checked: e.enceinte === valeur });
-          r.addEventListener('change', () => { e.enceinte = valeur; maj(); });
-          const l = creer('label', { className: 'pc-case' });
-          l.append(r, ` ${texte}`);
-          return l;
-        };
-        zone.append(choix('non', 'Non, pas d\'enceinte'), choix('oui', 'Oui : l\'enceinte est dans le carton'));
-      },
-      pret: (e) => e.enceinte === 'oui' || e.enceinte === 'non',
-    },
-    {
       cle: 'fermer',
       saute: enMain,
       titre: 'Fermer le colis',
@@ -553,7 +534,6 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       contenu(zone, e, maj) {
         const ul = creer('ul', { className: 'pc-liste' });
         const contenu = [`La tablette ${nom(e)}`, 'Le chargeur et son câble', ...pour('tous'),
-          ...(avecEnceinte(e) ? [enceinte()] : []),
           ...(internet ? [`La carte SIM ${simTexte(simDe(e))}, dans la tablette`] : [])];
         ul.append(...contenu.map((x) => creer('li', {}, x)));
         // Numéro lu sur la tablette mise dans le carton (A14-4) : vérifié au « Colis déposé », car la tablette
@@ -662,7 +642,6 @@ function etapesEnvoi(c, { stock = [], sims = [], accessoires = [] }) {
       contenu(zone, e) {
         const ul = creer('ul', { className: 'pc-liste' });
         const contenu = [`La tablette ${nom(e)}`, 'Le chargeur et son câble', ...pour('tous'),
-          ...(avecEnceinte(e) ? [enceinte()] : []),
           ...(internet ? [`La carte SIM ${simTexte(simDe(e))}, dans la tablette`] : [])];
         ul.append(...contenu.map((x) => creer('li', {}, x)));
         zone.append(ul);
