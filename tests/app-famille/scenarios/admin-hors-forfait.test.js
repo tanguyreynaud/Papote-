@@ -65,13 +65,16 @@ test('admin : ligne SIM d\'avant sans « Hors-forfait bloqué chez l\'opérateur
   assert.strictEqual((await s.lire(`commandes/${id}`)).expedition, 'a-preparer', 'rien n\'est parti');
   await p.locator('dialog.parcours .fermer').click();
 
-  // Cochée sur la fiche, en touchant deux fois : cochée tout de suite, une seule écriture.
+  // Cochée sur la fiche puis enregistrée : une seule écriture.
   await p.goto(`${banc.origine}/admin.html#sim/${simId}`);
   await laCase.waitFor({ state: 'visible', timeout: 20_000 });
   const avant = ecrituresCase().length;
-  await laCase.dblclick();
+  // Tanguy 27/11 : rien n'est envoyé à la coche, tout part avec « Enregistrer » (touché deux fois : un seul envoi).
+  await laCase.check();
+  await p.waitForTimeout(400);
+  assert.strictEqual(ecrituresCase().length - avant, 0, 'cocher n\'enregistre rien');
+  await p.locator('button[data-enregistrer-blocages]').dblclick();
   await p.waitForFunction(() => /^Noté/.test(document.querySelector('[data-hors-forfait-aide]')?.textContent || ''), null, { timeout: 15_000 });
-  await p.waitForFunction(() => !document.querySelector('label.case-hors-forfait.charge'), null, { timeout: 15_000 });
   assert.strictEqual(await laCase.isChecked(), true);
   assert.strictEqual(ecrituresCase().length - avant, 1, 'double toucher : une seule écriture');
   const ligne = await s.lire(`sims/${simId}`);
