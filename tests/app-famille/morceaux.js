@@ -27,12 +27,12 @@ const MORCEAUX = [
     'accueil.test.js', 'admin-hors-forfait.test.js', 'admin-journee.test.js', 'agenda.test.js', 'alerte-pas-vue.test.js', 'appels.test.js',
     'badges.test.js', 'chat-aller.test.js', 'clavier-bas.test.js', 'debordement.test.js', 'installation.test.js',
     'largeur.test.js', 'mauvais-jours.test.js', 'mes-informations.test.js', 'photos-multiples.test.js',
-    'resiliation.test.js',
+    'resiliation.test.js', 'retour-balayage.test.js',
   ],
   [
     'abonnement.test.js', 'admin-sim-bloquee.test.js', 'appel-android.test.js', 'declaration.test.js', 'liens-invitation.test.js',
     'deconnexion.test.js', 'forfait.test.js', 'que-faire.test.js', 'horsligne.test.js', 'mise-en-route.test.js', 'notifs-reconnexion.test.js', 'lien-connexion.test.js', 'panne.test.js',
-    'partage.test.js', 'plusieurs-proches.test.js', 'renvoi.test.js', 'retour.test.js', 'retour-balayage.test.js', 'sepa.test.js', 'touchers.test.js', 'wifi.test.js',
+    'partage.test.js', 'plusieurs-proches.test.js', 'renvoi.test.js', 'retour.test.js', 'sepa.test.js', 'touchers.test.js', 'wifi.test.js',
   ],
 ];
 
