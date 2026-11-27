@@ -309,3 +309,7 @@
 .welcome-spin { display: block; margin: 4vmin auto 3vmin; }
 .welcome-btn.small { min-height: 9vmin; font-size: 3.8vmin; }
 
+
+/* Alerte : une ligne en gras, puis la suite en texte normal, collée dessous. */
+.welcome-error + .welcome-suite, .welcome-notice + .welcome-suite { margin-top: .6vmin; color: #24212f; }
+.welcome-error:has(+ .welcome-suite), .welcome-notice:has(+ .welcome-suite) { margin-bottom: 0; }

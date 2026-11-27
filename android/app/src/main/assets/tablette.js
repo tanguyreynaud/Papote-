@@ -243,7 +243,8 @@
       pauseScreen.innerHTML = '<div class="pause-box"><p class="pause-title">' + TEXTES_PAUSE[cle][0] + '</p>' +
         '<p class="pause-text">' + TEXTES_PAUSE[cle][1] + '</p></div>';
       // Le SOS reste possible pendant la pause (audit F-a, 5/11).
-      var sos = el2('button', 'big-btn pause-sos', 'SOS');
+      var sos = el2('button', 'big-btn pause-sos', '');
+      sos.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z"/></svg><span>SOS</span>';
       on(sos, 'click', showSosCountdown);
       pauseScreen.firstChild.appendChild(sos);
       showSosButton();
@@ -1044,6 +1045,8 @@
   function majBoutonPhotos() {
     var e = overlayPhotos;
     $('overlay-close').textContent = e && e.nbVues < e.liste.length ? 'Suivante' : 'OK';
+    // « Suivante » est plus large que « OK » : bouton resserré, il dépassait de la carte à côté d'une photo en largeur (24/11).
+    $('overlay-close').classList.toggle('suivante', $('overlay-close').textContent === 'Suivante');
   }
 
   // « Suivante » : la photo d'après ; renvoie false quand toutes ont été vues (OK ferme alors).
@@ -1054,6 +1057,7 @@
     var now = Date.now();
     if (now - e.dernierOk < 1000) return true;
     e.dernierOk = now;
+    markSeen(e.post); // elle a touché : elle est là, l'envoi est « vu » (Tanguy, 24/11)
     montrerPhotoEnvoi((e.n + 1) % e.liste.length);
     relancerTourPhotos();
     return true;
@@ -1701,6 +1705,8 @@
       if (alreadyShown(today[i])) continue;
       var b = today[i];
       $('bday-text').textContent = "Aujourd'hui, c'est l'anniversaire " + deName(b.name) + ' !';
+      // Prénom long (« Marie-Françoise ») : le texte passait sur 3 lignes et la carte recouvrait « OK » (revue mesurée, 24/11).
+      $('bday-text').className = 'ln-text ' + ($('bday-text').textContent.length > 48 ? 'size-m' : 'size-l');
       $('bday-age').textContent = ageLabel(b);
       show($('bday-age'), !!ageLabel(b));
       $('bday-alert').setAttribute('data-id', b.id);
@@ -1937,7 +1943,7 @@
 
   function heureEssai(a) {
     var d = new Date(a);
-    return d.getHours() + ' h ' + pad(d.getMinutes());
+    return d.getHours() + 'h' + pad(d.getMinutes());
   }
 
   function afficherEssais() {
@@ -2136,6 +2142,9 @@
     // Plus de 4 personnes : une grande flèche de chaque côté des visages (demande de Tanguy, 26/10).
     // Au bout de la liste, la flèche est cachée mais garde sa place : les visages ne bougent pas.
     var strip = el2('div', 'call-strip');
+    // Un prénom long (« Marie-Françoise ») tient sur deux lignes : visages un peu plus petits, sinon le titre
+    // et « Accueil » touchaient les bords de l'écran (revue mesurée, 24/11).
+    for (var n = 0; n < list.length; n++) if (String(list[n].name || '').length > 10) { strip.className += ' noms-longs'; break; }
     if (pages > 1) strip.appendChild(pageArrow('left', pickerPage === 0, -1));
     strip.appendChild(grid);
     if (pages > 1) strip.appendChild(pageArrow('right', pickerPage >= pages - 1, 1));
@@ -2492,7 +2501,7 @@
       } else if (etat.cause === 'erreur') {
         gsmFinish('L’appel n’a pas pu partir', 'Réessayez dans un moment.', true, false);
       } else {
-        gsmFinish(who + ' n’a pas pu répondre', 'Réessayez plus tard.', true, false);
+        gsmFinish(who + ' n’a pas pu répondre', 'Réessayez dans un moment.', true, false);
       }
     }
   }
@@ -3508,6 +3517,7 @@
       if (ok) return; // la tablette s'éteint dans un instant, puis se rallume
       titre.textContent = 'Le redémarrage n’a pas marché.';
       detail.textContent = '';
+      redemarrerEl.classList.add('rate'); // plus de boutons grisés : le message seul, bien au milieu
       redemarrerTimer = setTimeout(function () { cacherRedemarrer(); }, 4000);
     });
     on(non, 'click', function () {
@@ -3541,6 +3551,7 @@
     $('redemarrer-titre').textContent = REDEMARRER_TITRE;
     $('redemarrer-detail').textContent = REDEMARRER_DETAIL;
     $('redemarrer-oui').disabled = false;
+    redemarrerEl.classList.remove('rate');
     $('redemarrer-non').disabled = false;
     wakeScreen(); // la nuit, l'écran se rallume pour la fenêtre
     show(redemarrerEl, true);
@@ -3553,6 +3564,7 @@
     if (!redemarrerEl || redemarrerEl.hasAttribute('hidden')) return;
     $('redemarrer-titre').textContent = 'Le redémarrage n’a pas marché.';
     $('redemarrer-detail').textContent = '';
+    redemarrerEl.classList.add('rate');
     clearTimeout(redemarrerTimer);
     redemarrerTimer = setTimeout(function () { cacherRedemarrer(); }, 4000);
   }
@@ -4022,6 +4034,20 @@
       stopAudio();
       if (overlayPost) markSeen(overlayPost);
       nextOverlay();
+    });
+
+    // Plusieurs photos (Tanguy, 24/11) : toucher la photo ou le mot, n'importe où sauf sur un bouton, montre la
+    // suivante, en boucle, et compte l'envoi « vu » (elle est forcément là). Ce toucher ne ferme jamais l'envoi : seul OK le fait.
+    on($('overlay'), 'click', function (ev) {
+      var e = overlayPhotos, c = ev.target;
+      if (!e || overlayPost !== e.post) return;
+      for (; c && c !== this; c = c.parentNode) if (c.tagName === 'BUTTON' || c.id === 'overlay-actions') return;
+      var now = Date.now();
+      if (now - e.dernierOk < 1000) return; // double toucher : une seule photo passée
+      e.dernierOk = now;
+      markSeen(e.post); // elle a touché : elle est là, l'envoi est « vu »
+      montrerPhotoEnvoi((e.n + 1) % e.liste.length);
+      relancerTourPhotos();
     });
 
     // Veille : on signale à l'app que Mamie utilise la tablette (au plus une fois par minute).

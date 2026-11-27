@@ -68,7 +68,7 @@ final class Redemarrage {
         void non();
     }
 
-    /** Même fenêtre que la page : fond crème, Oui en indigo, Non en gris, deux boutons de même taille. */
+    /** Même fenêtre que la page : fond crème, Oui en indigo, Non clair, deux boutons de même taille. */
     static View fenetre(Activity a, Choix choix) {
         FrameLayout voile = new FrameLayout(a);
         voile.setBackgroundColor(Color.argb(140, 28, 25, 23));
@@ -98,7 +98,12 @@ final class Redemarrage {
         LinearLayout boutons = new LinearLayout(a);
         boutons.setOrientation(LinearLayout.HORIZONTAL);
         Button oui = bouton(a, "Oui", "#4f46e5", boutonTf, vmin);
-        Button non = bouton(a, "Non", "#57534e", boutonTf, vmin);
+        Button non = bouton(a, "Non", "#ffffff", boutonTf, vmin);
+        // Comme la page (24/11) : « Non » clair, texte indigo, fin liseré.
+        non.setTextColor(Color.parseColor("#3730a3"));
+        GradientDrawable clair = fond(Color.WHITE, 7 * vmin);
+        clair.setStroke(Math.max(1, Math.round(.5f * vmin)), Color.parseColor("#e8e6fd"));
+        non.setBackground(clair);
         int largeur = Math.round(30 * vmin), hauteur = Math.round(14 * vmin);
         LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(largeur, hauteur);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(largeur, hauteur);
@@ -117,7 +122,8 @@ final class Redemarrage {
             detail.setText(DETAIL);
             if (!choix.oui()) {
                 titre.setText(IMPOSSIBLE);
-                detail.setText("");
+                detail.setVisibility(View.GONE); // le message seul, bien au milieu : plus de boutons grisés
+                boutons.setVisibility(View.GONE);
             }
         });
         non.setOnClickListener(v -> {
@@ -164,7 +170,7 @@ final class Redemarrage {
         b.setTextSize(TypedValue.COMPLEX_UNIT_PX, 6 * vmin);
         b.setTypeface(tf);
         b.setTextColor(Color.WHITE);
-        b.setBackground(fond(Color.parseColor(couleur), 3 * vmin));
+        b.setBackground(fond(Color.parseColor(couleur), 7 * vmin)); // bouton tout rond, comme la page
         b.setStateListAnimator(null);
         b.setSingleLine(true);
         return b;

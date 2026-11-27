@@ -58,7 +58,7 @@ test('A49 : Julie appelle, personne ne décroche : la carte à la place de la m�
     assert.ok(await meteoVisible(b), 'météo avant');
     await b.avancer(40000); // 10 h 00 min 48
     await sonneSansReponse(b, JULIE); // fin à 10 h 01
-    assert.strictEqual(await carte(b), 'Julie a essayé de vous appeler à 10 h 01');
+    assert.strictEqual(await carte(b), 'Julie a essayé de vous appeler à 10h01');
     assert.doesNotMatch(await b.texte('#essai-appel'), /manqu/i);
     assert.strictEqual(await b.page.evaluate(() => document.querySelectorAll('#essai-appel button').length), 0, 'pas de bouton');
     assert.ok(!(await meteoVisible(b)), 'la météo laisse la place');
@@ -78,8 +78,8 @@ test('A49 : Julie appelle, personne ne décroche : la carte à la place de la m�
       mise: e.classList.contains('a-essaye'),
     })));
     assert.deepStrictEqual(cartes, [
-      { nom: 'Marc', essai: 'vous a appelé à 10 h 02', mise: true },
-      { nom: 'Julie', essai: 'vous a appelé à 10 h 01', mise: true },
+      { nom: 'Marc', essai: 'vous a appelé à 10h02', mise: true },
+      { nom: 'Julie', essai: 'vous a appelé à 10h01', mise: true },
       { nom: 'Paul', essai: '', mise: false },
     ], 'le plus récent d’abord, puis les autres proches, sans étiquette');
     assert.strictEqual(await b.page.evaluate(() => document.querySelectorAll('.call-out.picker .call-person-essai button, #essai-appel button').length), 0, 'toujours pas de bouton « Rappeler »');
@@ -96,7 +96,7 @@ test('A49 : personne à rappeler (proche sans numéro) : un toucher enlève la c
     assert.ok(await meteoVisible(b), 'météo avant');
     // Visio d'un proche qui n'a pas donné son numéro : la tablette ne peut pas le rappeler.
     await b.page.evaluate(() => window.Papote.essaiAppel('lea', 'Léa'));
-    assert.strictEqual(await carte(b), 'Léa a essayé de vous appeler à 10 h 00');
+    assert.strictEqual(await carte(b), 'Léa a essayé de vous appeler à 10h00');
     await b.toucher('#essai-appel');
     assert.ok(!(await b.visible('.call-out.picker')), 'pas d’écran d’appel : personne à rappeler');
     assert.strictEqual(await carte(b), '', 'touchée : partie');
@@ -114,7 +114,7 @@ test('A49 : la carte survit à une relance de Papote', async () => {
   try {
     await sonneSansReponse(b, JULIE);
     const avant = await carte(b);
-    assert.match(avant, /^Julie a essayé de vous appeler à 10 h 00$/);
+    assert.match(avant, /^Julie a essayé de vous appeler à 10h00$/);
     await b.page.reload();
     await donnees(b);
     await b.avancer(3000);
@@ -225,7 +225,7 @@ test('A49 : visio réelle (appels.js) : sonnerie sans réponse → carte ; Mamie
     assert.ok(await b.visible('#call-ring'), 'ça sonne');
     await b.avancer(62000); // personne ne décroche : la sonnerie s'arrête au bout d'une minute
     assert.ok(!(await b.visible('#call-ring')));
-    assert.match(await carte(b), /^Julie a essayé de vous appeler à 10 h 0\d$/);
+    assert.match(await carte(b), /^Julie a essayé de vous appeler à 10h0\d$/);
     // L'appelant raccroche avant la réponse : la carte est mise à jour (toujours une seule).
     await visioDeJulie(b, 'v2');
     await b.ecrire('families/F1/calls/v2', { ...(await b.lire('families/F1/calls/v2')), state: 'ended' });
@@ -254,13 +254,13 @@ test('A49 : deux personnes : « Julie et Paul ont essayé de vous appeler » ; t
   try {
     await sonneSansReponse(b, JULIE);
     await sonneSansReponse(b, JULIE);
-    assert.match(await carte(b), /^Julie a essayé de vous appeler à 10 h 00$/, 'deux fois Julie : une seule carte');
+    assert.match(await carte(b), /^Julie a essayé de vous appeler à 10h00$/, 'deux fois Julie : une seule carte');
     await b.avancer(60000);
     await sonneSansReponse(b, PAUL);
     assert.strictEqual(await carte(b), 'Julie et Paul ont essayé de vous appeler');
     await b.avancer(60000);
     await sonneSansReponse(b, MARC);
-    assert.match(await carte(b), /^Marc a essayé de vous appeler à 10 h 0\d$/);
+    assert.match(await carte(b), /^Marc a essayé de vous appeler à 10h0\d$/);
     // Paul décroché : il reste Julie et Marc.
     await b.page.evaluate(() => window.Papote.appelAbouti('paul', 'Paul'));
     assert.strictEqual(await carte(b), 'Julie et Marc ont essayé de vous appeler');
@@ -273,7 +273,7 @@ test('A49 : deux prénoms trop longs pour tenir : la plus récente seule, avec l
   try {
     await b.page.evaluate(() => window.Papote.essaiAppel('a', 'Marie-Bernadette'));
     await b.page.evaluate(() => window.Papote.essaiAppel('b', 'Jean-Christophe'));
-    assert.strictEqual(await carte(b), 'Jean-Christophe a essayé de vous appeler à 10 h 00');
+    assert.strictEqual(await carte(b), 'Jean-Christophe a essayé de vous appeler à 10h00');
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
@@ -282,7 +282,7 @@ test('A49 : 21 h : la carte s’en va (veille à 23 h), et ne revient pas le len
   const b = await tablette('2026-10-26T20:50:00');
   try {
     await sonneSansReponse(b, JULIE);
-    assert.match(await carte(b), /^Julie a essayé de vous appeler à 20 h 50$/);
+    assert.match(await carte(b), /^Julie a essayé de vous appeler à 20h50$/);
     await b.avancer(10 * 60000 + 30000); // 21 h 01
     assert.strictEqual(await carte(b), '', 'partie à 21 h');
     await b.page.clock.fastForward(11 * 3600000); // lendemain 8 h
@@ -314,7 +314,7 @@ test('A49 : appel arrivé après 21 h (veille 23 h) : la carte reste jusqu’à 
   const b = await tablette('2026-10-26T21:30:00');
   try {
     await sonneSansReponse(b, JULIE);
-    assert.match(await carte(b), /^Julie a essayé de vous appeler à 21 h 30$/);
+    assert.match(await carte(b), /^Julie a essayé de vous appeler à 21h30$/);
     await b.avancer(60 * 60000); // 22 h 30
     assert.match(await carte(b), /^Julie a essayé/);
     await b.avancer(40 * 60000); // 23 h 10 : veille
