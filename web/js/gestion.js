@@ -5228,17 +5228,17 @@ $('campagne-a-qui').addEventListener('change', (e) => { $('filtre-clients').valu
 
 // E-mail d'ouverture des commandes à la liste d'attente (lancementListeAttente, functions/index.js).
 async function envoyerLancement(test) {
-  if (!test && !await demander("Envoyer l'e-mail « Papote est disponible : vous pouvez commander » à toute la liste d'attente ?\n\n"
-    + "Chaque personne ne le reçoit qu'une fois. Pensez à vous envoyer un test d'abord.")) return;
+  if (!test && !await demander("Envoyer « Une tablette Papote est disponible » à la liste d'attente ?\n\n"
+    + "Seules les personnes pas encore prévenues le reçoivent. Pensez à vous envoyer un essai d'abord.", { oui: 'Envoyer' })) return;
   const msg = $('lancement-msg');
   const boutons = [$('lancement-test'), $('lancement-envoyer')];
   boutons.forEach((b) => { b.disabled = true; });
   msg.hidden = false;
   msg.className = 'small';
-  msg.textContent = test ? 'Envoi du test…' : 'Envoi à la liste d\'attente…';
+  msg.textContent = test ? 'Envoi de l\'essai…' : 'Envoi à la liste d\'attente…';
   try {
     const r = await appeler('lancementListeAttente', test ? { test: true } : {});
-    msg.textContent = test ? 'Test envoyé à votre adresse.'
+    msg.textContent = test ? 'Essai envoyé à votre adresse.'
       : `${pluriel(r.envoyes || 0, 'e-mail')} envoyé${r.envoyes > 1 ? 's' : ''}${r.erreurs ? `, ${pluriel(r.erreurs, 'échec')} (voir les journaux)` : ''}.`;
     if (!test && r.erreurs) msg.className = 'small error';
   } catch (e) {
