@@ -356,7 +356,7 @@ test('un responsable qui ne paie pas résilie, garde, ouvre le portail et les fa
   assert.deepStrictEqual(mailsA(julie.email), ['Votre résiliation Papote est enregistrée']);
   assert.deepStrictEqual(mailsA(paul.email), ['Votre résiliation Papote est enregistrée']);
   assert.match(s.boite.find((m) => m.a === julie.email).texte, /Paul, responsable de la famille, a demandé dans l'appli la résiliation/);
-  assert.match(s.boite.find((m) => m.a === paul.email).texte, /Bonjour Paul[\s\S]*Votre demande de résiliation[\s\S]*qui paie l'abonnement, reçoit aussi un e-mail/);
+  assert.match(s.boite.find((m) => m.a === paul.email).texte, /Bonjour Paul[\s\S]*s'arrête le[\s\S]*qui paie l'abonnement, reçoit aussi un e-mail/);
   assert.deepStrictEqual(mailsA(marie.email), []);
 
   // Paul garde l'abonnement : même chose pour la reprise.
@@ -375,7 +375,7 @@ test('un responsable qui ne paie pas résilie, garde, ouvre le portail et les fa
   await s.calme();
   assert.ok(abo(id).cancel_at, 'arrêt prévu');
   assert.deepStrictEqual(mailsA(julie.email), ['Votre résiliation Papote est enregistrée']);
-  assert.match(s.boite.find((m) => m.a === julie.email).texte, /Votre demande de résiliation/);
+  assert.match(s.boite.find((m) => m.a === julie.email).texte, /Votre résiliation Papote est enregistrée[\s\S]*s.arrête le/);
   assert.deepStrictEqual(mailsA(paul.email), []);
 
   // Paul n'est plus responsable : il ne touche plus à l'abonnement.

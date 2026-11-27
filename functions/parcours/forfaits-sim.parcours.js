@@ -137,7 +137,7 @@ test('fin de forfait « débit réduit » : Papote à 80 et 95 %, la famille une
   assert.deepStrictEqual(mailsA(ADMIN), ['Forfait SIM à 80 % : tablette de Mamie', 'Forfait SIM à 95 % : tablette de Mamie']);
   assert.deepStrictEqual(mailsA(paul.email), ['La tablette de Mamie a presque utilisé son forfait internet du mois']);
   const texte = s.boite.find((m) => m.a === paul.email).texte;
-  assert.ok(texte.includes(`La tablette de Mamie a presque utilisé son forfait internet du mois : jusqu'au ${date} les appels vidéo seront plus lents ; branchez-la au Wi-Fi si vous pouvez.`), texte);
+  assert.ok(texte.includes(`Jusqu'au ${date}, les appels vidéo seront plus lents.`) && texte.includes('branchez la tablette au Wi-Fi'), texte);
   await conso(990);
   await s.tache('alerteForfait');
   assert.strictEqual(s.boite.length, 3, 'rien de plus pendant ce forfait');
@@ -152,15 +152,15 @@ test('fin de forfait « internet coupé » : la famille sait que c\'est coupé j
   await s.tache('alerteForfait');
   assert.deepStrictEqual(mailsA(ADMIN), ['Forfait SIM à 95 % : tablette de Mamie'], '80 et 95 % passés d\'un coup : un seul e-mail');
   const texte = s.boite.find((m) => m.a === paul.email).texte;
-  assert.ok(texte.includes(`La tablette de Mamie a presque utilisé son forfait internet du mois : internet sera coupé jusqu'au ${date} ; branchez-la au Wi-Fi si vous pouvez.`), texte);
+  assert.ok(texte.includes(`Jusqu'au ${date}, internet sera coupé sur la tablette`) && texte.includes('branchez la tablette au Wi-Fi'), texte);
   const admin95 = s.boite.find((m) => m.a === ADMIN).texte;
-  assert.match(admin95, /Forfait « internet coupé » au bout/);
+  assert.match(admin95, /Au bout du forfait, la tablette n.aura plus internet jusqu/);
 
   // Le forfait s'épuise, l'opérateur coupe : plus de nouvelles de la tablette.
   await fiche.update({ lastOnline: s.Timestamp.fromMillis(Date.now() - 3 * 3600_000) });
   await s.tache('alerteForfait');
   assert.deepStrictEqual(mailsA(ADMIN).slice(1), ['Tablette de Mamie : internet sans doute coupé par le forfait']);
-  assert.match(s.boite.at(-1).texte, /pas une panne\. Internet revient le/);
+  assert.match(s.boite.at(-1).texte, /pas une panne : internet revient le/);
   assert.doesNotMatch(s.boite.at(-1).texte, /hors ligne/i);
   await s.tache('alerteForfait');
   assert.strictEqual(mailsA(ADMIN).length, 2, 'une seule fois');

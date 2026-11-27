@@ -74,7 +74,7 @@ test('commande, famille préparée au paiement, envoi, la tablette entre seule d
   assert.strictEqual((await s.db.collection('reservations').get()).size, 0, 'réservation remplacée par la commande');
   assert.ok(mailsA(paul.email).some((m) => /commande/i.test(m)), 'e-mail de confirmation au client');
   const confirmation = s.boite.find((m) => m.a === paul.email && /commande/i.test(m.sujet));
-  assert.match(JSON.stringify(confirmation), /espace famille Papote est déjà prêt/, 'l\'e-mail ouvre l\'espace famille');
+  assert.match(JSON.stringify(confirmation), /espace famille est déjà prêt/, 'l\'e-mail ouvre l\'espace famille');
   assert.ok(mailsA('contact@mapapote.fr').some((m) => /commande/i.test(m)), 'e-mail de nouvelle commande à Papote');
 
   // merci.html affiche le code de commande.

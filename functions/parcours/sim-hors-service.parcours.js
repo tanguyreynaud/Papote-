@@ -138,7 +138,7 @@ test('aucune antenne du réseau qui porte la carte pendant 2 h : alerte « sans 
   assert.deepStrictEqual(emails(), [`Carte SIM sans son réseau depuis 2 h : tablette ${t.ref} de Mamie Jeanne`]);
   const mail = s.boite.filter((m) => m.a === PAPOTE).at(-1);
   assert.match(mail.texte, /sans antenne de son réseau \(20820\)/);
-  assert.match(mail.texte, /Changer de carte SIM/);
+  assert.match(mail.texte, /Changer la carte SIM pour un opérateur présent chez le client/);
   assert.match((await ligneAFaire())[0], /Carte SIM sans antenne de son réseau depuis le .*Aucune antenne 20820/);
   await rapport(240, { service: 'urgences', antennes: [antenne(ORANGE)] });
   assert.strictEqual(emails().length, 1);

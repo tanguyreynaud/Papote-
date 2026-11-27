@@ -133,7 +133,7 @@ test('impayé : suspendue depuis 30 jours, l\'abonnement s\'arrête tout seul ; 
   assert.strictEqual(ab.arretPar, 'papote');
   const arrets = mailsA(paul.email).filter((m) => /Papote arrête votre abonnement/.test(m));
   assert.strictEqual(arrets.length, 1);
-  assert.match(arrets[0], /aucun nouveau mois ne sera prélevé[\s\S]*140 €/);
+  assert.match(arrets[0], /Aucun nouveau mois ne sera prélevé[\s\S]*140 €/);
 
   // Fin de l'abonnement, puis 30 jours sans retour, carte refusée : mise en demeure.
   s.avancer((ab.resiliationLe.toMillis() - Date.now()) / s.JOUR + 0.1);
