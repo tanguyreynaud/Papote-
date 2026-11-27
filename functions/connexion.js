@@ -11,7 +11,12 @@
 //   - 3 envois par heure pour une même adresse e-mail ;
 //   - 10 envois par heure depuis une même adresse internet ;
 //   - 60 envois par heure pour tout Papote (le quota Brevo, 300 par jour, sert aussi aux e-mails de commande et SOS).
-// Au-delà : « resource-exhausted », rien ne part. Compteurs dans limites/connexion-… (adresse e-mail et adresse
+//   - 100 envois par jour (jour de Paris) pour tout Papote : sans ce plafond, quelqu'un qui tourne sous les limites
+//     par heure viderait les e-mails du jour, ceux des alertes et du SOS compris (audit du 26/11, Tanguy 27/11).
+//     Au-delà du plafond du jour, ou dès que la réserve des e-mails urgents est entamée (quota-courriels.js),
+//     rien ne part de Papote : la réponse porte « repli: true » et l'appli demande alors le lien à Firebase
+//     (e-mail de Google, en français, moins soigné mais qui ne coûte rien à notre quota). Personne n'est bloqué.
+// Au-delà des limites par heure : « resource-exhausted », rien ne part. Compteurs dans limites/connexion-… (adresse e-mail et adresse
 // internet hachées, comme limites/attente-ip-…), avec les heures des envois de la dernière heure et expireLe.
 // La réponse est la même qu'un compte existe ou non : rien n'apprend qui est inscrit.
 // L'adresse de retour doit être sur l'appli (app.mapapote.fr, papote-famille.web.app ; localhost avec les
@@ -21,7 +26,7 @@ const crypto = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { Timestamp } = require('firebase-admin/firestore');
 
-const LIMITES_CONNEXION = { parAdresse: 3, parIp: 10, total: 60 };
+const LIMITES_CONNEXION = { parAdresse: 3, parIp: 10, total: 60, parJour: 100 };
 const HEURE_MS = 60 * 60 * 1000;
 const DOMAINES = ['app.mapapote.fr', 'papote-famille.web.app'];
 
@@ -75,6 +80,19 @@ async function envoiPermis(db, { email, ip }, maintenant = Date.now()) {
   });
 }
 
+// Plafond du jour (une transaction, un document par jour de Paris) : true si cet envoi peut encore partir de Papote.
+const jourParis = (ms) => new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+async function sousPlafondDuJour(db, maintenant = Date.now()) {
+  const ref = db.doc(`limites/connexion-jour-${jourParis(maintenant)}`);
+  return db.runTransaction(async (tx) => {
+    const snap = (await tx.getAll(ref))[0];
+    const n = (snap.exists && snap.get('n')) || 0;
+    if (n >= LIMITES_CONNEXION.parJour) return false;
+    tx.set(ref, { n: n + 1, expireLe: Timestamp.fromMillis(maintenant + 48 * HEURE_MS) });
+    return true;
+  });
+}
+
 // Adresse internet de l'appelant : le DERNIER élément de X-Forwarded-For, ajouté par Google (stock.js, adresseVisiteur).
 function adresseAppelant(rawRequest) {
   const h = (rawRequest && rawRequest.headers) || {};
@@ -83,7 +101,8 @@ function adresseAppelant(rawRequest) {
 }
 
 // La fonction, avec ce dont elle a besoin (index.js : la base, admin.auth(), envoyerMail, logger ; les essais : des faux).
-function creer({ db, auth, envoyerMail, mail, logger }) {
+// reserveEntamee (facultatif) : () => true quand les e-mails « de confort » ne partent plus (quota-courriels.js).
+function creer({ db, auth, envoyerMail, mail, logger, reserveEntamee = async () => false }) {
   return async (request) => {
     const d = request.data || {};
     const email = adresseValide(d.email);
@@ -93,6 +112,17 @@ function creer({ db, auth, envoyerMail, mail, logger }) {
     if (!(await envoiPermis(db, { email, ip: adresseAppelant(request.rawRequest) }))) {
       logger.warn('Lien de connexion : limite atteinte');
       throw new HttpsError('resource-exhausted', MESSAGE_LIMITE);
+    }
+    // Plafond du jour atteint, ou réserve des urgents entamée : l'appli demandera le lien à Firebase (repli).
+    let repli = false;
+    try {
+      repli = !(await sousPlafondDuJour(db)) || await reserveEntamee();
+    } catch (e) {
+      logger.warn('Lien de connexion : plafond du jour illisible, envoi par Papote', e.message);
+    }
+    if (repli) {
+      logger.warn('Lien de connexion : plafond du jour atteint, repli sur l\'e-mail de Firebase');
+      return { ok: true, repli: true };
     }
     let lien;
     try {
@@ -112,5 +142,5 @@ function creer({ db, auth, envoyerMail, mail, logger }) {
 }
 
 module.exports = {
-  creer, adresseValide, retourPermis, reglagesLien, compterEnvoi, envoiPermis, adresseAppelant, LIMITES_CONNEXION, MESSAGE_LIMITE, DOMAINES,
+  creer, sousPlafondDuJour, adresseValide, retourPermis, reglagesLien, compterEnvoi, envoiPermis, adresseAppelant, LIMITES_CONNEXION, MESSAGE_LIMITE, DOMAINES,
 };

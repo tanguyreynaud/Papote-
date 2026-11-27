@@ -93,9 +93,9 @@ test('e-mail à la famille : calme, adapté au forfait, avec la date', () => {
   const fin = Date.parse('2026-12-05T12:00:00Z');
   const r = mail.forfaitPresqueEpuise({ nom: 'Mamie', type: 'reduit', fin });
   assert.strictEqual(r.subject, 'La tablette de Mamie a presque utilisé son forfait internet du mois');
-  assert.match(r.text, /La tablette de Mamie a presque utilisé son forfait internet du mois : jusqu'au 5 décembre les appels vidéo seront plus lents ; branchez-la au wifi si vous pouvez\./);
+  assert.match(r.text, /La tablette de Mamie a presque utilisé son forfait internet du mois : jusqu'au 5 décembre les appels vidéo seront plus lents ; branchez-la au Wi-Fi si vous pouvez\./);
   const b = mail.forfaitPresqueEpuise({ nom: 'Mamie', type: 'bloque', fin });
-  assert.match(b.text, /La tablette de Mamie a presque utilisé son forfait internet du mois : internet sera coupé jusqu'au 5 décembre ; branchez-la au wifi si vous pouvez\./);
+  assert.match(b.text, /La tablette de Mamie a presque utilisé son forfait internet du mois : internet sera coupé jusqu'au 5 décembre ; branchez-la au Wi-Fi si vous pouvez\./);
   for (const m of [r, b]) {
     assert.doesNotMatch(m.text, /urgent|attention|!|alerte/i);
     assert.doesNotMatch(m.html, /#f97316|#ea580c|#fb923c|orange|#dc2626/i, 'ni orange ni rouge');
@@ -109,7 +109,7 @@ test('« ne répond plus » adouci quand le forfait « internet coupé » est sa
   assert.strictEqual(f.coupeeParForfait(tablette(900, { lastOnline: silence }), BLOQUE, JOUR), null);
   assert.deepStrictEqual(message('silence', 'Mamie', '2026-12-05'), {
     titre: 'La tablette de Mamie n\'a sans doute plus internet',
-    texte: 'Son forfait du mois est épuisé, internet revient le 5 décembre. Branchez-la au wifi si vous pouvez.',
+    texte: 'Son forfait du mois est épuisé, internet revient le 5 décembre. Branchez-la au Wi-Fi si vous pouvez.',
   });
   assert.strictEqual(message('silence', 'Mamie', null).titre, 'La tablette de Mamie ne répond plus');
   assert.strictEqual(message('debranchee', 'Mamie', '2026-12-05').titre, 'La tablette de Mamie est débranchée');

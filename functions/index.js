@@ -449,6 +449,8 @@ exports.lienConnexion = onCall({ secrets: [MAIL_MOT_DE_PASSE], maxInstances: 2 }
     smtp: MAIL_SMTP.value(), expediteur: MAIL_EXPEDITEUR.value(), motDePasse: MAIL_MOT_DE_PASSE.value(), a, contenu,
   }),
   mail, logger,
+  // Réserve des e-mails urgents entamée (200 partis aujourd'hui) : le lien passe par Firebase, pas par notre quota.
+  reserveEntamee: async () => !require('./quota-courriels').confortPermis(await require('./quota-courriels').partisAujourdhui(db)),
 }));
 
 // Résiliation et annulation : les responsables de la famille, ou l'administrateur de Papote (badge admin).
@@ -590,8 +592,8 @@ async function prevenirPaiement(fid, commandeId, avis, graceJusqua) {
     const responsables = [...new Set([fam.get('createdBy'), ...(fam.get('admins') || [])].filter(Boolean))];
     const pauseLe = graceJusqua || Date.now() + regles.DELAI_GRACE_JOURS * 24 * 3600e3;
     const notification = avis === 'impaye'
-      ? { titre: 'Le paiement de Papote a échoué', texte: `La tablette de ${nom} se mettra en pause le ${mail.dateEnClair(pauseLe)}. Touchez pour régler.` }
-      : { titre: 'Papote est en pause', texte: `L'abonnement de ${nom} n'a pas été réglé. Touchez pour régler : tout reviendra.` };
+      ? { titre: 'Le paiement de Papote a échoué', texte: `La tablette ${mail.deOuD(nom)}${nom} se mettra en pause le ${mail.dateEnClair(pauseLe)}. Touchez pour régler.` }
+      : { titre: 'Papote est en pause', texte: `L'abonnement ${mail.deOuD(nom)}${nom} n'a pas été réglé. Touchez pour régler : tout reviendra.` };
     const envois = [push.envoyer(db, fid, responsables, { type: 'alerte', ...notification, fid, abonnement: '1' }, 24 * 3600)];
     const email = commande.exists && commande.get('email');
     if (email) {

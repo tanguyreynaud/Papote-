@@ -105,7 +105,7 @@ function decider(etat, deja, maintenant) {
   };
 }
 
-const jourTexte = (jour) => new Date(jourEnMs(jour)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' });
+const jourTexte = (jour) => new Date(jourEnMs(jour)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' }).replace(/(^| )1 /, '$11er ');
 
 // E-mail à Papote (mail.alerteForfait) : seuil atteint (seuil), ou internet sans doute coupé (coupee).
 function emailAdmin(etat, { nom, famille, seuil, coupee, commande }) {
