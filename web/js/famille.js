@@ -5482,7 +5482,7 @@ const RADIOS = [
 }());
 
 const optionsActuelles = () => session.family.options || {};
-const DUREE_AFFICHAGE_DEFAUT = 3;
+const DUREE_AFFICHAGE_DEFAUT = 5; // Tanguy, 27/11 (avant : 3)
 function dureeAffichage(options) {
   const m = Math.round(Number(options?.dureeAffichage));
   return m >= 1 && m <= 5 ? m : DUREE_AFFICHAGE_DEFAUT;
@@ -5641,13 +5641,18 @@ function renderSosOrdre() {
     val.replaceChildren(p);
     return;
   }
-  // Une seule ligne : « Activé · Julie, Anne, Thomas » (l'ordre d'appel).
+  // Une seule ligne : « Activé · Julie, Anne, Thomas » (l'ordre d'appel). Au-delà des 5 premiers, appelés par la
+  // tablette (SOS_APPELS_MAX, Tanguy, 27/11), les suivants ne reçoivent que le SMS : « SMS seulement : … ».
+  const nomDe = (m) => m.name || 'Proche';
   const etat = document.createElement('p');
   etat.className = 'sos-etat';
-  etat.textContent = `Activé · ${proches.map((m) => m.name || 'Proche').join(', ')}`;
+  etat.textContent = `Activé · ${proches.slice(0, SOS_APPELS_MAX).map(nomDe).join(', ')}`
+    + (proches.length > SOS_APPELS_MAX ? ` · SMS seulement : ${proches.slice(SOS_APPELS_MAX).map(nomDe).join(', ')}` : '');
   val.replaceChildren(etat);
 }
 
+// La tablette appelle les 5 premiers de l'ordre ; tout le monde reçoit le SMS (Tanguy, 27/11 ; tablette.js SOS_APPELS_MAX).
+const SOS_APPELS_MAX = 5;
 let sosOrdreEdit = []; // uids dans l'ordre affiché pendant la modification
 let sosOrdreDefautDemande = false;
 let sosOrdreTouche = false; // une flèche a été touchée depuis l'ouverture
@@ -5674,6 +5679,12 @@ function dessinerSosOrdre(focus) {
     prenom.className = 'sos-ordre-prenom';
     prenom.textContent = m.name || 'Proche';
     nom.append(prenom);
+    if (i >= SOS_APPELS_MAX) {
+      const sms = document.createElement('span');
+      sms.className = 'sos-ordre-sms';
+      sms.textContent = 'SMS seulement';
+      nom.append(sms);
+    }
     const fleches = document.createElement('span');
     fleches.className = 'sos-ordre-fleches';
     for (const [sens, haut] of [[-1, true], [1, false]]) {

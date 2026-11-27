@@ -1744,6 +1744,7 @@ a { text-decoration: none; }
 .sos-ordre-rang { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent-text); background: var(--accent); }
 .sos-ordre-nom { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 17px; font-weight: 600; }
 .sos-ordre-prenom, .sos-ordre-role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sos-ordre-sms { font-size: 14px; font-weight: 400; color: var(--muted); }
 .sos-ordre-role { font-size: 13px; font-weight: 400; color: var(--muted); }
 .sos-ordre-fleches { flex: none; display: flex; gap: 6px; }
 .sos-ordre-btn { width: 54px; height: 54px; padding: 0; border-radius: 12px; border: 2px solid var(--accent); color: var(--accent); background: var(--surface); touch-action: manipulation; }
