@@ -361,16 +361,17 @@ function listeAttenteConfirmee({ prenom, telephone, desinscription }) {
   });
 }
 
-// Ouverture des commandes, pour la liste d'attente du site (lancementListeAttente).
+// « Une tablette est disponible », pour la liste d'attente du site (lancementListeAttente) : à l'ouverture des commandes
+// comme à chaque retour de stock (Tanguy 27/11 : un seul e-mail pour les deux, les gens s'inscrivent quand il n'y a plus de tablette).
 function lancement({ prenom, desinscription }) {
-  return message('Papote est disponible : vous pouvez commander', [
+  return message('Une tablette Papote est disponible', [
     bonjour(prenom),
-    '<b>Les commandes sont ouvertes.</b> Les premières commandes partent en premier.',
+    '<b>Vous pouvez commander dès maintenant.</b> Les premières commandes partent en premier.',
     'La tablette arrive prête à brancher. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle.',
     { fiche: FICHE_OFFRE },
   ], { texte: 'Commander ma tablette', lien: `${SITE}/commande.html` }, {
     desinscription: desinscription || '',
-    pourquoi: 'Vous recevez cet e-mail car vous vous êtes inscrit à la liste d\'attente de Papote.',
+    pourquoi: 'Vous recevez cet e-mail car vous avez demandé à être prévenu dès qu\'une tablette Papote est disponible.',
   });
 }
 

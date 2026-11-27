@@ -1999,6 +1999,8 @@ exports.listeAttente = onRequest({ cors: [/mapapote\.fr$/, /papote\.web\.app$/],
     ...(telephone ? { telephone } : {}),
     ...(snap.exists ? {} : { source: 'liste-attente', creeLe: FieldValue.serverTimestamp() }),
     listeAttente: true, listeAttenteLe: FieldValue.serverTimestamp(),
+    // Déjà prévenu une fois, puis réinscrit à une rupture suivante : il sera prévenu de nouveau au prochain retour de stock.
+    lancementEnvoyeLe: FieldValue.delete(),
     jeton,
   }, { merge: true });
   res.status(204).end();
