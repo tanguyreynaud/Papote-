@@ -105,7 +105,8 @@ async function ouvrirChat(t, question) {
   await g.attendreVue(t, 'view-profile');
   await t.page.click('#view-profile .aide-pastille');
   await g.attendreVue(t, 'view-support');
-  // « Besoin d'aide ? » ouvre l'assistant tout de suite (Tanguy, 20/11 : plus de bulle flottante).
+  // « Besoin d'aide ? » ouvre la page Aide ; l'assistant s'ouvre avec son bouton (Tanguy, 27/11).
+  await t.page.click('#support-assistant');
   await t.page.locator('.ps-panneau textarea').waitFor({ state: 'visible' });
   await t.page.locator('.ps-panneau textarea').fill(question);
   await t.page.locator('.ps-panneau textarea').press('Enter');

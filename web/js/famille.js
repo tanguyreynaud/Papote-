@@ -420,7 +420,12 @@ function ouvrirAssistant(demande) {
 async function noticeAvecAide(message) {
   if (await noticeAide(message) === 'aide') ouvrirAssistant(`J'ai ce message : « ${message} » Que faire ?`);
 }
-document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', () => ouvrirAssistant(b.dataset.aide || undefined)));
+// « Besoin d'aide ? » de Réglages et de Mon profil ouvre la page Aide, sans lancer l'assistant (Tanguy, 27/11) : on y
+// lit d'abord les réponses toutes prêtes ; « Poser une question à l'assistant » est là si elles ne suffisent pas.
+document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', () => {
+  if (b.classList.contains('aide-pastille')) ouvrirOnglet('support');
+  else ouvrirAssistant(b.dataset.aide || undefined);
+}));
 
 // Un message d'alerte ou d'erreur ne s'affiche plus en un pavé tout en gras (contrôle mesuré du 24/11 : jusqu'à 5
 // lignes) : la première phrase, le fait, reste en gras ; la suite passe en texte normal. Fait une fois pour tous les

@@ -47,32 +47,26 @@ test('Assistant pas chargé : « Poser une question à l\'assistant » le dit au
   assert.match(await g.texteFenetre(julie), /L'assistant ne répond pas pour l'instant/);
 });
 
-// « Besoin d'aide ? » dans Réglages et Mon profil : la même demande simple partout (Tanguy, 27/11 : une demande
-// différente selon le réglage ouvert « perd plus qu'autre chose »).
-test('« Besoin d\'aide ? » dans Réglages et Mon profil : la même demande simple, quel que soit le réglage ouvert', async () => {
+// « Besoin d'aide ? » dans Réglages et Mon profil ouvre la page Aide sans lancer l'assistant (Tanguy, 27/11) ;
+// l'assistant ne s'ouvre qu'avec « Poser une question à l'assistant », sans demande toute faite.
+test('« Besoin d\'aide ? » dans Réglages et Mon profil : la page Aide s\'ouvre, l\'assistant seulement si on le demande', async () => {
   const julie = await banc.telephone('Julie');
   await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
-  await julie.page.evaluate(() => { window.demandes = []; window.papoteChat = { ouvrir: (d) => window.demandes.push(d) }; });
-  const derniere = () => julie.page.evaluate(() => window.demandes[window.demandes.length - 1]);
-  const aide = async (vue) => {
-    await julie.page.click(`#${vue} .aide-pastille`);
-    await g.attendreVue(julie, 'view-support');
-    await julie.page.click('#view-support .page-head .back');
-    await g.attendreVue(julie, vue);
-    return derniere();
-  };
-  const SIMPLE = "J'ai besoin d'aide avec la tablette.";
+  await julie.page.evaluate(() => { window.demandes = []; window.papoteChat = { ouvrir: (d) => window.demandes.push(d === undefined ? 'sans demande' : d) }; });
+  const demandes = () => julie.page.evaluate(() => window.demandes);
   await julie.page.click('#nav-reglages');
   await g.attendreVue(julie, 'view-settings');
-  assert.strictEqual(await aide('view-settings'), SIMPLE);
   await julie.page.click('#sleep-card .setting-modify');
-  assert.strictEqual(await aide('view-settings'), SIMPLE);
-  await julie.page.click('#sleep-card .setting-cancel');
+  await julie.page.click('#view-settings .aide-pastille');
+  await g.attendreVue(julie, 'view-support');
+  await julie.page.locator('#support-assistant').waitFor({ state: 'visible' });
+  assert.deepStrictEqual(await demandes(), []);
+  await julie.page.click('#view-support .page-head .back');
+  await g.attendreVue(julie, 'view-settings');
   await g.ouvrirProfil(julie);
-  assert.strictEqual(await aide('view-profile'), SIMPLE);
-  // La page Aide elle-même : l'assistant s'ouvre, sans demande toute faite.
   await julie.page.click('#view-profile .aide-pastille');
   await g.attendreVue(julie, 'view-support');
+  assert.deepStrictEqual(await demandes(), []);
   await julie.page.click('#support-assistant');
-  assert.strictEqual(await derniere(), undefined);
+  assert.deepStrictEqual(await demandes(), ['sans demande']);
 });
