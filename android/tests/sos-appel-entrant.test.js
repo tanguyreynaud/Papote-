@@ -158,3 +158,58 @@ test('SOS : le décompte quitte l’écran sans « Annuler » (autre écran d’
     await sansErreur(b);
   } finally { await b.fermer(); }
 });
+
+// Tanguy, 27/11 (revue des règles) : si l'appel qui a annulé le SOS n'est pas décroché, le SOS repart tout seul.
+test('SOS : Julie appelle pendant le décompte, Mamie ne décroche pas : le SOS repart (décompte, puis SMS et appels)', async () => {
+  const b = await tablette();
+  try {
+    await b.toucher('#sos-btn');
+    await b.avancer(2000);
+    await b.android('onGsm', { etat: 'sonne', ...JULIE_APPELLE });
+    await b.avancer(20000);
+    await b.android('onGsm', { etat: 'fin', cause: 'manque', ...JULIE_APPELLE });
+    await b.avancer(5000);
+    assert.ok(await decompte(b), 'le décompte du SOS est revenu');
+    assert.ok((await journal(b)).some((l) => /SOS relancé/.test(l)), 'journal');
+    await b.avancer(5500);
+    assert.strictEqual((await b.appels('sendSms')).length, 1, 'le SMS du SOS part');
+    assert.deepStrictEqual(await numeros(b), ['0700000000'], 'Paul (responsable) appelé');
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('SOS : Julie appelle pendant le décompte, Mamie décroche : après l’appel, le SOS ne repart pas', async () => {
+  const b = await tablette();
+  try {
+    await b.toucher('#sos-btn');
+    await b.avancer(2000);
+    await b.android('onGsm', { etat: 'sonne', ...JULIE_APPELLE });
+    await b.toucher('.call-answer');
+    await b.android('onGsm', { etat: 'enLigne', ...JULIE_APPELLE });
+    await b.avancer(30000);
+    await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...JULIE_APPELLE });
+    await b.avancer(15000);
+    assert.ok(!(await decompte(b)), 'pas de décompte');
+    assert.deepStrictEqual(await numeros(b), []);
+    assert.deepStrictEqual(await b.appels('sendSms'), []);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
+
+test('SOS relancé après un appel manqué : « Annuler » pendant le nouveau décompte l’arrête pour de bon', async () => {
+  const b = await tablette();
+  try {
+    await b.toucher('#sos-btn');
+    await b.avancer(2000);
+    await b.android('onGsm', { etat: 'sonne', ...JULIE_APPELLE });
+    await b.android('onGsm', { etat: 'fin', cause: 'manque', ...JULIE_APPELLE });
+    await b.avancer(5000);
+    assert.ok(await decompte(b));
+    await b.toucher('.sos-cancel');
+    await b.avancer(20000);
+    assert.deepStrictEqual(await numeros(b), []);
+    assert.deepStrictEqual(await b.appels('sendSms'), []);
+    assert.strictEqual(await sosGarde(b), null);
+    await sansErreur(b);
+  } finally { await b.fermer(); }
+});
