@@ -79,8 +79,8 @@
     '.ps-decl .ps-d-vignette img{width:100%;height:100%;object-fit:cover;display:block}' +
     '.ps-decl .ps-d-vignette button{position:absolute;top:2px;right:2px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(36,33,47,.78);color:#fff;font-size:1.1rem;line-height:1;display:flex;align-items:center;justify-content:center}' +
     '.ps-decl .ps-d-vignette.ps-d-prepa{display:flex;align-items:center;justify-content:center;font-size:.8rem;color:var(--ps-gris)}' +
-    '.ps-decl .ps-d-ajout{min-height:44px;border:1.5px dashed var(--ps-indigo);background:#fff;color:var(--ps-indigo-fonce);border-radius:12px;padding:.55rem .9rem;font-weight:700}' +
-    '.ps-decl .ps-d-ajout:disabled{opacity:.5;cursor:default}' +
+    '.ps-decl .ps-d-ajout,.ps-decl .ps-d-prendre{min-height:44px;border:1.5px dashed var(--ps-indigo);background:#fff;color:var(--ps-indigo-fonce);border-radius:12px;padding:.55rem .9rem;font-weight:700}' +
+    '.ps-decl .ps-d-ajout:disabled,.ps-decl .ps-d-prendre:disabled{opacity:.5;cursor:default}' +
     '.ps-decl .ps-d-petit{font-size:.85rem;color:var(--ps-gris)}' +
     '.ps-decl .ps-d-lien{align-self:flex-start;border:0;background:none;color:var(--ps-indigo-fonce);text-decoration:underline;padding:.3rem 0;min-height:44px;font-size:.95rem}' +
     '.ps-decl .ps-d-envoyer{border:0;border-radius:12px;background:var(--ps-indigo);color:#fff;font-weight:700;padding:.8rem;min-height:48px;display:flex;align-items:center;justify-content:center;gap:.5rem}' +
@@ -303,19 +303,23 @@
     for (var k = 0; k < f.enPrepa; k++) z.appendChild(el('div', 'ps-d-vignette ps-d-prepa', 'Préparation…'));
     var place = MAX_PHOTOS - f.photos.length - f.enPrepa;
     if (place > 0) {
-      var ajout = bouton('ps-d-ajout', f.photos.length ? '+ Une autre photo' : '📷 Ajouter une photo', function () { prendrePhotos(f); });
-      ajout.disabled = f.envoi;
+      // Deux boutons, comme dans l'appli (Tanguy, 27/11) : sur Android, un seul champ n'ouvrait que la galerie.
+      var prendre = bouton('ps-d-prendre', '📷 Prendre une photo', function () { prendrePhotos(f, true); });
+      var ajout = bouton('ps-d-ajout', '🖼️ Choisir dans la galerie', function () { prendrePhotos(f, false); });
+      prendre.disabled = ajout.disabled = f.envoi;
+      z.appendChild(prendre);
       z.appendChild(ajout);
     }
   }
 
-  // Champ fichier sans « capture » : le téléphone propose l'appareil photo ET la galerie.
-  function prendrePhotos(f) {
+  // « capture » ouvre l'appareil photo (une photo à la fois) ; sans, la galerie (plusieurs d'un coup).
+  function prendrePhotos(f, appareil) {
     if (f.envoi) return;
     var champ = el('input');
     champ.type = 'file';
     champ.accept = 'image/*';
-    champ.multiple = true;
+    if (appareil) champ.setAttribute('capture', 'environment');
+    else champ.multiple = true;
     champ.style.display = 'none';
     champ.onchange = function () {
       var fichiers = Array.prototype.slice.call(champ.files || [], 0, MAX_PHOTOS - f.photos.length - f.enPrepa);
