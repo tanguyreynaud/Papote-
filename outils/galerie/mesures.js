@@ -241,7 +241,7 @@ function mesurer({ pasBouton, texteLibre, longLibre, textesLongs }) {
   // Élément standard du téléphone (liste, date, heure) : sa fenêtre est dessinée par le téléphone, hors style Papote,
   // et aucune capture ne la montre. Interdit : passer par une liste Papote (web/js/listes.js).
   for (const e of document.querySelectorAll('select, input[type=date], input[type=time], input[type=datetime-local], input[type=month], input[type=week], input[type=color]')) {
-    if (!vis(e)) continue;
+    if (e.classList.contains('liste-native') || !vis(e)) continue; // déjà habillé par listes.js : invisible, un bouton Papote à sa place
     out.push({ type: 'natif', sig: chemin(e), detail: `élément standard du téléphone : ${e.tagName === 'SELECT' ? 'liste' : e.type} ${nom(e)}`, r: rect(e) });
   }
   return out;
