@@ -10,7 +10,7 @@
 //                     Délai par défaut 5 jours (Tanguy, 21/11/2026 : sans rien recevoir, Mamie n'a aucune raison de
 //                     toucher la tablette ; ce filet ne sert que quand la famille n'envoie rien).
 //   alerteNonVus      toutes les heures de 9 h à 20 h (Paris, taches.js) : « {nom} n'a pas vu vos 3 derniers envois »
-//                     quand 3 envois ou rappels de suite sont restés sans « vu » et que la tablette ne l'a ni vue ni
+//                     quand 3 envois ou rappels de suite, sur 2 jours différents, sont restés sans « vu » et que la tablette ne l'a ni vue ni
 //                     sentie depuis le premier (Tanguy, 21/11/2026 : l'alerte se fonde sur l'absence de réaction à ce
 //                     qu'on lui envoie, pas sur l'absence de toucher).
 //
@@ -290,10 +290,11 @@ exports.alerteMatin = async () => {
 
 // ---------- « N'a pas vu vos 3 derniers envois » (Tanguy, 21/11/2026) ----------
 // Un envoi (photo, vidéo, message, vocal) ou un rappel « sans réponse » : pas de « vu » (visage ou OK) alors qu'il
-// aurait dû être vu. Trois de suite, sans aucun signe de vie de la personne depuis le premier : on prévient les
+// aurait dû être vu. Trois de suite, sur 2 jours différents au moins, sans aucun signe de vie de la personne depuis le premier : on prévient les
 // responsables, une fois par épisode. Tout signe de vie (toucher, visage, envoi lu, rappel vu ou fait) remet à zéro.
 // Le serveur le déduit seul : rien à changer sur la tablette.
 const NON_VUS_SEUIL = 3;
+const NON_VUS_JOURS = 2; // les envois sans réponse doivent tomber sur au moins 2 jours différents
 // Envoi : laissé à la tablette le temps de l'afficher (durée réglable 1 à 5 min) et de le noter « vu ».
 const NON_VU_ENVOI_MS = 15 * 60_000;
 // Rappel : affiché 1 h au plus à partir de son heure (tablette.js REMINDER_WINDOW_MIN), plus une marge.
@@ -377,13 +378,17 @@ function nonVus({ tablettes, envois = [], rappels = [], veille, maintenant }) {
   }
   const depuis = Math.max(signe, debut);
   // Pendant la veille, rien n'est montré : ce qui arrive la nuit ne compte pas.
-  const envoisSansReponse = aMontrer.filter((e) => {
-    const quand = enMillis(e.createdAt);
-    return quand && quand > depuis && maintenant - quand > NON_VU_ENVOI_MS && !enMillis(e.seenAt) && !enVeille(veille, quand);
-  }).length;
-  const rappelsSansReponse = occ.filter((o) => !o.vu && o.quand > depuis && maintenant - o.quand > NON_VU_RAPPEL_MS && !enVeille(veille, o.quand)).length;
-  const nombre = envoisSansReponse + rappelsSansReponse;
-  return { due: nombre >= NON_VUS_SEUIL, depuis: signe, nombre };
+  const envoisSansReponse = aMontrer.map((e) => ({ quand: enMillis(e.createdAt), vu: enMillis(e.seenAt) }))
+    .filter((e) => e.quand && e.quand > depuis && maintenant - e.quand > NON_VU_ENVOI_MS && !e.vu && !enVeille(veille, e.quand))
+    .map((e) => e.quand);
+  const rappelsSansReponse = occ.filter((o) => !o.vu && o.quand > depuis && maintenant - o.quand > NON_VU_RAPPEL_MS && !enVeille(veille, o.quand))
+    .map((o) => o.quand);
+  const quands = envoisSansReponse.concat(rappelsSansReponse);
+  const nombre = quands.length;
+  // Sur 2 jours différents au moins (Tanguy, 27/11) : 3 photos envoyées pendant une sieste ou un après-midi
+  // dehors n'alertent plus toute la famille ; au pire, l'alerte arrive un jour plus tard.
+  const jours = new Set(quands.map((q) => jourEtSemaineParis(q).jour)).size;
+  return { due: nombre >= NON_VUS_SEUIL && jours >= NON_VUS_JOURS, depuis: signe, nombre };
 }
 
 function messageNonVus(nom, nombre) {

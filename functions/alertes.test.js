@@ -201,10 +201,23 @@ test('non vus : heure de la tablette lue à Paris, hiver comme été', () => {
   assert.strictEqual(heureTabletteEnMillis('n importe quoi'), null);
 });
 
-test('non vus : 3 envois de suite sans « vu » depuis le dernier signe de vie : alerte', () => {
-  const r = nonVus({ tablettes: [tab()], envois: [envoi('23T10:00'), envoi('23T12:00'), envoi('23T15:00')], maintenant: a16h });
-  assert.deepStrictEqual(r, { due: true, depuis: nov('23T09:00'), nombre: 3 });
+// Vue pour la dernière fois la veille (dimanche 22) : les envois sans réponse peuvent tomber sur 2 jours.
+const tabHier = (plus = {}) => tab({ lastSeen: new Date(nov('22T16:00')), ...plus });
+
+test('non vus : 3 envois de suite sans « vu », sur 2 jours, depuis le dernier signe de vie : alerte', () => {
+  const r = nonVus({ tablettes: [tabHier()], envois: [envoi('22T18:00'), envoi('23T12:00'), envoi('23T15:00')], maintenant: a16h });
+  assert.deepStrictEqual(r, { due: true, depuis: nov('22T16:00'), nombre: 3 });
   assert.match(messageNonVus('Mamie', 3).titre, /^Mamie n'a pas vu vos 3 derniers envois$/);
+});
+
+// Tanguy, 27/11 : une sieste ou un après-midi dehors ne doit pas alerter toute la famille.
+test('non vus : 3 envois sans « vu » le même jour : pas d\'alerte ; un 4e le lendemain : alerte', () => {
+  const memeJour = [envoi('23T10:00'), envoi('23T12:00'), envoi('23T15:00')];
+  assert.deepStrictEqual(nonVus({ tablettes: [tab()], envois: memeJour, maintenant: a16h }), { due: false, depuis: nov('23T09:00'), nombre: 3 });
+  const lendemain = nov('24T10:30');
+  const t = tab({ lastOnline: new Date(nov('24T10:28')) });
+  assert.strictEqual(nonVus({ tablettes: [t], envois: memeJour, maintenant: lendemain }).due, false, 'rien de nouveau le lendemain');
+  assert.strictEqual(nonVus({ tablettes: [t], envois: memeJour.concat(envoi('24T10:00')), maintenant: lendemain }).due, true);
 });
 
 test('non vus : 2 seulement, rien', () => {
@@ -221,15 +234,15 @@ test('non vus : un envoi lu, un toucher ou un visage remet à zéro', () => {
 
 test('non vus : les rappels comptent, et un rappel vu ou fait est un signe de vie', () => {
   const rappel = { time: '11:00', repeat: 'daily', title: 'Médicament' };
-  const envois = [envoi('23T12:00'), envoi('23T15:00')];
-  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [rappel], maintenant: a16h }).due, true);
-  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, lastSeen: '2026-11-23 11:02' }], maintenant: a16h }).due, false, 'rappel vu');
-  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, lastAck: '2026-11-23 11:10' }], maintenant: a16h }).due, false, 'rappel fait');
+  const envois = [envoi('22T18:00'), envoi('23T12:00')];
+  assert.strictEqual(nonVus({ tablettes: [tabHier()], envois, rappels: [rappel], maintenant: a16h }).due, true);
+  assert.strictEqual(nonVus({ tablettes: [tabHier()], envois, rappels: [{ ...rappel, lastSeen: '2026-11-23 11:02' }], maintenant: a16h }).due, false, 'rappel vu');
+  assert.strictEqual(nonVus({ tablettes: [tabHier()], envois, rappels: [{ ...rappel, lastAck: '2026-11-23 11:10' }], maintenant: a16h }).due, false, 'rappel fait');
   // Rappel de 15 h : encore affiché à 16 h, ne compte pas encore.
-  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, time: '15:00' }], maintenant: a16h }).due, false);
+  assert.strictEqual(nonVus({ tablettes: [tabHier()], envois, rappels: [{ ...rappel, time: '15:00' }], maintenant: a16h }).due, false);
   // Rappel du mardi seulement (2) : pas aujourd'hui lundi.
-  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, repeat: 'weekly', days: [2] }], maintenant: a16h }).due, false);
-  assert.strictEqual(nonVus({ tablettes: [tab()], envois, rappels: [{ ...rappel, repeat: 'weekly', days: [1] }], maintenant: a16h }).due, true);
+  assert.strictEqual(nonVus({ tablettes: [tabHier()], envois, rappels: [{ ...rappel, repeat: 'weekly', days: [2] }], maintenant: a16h }).due, false);
+  assert.strictEqual(nonVus({ tablettes: [tabHier()], envois, rappels: [{ ...rappel, repeat: 'weekly', days: [1] }], maintenant: a16h }).due, true);
 });
 
 test('non vus : rien la nuit, rien de trop frais, ni ses propres réponses', () => {

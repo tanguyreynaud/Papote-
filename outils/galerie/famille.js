@@ -463,6 +463,8 @@ const SCENES = [
   { groupe: 'Réglages', titre: 'Dépanner : redémarrer la tablette ?', donnees: () => connecte(), faire: toucher(page('settings'), '#remote-card summary', '[data-cmd="restart"]') },
   { groupe: 'Réglages', titre: 'Dépanner : obtenir l’état (en attente de la tablette)', plein: true, donnees: () => connecte(), faire: toucher(page('settings'), '#remote-card summary', '[data-cmd="status"]') },
   { groupe: 'Réglages', titre: 'Modifier : SOS famille (bouton et ordre d’appel)', plein: true, donnees: () => connecte(), faire: toucher(page('settings'), modifier('sos-ordre-card')) },
+  // La tablette n'appelle que les 5 premiers, tous reçoivent le SMS (Tanguy, 27/11) : famille nombreuse.
+  { groupe: 'Réglages', titre: 'Modifier : SOS famille, famille nombreuse (5 appelés, les autres par SMS)', plein: true, donnees: () => connecte({ nombreux: true }), faire: toucher(page('settings'), modifier('sos-ordre-card')) },
   { groupe: 'Réglages', titre: 'Réglages : La famille (responsable)', plein: true, donnees: () => connecte(), faire: toucher(page('settings'), FAMILLE) },
   { groupe: 'Réglages', titre: 'Inviter un proche', plein: true, donnees: () => connecte(), faire: toucher('#btn-invite') },
   { groupe: 'Réglages', titre: 'Inviter : invitations en attente', plein: true, donnees: () => connecte({ docs: {
