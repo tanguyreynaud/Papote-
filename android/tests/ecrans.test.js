@@ -329,7 +329,7 @@ test('attente de la famille : « On prépare votre tablette… », rien à scann
     assert.match(t, /On prépare votre tablette…/);
     assert.match(t, /attend internet/);
     assert.doesNotMatch(t, /scann|code|Impossible/i);
-    await b.page.getByText('Choisir un wifi').click();
+    await b.page.getByText('Choisir un Wi-Fi').click();
     assert.deepStrictEqual((await b.appels('welcomeBack')).map((a) => a.args[0]), [false]);
     await sansErreur(b);
   } finally { await b.fermer(); }
@@ -405,14 +405,14 @@ test('installation : pas reliée au bout de 2 min, l\'écran le dit sans rien de
 });
 
 // Audit mise en route M0 (12/11) : la 4G arrive souvent 30 s à 2 min après « Commencer ».
-test('installation sans internet : « Je cherche internet… » (avec « Choisir un wifi »), puis l\'erreur et le wifi, puis la suite toute seule', async () => {
+test('installation sans internet : « Je cherche internet… » (avec « Choisir un Wi-Fi »), puis l\'erreur et le wifi, puis la suite toute seule', async () => {
   const b = await ouvrir('2026-10-26T10:00:00', { reseau: { wifi: '', internet: false, mobile: false, sim: true } });
   try {
     await b.android('onStatus', { state: 'welcome', step: 'wifi' });
     await b.avancer(500);
     assert.match(await b.texte('.welcome-title'), /cherche internet/);
     assert.ok(await b.visible('.welcome .welcome-spin'), 'on voit qu\'elle cherche');
-    assert.ok(await b.page.getByText('Choisir un wifi').isVisible(), 'le wifi d\'une box peut être donné dès la recherche');
+    assert.ok(await b.page.getByText('Choisir un Wi-Fi').isVisible(), 'le wifi d\'une box peut être donné dès la recherche');
     await b.avancer(92000);
     assert.match(await b.texte('.welcome-notice'), /pas trouvé internet/);
     assert.match(await b.texte('.welcome'), /Choisir un réseau/);
@@ -923,7 +923,7 @@ test('installation sans internet : au bout de 90 s, l\'erreur claire et le wifi 
     assert.match(await b.texte('.welcome-notice'), /La tablette n’a pas trouvé internet/);
     assert.strictEqual(await b.page.locator('.welcome .welcome-error').count(), 0, 'pas de texte d\'erreur en rouge');
     assert.strictEqual(await b.page.evaluate(() => getComputedStyle(document.querySelector('.welcome-notice')).color), 'rgb(79, 70, 229)', 'indigo, pas rouge');
-    assert.match(await b.texte('.welcome'), /Choisissez le wifi de votre box/);
+    assert.match(await b.texte('.welcome'), /Choisissez le Wi-Fi de votre box/);
     assert.ok(await b.page.getByText('Choisir un réseau').isVisible(), 'le wifi peut être donné');
     // Le proche ouvre la liste des réseaux : la 4G qui arrive ne la ferme pas sous ses doigts.
     await b.page.getByText('Choisir un réseau').click();
@@ -956,7 +956,7 @@ test('installation sans carte SIM ni internet : le choix du wifi tout de suite',
     await b.android('onStatus', { state: 'welcome', step: 'wifi' });
     await b.avancer(500);
     assert.match(await b.texte('.welcome-title'), /Connexion à internet/);
-    assert.match(await b.texte('.welcome'), /Choisissez le wifi de votre box/);
+    assert.match(await b.texte('.welcome'), /Choisissez le Wi-Fi de votre box/);
     await sansErreur(b);
   } finally { await b.fermer(); }
 });

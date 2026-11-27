@@ -11,6 +11,9 @@
 (function () {
   'use strict';
 
+  // « de » ou « d' » devant un prénom ou une ville : « d'Anne », « de Julie » (audit du 26/11, Tanguy 27/11).
+  function deOuD(nom) { return /^[aeiouyhàâäéèêëîïôöùûü]/i.test(String(nom || '').replace(/^\s+/, '')) ? 'd\u2019' : 'de '; }
+
   function android() { return window.PapoteAndroid; }
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -225,12 +228,12 @@
     var connected = st.wifi && st.internet;
     if (!repair && !connected && st.sim && !chercheFini) { showSearch(); return; }
     var echec = !repair && !connected && chercheFini;
-    var box = screen('Connexion à internet', connected || echec ? '' : 'Choisissez le wifi de votre box.');
+    var box = screen('Connexion à internet', connected || echec ? '' : 'Choisissez le Wi-Fi de votre box.');
     if (connected) sayGuide('wifi-ok', 'La tablette est connectée à internet. Appuyez sur Continuer.');
-    else sayGuide('wifi-choisir', 'Choisissez le wifi de votre box.');
+    else sayGuide('wifi-choisir', 'Choisissez le Wi-Fi de votre box.');
     if (echec) {
       box.appendChild(el('p', 'welcome-notice', 'La tablette n’a pas trouvé internet.')); // calme, jamais en rouge
-      box.appendChild(el('p', 'welcome-sub welcome-suite', 'Choisissez le wifi de votre box. Sans box, laissez-la allumée : Papote est prévenu et vous recontacte.'));
+      box.appendChild(el('p', 'welcome-sub welcome-suite', 'Choisissez le Wi-Fi de votre box. Sans box, laissez-la allumée : Papote est prévenu et vous recontacte.'));
     }
     if (connected) {
       box.appendChild(el('p', 'welcome-ok', 'Connectée à «\u00a0' + st.wifi + '\u00a0»'));
@@ -260,7 +263,7 @@
     var box = screen('Je cherche internet…', 'Un instant : la tablette se connecte toute seule.');
     box.className += ' welcome-prepare';
     box.appendChild(el('span', 'boot-spin welcome-spin', ''));
-    box.appendChild(button('Choisir un wifi', '', openNetworks));
+    box.appendChild(button('Choisir un Wi-Fi', '', openNetworks));
     addBack(box, false);
     if (!chercheDepuis) chercheDepuis = Date.now();
     wifiTimer = setInterval(function () {
@@ -350,11 +353,11 @@
     clearInterval(wifiTimer); // mot de passe en cours : la carte SIM ne coupe pas la saisie
     chosen = net;
     if (!net.secure) { connect(''); return; }
-    var box = screen('«\u00a0' + net.ssid + '\u00a0»', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
-    sayGuide('wifi-mdp', 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.');
+    var box = screen('«\u00a0' + net.ssid + '\u00a0»', 'Tapez le mot de passe du Wi-Fi. Il est souvent écrit sous la box.');
+    sayGuide('wifi-mdp', 'Tapez le mot de passe du Wi-Fi. Il est souvent écrit sous la box.');
     var input = el('input', 'welcome-input');
     input.type = 'text';
-    input.setAttribute('aria-label', 'Mot de passe du wifi');
+    input.setAttribute('aria-label', 'Mot de passe du Wi-Fi');
     input.autocomplete = 'off';
     input.autocapitalize = 'off';
     input.spellcheck = false;
@@ -445,7 +448,7 @@
     var c = chosenCity;
     var box = screen('La météo', c ? '' : 'Tapez le code postal de la tablette, puis choisissez la ville : elle affichera sa météo.');
     if (c) {
-      box.appendChild(el('p', 'welcome-ok', 'Météo de ' + c.nom + (c.detail ? ' (' + c.detail.replace(/^\d{5} · /, '') + ')' : '')));
+      box.appendChild(el('p', 'welcome-ok', 'Météo ' + deOuD(c.nom) + c.nom + (c.detail ? ' (' + c.detail.replace(/^\d{5} · /, '') + ')' : '')));
       box.appendChild(button('Continuer', 'primary', function () {
         chosenCity = null;
         android().meteoChoose(c.nom, c.lat, c.lon);
@@ -570,7 +573,7 @@
     box.className += ' welcome-prepare';
     box.appendChild(el('span', 'boot-spin welcome-spin', ''));
     if (horsLigne) {
-      box.appendChild(button('Choisir un wifi', '', function () { android().welcomeBack(false); }));
+      box.appendChild(button('Choisir un Wi-Fi', '', function () { android().welcomeBack(false); }));
     }
     if (attendFamille) {
       // « Retour » : vers le wifi, ou vers Bienvenue si le wifi a été sauté (carte SIM).

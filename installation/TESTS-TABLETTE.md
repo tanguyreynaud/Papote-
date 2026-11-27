@@ -31,7 +31,7 @@ Les autres listes (commandes, stock, app famille) viendront à côté de celle-c
 ## C. Chaque tablette, parcours client (avant mise en carton)
 
 - 👤 Écran « Bienvenue » affiché, étape 1 sur 3
-- 👤 Choisir un wifi, mot de passe faux puis bon
+- 👤 Choisir un Wi-Fi, mot de passe faux puis bon
 - 👤 Code et QR affichés ; scanner avec l'app famille : la tablette se relie
 - 👤 Envoyer une photo, une vidéo, un message écrit depuis l'app famille : reçus, « vue » remontée
 - 👤 « Écouter » lit le message à voix haute

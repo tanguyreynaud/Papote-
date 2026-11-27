@@ -6,6 +6,9 @@
 (function () {
   'use strict';
 
+  // « de » ou « d' » devant un prénom ou une ville : « d'Anne », « de Julie » (audit du 26/11, Tanguy 27/11).
+  function deOuD(nom) { return /^[aeiouyhàâäéèêëîïôöùûü]/i.test(String(nom || '').replace(/^\s+/, '')) ? 'd’' : 'de '; }
+
   // Appui long : Android (MainActivity) ignore déjà le long clic ; la page empêche aussi le menu du
   // long appui, pour que rien ne sorte jamais de l'écran de Mamie (appui long, 31/10).
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
@@ -1001,7 +1004,7 @@
     // Vocal ou vidéo : le visage au-dessus de « Une vidéo de … ».
     var text = mode === 'message' ? p.text
       : mode === 'photo' ? (legende(p.text) || motParDefaut(p))
-        : mode === 'voice' ? 'Un message vocal de ' + p.authorName
+        : mode === 'voice' ? 'Un message vocal ' + deOuD(p.authorName) + p.authorName
           : legende(p.text) || motParDefaut(p); // sans légende : un des mots par défaut, comme une photo
     fillHead(media ? null : p);
     // Photo : pas de petit mot seul en bout de ligne (« Je » / « t’embrasse »), il reste avec le suivant.
@@ -2799,8 +2802,8 @@
     sosSuiviNoter(s);
     var nom = familyName || 'votre proche';
     var prenom = (qui && qui.name) || 'Un proche';
-    var texte = genre === 'repondu' ? 'Papote : ' + prenom + ' a répondu au SOS de ' + nom + '.'
-      : genre === 'pris' ? 'Papote : ' + prenom + ' s’occupe du SOS de ' + nom + '.'
+    var texte = genre === 'repondu' ? 'Papote : ' + prenom + ' a répondu au SOS ' + deOuD(nom) + nom + '.'
+      : genre === 'pris' ? 'Papote : ' + prenom + ' s’occupe du SOS ' + deOuD(nom) + nom + '.'
         : 'Papote : ' + nom + ' a arrêté son SOS depuis sa tablette. Appelez-la quand même.';
     var tels = [];
     for (var i = 0; i < (s.liste || []).length; i++) {

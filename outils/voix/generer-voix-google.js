@@ -14,9 +14,9 @@ const assets = path.join(__dirname, '..', '..', 'android', 'app', 'src', 'main',
 
 const GUIDE = {
   'accueil': 'Bonjour, et bienvenue sur Papote ! Appuyez sur Commencer.',
-  'wifi-choisir': 'Choisissez le wifi de votre box.',
+  'wifi-choisir': 'Choisissez le Wi-Fi de votre box.',
   'wifi-ok': 'La tablette est connectée à internet. Appuyez sur Continuer.',
-  'wifi-mdp': 'Tapez le mot de passe du wifi. Il est souvent écrit sous la box.',
+  'wifi-mdp': 'Tapez le mot de passe du Wi-Fi. Il est souvent écrit sous la box.',
   'code': "Dernière étape : avec votre téléphone, scannez le code affiché à l'écran.",
   'confirmer': "Quelqu'un veut relier cette tablette. C'est bien vous ?",
   'placer': 'Asseyez-vous là où la personne s’installe d’habitude, puis tournez doucement la tablette.',
