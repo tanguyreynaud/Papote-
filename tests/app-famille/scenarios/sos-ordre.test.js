@@ -131,8 +131,8 @@ test('Ordre d\'appel SOS : ↑/↓, double appui, enregistré, relu après actua
 });
 
 // Tanguy, 27/11 : deux proches au même prénom ne se distinguaient pas dans l'ordre d'appel. Chaque ligne montre la photo
-// (ou l'initiale) ; les homonymes ont en plus la fin de leur numéro.
-test('Ordre d\'appel SOS : photo ou initiale sur chaque ligne ; deux « Paul » se distinguent par la fin du numéro', async () => {
+// (ou l'initiale) ; les homonymes ont en plus leur numéro, en entier.
+test('Ordre d\'appel SOS : photo ou initiale sur chaque ligne ; deux « Paul » se distinguent par leur numéro', async () => {
   const julie = await banc.telephone('Julie');
   const paul = await banc.telephone('Paul');
   const pol = await banc.telephone('Pol');
@@ -146,7 +146,7 @@ test('Ordre d\'appel SOS : photo ou initiale sur chaque ligne ; deux « Paul » 
   await banc.s.db.doc(`families/${fid}/members/${uidPaul}`).update({ face: null });
   await banc.s.db.doc(`families/${fid}/members/${uidPol}`).update({ name: 'Paul', face: PHOTO });
   const telDe = async (uid) => (await g.lire(`families/${fid}/members/${uid}`)).telephone.replace(/\s/g, '');
-  const fin = (tel) => `·· ${tel.slice(6, 8)} ${tel.slice(8)}`;
+  const fin = (tel) => tel.replace(/(\d{2})(?=\d)/g, '$1 ');
 
   await g.ouvrirTuile(julie, 'settings');
   await julie.page.locator('#sos-ordre-value', { hasText: 'Paul, Paul' }).waitFor();
@@ -156,7 +156,7 @@ test('Ordre d\'appel SOS : photo ou initiale sur chaque ligne ; deux « Paul » 
     uid: li.dataset.uid, prenom: li.querySelector('.sos-ordre-prenom').textContent,
     tete: li.querySelector('.sos-ordre-tete').tagName === 'IMG' ? 'photo' : li.querySelector('.sos-ordre-tete').textContent,
     fin: li.querySelector('.sos-ordre-role')?.textContent || '',
-    large: li.scrollWidth <= li.clientWidth,
+    large: li.scrollWidth <= li.clientWidth && [...li.querySelectorAll('.sos-ordre-prenom, .sos-ordre-role')].every((e) => e.scrollWidth <= e.clientWidth),
   })));
   const de = (uid) => vues.find((v) => v.uid === uid);
   assert.deepStrictEqual(vues.map((v) => v.prenom), ['Julie', 'Paul', 'Paul']);
@@ -165,5 +165,5 @@ test('Ordre d\'appel SOS : photo ou initiale sur chaque ligne ; deux « Paul » 
   assert.strictEqual(de(uidPol).tete, 'photo');
   assert.strictEqual(de(uidPaul).fin, fin(await telDe(uidPaul)));
   assert.strictEqual(de(uidPol).fin, fin(await telDe(uidPol)));
-  assert.ok(vues.every((v) => v.large), 'aucune ligne ne déborde');
+  assert.ok(vues.every((v) => v.large), 'aucune ligne ne déborde, aucun texte coupé');
 });
