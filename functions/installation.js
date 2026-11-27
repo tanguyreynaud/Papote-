@@ -323,7 +323,7 @@ function brancher(deps) {
     await ref.update(maj);
     if (aRelier && prevenirPapote) {
       await prevenirPapote(`Famille installée sans commande reliée : ${fam.name || fid}`,
-        `La tablette de « ${fam.name || fid} » vient d'être installée mais aucune commande n'est reliée (tablette pas reconnue à son n° de série, ou commande à un autre e-mail). Tout fonctionne pendant 48 h : reliez la commande depuis l'admin (page de la famille), sinon Papote passera en pause chez la personne.`)
+        ['Reliez la commande sous 48 h : admin, page de la famille. Sinon, Papote passera en pause chez la personne.', `La tablette de « ${fam.name || fid} » vient d'être installée, mais aucune commande n'est reliée (tablette pas reconnue à son n° de série, ou commande à un autre e-mail).`])
         .catch((e) => logger.error(`Installation ${fid} : Papote non prévenu`, e.message));
     }
     await inviterAttente(fid, fam, uid);

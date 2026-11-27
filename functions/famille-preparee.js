@@ -97,7 +97,11 @@ function alerteSansFamille({ decision, p = {}, fiche = null, commande = null, se
   return {
     cle: `${ident}_${(fiche && fiche.commande) || 'sans-commande'}`.slice(0, 200),
     titre: `Tablette connectée mais sans famille : ${nom}${client}`,
-    detail: `La tablette ${nom}${p.serie && fiche && fiche.ref ? ` (n° de série ${p.serie})` : ''} a internet et affiche son code, mais elle ne trouve pas sa famille : ${manque}. Son écran dit à la personne que Papote est prévenu et s'en occupe. ${gestes[etat] || ''}`.trim(),
+    detail: [
+      gestes[etat] || 'Regardez sa fiche dans Stock.',
+      `La tablette ${nom}${p.serie && fiche && fiche.ref ? ` (n° de série ${p.serie})` : ''} a internet et affiche son code, mais elle ne trouve pas sa famille : ${manque}.`,
+      'Son écran dit à la personne que Papote est prévenu et s\'en occupe.',
+    ],
   };
 }
 

@@ -40,7 +40,7 @@ test('blocs : fiche, étapes et encadré en HTML comme en texte brut', () => {
 test('aperçu dans la boîte de réception : la première vraie phrase, jamais « Bonjour »', () => {
   const m = mail.tabletteRecue({ nom: 'Paul', rembourse: 0 });
   assert.match(m.html, /<title>Nous avons bien reçu la tablette<\/title>/);
-  assert.match(m.html, /display:none[^>]*>La tablette Papote est bien revenue chez nous\. Merci !/);
+  assert.match(m.html, /display:none[^>]*>La tablette est bien revenue chez nous\. Merci !/);
 });
 
 test('nouveaux e-mails : liste d\'attente, pause, matériel non rendu, demande acceptée, installation, rappel', () => {
@@ -49,7 +49,7 @@ test('nouveaux e-mails : liste d\'attente, pause, matériel non rendu, demande a
   assert.match(l.text, /Se désinscrire des e-mails d'information : https:\/\/x\/d/);
   assert.match(l.html, /demandé à être prévenu/);
   const p = mail.pausePrelevements({ nom: 'Julie', famille: 'Mamie Jeanne', jusqua: Date.UTC(2026, 11, 20) });
-  assert.match(p.text, /reprennent le 20 décembre 2026/);
+  assert.match(p.text, /Rien ne sera prélevé jusqu'au 20 décembre 2026/);
   assert.match(mail.reprisePrelevements({ nom: 'Julie' }).subject, /reprennent/);
   const n = mail.materielNonRendu({ nom: 'Julie', montant: 15000, avant: Date.UTC(2026, 10, 25) });
   assert.match(n.text, /150 € ont été prélevés/);
@@ -126,7 +126,7 @@ test('décès : e-mails de deuil, sans « Merci de nous avoir fait confiance »,
   assert.match(arret.text, /Tout télécharger/);
   assert.match(arret.text, /deux mois après l'arrêt/, 'après un décès : 60 jours pour rendre la tablette');
   const avis = mail.avantEffacement({ nom: 'Paul', famille: 'Mamie Jeanne', le, deces: true });
-  assert.match(avis.text, /les photos, les vidéos et les messages s'enregistre/);
+  assert.match(avis.text, /Tout télécharger » : tout s'enregistre/);
   assert.doesNotMatch(arret.text, /Garder mon abonnement|Merci de nous avoir/);
   const retour = mail.retourTablette({ nom: 'Paul', avant: le, retractation: null, montant: 14000, deces: true });
   assert.doesNotMatch(retour.text, /Merci de nous avoir fait confiance|seront prélevés/);
@@ -135,7 +135,7 @@ test('décès : e-mails de deuil, sans « Merci de nous avoir fait confiance »,
   const rappel = mail.rappelRestitution({ nom: 'Paul', avant: le, lien: null, montant: 14000, deces: true });
   assert.doesNotMatch(rappel.html, /<b>140|seront prélevés/);
   // Sans décès : rien ne change.
-  assert.match(mail.retourTablette({ nom: 'Paul', avant: le, retractation: null, montant: 14000 }).text, /Merci de nous avoir fait confiance/);
+  assert.match(mail.retourTablette({ nom: 'Paul', avant: le, retractation: null, montant: 14000 }).text, /merci de votre confiance/);
 });
 
 test('passer au SEPA : premier e-mail et relance, sans promesse impossible (10/11)', () => {
@@ -288,11 +288,11 @@ test('résiliation par un responsable qui ne paie pas : le payeur sait qui l\'a 
   const copie = mail.resiliationEnregistree({ nom: 'Paul', famille: 'Mamie Jeanne', le, tablettePretee: true, copie: true, payeur: 'Julie Martin' });
   assert.strictEqual(copie.subject, 'Votre résiliation Papote est enregistrée');
   assert.match(copie.text, /Bonjour Paul/);
-  assert.match(copie.text, /Votre demande de résiliation/);
+  assert.match(copie.text, /L'abonnement Papote de Mamie Jeanne s'arrête le 5 janvier 2027/);
   assert.match(copie.text, /Julie Martin, qui paie l'abonnement, reçoit aussi un e-mail/);
   assert.match(copie.text, /mode d'emploi par e-mail à la personne qui paie l'abonnement/);
   // Sans « par » : le texte d'avant.
-  assert.match(mail.resiliationEnregistree({ nom: 'Julie', famille: 'Mamie Jeanne', le, tablettePretee: false }).text, /Votre demande de résiliation/);
+  assert.match(mail.resiliationEnregistree({ nom: 'Julie', famille: 'Mamie Jeanne', le, tablettePretee: false }).text, /L'abonnement Papote de Mamie Jeanne s'arrête le 5 janvier 2027/);
   const garde = mail.resiliationAnnulee({ nom: 'Julie Martin', famille: 'Mamie Jeanne', par: 'Paul' });
   assert.match(garde.text, /Paul, responsable de la famille, a annulé dans l'appli la résiliation/);
   const gardeCopie = mail.resiliationAnnulee({ nom: 'Paul', famille: 'Mamie Jeanne', copie: true, payeur: null });

@@ -46,7 +46,8 @@ test('alerteSauvegarde : un seul e-mail par retard, pas un par jour ; une nouvel
   for (let j = 10; j <= 20; j++) assert.strictEqual(await alerteSauvegarde({ db, prevenir, maintenant: T0 + j * JOUR }), null);
   assert.strictEqual(envoyes.length, 1);
   assert.match(envoyes[0].titre, /aucune réussie depuis 9 jours/);
-  assert.match(envoyes[0].detail, /date du 8 novembre/);
+  assert.match(envoyes[0].detail[0], /^Allumez le PC et lancez sauvegarder\.bat/);
+  assert.match(envoyes[0].detail.join(' '), /date du 8 novembre/);
 
   // Le PC note un échec : il est cité dans l'e-mail suivant. Une réussite le 22, puis plus rien jusqu'au 30 ; le 31,
   // un nouvel e-mail (nouvelle sauvegarde vieillie).
@@ -57,7 +58,7 @@ test('alerteSauvegarde : un seul e-mail par retard, pas un par jour ; une nouvel
   assert.strictEqual(await alerteSauvegarde({ db, prevenir, maintenant: reussie + 9 * JOUR }), 'alerte');
   assert.strictEqual(await alerteSauvegarde({ db, prevenir, maintenant: reussie + 10 * JOUR }), null);
   assert.strictEqual(envoyes.length, 2);
-  assert.match(envoyes[1].detail, /Dernier essai raté le .* : quota du disque dépassé/);
+  assert.match(envoyes[1].detail.join(' '), /Dernier essai raté le .* : quota du disque dépassé/);
 });
 
 test('alerteSauvegarde : sans relevé, le premier contrôle sert de départ (pas d\'e-mail le jour de la mise en ligne)', async () => {

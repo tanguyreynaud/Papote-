@@ -811,7 +811,7 @@ exports.gestionDonnees = onCall(async (request) => {
   // Tout est lu en même temps : « à vendre » et les batteries (qui attendent seulement le stock) ne font plus
   // deux allers-retours de plus vers la base après les autres lectures.
   const lectureStock = db().collection('stock').get();
-  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes, courrielsPerdus, sauvegarde, pannesSim, membres] = await Promise.all([
+  const [commandes, stock, depenses, familles, automatique, reglages, courrier, archives, sims, accessoires, aVendre, batteries, alertes, gardes, courrielsPerdus, sauvegarde, pannesSim, membres, declarationsAFaire] = await Promise.all([
     db().collection('commandes').get(),
     lectureStock,
     db().collection('depenses').get(),
@@ -838,6 +838,8 @@ exports.gestionDonnees = onCall(async (request) => {
     db().doc(require('./sim-hors-service').DOCUMENT).get().catch((e) => { logger.warn('Cartes SIM sans réseau', e.message); return null; }),
     // Fiches des membres de toutes les familles, trois champs seulement (tel-unique.js : numéro en double).
     db().collectionGroup('members').select('name', 'role', 'telephone').get().catch((e) => { logger.warn('Numéros en double', e.message); return { docs: [] }; }),
+    // Déclarations des familles pas encore traitées (declaration.js) : une requête, des lignes « À faire ».
+    require('./declaration').lireAFaire(db()),
   ]);
   const parFid = new Map(familles.docs.map((f) => [f.id, f.data()]));
   // Compte de la tablette -> sa fiche de stock (T-…), pour compter les alertes sur la page de la tablette.
@@ -942,6 +944,8 @@ exports.gestionDonnees = onCall(async (request) => {
     sauvegardeAFaire: require('./sauvegarde-alerte').ligneAFaire(sauvegarde && sauvegarde.exists ? sauvegarde.data() : null, Date.now()),
     // Cartes SIM sans réseau depuis plus de 2 h (sim-hors-service.js) : une ligne par panne, levée au retour du réseau.
     simAFaire: require('./sim-hors-service').lignesAFaire(pannesSim && pannesSim.exists ? pannesSim.data() : null),
+    // Déclarations des familles pas encore traitées (declaration.js) : une ligne chacune, qui ouvre Clients > Déclarations.
+    declarationsAFaire,
     // Même numéro de portable pour deux proches d'une famille (tel-unique.js) : [{ fid, numero (masqué), prenoms, texte }],
     // une ligne « À faire » chacun et un mot sur la page de la famille.
     telDoubles: (() => {
@@ -3330,7 +3334,7 @@ const suiteSuspendue = (f) => (f.resiliationLe ? ' : abonnement arrêté par Pap
 // courriels : e-mails perdus (courriels-perdus.js, enAttente) ; seuls ceux « a-faire » font une ligne.
 // sauvegarde : le relevé interne/sauvegarde (sauvegarde-alerte.js) ; plus de 8 jours sans sauvegarde réussie = une ligne.
 // pannesSim : interne/simHorsService (sim-hors-service.js) ; une ligne par carte SIM sans réseau depuis plus de 2 h.
-function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [], courriels = [], sauvegarde = null, pannesSim = null }) {
+function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = [], accessoires = [], familles = [], courriels = [], sauvegarde = null, pannesSim = null, declarations = [] }) {
   const liste = [];
   // texte : « tablette(s) reçue(s) » → singulier ou pluriel selon n.
   const ajouter = (n, texte) => { if (n > 0) liste.push(`${n} ${texte.replace(/\(s\)/g, n > 1 ? 's' : '')}`); };
@@ -3412,6 +3416,8 @@ function aFaire({ commandes, stock, depenses, automatique, maintenant, sims = []
   if (ligneSauvegarde) liste.push(ligneSauvegarde);
   // Cartes SIM sans réseau depuis plus de 2 h (sim-hors-service.js, interne/simHorsService).
   liste.push(...require('./sim-hors-service').lignesAFaire(pannesSim));
+  // Déclarations des familles pas encore traitées (textes de declaration.js, lignesAFaire).
+  liste.push(...declarations);
   return liste;
 }
 
@@ -3421,7 +3427,7 @@ async function recapitulatif() {
   const maintenant = Date.now();
   const debutAnnee = new Date(new Date(maintenant).getFullYear(), 0, 1).getTime();
   const [commandesSnap, stockSnap, depensesSnap, familles, automatique, reglagesSnap, semaine, annee, abonnes, simsSnap,
-    accessoiresSnap, courriels, sauvegarde, pannesSim] = await Promise.all([
+    accessoiresSnap, courriels, sauvegarde, pannesSim, declarations] = await Promise.all([
     db().collection('commandes').get(),
     db().collection('stock').get(),
     db().collection('depenses').get(),
@@ -3436,6 +3442,7 @@ async function recapitulatif() {
     require('./courriels-perdus').enAttente(db()).catch((e) => { logger.warn('E-mails perdus illisibles', e.message); return []; }),
     db().doc(require('./sauvegarde-alerte').DOCUMENT).get(),
     db().doc(require('./sim-hors-service').DOCUMENT).get(),
+    require('./declaration').lireAFaire(db()),
   ]);
   const statut = new Map(familles.docs.map((f) => [f.id, f.get('abonnement.statut') || null]));
   const commandes = commandesSnap.docs.map((d) => {
@@ -3454,6 +3461,7 @@ async function recapitulatif() {
     courriels,
     sauvegarde: sauvegarde.exists ? sauvegarde.data() : null,
     pannesSim: pannesSim.exists ? pannesSim.data() : null,
+    declarations,
     maintenant,
   });
   const nouvelles = commandes.filter((c) => ms(c.creeLe) > maintenant - JOURS(7)).length;

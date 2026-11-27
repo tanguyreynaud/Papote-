@@ -22,7 +22,7 @@ test('chaque palier n’est prévenu qu’une fois par mois', () => {
 test('l’avertissement à 100 € annonce la coupure à 150 €', () => {
   const m = message('avertissement', 104.5, 'EUR');
   assert.match(m.subject, /coupe-circuit bientôt/);
-  assert.match(m.text, /coupera tout à 150 €/);
+  assert.match(m.text, /À 150 €, tout sera coupé/);
   assert.match(m.text, /104,50 €/);
 });
 

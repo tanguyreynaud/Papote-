@@ -47,8 +47,8 @@ test('401 : une alerte ; second 401 dans les 24 h : pas de nouvelle alerte ; apr
   assert.strictEqual(await signalerCleIA(erreurApi(401, 'authentication_error'), { db, prevenir, source: 'le chat du site', maintenant: T0 }), 'alerte');
   assert.strictEqual(envoyes.length, 1);
   assert.strictEqual(envoyes[0].titre, 'La clé IA (Anthropic) est refusée');
-  assert.ok(envoyes[0].detail.startsWith(TEXTE), envoyes[0].detail);
-  assert.match(envoyes[0].detail, /le chat du site : erreur 401/);
+  assert.match(envoyes[0].detail[0], /^Créer une nouvelle clé/);
+  assert.match(envoyes[0].detail.join(' '), /le chat du site : erreur 401/);
 
   assert.strictEqual(await signalerCleIA(erreurApi(401, 'authentication_error'), { db, prevenir, maintenant: T0 + HEURE }), 'deja');
   assert.strictEqual(await signalerCleIA(erreurApi(403, 'permission_error'), { db, prevenir, maintenant: T0 + 23 * HEURE }), 'deja');
@@ -153,9 +153,9 @@ test('crédit épuisé : alerte « crédit Anthropic épuisé », une seule par 
   assert.strictEqual(await signalerCleIA(credit, { db, prevenir, source: 'la lecture des factures', maintenant: T0 }), 'alerte');
   assert.strictEqual(envoyes.length, 1);
   assert.strictEqual(envoyes[0].titre, TITRE_CREDIT);
-  assert.match(envoyes[0].detail, /^Crédit Anthropic épuisé/);
-  assert.match(envoyes[0].detail, /la lecture des factures : erreur 400/);
-  assert.ok(!envoyes[0].detail.includes('credit balance'), 'pas le message d\'Anthropic');
+  assert.match(envoyes[0].detail[0], /^Recharger le crédit/);
+  assert.match(envoyes[0].detail.join(' '), /la lecture des factures : erreur 400/);
+  assert.ok(!envoyes[0].detail.join(' ').includes('credit balance'), 'pas le message d\'Anthropic');
   assert.strictEqual(await signalerCleIA(credit, { db, prevenir, maintenant: T0 + HEURE }), 'deja');
   assert.strictEqual(envoyes.length, 1);
   assert.ok(db.docs.has(DOCUMENT_CREDIT) && !db.docs.has(DOCUMENT), 'document à part');
