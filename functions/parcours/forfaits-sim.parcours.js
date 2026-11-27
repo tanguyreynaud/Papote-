@@ -137,7 +137,7 @@ test('fin de forfait « débit réduit » : Papote à 80 et 95 %, la famille une
   assert.deepStrictEqual(mailsA(ADMIN), ['Forfait SIM à 80 % : tablette de Mamie', 'Forfait SIM à 95 % : tablette de Mamie']);
   assert.deepStrictEqual(mailsA(paul.email), ['La tablette de Mamie a presque utilisé son forfait internet du mois']);
   const texte = s.boite.find((m) => m.a === paul.email).texte;
-  assert.ok(texte.includes(`La tablette de Mamie a presque utilisé son forfait internet du mois : jusqu'au ${date} les appels vidéo seront plus lents ; branchez-la au wifi si vous pouvez.`), texte);
+  assert.ok(texte.includes(`La tablette de Mamie a presque utilisé son forfait internet du mois : jusqu'au ${date} les appels vidéo seront plus lents ; branchez-la au Wi-Fi si vous pouvez.`), texte);
   await conso(990);
   await s.tache('alerteForfait');
   assert.strictEqual(s.boite.length, 3, 'rien de plus pendant ce forfait');
@@ -152,7 +152,7 @@ test('fin de forfait « internet coupé » : la famille sait que c\'est coupé j
   await s.tache('alerteForfait');
   assert.deepStrictEqual(mailsA(ADMIN), ['Forfait SIM à 95 % : tablette de Mamie'], '80 et 95 % passés d\'un coup : un seul e-mail');
   const texte = s.boite.find((m) => m.a === paul.email).texte;
-  assert.ok(texte.includes(`La tablette de Mamie a presque utilisé son forfait internet du mois : internet sera coupé jusqu'au ${date} ; branchez-la au wifi si vous pouvez.`), texte);
+  assert.ok(texte.includes(`La tablette de Mamie a presque utilisé son forfait internet du mois : internet sera coupé jusqu'au ${date} ; branchez-la au Wi-Fi si vous pouvez.`), texte);
   const admin95 = s.boite.find((m) => m.a === ADMIN).texte;
   assert.match(admin95, /Forfait « internet coupé » au bout/);
 
@@ -169,7 +169,7 @@ test('fin de forfait « internet coupé » : la famille sait que c\'est coupé j
   const n = s.notifications.filter((x) => x.type === 'alerte');
   assert.strictEqual(n.length, 1);
   assert.strictEqual(n[0].titre, 'La tablette de Mamie n\'a sans doute plus internet');
-  assert.strictEqual(n[0].texte, `Son forfait du mois est épuisé, internet revient le ${date}. Branchez-la au wifi si vous pouvez.`);
+  assert.strictEqual(n[0].texte, `Son forfait du mois est épuisé, internet revient le ${date}. Branchez-la au Wi-Fi si vous pouvez.`);
 });
 
 test('achat Sosh par e-mail : confirmation, justificatif, puis vraie facture d\'un autre montant (8/11)', async () => {
