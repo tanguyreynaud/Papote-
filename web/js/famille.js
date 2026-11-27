@@ -473,6 +473,9 @@ function surUnOnglet() {
 
 // Notifications, Profil, Aide : une entrée d'historique au-dessus de l'accueil, remplacée d'un onglet à l'autre.
 function ouvrirOnglet(nom) {
+  // Déjà sur cette page (« Poser une question à l'assistant » depuis l'Aide, double toucher) : rien à empiler, sinon
+  // il fallait autant de « retour » que de touchers pour quitter l'Aide (Tanguy, 27/11).
+  if (history.state?.vue === nom && !$(`view-${nom}`).hidden) return;
   const etat = { vue: nom };
   // Aide et Notifications : pages à part (flèche retour), toujours empilées au-dessus de la page d'où l'on vient.
   if (nom !== 'support' && nom !== 'notifs' && surUnOnglet()) remplacer(etat);
