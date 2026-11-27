@@ -209,7 +209,7 @@ const COMMANDE = {
 // Commande à envoyer dont la préparation est déjà entamée (étape où reprendre, étapes faites).
 function avecPreparation(etape, faites) {
   const g = gestionDonnees({});
-  const preparation = { etape, mode: 'colis', enceinte: 'non', tablette: 'T-003', tabletteLue: 'T-003', suivi: '12345678', faits: Object.fromEntries(faites.map((k) => [k, Date.now()])) };
+  const preparation = { etape, mode: 'colis', tablette: 'T-003', tabletteLue: 'T-003', suivi: '12345678', faits: Object.fromEntries(faites.map((k) => [k, Date.now()])) };
   return donnees({ donnees: { ...g, commandes: g.commandes.map((c) => (c.id === 'CMD-AB12' ? { ...c, preparation } : c)) } });
 }
 
@@ -409,7 +409,7 @@ const SCENES = [
   { groupe: 'Commandes', titre: 'Préparer l’envoi : étape 2, choisir la tablette', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: toucher('text=Préparer l\'envoi', 'text=C\'est fait') },
   { groupe: 'Commandes', titre: 'Préparer l’envoi : une étape qu’on peut remettre à plus tard', page: '#commandes', tailles: ['pc', 'tel'], plein: true, donnees: () => avecPreparation(6, ['mode', 'tablette', 'sim', 'sim-installer', 'hors-forfait', 'blocages']), faire: toucher('text=Reprendre la préparation') },
   { groupe: 'Commandes', titre: 'Préparer l’envoi : après « Plus tard », l’étape suivante', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => avecPreparation(6, ['mode', 'tablette', 'sim', 'sim-installer', 'hors-forfait', 'blocages']), faire: toucher('text=Reprendre la préparation', 'text=Plus tard') },
-  { groupe: 'Commandes', titre: 'Préparer l’envoi : étape remise, redemandée avant le dépôt', page: '#commandes', tailles: ['pc', 'tel'], plein: true, donnees: () => avecPreparation(11, ['mode', 'tablette', 'sim', 'sim-installer', 'hors-forfait', 'blocages', 'enceinte-choix', 'fermer', 'etiquette']), faire: toucher('text=Reprendre la préparation') },
+  { groupe: 'Commandes', titre: 'Préparer l’envoi : étape remise, redemandée avant le dépôt', page: '#commandes', tailles: ['pc', 'tel'], plein: true, donnees: () => avecPreparation(10, ['mode', 'tablette', 'sim', 'sim-installer', 'hors-forfait', 'blocages', 'fermer', 'etiquette']), faire: toucher('text=Reprendre la préparation') },
   { groupe: 'Clients', titre: 'Un client avec beaucoup de paiements', page: '#client/claire%40exemple.fr', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees({ fonctions: { gestionCommande: { ...COMMANDE, paiements: Array.from({ length: 9 }, (_, n) => ({ id: `ch_${n}`, le: il(1 + 30 * n), montant: n === 8 ? 6000 : 1490, rembourse: 0, statut: 'succeeded', description: n === 8 ? 'Mise en service' : 'Abonnement', recu: 'https://exemple.invalid/r' })) } } }) },
   { groupe: 'Commandes', titre: 'Commandes : en route', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: onglet('en route') },
   { groupe: 'Commandes', titre: 'Commandes : à récupérer', page: '#commandes', tailles: ['pc'], plein: true, donnees: () => donnees(), faire: onglet('à récupérer') },

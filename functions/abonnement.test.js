@@ -172,10 +172,11 @@ test('rappel de restitution : une fois, dans les 7 derniers jours', () => {
 
 test('matériel non rendu : prix par élément, plafonné au matériel prêté', () => {
   assert.strictEqual(a.penaliteRestitution({ formule: 'wifi' }), 14000);
-  assert.strictEqual(a.penaliteRestitution({ formule: 'sim', enceinteFournie: true }), 15000);
+  // Plus d'enceinte (Tanguy, 27/11) : une ancienne commande marquée enceinteFournie reste à 140 €.
+  assert.strictEqual(a.penaliteRestitution({ formule: 'sim', enceinteFournie: true }), 14000);
   assert.strictEqual(a.montantManquants({ formule: 'wifi' }, ['chargeur']), 1000);
   assert.strictEqual(a.montantManquants({}, ['enceinte', 'chargeur', 'chargeur']), 1000);
-  assert.strictEqual(a.montantManquants({ enceinteFournie: true }, ['enceinte']), 1000);
+  assert.strictEqual(a.montantManquants({ enceinteFournie: true }, ['enceinte']), 0);
   assert.strictEqual(a.montantManquants({ enceinteFournie: true }, []), 0);
   assert.strictEqual(a.PENALITE_NON_RESTITUTION, 14000);
 });
@@ -302,7 +303,7 @@ test('remplacement de la tablette (Tanguy, 11/11) : panne gratuite, casse 130 �
   assert.strictEqual(a.montantRemplacement('panne', {}), 0);
   assert.strictEqual(a.montantRemplacement('casse', {}), 13000);
   assert.strictEqual(a.montantRemplacement('perte', {}), 14000);
-  assert.strictEqual(a.montantRemplacement('perte', { enceinteFournie: true }), 15000);
+  assert.strictEqual(a.montantRemplacement('perte', { enceinteFournie: true }), 14000);
   assert.strictEqual(a.montantRemplacement('casse', { offerte: true }), 0);
   assert.strictEqual(a.montantRemplacement('autre', {}), null);
   assert.strictEqual(a.montantRemplacement(undefined, {}), null);

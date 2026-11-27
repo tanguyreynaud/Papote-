@@ -40,29 +40,29 @@ function premierPrelevementDe(abo, maintenant) {
 }
 // Tablette incluse : à rendre dans les 30 jours après la fin de l'abonnement, sinon facturée
 // (Tanguy, 2026-10-20, comme les conditions de vente) : tablette 130 €, chargeur et câble 10 €,
-// enceinte 10 € seulement si elle était dans le colis. Plus de routeur 4G ; le socle n'est pas facturé.
+// soit 140 € au plus. Plus d'enceinte (Tanguy, 27/11) ni de routeur 4G ; le socle n'est pas facturé.
 const RESTITUTION_JOURS = 30;
 // Après le décès du proche (resilierAbonnement { motif: 'deces' }) : 60 jours pour rendre la tablette (Tanguy, 5/11).
 const RESTITUTION_DECES_JOURS = 60;
 // Prix de chaque élément prêté, en centimes : un élément manquant au retour est facturé seul.
-const PRIX_MATERIEL = { tablette: 13000, chargeur: 1000, enceinte: 1000 };
-const NOMS_MATERIEL = { tablette: 'tablette', chargeur: 'chargeur et câble', enceinte: 'enceinte' };
-// commande : { enceinteFournie } (noté à la préparation du colis, voir gestionParcours).
-const materielPrete = (commande) => (commande && commande.enceinteFournie === true
-  ? ['tablette', 'chargeur', 'enceinte'] : ['tablette', 'chargeur']);
+const PRIX_MATERIEL = { tablette: 13000, chargeur: 1000 };
+const NOMS_MATERIEL = { tablette: 'tablette', chargeur: 'chargeur et câble' };
+// Le même matériel pour toutes les commandes : plus d'enceinte envoyée (Tanguy, 27/11). Une ancienne commande
+// marquée enceinteFournie n'est plus facturée pour elle.
+const materielPrete = () => ['tablette', 'chargeur'];
 // Montant des éléments manquants (seulement ceux prêtés avec cette commande).
 function montantManquants(commande, manquants) {
   const pretes = materielPrete(commande);
   return [...new Set(manquants || [])].filter((m) => pretes.includes(m))
     .reduce((total, m) => total + PRIX_MATERIEL[m], 0);
 }
-// Rien de rendu : tout le matériel prêté (140 €, 150 € avec l'enceinte).
+// Rien de rendu : tout le matériel prêté (140 €).
 const penaliteRestitution = (commande) => montantManquants(commande, materielPrete(commande));
 const PENALITE_NON_RESTITUTION = penaliteRestitution({});
 
 // Remplacement de la tablette chez un client (Tanguy, 11/11) : selon la raison, ce qui est prélevé avant l'envoi.
 //   panne : rien (défaut du matériel) ; casse : la tablette (130 €) ; perte ou vol : tout le matériel prêté
-//   (140 €, 150 € avec l'enceinte). Commande offerte : jamais rien.
+//   (140 €). Commande offerte : jamais rien.
 const RAISONS_REMPLACEMENT = {
   panne: 'panne',
   casse: 'tablette cassée',

@@ -113,7 +113,7 @@ const ETATS = {
 const CATEGORIES = {
   tablettes: 'Achat de tablettes',
   sim: 'Cartes SIM et forfaits',
-  materiel: 'Accessoires (support, câble, enceinte…)',
+  materiel: 'Accessoires (support, câble…)',
   reparations: 'Réparations et remplacements',
   expedition: 'Envoi des colis (Mondial Relay, Sendcloud)',
   emballage: 'Emballage et impression',
@@ -263,7 +263,7 @@ const STATUTS_SIM = {
   resiliee: 'Résiliée',
 };
 // Avec quels envois part un accessoire (clé 4G, prise…) : sorti du stock à chaque tablette envoyée.
-// « option » : envoyé à la demande (enceinte), jamais sorti du stock automatiquement ni compté dans la rentabilité.
+// « option » : envoyé à la demande, jamais sorti du stock automatiquement ni compté dans la rentabilité.
 const ENVOIS_ACCESSOIRE = { '': 'Aucun envoi', tous: 'Chaque envoi', sim: 'Envois Tout compris', wifi: 'Envois Wi-Fi', option: 'En option (à la demande)' };
 
 // Prix payé ce mois-ci pour une ligne (centimes) : le prix après la promo quand elle est finie.
@@ -1227,7 +1227,7 @@ async function remplacer(d, qui) {
       throw new HttpsError('failed-precondition', 'Choisissez une tablette disponible du stock.');
     }
     if (neuve.get('fid')) throw new HttpsError('failed-precondition', 'Cette tablette est dans une famille : pas à vendre. Choisissez-en une autre.');
-    // Raison (Tanguy, 11/11) : panne (gratuit), casse (130 €) ou perte/vol (140 €, 150 € avec l'enceinte).
+    // Raison (Tanguy, 11/11) : panne (gratuit), casse (130 €) ou perte/vol (140 €).
     const raison = d.raison;
     const cmd = (await db().doc(`commandes/${commande}`).get()).data() || {};
     const montant = regles.montantRemplacement(raison, cmd);
@@ -1459,12 +1459,6 @@ async function sortirAccessoires(commandeId) {
   const sortis = [];
   for (const a of accessoires.docs) {
     const envoi = a.get('parEnvoi');
-    // Enceinte (accessoire « en option ») : sortie seulement quand la préparation dit qu'elle part dans le colis.
-    if (envoi === 'option' && commande.get('enceinteFournie') === true && /enceinte|haut-parleur/i.test(a.get('nom') || '')) {
-      await a.ref.update({ quantite: FieldValue.increment(-1), majLe: FieldValue.serverTimestamp() });
-      sortis.push(a.get('nom'));
-      continue;
-    }
     if (!envoi || (envoi !== 'tous' && envoi !== formule)) continue;
     await a.ref.update({ quantite: FieldValue.increment(-1), majLe: FieldValue.serverTimestamp() });
     sortis.push(a.get('nom'));
@@ -2345,7 +2339,7 @@ const CONSIGNE_LECTURE = `Tu lis une facture d'achat (ou un ticket) reçue par P
 qui prête des tablettes à des personnes âgées et leur famille. Remplis chaque champ d'après le document seulement :
 null (ou chaîne vide pour un texte, 0 ou « inconnu » quand le champ le demande) quand l'information n'y figure pas, jamais d'invention. Montants en euros, tels qu'imprimés.
 Catégories : tablettes (achat de tablettes), sim (cartes SIM, forfaits mobiles), materiel (accessoires : câbles,
-chargeurs, supports, enceintes), reparations (réparation ou remplacement de matériel), expedition (transport, colis,
+chargeurs, supports), reparations (réparation ou remplacement de matériel), expedition (transport, colis,
 étiquettes Mondial Relay ou Sendcloud), emballage (cartons, papier bulle, impression), deplacements (train, carburant,
 péage), hebergement (serveurs, Firebase, Google Cloud, nom de domaine), logiciels (abonnements logiciels, Brevo, IA),
 stores (Google Play, Apple Developer), publicite (annonces, réseaux sociaux), assurance (RC Pro, assurances),
@@ -4435,14 +4429,12 @@ exports.gestionParcours = onCall(async (request) => {
       await ref.update({ 'preparation.recuLe': Date.now(), 'preparation.recuPar': qui });
     }
     else {
-      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'enceinte', 'tabletteLue']);
+      const preparation = avancementPropre(d.preparation, ['tablette', 'sim', 'suivi', 'tabletteLue']);
       // Date de réception déjà notée (suivi du colis, jumelage, « Le client a reçu le colis ») : gardée, car elle
       // fait partir les 30 jours pour changer d'avis et le premier prélèvement.
       const avant = snap.get('preparation') || {};
       if (avant.recuLe != null) Object.assign(preparation, { recuLe: avant.recuLe, recuPar: avant.recuPar || null });
-      // Enceinte dans le colis ou non : facturée seulement si elle était fournie et ne revient pas.
-      const enceinte = preparation.enceinte === 'oui' ? { enceinteFournie: true } : preparation.enceinte === 'non' ? { enceinteFournie: false } : {};
-      await ref.update({ preparation: { ...preparation, majLe: Date.now(), par: qui }, ...enceinte });
+      await ref.update({ preparation: { ...preparation, majLe: Date.now(), par: qui } });
     }
     return { ok: true };
   }
