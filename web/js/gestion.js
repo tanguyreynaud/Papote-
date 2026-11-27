@@ -1583,10 +1583,10 @@ function etiquettesDe(c) {
 
 // Matériel revenu : ce qui manque est prélevé au client (tabletteRendue, index.js), la tablette passe
 // « Revenue » (à vérifier) ou « Perdue » si elle manque.
-const PRIX_MATERIEL = { tablette: 130, chargeur: 10, enceinte: 10 };
+const PRIX_MATERIEL = { tablette: 130, chargeur: 10 };
 function zoneMaterielRecu(c, t) {
-  const cases = [['tablette', 'la tablette'], ['chargeur', 'le chargeur et son câble'], c.enceinteFournie === true ? ['enceinte', 'l\'enceinte'] : null]
-    .filter(Boolean).map(([k, v]) => h('label', { class: 'case' }, h('input', { type: 'checkbox', value: k }), ` ${v} (${PRIX_MATERIEL[k]} €)`));
+  const cases = [['tablette', 'la tablette'], ['chargeur', 'le chargeur et son câble']]
+    .map(([k, v]) => h('label', { class: 'case' }, h('input', { type: 'checkbox', value: k }), ` ${v} (${PRIX_MATERIEL[k]} €)`));
   const msg = h('p', { class: 'small error', hidden: true });
   const titre = h('strong', {}, 'Colis de retour reçu. ');
   let enMain = false;
@@ -1702,7 +1702,7 @@ function formulaireRemplacement(c, t) {
     h('option', { value: 'accessoire' }, 'un accessoire'));
   const nouveau = h('select', { 'aria-label': 'Remplacé par', hidden: true });
   // Raison du remplacement de la tablette (Tanguy, 11/11) : même barème que functions/abonnement.js (montantRemplacement).
-  const prixPerte = c.enceinteFournie === true ? 150 : 140;
+  const prixPerte = 140;
   const RAISONS = { panne: 0, casse: 130, perte: prixPerte };
   const gratuit = (r) => c.offerte || !RAISONS[r];
   const raison = h('select', { 'aria-label': 'Raison du remplacement', hidden: true },
@@ -4681,7 +4681,7 @@ function afficherTva(t) {
 
 // Un abonné rapporte chaque mois (prix − Stripe − URSSAF − forfait SIM) et coûte au départ : la tablette et ce qui
 // revient avec elle (achetés une fois, réutilisés), ce qui est consommé à chaque envoi (carton, papier, fiche), le port
-// aller et retour, moins la mise en service. Les accessoires « en option » (enceinte) ne sont pas comptés.
+// aller et retour, moins la mise en service. Les accessoires « en option » ne sont pas comptés.
 function afficherRentabilite() {
   const r = donnees.reglages;
   // Frais Stripe réels de la période (part du montant encaissé), sinon ~3 % : carte, le cas le moins favorable
