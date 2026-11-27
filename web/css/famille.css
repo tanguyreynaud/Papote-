@@ -1745,9 +1745,10 @@ a { text-decoration: none; }
 .sos-ordre-resume { margin: 8px 0 4px; padding-left: 26px; font-size: 16px; }
 .sos-ordre-resume li { padding: 3px 0; overflow-wrap: anywhere; }
 .sos-ordre-liste { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.sos-ordre-ligne { display: flex; align-items: center; gap: 10px; min-height: 68px; padding: 6px 6px 6px 12px; border: 2px solid var(--line); border-radius: 14px; background: var(--surface); transition: border-color .2s, background-color .2s; }
+.sos-ordre-ligne { display: flex; align-items: center; gap: 8px; min-height: 68px; padding: 6px 6px 6px 10px; border: 2px solid var(--line); border-radius: 14px; background: var(--surface); transition: border-color .2s, background-color .2s; }
 .sos-ordre-ligne.vient-de-bouger { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .sos-ordre-rang { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent-text); background: var(--accent); }
+.sos-ordre-tete { flex: none; width: 36px; height: 36px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; font: 700 16px var(--display); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .sos-ordre-nom { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 17px; font-weight: 600; }
 .sos-ordre-prenom, .sos-ordre-role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sos-ordre-role { font-size: 13px; font-weight: 400; color: var(--muted); }

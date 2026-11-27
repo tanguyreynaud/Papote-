@@ -5684,6 +5684,18 @@ function dessinerSosOrdre(focus) {
     prenom.className = 'sos-ordre-prenom';
     prenom.textContent = m.name || 'Proche';
     nom.append(prenom);
+    // Deux proches au même prénom (Tanguy, 27/11) : la photo les distingue ; la fin du numéro aussi, en gris.
+    const tete = m.face ? avatar(m.face) : document.createElement('span');
+    tete.classList.add('sos-ordre-tete');
+    if (!m.face) { tete.textContent = (m.name || '?').trim().charAt(0).toUpperCase(); tete.setAttribute('aria-hidden', 'true'); }
+    const memeNom = (x) => (x.name || '').trim().toLocaleLowerCase('fr') === (m.name || '').trim().toLocaleLowerCase('fr');
+    const tel = telPropre(m.telephone);
+    if (tel && [...parUid.values()].filter(memeNom).length > 1) {
+      const fin = document.createElement('span');
+      fin.className = 'sos-ordre-role';
+      fin.textContent = `·· ${tel.slice(-5)}`;
+      nom.append(fin);
+    }
     const fleches = document.createElement('span');
     fleches.className = 'sos-ordre-fleches';
     for (const [sens, haut] of [[-1, true], [1, false]]) {
@@ -5696,7 +5708,7 @@ function dessinerSosOrdre(focus) {
       b.addEventListener('click', () => deplacerSos(uid, sens));
       fleches.append(b);
     }
-    li.append(rang, nom, fleches);
+    li.append(rang, tete, nom, fleches);
     return li;
   }));
   if (focus) liste.querySelector(`li[data-uid="${CSS.escape(focus.uid)}"] .${focus.haut ? 'monter' : 'descendre'}:not(:disabled)`)?.focus({ preventScroll: true });

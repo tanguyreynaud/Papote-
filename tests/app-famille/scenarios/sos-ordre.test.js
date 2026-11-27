@@ -129,3 +129,41 @@ test('Ordre d\'appel SOS : ↑/↓, double appui, enregistré, relu après actua
   await g.attendreBase(async () => !('sosOrdre' in (await g.lire(`families/${fid}`))), 'ordre effacé');
   await attendreResume(julie, ['Julie', 'Léa', 'Marc', 'Paul'], 'ordre par défaut après Enregistrer');
 });
+
+// Tanguy, 27/11 : deux proches au même prénom ne se distinguaient pas dans l'ordre d'appel. Chaque ligne montre la photo
+// (ou l'initiale) ; les homonymes ont en plus la fin de leur numéro.
+test('Ordre d\'appel SOS : photo ou initiale sur chaque ligne ; deux « Paul » se distinguent par la fin du numéro', async () => {
+  const julie = await banc.telephone('Julie');
+  const paul = await banc.telephone('Paul');
+  const pol = await banc.telephone('Pol');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const uidPaul = await g.rejoindre(julie, fid, paul, { email: 'paul@exemple.fr', prenom: 'Paul' });
+  const uidPol = await g.rejoindre(julie, fid, pol, { email: 'pol@exemple.fr', prenom: 'Pol' });
+  await g.attendreBase(async () => (await g.liste(`families/${fid}/members`)).filter((m) => m.role === 'famille' && m.telephone).length === 3,
+    'les trois numéros enregistrés');
+  // Le second s'appelle Paul lui aussi, et a une photo.
+  const PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k=';
+  await banc.s.db.doc(`families/${fid}/members/${uidPaul}`).update({ face: null });
+  await banc.s.db.doc(`families/${fid}/members/${uidPol}`).update({ name: 'Paul', face: PHOTO });
+  const telDe = async (uid) => (await g.lire(`families/${fid}/members/${uid}`)).telephone.replace(/\s/g, '');
+  const fin = (tel) => `·· ${tel.slice(6, 8)} ${tel.slice(8)}`;
+
+  await g.ouvrirTuile(julie, 'settings');
+  await julie.page.locator('#sos-ordre-value', { hasText: 'Paul, Paul' }).waitFor();
+  await modifier(julie);
+  if (process.env.CAPTURE) { await julie.page.waitForTimeout(5000); await julie.page.locator('#sos-ordre-card').screenshot({ path: process.env.CAPTURE }); }
+  const vues = await julie.page.locator('#sos-ordre-liste li').evaluateAll((lis) => lis.map((li) => ({
+    uid: li.dataset.uid, prenom: li.querySelector('.sos-ordre-prenom').textContent,
+    tete: li.querySelector('.sos-ordre-tete').tagName === 'IMG' ? 'photo' : li.querySelector('.sos-ordre-tete').textContent,
+    fin: li.querySelector('.sos-ordre-role')?.textContent || '',
+    large: li.scrollWidth <= li.clientWidth,
+  })));
+  const de = (uid) => vues.find((v) => v.uid === uid);
+  assert.deepStrictEqual(vues.map((v) => v.prenom), ['Julie', 'Paul', 'Paul']);
+  assert.strictEqual(vues[0].fin, '', 'pas de numéro quand le prénom est seul');
+  assert.strictEqual(de(uidPaul).tete, 'P');
+  assert.strictEqual(de(uidPol).tete, 'photo');
+  assert.strictEqual(de(uidPaul).fin, fin(await telDe(uidPaul)));
+  assert.strictEqual(de(uidPol).fin, fin(await telDe(uidPol)));
+  assert.ok(vues.every((v) => v.large), 'aucune ligne ne déborde');
+});
