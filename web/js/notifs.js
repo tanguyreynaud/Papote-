@@ -5,6 +5,7 @@ import {
 import {
   db, collection, onSnapshot, toDate, doc, updateDoc, serverTimestamp,
 } from './firebase.js';
+import { heureFr, deOuD } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const WHAT = { photo: 'une photo', video: 'une vidéo', message: 'un message' };
@@ -116,17 +117,17 @@ function events() {
       const repondu = qui && (qui === 'Vous' ? 'vous avez répondu' : `${qui} a répondu`);
       if (/^SOS/.test(c.calleeName || '')) add(date, 'call', `${grand} a appuyé sur SOS : ${repondu || 'personne n\'a pu répondre'}`, false, !repondu);
       else if (repondu) addInfo(date, 'call', `${grand} a appelé toute la famille : ${repondu}`);
-      else if (manque) add(date, 'call', `Appel manqué de ${grand}`, false, true);
+      else if (manque) add(date, 'call', `Appel manqué ${deOuD(grand)}${grand}`, false, true);
     } else if (fromTablet) {
       if (c.state === 'ringing') continue;
       const to = who(c.calleeUid, c.calleeName);
-      if (manque) add(date, 'call', `Appel manqué de ${grand}${to === 'Vous' ? '' : ` pour ${to}`}`, false, true);
+      if (manque) add(date, 'call', `Appel manqué ${deOuD(grand)}${grand}${to === 'Vous' ? '' : ` pour ${to}`}`, false, true);
       else addInfo(date, 'call', `${grand} a appelé ${to === 'Vous' ? 'vous' : to}`);
     } else {
       const from = who(c.callerUid, c.callerName);
       const verb = from === 'Vous' ? 'avez' : 'a';
-      if (c.state === 'missed') add(date, 'call', `${grand} n'a pas répondu à l'appel de ${from === 'Vous' ? 'vous' : from}`, false, true);
-      else if (c.state === 'declined') add(date, 'call', `${grand} a refusé l'appel de ${from === 'Vous' ? 'vous' : from}`, false, true);
+      if (c.state === 'missed') add(date, 'call', `${grand} n'a pas répondu à l'appel ${deOuD(from === 'Vous' ? 'vous' : from)}${from === 'Vous' ? 'vous' : from}`, false, true);
+      else if (c.state === 'declined') add(date, 'call', `${grand} a refusé l'appel ${deOuD(from === 'Vous' ? 'vous' : from)}${from === 'Vous' ? 'vous' : from}`, false, true);
       else if (c.state !== 'ringing') add(date, 'call', `${from} ${verb} appelé ${grand}`, from === 'Vous', false, PAGE.call, true);
     }
   }
@@ -144,7 +145,7 @@ function events() {
 
 function when(date) {
   const now = new Date();
-  const hm = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const hm = heureFr(date);
   if (date.toDateString() === now.toDateString()) return hm;
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);

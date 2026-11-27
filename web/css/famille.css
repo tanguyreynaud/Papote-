@@ -1331,7 +1331,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
   font-family: var(--display); font-size: 20px; font-weight: 800; color: #fff;
 }
 .round-btn svg { width: 30px; height: 30px; }
-.round-btn.answer { background: #16a34a; box-shadow: 0 8px 24px rgba(22, 163, 74, .3); }
+.round-btn.answer { background: var(--ok); box-shadow: 0 8px 24px rgba(21, 128, 61, .3); }
 .round-btn.decline { background: #dc2626; box-shadow: 0 8px 24px rgba(220, 38, 38, .25); }
 
 .call-audio-panel { display: none; }
@@ -1399,7 +1399,7 @@ body:not(.on-support) .ps-bouton, body:not(.on-support):not(.chat-libre) .ps-pan
 .station-row select { flex: 1; min-width: 0; margin: 0 !important; }
 .station-row .small-btn { flex: none; min-height: 46px; padding: 0 14px; justify-content: center; font-weight: 700; color: var(--accent); }
 .toggle-list .station label { margin: 0; }
-.toggle-list .station .station-aide { display: block; margin-top: 6px; font-size: 13px; font-weight: 400; }
+.toggle-list .station .station-aide { display: block; margin-top: 6px; font-size: 15px; font-weight: 400; }
 
 .radio-vol-label { display: block; margin: 12px 0 0 !important; }
 .radio-vol { width: 100%; margin: 6px 0 0 !important; padding: 0 !important; border: none !important; background: none !important; accent-color: var(--accent); }
@@ -1601,7 +1601,7 @@ a { text-decoration: none; }
 
 /* Invitations par e-mail pas encore utilisées (refonte du 23/11) : l'adresse seule sur sa ligne (jamais coupée en
    deux, « … » si elle est vraiment trop longue), la date d'envoi dessous, les actions à droite de la date. */
-.invitations-titre { margin: 18px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.invitations-titre { margin: 18px 0 4px; font-size: 15px; font-weight: 600; color: var(--muted); }
 .invitations li.invitation { position: relative; z-index: 0; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: "rond email email" "rond etat actions"; align-items: center; gap: 0 12px; padding: 13px 0 11px; overflow-x: visible; overflow-y: clip; }
 .invitation-rond { grid-area: rond; width: 36px; height: 36px; font-weight: 700; font-size: 15px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
 .invitation-email { grid-area: email; display: block; min-width: 0; font-size: 16px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1636,12 +1636,12 @@ a { text-decoration: none; }
 
 /* Annuler ma commande / Résilier : un lien gris discret en bas de la carte, pas un bouton mis en avant. */
 .abo-sortie { display: inline-block; width: auto; min-height: 0; margin-top: 10px; padding: 4px 0; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
-.abo-sortie-info { margin: 14px 0 0; font-size: 13px; line-height: 1.45; }
+.abo-sortie-info { margin: 14px 0 0; font-size: 15px; line-height: 1.45; }
 .factures { list-style: none; margin: 4px 0 0; padding: 0; }
 .factures li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
 .factures li:first-child { border-top: 0; }
 .facture-quand { flex: 1; min-width: 0; }
-.facture-quand small { display: block; color: var(--muted); font-size: 13px; }
+.facture-quand small { display: block; color: var(--muted); font-size: 15px; }
 .facture-montant { font-weight: 700; }
 .facture-lien { color: var(--accent); font-weight: 700; text-decoration: none; padding: 6px 0; }
 #view-abonnement .abo-sortie { margin-left: 4px; }
@@ -1713,6 +1713,8 @@ a { text-decoration: none; }
 
 /* Accessibilité (30/10) : un lien dans une phrase se voit autrement que par sa couleur. */
 .activity a, .card p a { text-decoration: underline; text-underline-offset: 3px; }
+/* Lien « Appeler … par téléphone » : le bleu de la charte, pas le bleu par défaut du navigateur (revue du 26/11). */
+.activity a { color: var(--accent); }
 
 /* Texte lu par le lecteur d'écran seulement. */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -1744,8 +1746,8 @@ a { text-decoration: none; }
 .sos-ordre-rang { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent-text); background: var(--accent); }
 .sos-ordre-nom { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 17px; font-weight: 600; }
 .sos-ordre-prenom, .sos-ordre-role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sos-ordre-sms { font-size: 14px; font-weight: 400; color: var(--muted); }
-.sos-ordre-role { font-size: 13px; font-weight: 400; color: var(--muted); }
+.sos-ordre-sms { font-size: 15px; font-weight: 400; color: var(--muted); }
+.sos-ordre-role { font-size: 15px; font-weight: 400; color: var(--muted); }
 .sos-ordre-fleches { flex: none; display: flex; gap: 6px; }
 .sos-ordre-btn { width: 54px; height: 54px; padding: 0; border-radius: 12px; border: 2px solid var(--accent); color: var(--accent); background: var(--surface); touch-action: manipulation; }
 .sos-ordre-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -2117,7 +2119,7 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
   .photo-cta br, .photo-cta .small { display: none; }
   .photo-cta-icon { width: 40px; height: 40px; }
   .photo-cta-icon svg { width: 22px; height: 22px; }
-  .tile-note { margin-top: 0; font-size: 13px; }
+  .tile-note { margin-top: 0; font-size: 15px; }
 }
 /* Petit téléphone ET texte agrandi (zoom 130 %, ~300 px de large) : pas la place pour l'icône à côté du mot
    (« Messages » sortait de l'écran) : l'icône repasse au-dessus, en petit. */
@@ -2279,3 +2281,31 @@ details.rg[open] > :not(summary), .faq details[open] > :not(summary) { animation
 
 /* « Lire » touché : le bouton s'estompe le temps que la vidéo parte. */
 .viewer .video-play.attend { opacity: .55; }
+
+/* Zones à toucher : au moins 44 px sensibles, sans rien changer à l'œil (audit du 26/11, Tanguy 27/11).
+   Un voile invisible (::before) déborde du bouton ; le bouton garde sa taille et sa place. */
+#tablet-chip, .setting-modify, .icon-btn.del, #btn-photos-zip, .quick-msg, #btn-resilier, #btn-resilier-deces,
+#btn-retracter, .facture-lien, #abo-banner-btn, #viewer-save, #viewer-delete, #family-switch, #sos-ordre-defaut { position: relative; }
+#tablet-chip::before, .setting-modify::before, .icon-btn.del::before, #btn-photos-zip::before, .quick-msg::before,
+#btn-resilier::before, #btn-resilier-deces::before, #btn-retracter::before, .facture-lien::before, #abo-banner-btn::before,
+#viewer-save::before, #viewer-delete::before, #family-switch::before, #sos-ordre-defaut::before, #btn-invite::before,
+#btn-bell::before { content: ""; position: absolute; inset: 0; }
+#tablet-chip::before { inset: -5px 0; }
+.setting-modify::before { inset: 0 -6px; }
+.icon-btn.del::before, #btn-bell::before { inset: -2px; }
+#btn-invite::before { inset: -2px 0; }
+#btn-photos-zip::before, .quick-msg::before, .facture-lien::before { inset: -4px 0; }
+#btn-resilier::before, #btn-resilier-deces::before, #btn-retracter::before { inset: -8px 0; }
+#abo-banner-btn::before { inset: -3px 0; }
+#viewer-save::before, #viewer-delete::before, #sos-ordre-defaut::before { inset: -1px 0; }
+#family-switch::before { inset: -16px 0 -3px; }
+/* La ligne des messages tout prêts se fait glisser : un peu de place en haut et en bas pour le voile, reprise en marge. */
+.quick-messages { padding-block: 4px 6px; margin-block: -4px; }
+
+/* Marge de page : 20 px partout (Tanguy, 27/11). Les écrans sans en-tête (accueil, connexion, « Vos informations »,
+   rejoindre) étaient à 16 px, ceux de Réglages à 20 px. */
+section.page-pad { padding-left: 20px; padding-right: 20px; }
+/* Curseurs : même trait, même rond, mais 44 px de haut à toucher (la marge négative garde la mise en page). */
+.viewer-temps { height: 44px; margin: -8px 0; }
+.intro .intro-son input[type=range] { height: 44px; margin: -2px 0; }
+@media (max-height: 700px) { .intro .intro-son input[type=range] { height: 44px; margin: -6px 0; } }

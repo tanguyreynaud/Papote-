@@ -46,8 +46,9 @@ test('Le même rappel modifié par deux proches en même temps : une seule versi
   // Un seul rappel, à l'une des deux heures, et les deux téléphones affichent la même.
   const rappels = await g.attendreBase(async () => { const l = await g.liste(`families/${fid}/reminders`); return l.length === 1 && l; }, 'un seul rappel');
   assert.ok(['10:30', '11:45'].includes(rappels[0].time), `heure gardée : ${rappels[0].time}`);
-  await chezJulie.filter({ hasText: `à ${rappels[0].time}` }).waitFor();
-  await chezPaul.filter({ hasText: `à ${rappels[0].time}` }).waitFor();
+  const heureEcrite = rappels[0].time.replace(':', ' h '); // l'appli écrit « 10 h 30 » (Tanguy, 27/11)
+  await chezJulie.filter({ hasText: `à ${heureEcrite}` }).waitFor();
+  await chezPaul.filter({ hasText: `à ${heureEcrite}` }).waitFor();
   // La feuille se ferme en fondu (23/11) : on lui laisse le temps de partir.
   for (const t of [julie, paul]) await t.page.locator('#sheet-reminder').waitFor({ state: 'hidden', timeout: 2000 });
 });
