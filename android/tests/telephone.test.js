@@ -218,7 +218,9 @@ test('SOS par téléphone : un SMS à tous, Paul (responsable) appelé d’abord
     await b.avancer(6000);
     await b.android('onGsm', { etat: 'enLigne', sortant: true, uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /En ligne avec Julie/);
-    await b.avancer(41000); // une vraie conversation (≥ 40 s) : une messagerie ne compte pas comme une réponse
+    await b.page.evaluate(() => { window.__etat.appelGsm = { etat: 'enLigne', sortant: true }; }); // Android : l'appel est toujours là
+    await b.avancer(136000); // une vraie conversation (≥ 2 min 15) : une messagerie (2 min 07 au plus) ne compte pas comme une réponse
+    await b.page.evaluate(() => { window.__etat.appelGsm = {}; });
     await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche', uid: 'julie', name: 'Julie' });
     assert.match(await b.texte('.call-out'), /Appel terminé/);
     assert.strictEqual((await b.appels('phoneCall')).length, 2, 'personne d’autre appelé');

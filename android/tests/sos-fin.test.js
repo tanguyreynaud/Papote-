@@ -98,7 +98,7 @@ test('SOS : Mamie appuie sur « Raccrocher » : un SMS « a arrêté son SOS » 
     const envois = await sms(b);
     assert.strictEqual(envois.length, 2);
     assert.strictEqual(envois[1].a, TOUS);
-    assert.match(envois[1].texte, /^Papote : .+ a arrêté son SOS depuis sa tablette\.$/);
+    assert.match(envois[1].texte, /^Papote : .+ a arrêté son SOS depuis sa tablette\. Appelez-la quand même\.$/);
     // Un « Je m'en occupe » qui arrive après : rien de plus.
     await jeMenOccupe(b, JULIE, await maintenant(b));
     await b.avancer(5 * 60000);

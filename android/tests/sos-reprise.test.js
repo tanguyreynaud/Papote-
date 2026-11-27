@@ -221,7 +221,9 @@ test('A47-2 : deuxième SOS 2 min après le premier (et après une relance) : pa
     // Paul répond pour de vrai : SOS fini.
     await b.avancer(6000);
     await b.android('onGsm', { etat: 'enLigne', ...PAUL });
-    await b.avancer(60000);
+    await b.page.evaluate(() => { window.__etat.appelGsm = { etat: 'enLigne', sortant: true }; }); // Android : l'appel est toujours là
+    await b.avancer(140000); // 2 min 15 et plus : une vraie réponse
+    await b.page.evaluate(() => { window.__etat.appelGsm = {}; });
     await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...PAUL });
     await b.avancer(5000);
     assert.ok(!(await b.visible('.call-out')));
@@ -234,7 +236,9 @@ test('A47-2 : deuxième SOS 2 min après le premier (et après une relance) : pa
     // Relance de Papote : l'heure du dernier SMS est gardée.
     await b.avancer(6000);
     await b.android('onGsm', { etat: 'enLigne', ...PAUL });
-    await b.avancer(45000);
+    await b.page.evaluate(() => { window.__etat.appelGsm = { etat: 'enLigne', sortant: true }; }); // Android : l'appel est toujours là
+    await b.avancer(140000);
+    await b.page.evaluate(() => { window.__etat.appelGsm = {}; });
     await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...PAUL });
     await b.avancer(5000);
     await relancer(b, { appelGsm: {} });
@@ -334,7 +338,8 @@ test('A47-4 : personne sur internet, toujours pas de réseau : la famille est pr
     await b.avancer(5500 + 15500);
     await b.page.evaluate(() => window.__fin('missed')); // 2e essai sans réponse : alerte du serveur
     assert.match(await ecran(b), /La famille est prévenue/);
-    await b.avancer(10000);
+    assert.match(await ecran(b), /Si c’est grave, appelez le 15\./, 'personne n’a répondu : quoi faire (Tanguy, 27/11)');
+    await b.avancer(21000);
     assert.ok(!(await b.visible('.call-out')), 'retour à l’accueil');
     await relancer(b);
     assert.strictEqual((await sos(b)).phase, 'attente-gsm', 'toujours en attente du réseau téléphonique');

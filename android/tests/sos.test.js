@@ -71,7 +71,26 @@ test('SOS (F-c) : la messagerie de Paul décroche (25 s « en ligne ») : la cha
   } finally { await b.fermer(); }
 });
 
-test('SOS (F-c, témoin) : vraie conversation de 60 s avec Paul : la chaîne s\'arrête', async () => {
+// Tanguy, 27/11 : « répondu » seulement après 2 min 15 en ligne (avant : 40 s).
+test('SOS : Paul refuse l\'appel, sa messagerie reste en ligne 2 min 07 : pas une réponse, Julie est appelée', async () => {
+  const b = await tablette();
+  try {
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    await b.android('onGsm', { etat: 'appel', ...PAUL });
+    await b.avancer(6000);
+    await b.android('onGsm', { etat: 'enLigne', ...PAUL }); // la messagerie décroche, comme une personne
+    await b.page.evaluate(() => { window.__etat.appelGsm = { etat: 'enLigne', sortant: true }; }); // Android : l'appel est toujours là
+    await b.avancer(127000);
+    await b.page.evaluate(() => { window.__etat.appelGsm = {}; });
+    await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...PAUL });
+    await b.avancer(1000);
+    assert.deepStrictEqual(await appelsTel(b), ['0700000000', '0612345678'], 'Julie appelée après la messagerie de Paul');
+    assert.match(await ecran(b), /SOS : on appelle Julie/);
+  } finally { await b.fermer(); }
+});
+
+test('SOS (F-c, témoin) : vraie conversation de 2 min 20 avec Paul : la chaîne s\'arrête', async () => {
   const b = await tablette();
   try {
     await b.toucher('#sos-btn');
@@ -79,7 +98,9 @@ test('SOS (F-c, témoin) : vraie conversation de 60 s avec Paul : la chaîne s\'
     await b.android('onGsm', { etat: 'appel', ...PAUL });
     await b.avancer(5000);
     await b.android('onGsm', { etat: 'enLigne', ...PAUL });
-    await b.avancer(60000);
+    await b.page.evaluate(() => { window.__etat.appelGsm = { etat: 'enLigne', sortant: true }; }); // Android : l'appel est toujours là
+    await b.avancer(140000);
+    await b.page.evaluate(() => { window.__etat.appelGsm = {}; });
     await b.android('onGsm', { etat: 'fin', cause: 'raccroche', ...PAUL });
     await b.avancer(1000);
     assert.deepStrictEqual(await appelsTel(b), ['0700000000']);
@@ -240,5 +261,26 @@ test('SOS : ordre retiré dans l\'app (sosOrdre null) : retour à l\'ordre par d
     await b.toucher('#sos-btn');
     await b.avancer(5500);
     assert.deepStrictEqual(await appelsTel(b), ['0700000000']);
+  } finally { await b.fermer(); }
+});
+
+// Tanguy, 27/11 (revue des règles, grande famille) : SMS à tous, appels aux 5 premiers seulement.
+test('SOS, 7 proches : le SMS part aux 7, les 5 premiers sont appelés, puis la ligne est libre', async () => {
+  const b = await tablette();
+  try {
+    const sept = ['Alice', 'Bruno', 'Chloé', 'David', 'Emma', 'Fanny', 'Gaël'].map((name, i) => ({ uid: 'p' + i, name, tel: '060000000' + i, responsable: i === 0 }));
+    await b.android('onFamily', { faces: {}, birthdays: [], people: sept });
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    const sms = await b.appels('sendSms');
+    assert.strictEqual(sms.length, 1);
+    assert.strictEqual(sms[0].args[0].split(',').length, 7, 'SMS aux 7');
+    for (let i = 0; i < 6; i++) {
+      await b.avancer(19000); // sans réponse : raccroché à 18 s
+      await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche' });
+      await b.avancer(1000);
+    }
+    assert.deepStrictEqual(await appelsTel(b), ['0600000000', '0600000001', '0600000002', '0600000003', '0600000004'], 'les 5 premiers, pas les 2 derniers');
+    assert.ok((await b.appels('logAppel')).some((a) => /SMS à 7 proches, appels aux 5 premiers/.test(a.args[0])), 'journal');
   } finally { await b.fermer(); }
 });

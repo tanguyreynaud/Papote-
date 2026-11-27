@@ -1904,6 +1904,7 @@
   }
 
   function essaiAppel(uid, name) {
+    sosRelancerApresAppelManque(); // appel manqué qui avait annulé un SOS : le SOS repart
     if (!name && uid) { var p = personOf(uid); name = p ? p.name : ''; }
     if (!name) return;
     var now = Date.now();
@@ -1916,6 +1917,8 @@
 
   // Appel décroché avec cette personne (téléphone ou visio, dans un sens ou dans l'autre) : sa carte s'en va.
   function appelAbouti(uid, name) {
+    sosARelancer = 0; // elle a décroché : un SOS annulé par cet appel le reste
+    sosRelance = null;
     if (!uid && !name) return;
     var avant = essaisAppel.length;
     essaisAppel = essaisAppel.filter(function (m) { return !memePersonne(m, uid, name); });
@@ -2317,7 +2320,9 @@
   // SOS : Android publie « fin » dès STATE_DISCONNECTING, mais garde l'appel (AppelGsm.enCours) jusqu'à
   // onCallRemoved : le proche suivant attend que la ligne se libère (phoneCall refusé) au lieu d'être sauté.
   var SOS_LIGNE_ESSAIS = 12, SOS_LIGNE_MS = 500;
-  var SOS_REPONDU_MS = 40000;
+  // Tanguy, 27/11 (revue des règles) : 2 min 15 et plus 40 s. Un appel refusé part sur la messagerie du proche,
+  // qui reste en ligne jusqu'à 2 min 07 : à 40 s elle comptait comme une réponse et plus personne n'était appelé.
+  var SOS_REPONDU_MS = 135000;
 
   // Mamie appelle (appel ordinaire ou SOS) : deux règles mesurées sur T-003 (carte Sosh, 13/11 et 19/11)
   // et choisies par Tanguy le 19/11, pour qu'elle ne reste jamais à parler à une messagerie.
@@ -2488,7 +2493,7 @@
       gsmSurveiller();
     } else if (e === 'fin') {
       // SOS : la messagerie du proche « décroche » aussi (STATE_ACTIVE) ; seul un appel resté en ligne
-      // au moins 40 s compte comme une vraie réponse, sinon la chaîne passe au proche suivant.
+      // au moins 2 min 15 compte comme une vraie réponse, sinon la chaîne passe au proche suivant.
       var repondu = gsm.enLigne && (!gsm.sos || Date.now() - gsm.enLigneDepuis >= SOS_REPONDU_MS);
       var who = gsm.who;
       if (repondu) {
@@ -2635,6 +2640,9 @@
   // puis la tablette passe aux appels par la carte SIM dès que le réseau téléphonique revient, pendant
   // 10 minutes au plus après l'appui.
   var SOS_INTERNET_MS = 15000;
+  // Personne n'a répondu (Tanguy, 27/11) : l'écran de fin lui dit quoi faire, et reste plus longtemps.
+  var SOS_SI_GRAVE = 'Si c’est grave, appelez le 15.';
+  var SOS_FIN_SEULE_MS = 20000;
   var SOS_ATTENTE_GSM_MS = 10 * 60000;
   var SOS_VEILLE_GSM_MS = 3000;
   var sosEtat = null;
@@ -2724,7 +2732,7 @@
     var prenom = (qui && qui.name) || 'Un proche';
     var texte = genre === 'repondu' ? 'Papote : ' + prenom + ' a répondu au SOS de ' + nom + '.'
       : genre === 'pris' ? 'Papote : ' + prenom + ' s’occupe du SOS de ' + nom + '.'
-        : 'Papote : ' + nom + ' a arrêté son SOS depuis sa tablette.';
+        : 'Papote : ' + nom + ' a arrêté son SOS depuis sa tablette. Appelez-la quand même.';
     var tels = [];
     for (var i = 0; i < (s.liste || []).length; i++) {
       var p = s.liste[i];
@@ -2785,7 +2793,31 @@
   // Un proche appelle (carte SIM ou internet) pendant le décompte (choix de Tanguy, 19/11) : le SOS est
   // annulé comme par « Annuler » (rien gardé pour une reprise, aucun proche appelé ni SMS), puis l'appel
   // du proche s'affiche normalement ; à sa fin, l'accueil.
+  // Tanguy, 27/11 : si cet appel n'est pas décroché (elle ne peut pas l'atteindre), le SOS repart tout seul,
+  // par un nouveau décompte de 5 s (« Annuler » reste possible). Décroché : le SOS reste annulé.
+  var SOS_RELANCE_MS = 3 * 60000; // au-delà, l'appui est trop ancien pour repartir sans elle
+  var sosARelancer = 0;
+  var sosRelance = null; // relance en attente de la fin de l'appel ; un décroché ou un nouveau décompte l'abandonne
+  function sosRelancerApresAppelManque() {
+    var depuis = sosARelancer;
+    sosARelancer = 0;
+    var now = Date.now();
+    if (!depuis || now < depuis || now - depuis > SOS_RELANCE_MS) return;
+    var essais = 0;
+    var moi = sosRelance = {};
+    var tenter = function () {
+      // L'écran « … a appelé » se ferme d'abord. Un autre appel sonne : on attend sa fin (décroché, il abandonne
+      // la relance). Un SOS déjà reparti : on laisse.
+      if (sosRelance !== moi || sosEtat) return;
+      if (gsm || etatAppelsInternet() || inCall()) { if (++essais < 90) setTimeout(tenter, 1000); return; }
+      sosRelance = null;
+      noterAppel('SOS relancé : l’appel qui l’avait annulé n’a pas été décroché');
+      showSosCountdown();
+    };
+    setTimeout(tenter, 4500);
+  }
   function sosAnnulerParAppel(name, par) {
+    sosARelancer = Date.now();
     noterAppel('SOS annulé pendant le décompte : appel entrant de ' + (name || 'un proche') + ' ' + par);
     closeCallScreen(); // efface aussi le « décompte » gardé (voir closeCallScreen)
     leverPausePourSos(false);
@@ -2820,6 +2852,8 @@
   }
 
   function showSosCountdown(reprise) {
+    sosARelancer = 0; // un décompte est à l'écran : plus rien à relancer
+    sosRelance = null;
     clearTimeout(sosAnnuleTimer);
     sosAnnuleTimer = null;
     // Tablette verrouillée : seulement le SOS de son propre écran (Tanguy, 05/11), jamais celui de dessous.
@@ -2972,9 +3006,9 @@
             startSos(2);
           } else if (state === 'missed') {
             // La famille a reçu l'alerte du serveur ; sans réseau téléphonique, la carte SIM appellera dès son retour.
-            if (attendreGsm) { finish('La famille est prévenue', 'Votre SOS lui a été envoyé.', 8000); sosAttendreGsm(); return; }
+            if (attendreGsm) { finish('La famille est prévenue', 'Votre SOS lui a été envoyé. ' + SOS_SI_GRAVE, SOS_FIN_SEULE_MS); sosAttendreGsm(); return; }
             sosFini();
-            finish('La famille est prévenue', 'Votre SOS lui a été envoyé.', 8000);
+            finish('La famille est prévenue', 'Votre SOS lui a été envoyé. ' + SOS_SI_GRAVE, SOS_FIN_SEULE_MS);
           } else if (state === 'busy') {
             sosFini();
             finish('Occupé', 'Réessayez dans un moment.');
@@ -3013,9 +3047,12 @@
   // SOS par la carte SIM : un SMS à tous les numéros de la famille, puis un vrai appel au responsable,
   // puis aux autres un à un (18 s sans réponse chacun) jusqu'à ce que quelqu'un décroche. Personne : l'appel par
   // internet d'avant (2e essai), qui fait prévenir toute la famille par le serveur.
+  // Grande famille (Tanguy, 27/11) : le SMS part à tous, mais seuls les 5 premiers de l'ordre du SOS sont
+  // appelés (1 min 30 au pire) ; à 30 proches la ligne restait occupée 10 minutes pour ceux qui rappelaient.
+  var SOS_APPELS_MAX = 5;
   function startSosTelephone() {
     var gens = phonePeople();
-    if (!gens.length && sosEtat && sosEtat.liste) gens = sosEtat.liste;
+    if (!gens.length && sosEtat && (sosEtat.tous || sosEtat.liste)) gens = sosEtat.tous || sosEtat.liste;
     var liste = [];
     var tels = [];
     for (var i = 0; i < gens.length; i++) {
@@ -3033,10 +3070,12 @@
       } catch (e) { sosSmsParti = false; }
       if (sosSmsParti) { try { localStorage.setItem(SOS_SMS_CLE, String(Date.now())); } catch (e) { } }
     }
-    sosNoter({ phase: 'tel', liste: liste, index: -1, sms: sosSmsParti, attendreGsm: false, enLigneDepuis: 0 });
-    sosSuiviDemarrer(liste);
+    var appeles = liste.slice(0, SOS_APPELS_MAX);
+    sosNoter({ phase: 'tel', liste: appeles, tous: liste, index: -1, sms: sosSmsParti, attendreGsm: false, enLigneDepuis: 0 });
+    sosSuiviDemarrer(liste); // le message de fin va à tous ceux qui ont reçu le SMS
+    if (liste.length > appeles.length) noterAppel('SOS : SMS à ' + liste.length + ' proches, appels aux ' + appeles.length + ' premiers');
     renderSos('starting', 'SOS : on prévient la famille…', null, null);
-    sosChaine(liste, 0)(false);
+    sosChaine(appeles, 0)(false);
   }
 
   // La suite de la chaîne à partir du proche n : chaque appel fini (sans vraie réponse) passe au suivant.
@@ -3062,8 +3101,8 @@
         if (callApiReady()) { startSos(2); return; }
         sosFini();
         renderCall('ended', sosSmsParti ? 'La famille a reçu votre SOS' : 'Personne n’a pu répondre',
-          sosSmsParti ? 'Elle a reçu un message.' : 'Réessayez dans un moment.');
-        setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, 8000);
+          (sosSmsParti ? 'Elle a reçu un message. ' : 'Réessayez dans un moment. ') + SOS_SI_GRAVE);
+        setTimeout(function () { if (!gsm && /state-ended/.test(callScreen.className)) closeCallScreen(); }, SOS_FIN_SEULE_MS);
         return;
       }
       sosNoter({ phase: 'tel', index: n, enLigneDepuis: 0, depart: 0 });
