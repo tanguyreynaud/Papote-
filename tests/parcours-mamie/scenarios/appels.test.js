@@ -127,7 +127,7 @@ test('Julie appelle, Mamie ne répond pas : au bout de 45 s Julie est prévenue,
   assert.strictEqual(await mamie.visible('#view-home'), true);
   console.log(`Écran de Mamie après l'appel manqué : ${(await mamie.page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').slice(0, 300)))}`);  // A49 : une carte calme à la place de la météo, sans le mot « manqué ».
   await chezMamie(mamie, '#essai-appel', 10_000);
-  assert.match(await carteEssai(mamie), /^Julie a essayé de vous appeler à \d{1,2} h \d{2}$/);
+  assert.match(await carteEssai(mamie), /^Julie a essayé de vous appeler à \d{1,2}h\d{2}$/);
 });
 
 const carteEssai = async (mamie) => ((await mamie.visible('#essai-appel')) ? (await mamie.texte('#essai-appel')).replace(/\s+/g, ' ').trim() : '');
@@ -143,7 +143,7 @@ test('A49 : Julie raccroche avant que Mamie décroche : « Julie a essayé de vo
     .catch(async () => assert.fail(`La tablette sonne encore après que Julie a raccroché.\n${await diagnostic(mamie)}`));
   await chezMamie(mamie, '#essai-appel', 10_000);
   const carte = await carteEssai(mamie);
-  assert.match(carte, /^Julie a essayé de vous appeler à \d{1,2} h \d{2}$/);
+  assert.match(carte, /^Julie a essayé de vous appeler à \d{1,2}h\d{2}$/);
   assert.doesNotMatch(carte, /manqu/i);
   assert.strictEqual(await mamie.page.locator('#essai-appel button').count(), 0, 'pas de bouton');
   assert.ok(await mamie.visible('#sos-btn'), 'le SOS reste là');
