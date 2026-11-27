@@ -32,7 +32,7 @@ const MORCEAUX = [
   [
     'abonnement.test.js', 'admin-sim-bloquee.test.js', 'appel-android.test.js', 'declaration.test.js', 'liens-invitation.test.js',
     'deconnexion.test.js', 'forfait.test.js', 'que-faire.test.js', 'horsligne.test.js', 'mise-en-route.test.js', 'notifs-reconnexion.test.js', 'lien-connexion.test.js', 'panne.test.js',
-    'partage.test.js', 'plusieurs-proches.test.js', 'renvoi.test.js', 'retour.test.js', 'sepa.test.js', 'touchers.test.js', 'wifi.test.js',
+    'partage.test.js', 'plusieurs-proches.test.js', 'renvoi.test.js', 'retour.test.js', 'retour-balayage.test.js', 'sepa.test.js', 'touchers.test.js', 'wifi.test.js',
   ],
 ];
 
