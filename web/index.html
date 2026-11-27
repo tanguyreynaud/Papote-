@@ -266,7 +266,11 @@
         <div id="sans-abo-formules" class="abo-formules"></div>
         <p id="sans-abo-error" class="error" hidden></p>
       </div>
-      <button type="button" class="link lien-aide" id="sans-abo-aide" data-aide="Papote n'est pas encore activé pour ma famille. Que dois-je faire ?">Besoin d'aide ?</button>
+      <div class="card">
+        <h2>Une question ?</h2>
+        <p class="muted small">L'assistant Papote vous répond tout de suite.</p>
+        <button type="button" class="primary wide" id="sans-abo-aide" data-aide="Papote n'est pas encore activé pour ma famille. Que dois-je faire ?">Poser une question</button>
+      </div>
       <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille</button>
       <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
     </section>
@@ -411,7 +415,7 @@
       <p class="outbox" hidden></p>
       <ul id="photos" class="gallery"></ul>
       <div id="photos-more" class="feed-more"></div>
-      <div id="photos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-photo"/></svg></span><p class="vide-titre">Aucune photo pour l'instant.</p></div>
+      <div id="photos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-photo"/></svg></span><p class="vide-titre">Aucune photo pour l'instant.</p><p>Touchez + pour en envoyer une.</p></div>
       <button type="button" class="fab fab-texte" data-add="photo"><svg><use href="#i-plus"/></svg><span>Envoyer une photo</span></button>
     </section>
 
@@ -424,7 +428,7 @@
       <p class="outbox" hidden></p>
       <ul id="videos" class="gallery"></ul>
       <div id="videos-more" class="feed-more"></div>
-      <div id="videos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-video"/></svg></span><p class="vide-titre">Aucune vidéo pour l'instant.</p></div>
+      <div id="videos-empty" class="empty vide" hidden><span class="vide-icone" aria-hidden="true"><svg><use href="#i-video"/></svg></span><p class="vide-titre">Aucune vidéo pour l'instant.</p><p>Touchez + pour en envoyer une.</p></div>
       <button type="button" class="fab fab-texte" data-add="video"><svg><use href="#i-plus"/></svg><span>Envoyer une vidéo</span></button>
     </section>
 
@@ -524,6 +528,7 @@
                   <strong>Sonnerie</strong>
                   <span id="volume-sonnerie-val" class="setup-son-val"></span>
                 </div>
+                <p class="muted small volume-aide">Les appels qui arrivent</p>
                 <div class="setup-son-ctrl">
                   <input id="volume-sonnerie" type="range" min="10" max="100" step="5" aria-label="Volume de la sonnerie">
                   <button type="button" class="setup-essai volume-essai" data-essai="sonnerie" aria-label="Écouter la sonnerie"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
@@ -534,6 +539,7 @@
                   <strong>Vidéos et messages lus</strong>
                   <span id="volume-value" class="setup-son-val"></span>
                 </div>
+                <p class="muted small volume-aide">Le son des vidéos, les messages lus à voix haute, la radio</p>
                 <div class="setup-son-ctrl">
                   <input id="volume" type="range" min="10" max="100" step="5" aria-label="Volume des vidéos et des messages">
                   <button type="button" class="setup-essai volume-essai" data-essai="voix" aria-label="Écouter la voix"><svg><use href="#i-play"/></svg><span>Écouter</span></button>
@@ -541,9 +547,10 @@
               </div>
               <div class="setup-son-ligne">
                 <div class="setup-son-tete">
-                  <strong>Voix pendant les appels</strong>
+                  <strong>Appels</strong>
                   <span id="volume-appel-val" class="setup-son-val"></span>
                 </div>
+                <p class="muted small volume-aide">La voix du proche pendant les appels</p>
                 <div class="setup-son-ctrl">
                   <input id="volume-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
                   <button type="button" class="setup-essai volume-essai" data-essai="appel" aria-label="Écouter la voix d'un appel"><svg><use href="#i-play"/></svg><span>Écouter</span></button>

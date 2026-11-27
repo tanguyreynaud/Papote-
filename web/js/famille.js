@@ -433,7 +433,7 @@ function demandeDeLaPage(bouton) {
   if (surProfil) return "J'ai besoin d'aide pour mon profil ou mon abonnement.";
   if (panneauReglages() === 'famille') return "J'ai besoin d'aide pour gérer la famille : inviter, retirer ou nommer un responsable.";
   if ($('remote-card').open) return "La tablette ne marche pas bien. J'ai besoin d'aide pour la dépanner.";
-  if (targetTablet()?.lastOnline && !tabletteEnLigne()) return 'La tablette ne répond plus. Que faire ?';
+  if (targetTablet()?.lastOnline && !tabletteEnLigne()) return 'La tablette ne répond plus. Que faire\u00a0?';
   return "J'ai besoin d'aide pour régler la tablette.";
 }
 document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', () => ouvrirAssistant(demandeDeLaPage(b))));
@@ -1307,14 +1307,17 @@ function showIntroTablette() {
         <h2>Le son</h2>
         <div class="intro-son">
           <div class="intro-son-tete"><strong>Sonnerie</strong><span id="intro-sonnerie-val" class="setup-son-val"></span></div>
+          <p class="muted small intro-son-aide">Les appels qui arrivent</p>
           <input id="intro-sonnerie" type="range" min="10" max="100" step="5" aria-label="Volume de la sonnerie">
         </div>
         <div class="intro-son">
           <div class="intro-son-tete"><strong>Vidéos et messages lus</strong><span id="intro-volume-val" class="setup-son-val"></span></div>
+          <p class="muted small intro-son-aide">Les vidéos, les messages lus à voix haute, la radio</p>
           <input id="intro-volume" type="range" min="10" max="100" step="5" aria-label="Volume des vidéos et des messages">
         </div>
         <div class="intro-son">
-          <div class="intro-son-tete"><strong>Voix pendant les appels</strong><span id="intro-appel-val" class="setup-son-val"></span></div>
+          <div class="intro-son-tete"><strong>Appels</strong><span id="intro-appel-val" class="setup-son-val"></span></div>
+          <p class="muted small intro-son-aide">La voix du proche, en visio et au téléphone</p>
           <input id="intro-appel" type="range" min="10" max="100" step="5" aria-label="Volume des appels">
         </div>
       </div>
