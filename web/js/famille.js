@@ -6335,16 +6335,12 @@ function texteForfait(f, name) {
   // Le fait en une ligne (en gras, voir faitPuisSuite), puis ce que ça change (2e épuration, 26/11).
   const debut = `Forfait de la tablette utilisé à ${Math.min(f.pourCent, 100)} %.`;
   const jusqua = f.fin ? `jusqu'au ${f.fin}` : 'jusqu\'à sa recharge';
-  // Forfait « internet coupé » au bout (Sosh 1 Go bloqué) : le dire simplement, avec la date et le geste utile.
-  const coupe = f.coupe && f.fin ? ` À 100 %, internet est coupé jusqu'au ${f.fin} : branchez-la au Wi-Fi si vous pouvez.` : '';
-  if (f.niveau >= 3) {
-    return f.coupe && f.fin
-      ? `${debut} Appels sans image, et les vidéos attendent le Wi-Fi.${coupe}`
-      : `${debut} Appels sans image ${jusqua}, et les vidéos attendent le Wi-Fi.${f.fin ? ' Branchez-la au Wi-Fi si vous pouvez.' : ''}`;
-  }
+  // Même phrase que le forfait soit coupé au bout ou non (Tanguy, 27/11 : « trop long ») ; la coupure se lit dans
+  // la fenêtre de la pastille, et une tablette devenue muette l'explique (coupeeParForfait).
+  if (f.niveau >= 3) return `${debut} Appels sans image ${jusqua}, et les vidéos attendent le Wi-Fi.${f.fin ? ' Branchez-la au Wi-Fi si vous pouvez.' : ''}`;
   // Paliers de la tablette (Forfait.java) : 70 % image réduite, 88 % très réduite, 95 % son seul.
   const image = f.niveau >= 2 ? 'très réduite' : 'réduite';
-  return `${debut} Appels vidéo en image ${image} ${jusqua}. Photos et messages passent toujours.${coupe}`;
+  return `${debut} Appels vidéo en image ${image} ${jusqua}. Photos et messages passent toujours.`;
 }
 
 function renderTabletChip() {

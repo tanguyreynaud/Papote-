@@ -66,10 +66,11 @@ test('Forfait « internet coupé » au bout : la date de coupure, puis une table
   });
   await sim(820, 1);
   await julie.page.locator('#activity.calme', { hasText: 'utilisé à 82 %' }).waitFor();
-  assert.ok((await julie.page.locator('#activity').textContent()).includes(`À 100 %, internet est coupé jusqu'au ${fin} : branchez-la au Wi-Fi si vous pouvez.`));
+  // Même alerte courte que pour un forfait sans coupure (Tanguy, 27/11) : pas de phrase en plus.
+  assert.strictEqual(await julie.page.locator('#activity').textContent(), `Forfait de la tablette utilisé à 82 %. Appels vidéo en image réduite jusqu'au ${fin}. Photos et messages passent toujours.`);
   await sim(970, 3);
   await julie.page.locator('#activity.calme', { hasText: 'utilisé à 97 %' }).waitFor();
-  assert.ok((await julie.page.locator('#activity').textContent()).includes(`internet est coupé jusqu'au ${fin}`));
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`Appels sans image jusqu'au ${fin}, et les vidéos attendent le Wi-Fi. Branchez-la au Wi-Fi si vous pouvez.`));
   // L'opérateur coupe : la tablette ne donne plus de nouvelles depuis 4 h (au-delà des 3 h tolérées la nuit).
   await sim(990, 3, s.Timestamp.fromMillis(Date.now() - 4 * 3600_000));
   await julie.page.locator('#activity.calme', { hasText: 'n\'a sans doute plus internet' }).waitFor();
