@@ -500,6 +500,8 @@
       e.preventDefault();
       ouvrir(true);
     });
+    // Lien « poser ma question » des e-mails (mapapote.fr/#aide) : le chat s'ouvre d'emblée.
+    if (/(^|[#&])aide(&|$)/.test(location.hash || '')) ouvrir(true);
     // L'appli peut ouvrir le chat avec une demande déjà envoyée (« Besoin d'aide ? », Tanguy, 24/11) : la personne
     // n'a pas à retaper ce qu'elle vient de voir. La même demande n'est pas posée deux fois de suite.
     window.papoteChat = { ouvrir: function (question) {

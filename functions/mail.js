@@ -15,6 +15,11 @@
 
 const APPLI = 'https://app.mapapote.fr';
 const SITE = 'https://mapapote.fr';
+// Le chat du site, ouvert d'emblée (vitrine/chat-support.js lit #aide). Tanguy 27/11 : le pied des e-mails renvoie vers
+// l'assistant, plus vers une réponse par e-mail ; un e-mail qui demande déjà de répondre (deuil, hospitalisation,
+// somme contestée) n'a pas ce pied (inviteARepondre).
+const AIDE = `${SITE}/#aide`;
+const inviteARepondre = (blocs) => /[Rr]épondez (simplement )?à cet e-mail/.test(JSON.stringify(blocs));
 const ADMIN = 'https://app.mapapote.fr/admin.html';
 // Lien vers l'appli qui garde le code de commande : la famille créée s'y rattache toute seule.
 const lienAppli = (code) => (code ? `${APPLI}/?commande=${encodeURIComponent(code)}` : APPLI);
@@ -70,9 +75,8 @@ function blocHtml(b) {
     const lignes = b.fiche.filter((l) => l && l[1] != null && l[1] !== '');
     if (!lignes.length) return '';
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;background:${C.fond};border:1px solid ${C.ligne};border-radius:12px;border-collapse:separate">
-${lignes.map(([k, v], i) => `<tr><td style="padding:${i === 0 ? 14 : 8}px 16px ${i === lignes.length - 1 ? 14 : 8}px;font-family:${POLICE};${i ? `border-top:1px solid ${C.ligne};` : ''}">
-<div style="font-size:13px;line-height:1.3;letter-spacing:.04em;text-transform:uppercase;color:${C.doux}">${insecables(echapper(k))}</div>
-<div style="font-size:17px;line-height:1.45;font-weight:bold;color:${C.texte};word-break:break-word">${insecables(v)}</div></td></tr>`).join('\n')}
+${lignes.map(([k, v], i) => `<tr><td width="96" valign="top" style="width:96px;padding:${i === 0 ? 12 : 7}px 0 ${i === lignes.length - 1 ? 12 : 7}px 16px;font-family:${POLICE};font-size:14px;line-height:1.45;color:${C.doux};${i ? `border-top:1px solid ${C.ligne};` : ''}">${insecables(echapper(k))}</td>
+<td valign="top" style="padding:${i === 0 ? 12 : 7}px 16px ${i === lignes.length - 1 ? 12 : 7}px 10px;font-family:${POLICE};font-size:16px;line-height:1.4;color:${C.texte};word-break:break-word;${i ? `border-top:1px solid ${C.ligne};` : ''}">${insecables(v)}</td></tr>`).join('\n')}
 </table>`;
   }
   // Numéro d'étape : une cellule de 32 × 32 (Outlook ignore la taille d'un <div> ; le rond devient un carré, lisible).
@@ -125,7 +129,7 @@ function page(titre, blocs, bouton, options = {}) {
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 10px;border-collapse:separate">
 <tr><td align="center" style="background:${C.indigo};border-radius:999px;mso-padding-alt:15px 28px"><a href="${echapper(bouton.lien)}" style="display:inline-block;padding:15px 28px;font-family:${POLICE};font-size:17px;font-weight:bold;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:999px">${insecables(echapper(bouton.texte))}&nbsp;→</a></td></tr></table>`
     : '';
-  const question = options.interne || options.formel || options.sansQuestion ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? Répondez simplement à cet e&#8209;mail, nous vous répondons personnellement.</p>`;
+  const question = options.interne || options.formel || options.sansQuestion || inviteARepondre(blocs) ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? Notre assistant vous répond tout de suite&nbsp;: <a href="${AIDE}" style="color:${C.indigo};font-weight:bold">poser ma question</a>.</p>`;
   const pourquoi = options.desinscription
     ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:${C.doux}">${insecables(echapper(options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'))} <a href="${echapper(options.desinscription)}" style="color:${C.doux}">Se désinscrire des e-mails d'information</a>.</p>`
     : '';
@@ -185,7 +189,7 @@ ${question}
 function texteBrut(titre, blocs, bouton, options = {}) {
   return [titre, '', ...blocs.map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`), bouton ? `${bouton.texte} : ${bouton.lien}` : '', '',
     ...(options.apres || []).map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`),
-    ...(options.interne ? [`Espace admin : ${ADMIN}`] : options.formel ? [IDENTITE] : options.sansQuestion ? [] : ['Une question ? Répondez simplement à cet e-mail.']),
+    ...(options.interne ? [`Espace admin : ${ADMIN}`] : options.formel ? [IDENTITE] : options.sansQuestion || inviteARepondre(blocs) ? [] : [`Une question ? Notre assistant vous répond tout de suite : ${AIDE}`]),
     ...(options.desinscription ? ['', `${options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'}`, `Se désinscrire des e-mails d'information : ${options.desinscription}`] : [])]
     .join('\n').replace(/\n{3,}/g, '\n\n');
 }
@@ -303,13 +307,13 @@ function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, rep
     // l'e-mail n'invite pas à reculer. « Une question ? Répondez à cet e-mail » reste en pied.
     `<b>${DELAI}.</b> Vous recevrez un e-mail à son départ.`,
     { fiche: [
-      ['Numéro de commande', code ? echapper(code) : null],
+      ['Commande', code ? echapper(code) : null],
       ['Livraison', relais && relais.transporteur
-        ? `offerte au point relais ${relaisEnTexte(relais)}${relais.destinataire ? `, à retirer par ${echapper(relais.destinataire)}` : ''}`
-        : 'offerte à l\'adresse indiquée'],
-      ['Réglé aujourd\'hui', '60 € de mise en service'],
-      ['Abonnement', `${mensuel}, payés une fois chaque mois écoulé à partir de la réception, sans engagement`],
-      ['Changer d\'avis', '30 jours après la réception : rien à payer et les 60 € remboursés'],
+        ? `offerte, au point relais ${relaisEnTexte(relais)}${relais.destinataire ? ` (retrait par ${echapper(relais.destinataire)})` : ''}`
+        : 'offerte, à l\'adresse indiquée'],
+      ['Réglé', '<b>60 €</b> de mise en service'],
+      ['Ensuite', `<b>25 € par mois</b>, tout compris, sans engagement. Chaque mois est payé une fois écoulé, à partir de la réception`],
+      ['Changer d\'avis', '30 jours après la réception : rien à payer, les 60 € remboursés'],
     ] },
     // Famille préparée (05/11) : l'espace famille existe dès le paiement, la tablette y entrera seule.
     famille
@@ -328,8 +332,7 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
       RIEN_A_INSTALLER,
     ]],
     2: ['Une question avant de vous décider ?', [
-      '<b>Quelque chose vous fait hésiter ?</b> Répondez simplement à cet e-mail : nous vous répondons personnellement.',
-      'Vous avez 30 jours après la réception pour changer d\'avis : rien à payer et les 60 € remboursés.',
+      '<b>Vous avez 30 jours après la réception pour changer d\'avis</b> : rien à payer et les 60 € remboursés.',
     ]],
     3: ['Dernier rappel pour votre commande Papote', [
       '<b>Votre commande est toujours prête.</b> C\'est notre dernier rappel : nous ne vous écrirons plus à ce sujet.',
@@ -340,7 +343,6 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
   return message(titre, [bonjour(nom), ...corps], { texte: 'Reprendre ma commande', lien }, {
     desinscription: desinscription || '',
     pourquoi: 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.',
-    sansQuestion: etape === 2, // la question est déjà posée dans le texte
   });
 }
 
@@ -406,7 +408,7 @@ function rappelJumelage({ nom, numero, code, preparee }) {
     bonjour(nom),
     numero === 1
       ? '<b>Votre tablette n\'est pas encore branchée.</b> Elle devrait être arrivée au point relais. Trois gestes :'
-      : '<b>Votre tablette n\'est toujours pas branchée.</b> Si quelque chose bloque, répondez à cet e-mail : nous vous aidons. Pour rappel :',
+      : '<b>Votre tablette n\'est toujours pas branchée.</b> Si quelque chose bloque, notre assistant vous aide tout de suite (lien en bas de cet e-mail). Pour rappel :',
     gestes(code, preparee),
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
