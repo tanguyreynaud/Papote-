@@ -464,6 +464,10 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /members/{uid} {
+        // Ce champ change-t-il dans cette écriture (ajout, modification ou retrait) ?
+        function touche(champ) {
+          return request.resource.data.diff(resource.data).affectedKeys().hasAny([champ]);
+        }
         // Jeton de notification du téléphone (appels de la tablette) : visible de soi seul. Seulement « push »,
         // seulement dans une famille dont on a la fiche, champs connus et listes courtes (audit 8, R7).
         match /private/{name} {
@@ -575,6 +579,8 @@ service cloud.firestore {
           && resource.data.get('role', '') == 'famille'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['canCall'])
           && request.resource.data.canCall is bool;
+        // Chaque champ n'est contrôlé que s'il change (27/11) : une valeur d'avant un durcissement des règles (numéro
+        // saisi avant le 29/10 dans un autre format, par exemple) ne doit pas bloquer tout le profil, prénom compris.
         // Ma fiche. Un proche en attente n'y touche plus du tout (R5, 12/11) : il attend qu'un responsable l'accepte.
         // canCall : seulement la tablette pour elle-même (ses appels) ; un proche peut s'ôter le droit, pas se le donner.
         allow update: if signedIn()
@@ -589,24 +595,24 @@ service cloud.firestore {
           && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['notifsVues'])
               || request.resource.data.notifsVues == request.time)
           // Mon numéro de téléphone : la tablette m'appelle par la carte SIM et n'accepte que les numéros de la famille.
-          && telephoneValide(request.resource.data)
+          && (!touche('telephone') || telephoneValide(request.resource.data))
           // Je suis une femme / un homme : voix qui lit mes messages sur la tablette.
-          && (!('genre' in request.resource.data) || request.resource.data.genre in ['femme', 'homme'])
+          && (!touche('genre') || !('genre' in request.resource.data) || request.resource.data.genre in ['femme', 'homme'])
           // lastSeen : dernière fois que la caméra a vu quelqu'un (horodatage serveur).
-          && (!('lastSeen' in request.resource.data) || request.resource.data.lastSeen == null || request.resource.data.lastSeen is timestamp)
+          && (!touche('lastSeen') || !('lastSeen' in request.resource.data) || request.resource.data.lastSeen == null || request.resource.data.lastSeen is timestamp)
           // Wi-Fi auquel la tablette est connectée : { ssid }.
-          && (!('wifi' in request.resource.data) || request.resource.data.wifi == null
+          && (!touche('wifi') || !('wifi' in request.resource.data) || request.resource.data.wifi == null
               || (request.resource.data.wifi is map && request.resource.data.wifi.keys().hasOnly(['ssid'])
                   && request.resource.data.wifi.ssid is string && request.resource.data.wifi.ssid.size() <= 64))
           // Ville de la météo utilisée par la tablette, affichée dans l'app.
-          && (!('meteoVille' in request.resource.data) || request.resource.data.meteoVille == null
+          && (!touche('meteoVille') || !('meteoVille' in request.resource.data) || request.resource.data.meteoVille == null
               || villeMeteoOk(request.resource.data.meteoVille))
           // uid et e-mail ajoutés aux fiches d'avant, pour retrouver ses familles.
-          && request.resource.data.get('uid', request.auth.uid) == request.auth.uid
+          && (!touche('uid') || request.resource.data.get('uid', request.auth.uid) == request.auth.uid)
           && (request.resource.data.get('email', null) == resource.data.get('email', null)
               || (isRealAccount() && request.resource.data.email == myEmail()))
           // Photo de profil : petite image JPEG en data URL, ou null pour la retirer.
-          && (!('face' in request.resource.data) || request.resource.data.face == null
+          && (!touche('face') || !('face' in request.resource.data) || request.resource.data.face == null
               || (request.resource.data.face is string && request.resource.data.face.size() <= 200000))
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
