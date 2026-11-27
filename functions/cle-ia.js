@@ -38,6 +38,10 @@ const TYPES_REFUS = ['authentication_error', 'permission_error'];
 const TITRE = 'La clé IA (Anthropic) est refusée';
 const TEXTE = 'La clé IA (Anthropic) est refusée : chat du site, IA de l\'admin et lecture des factures sont en panne. '
   + 'Créer une nouvelle clé et lancer outils\\support\\installer-support.bat, puis republier les fonctions.';
+// L'e-mail (épuration du 27/11) : ce qu'il faut faire en gras, puis ce qui est en panne.
+const GESTE = 'Créer une nouvelle clé, lancer outils\\support\\installer-support.bat, puis republier les fonctions.';
+const GESTE_CREDIT = 'Recharger le crédit dans la console Anthropic, rubrique Billing. Rien à republier.';
+const EFFET = 'En attendant, le chat du site, l\'IA de l\'admin et la lecture des factures sont en panne.';
 
 const TITRE_CREDIT = 'Crédit Anthropic épuisé';
 const TEXTE_CREDIT = 'Crédit Anthropic épuisé : Anthropic refuse les appels faute de crédit ; le chat du site, l\'IA de l\'admin '
@@ -121,8 +125,8 @@ async function prevenirParDefaut(titre, detail) {
 // rend), prevenir(titre, detail), maintenant }. Rend 'alerte' (e-mail parti), 'deja' (alerte de moins de 24 h),
 // ou null (ni refus de clé ni crédit épuisé, ou alerte impossible).
 async function signalerCleIA(erreur, { source = null, db = null, prevenir = prevenirParDefaut, maintenant = Date.now() } = {}) {
-  const motif = refusDeCle(erreur) ? { document: DOCUMENT, titre: TITRE, texte: TEXTE, nom: 'Clé IA (Anthropic) refusée', constat: 'Refus constaté' }
-    : creditEpuise(erreur) ? { document: DOCUMENT_CREDIT, titre: TITRE_CREDIT, texte: TEXTE_CREDIT, nom: 'Crédit Anthropic épuisé', constat: 'Constaté' }
+  const motif = refusDeCle(erreur) ? { document: DOCUMENT, titre: TITRE, texte: TEXTE, geste: GESTE, effet: EFFET, nom: 'Clé IA (Anthropic) refusée', constat: 'Refus constaté' }
+    : creditEpuise(erreur) ? { document: DOCUMENT_CREDIT, titre: TITRE_CREDIT, texte: TEXTE_CREDIT, geste: GESTE_CREDIT, effet: EFFET, nom: 'Crédit Anthropic épuisé', constat: 'Constaté' }
       : null;
   if (!motif) return null;
   const statut = Number(erreur.status) || null;
@@ -145,7 +149,7 @@ async function signalerCleIA(erreur, { source = null, db = null, prevenir = prev
     if (avant.deja) return 'deja';
     logger.error(`${motif.nom} (${statut || type}${source ? `, ${source}` : ''}) : alerte envoyée à Papote`);
     try {
-      await prevenir(motif.titre, `${motif.texte} (${motif.constat}${source ? ` sur ${source}` : ''} : erreur ${statut || type}.)`);
+      await prevenir(motif.titre, [motif.geste, motif.effet, `${motif.constat}${source ? ` sur ${source}` : ''} : erreur ${statut || type}.`]);
     } catch (e) {
       // E-mail non parti : l'alerte pourra repartir au prochain refus, sans attendre 24 h.
       await base.doc(motif.document).set({ alerteLe: avant.alerteLe }, { merge: true }).catch(() => null);

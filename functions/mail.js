@@ -125,7 +125,7 @@ function page(titre, blocs, bouton, options = {}) {
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 10px;border-collapse:separate">
 <tr><td align="center" style="background:${C.indigo};border-radius:999px;mso-padding-alt:15px 28px"><a href="${echapper(bouton.lien)}" style="display:inline-block;padding:15px 28px;font-family:${POLICE};font-size:17px;font-weight:bold;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:999px">${insecables(echapper(bouton.texte))}&nbsp;→</a></td></tr></table>`
     : '';
-  const question = options.interne || options.formel ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? Répondez simplement à cet e&#8209;mail, nous vous répondons personnellement.</p>`;
+  const question = options.interne || options.formel || options.sansQuestion ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? Répondez simplement à cet e&#8209;mail, nous vous répondons personnellement.</p>`;
   const pourquoi = options.desinscription
     ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:${C.doux}">${insecables(echapper(options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'))} <a href="${echapper(options.desinscription)}" style="color:${C.doux}">Se désinscrire des e-mails d'information</a>.</p>`
     : '';
@@ -185,7 +185,7 @@ ${question}
 function texteBrut(titre, blocs, bouton, options = {}) {
   return [titre, '', ...blocs.map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`), bouton ? `${bouton.texte} : ${bouton.lien}` : '', '',
     ...(options.apres || []).map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`),
-    ...(options.interne ? [`Espace admin : ${ADMIN}`] : options.formel ? [IDENTITE] : ['Une question ? Répondez simplement à cet e-mail.']),
+    ...(options.interne ? [`Espace admin : ${ADMIN}`] : options.formel ? [IDENTITE] : options.sansQuestion ? [] : ['Une question ? Répondez simplement à cet e-mail.']),
     ...(options.desinscription ? ['', `${options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'}`, `Se désinscrire des e-mails d'information : ${options.desinscription}`] : [])]
     .join('\n').replace(/\n{3,}/g, '\n\n');
 }
@@ -220,9 +220,9 @@ const lienHtml = (lien, texte) => `<a href="${echapper(lien)}" style="color:${C.
 // Famille préparée dès la commande (famille-preparee.js, 05/11) : la tablette retrouve sa famille toute seule.
 // Plus aucun code à scanner (Tanguy 12/11, A29) ; « bouton d'allumage (Power) », jamais « bouton de la tranche » (M9).
 const GESTES = { etapes: [
-  'Branchez la tablette sur une prise, puis appuyez 3 secondes sur le bouton d\'allumage (Power). Elle démarre en une minute environ ; si l\'écran reste noir, laissez-la charger un quart d\'heure. La carte SIM est déjà dedans : rien à régler.',
-  'La tablette retrouve votre famille toute seule, sans code à scanner. Personne n\'a besoin d\'être dans l\'appli Papote pour la brancher.',
-  'Les photos déjà envoyées depuis l\'appli Papote s\'affichent. Invitez vos proches depuis l\'appli : ils pourront envoyer des photos et appeler en vidéo.',
+  'Branchez la tablette, puis appuyez 3 secondes sur le bouton d\'allumage (Power). Si l\'écran reste noir, laissez-la charger un quart d\'heure.',
+  'Elle retrouve votre famille toute seule : rien à régler, aucun code. Personne n\'a besoin d\'être dans l\'appli Papote pour la brancher.',
+  'Invitez vos proches depuis l\'appli : ils pourront envoyer des photos et appeler en vidéo.',
 ] };
 const gestes = () => GESTES;
 
@@ -231,7 +231,7 @@ const gestes = () => GESTES;
 function colisParti({ nom, suivi, lien, relais, code, preparee }) {
   return message('Votre tablette Papote est en route', [
     bonjour(nom),
-    `Votre tablette vient de partir. Vous recevrez un message de Mondial Relay dès qu'elle sera disponible${relais ? ' au point relais' : ' au point relais choisi'}.`,
+    '<b>Votre tablette vient de partir.</b> Mondial Relay vous prévient dès qu\'elle est au point relais.',
     { fiche: [['Numéro de suivi', echapper(suivi)], ['Point relais', relais ? relaisEnTexte(relais) : null]] },
     'À son arrivée, trois gestes :',
     gestes(code, preparee),
@@ -242,9 +242,7 @@ function colisParti({ nom, suivi, lien, relais, code, preparee }) {
 function tabletteRemise({ nom, code, preparee }) {
   return message('Votre tablette Papote est chez vous', [
     bonjour(nom),
-    preparee
-      ? 'Votre tablette Papote vous a été remise en main propre : elle est prête et déjà reliée à votre famille. Trois gestes :'
-      : 'Votre tablette Papote vous a été remise en main propre : elle est prête. Trois gestes :',
+    '<b>Votre tablette vous a été remise en main propre : elle est prête.</b> Trois gestes :',
     gestes(code, preparee),
     // Plus de « 30 jours pour changer d'avis » (Tanguy, 2026-10-29) : même règle que l'e-mail de commande, les CGV couvrent le droit.
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
@@ -265,7 +263,9 @@ const FICHE_OFFRE = [
 // Jamais « rien à installer » adressé à un membre de la famille, jamais « chacun installe » non plus.
 const RIEN_A_INSTALLER = { petit: 'Votre proche n\'a rien à installer : la tablette est prêtée et arrive configurée, prête à brancher.' };
 
-const DELAI = 'Nous préparons et vérifions votre tablette à la main, avec sa carte SIM : elle est expédiée sous 3 à 5 jours ouvrés';
+const DELAI = 'Votre tablette est préparée à la main et part sous 3 à 5 jours ouvrés';
+// Le prix en une ligne, pour les e-mails qui n'ont pas besoin de la fiche complète (épuration, Tanguy 27/11).
+const RAPPEL_PRIX = 'Pour rappel : 60 € à la commande, puis 25 € par mois tout compris, sans engagement.';
 
 // reprise : abonnement repris après une résiliation, tablette restée chez le proche (C3) : pas de mise en service,
 // pas de délai pour changer d'avis.
@@ -285,7 +285,7 @@ function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, rep
   if (dejaInstallee) {
     return message(reprise ? 'Votre abonnement Papote reprend' : 'Merci pour votre abonnement Papote', [
       bonjour(nom),
-      `Merci, votre abonnement Papote ${reprise ? 'reprend' : 'est pris'} ! La tablette fonctionne déjà, il n'y a rien d'autre à faire.`,
+      '<b>La tablette fonctionne déjà : vous n\'avez rien d\'autre à faire.</b>',
       { fiche: [
         ['Numéro', code ? echapper(code) : null],
         ['Réglé aujourd\'hui', reprise ? 'rien' : '60 € de mise en service'],
@@ -296,12 +296,12 @@ function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, rep
       CGV_JOINTES,
     ], { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
   }
+  // Épuration (Tanguy, 27/11) : le titre dit déjà merci ; la première ligne dit quand la tablette part.
   return message('Merci pour votre commande Papote', [
     bonjour(nom),
-    'Merci pour votre commande !',
     // Plus de « vous pouvez annuler à tout moment avant » (Tanguy, 2026-10-27, A2) : les CGV couvrent le droit,
     // l'e-mail n'invite pas à reculer. « Une question ? Répondez à cet e-mail » reste en pied.
-    `${DELAI}. Vous recevrez un e-mail dès qu'elle part.`,
+    `<b>${DELAI}.</b> Vous recevrez un e-mail à son départ.`,
     { fiche: [
       ['Numéro de commande', code ? echapper(code) : null],
       ['Livraison', relais && relais.transporteur
@@ -313,9 +313,8 @@ function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, rep
     ] },
     // Famille préparée (05/11) : l'espace famille existe dès le paiement, la tablette y entrera seule.
     famille
-      ? '<b>Votre espace famille Papote est déjà prêt.</b> Ouvrez l\'appli Papote avec le bouton ci-dessous et connectez-vous avec cette adresse e-mail : vous pourrez donner le nom de votre proche, préparer les premières photos et inviter la famille avant même l\'arrivée de la tablette. À son arrivée, il suffira de la brancher : elle retrouvera votre famille toute seule.'
-      : '<b>En attendant, ouvrez l\'appli Papote sur votre téléphone</b> avec le bouton ci-dessous : c\'est par elle que la famille envoie les photos et appelle. À son arrivée, il suffira de brancher la tablette : elle retrouvera votre famille toute seule.',
-    RIEN_A_INSTALLER,
+      ? '<b>Votre espace famille est déjà prêt.</b> Ouvrez l\'appli Papote avec cette adresse e-mail : vous pouvez dès maintenant donner le nom de votre proche, préparer les premières photos et inviter la famille. À son arrivée, la tablette se branche et retrouve votre famille toute seule.'
+      : '<b>En attendant, ouvrez l\'appli Papote sur votre téléphone</b> : c\'est par elle que la famille envoie les photos et appelle. À son arrivée, la tablette se branche et retrouve votre famille toute seule.',
     CGV_JOINTES,
   ], famille ? { texte: 'Ouvrir mon espace famille', lien: famille } : { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
 }
@@ -324,24 +323,24 @@ function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, rep
 function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
   const textes = {
     1: ['Votre commande Papote vous attend', [
-      'Vous avez commencé une commande Papote sans la terminer. Elle est gardée de côté : vous pouvez la reprendre en un clic, avec le même point relais.',
+      '<b>Votre commande est gardée de côté.</b> Vous la reprenez en un clic, avec le même point relais.',
       { fiche: FICHE_OFFRE },
       RIEN_A_INSTALLER,
     ]],
     2: ['Une question avant de vous décider ?', [
-      'Vous avez regardé Papote hier. Si quelque chose vous fait hésiter, répondez simplement à cet e-mail : nous vous répondons personnellement.',
-      'La tablette arrive prête à brancher, votre proche n\'a rien à manipuler, et vous avez 30 jours après la réception pour changer d\'avis : rien à payer et les 60 € remboursés.',
+      '<b>Quelque chose vous fait hésiter ?</b> Répondez simplement à cet e-mail : nous vous répondons personnellement.',
+      'Vous avez 30 jours après la réception pour changer d\'avis : rien à payer et les 60 € remboursés.',
     ]],
     3: ['Dernier rappel pour votre commande Papote', [
-      'Votre commande Papote est toujours prête. C\'est notre dernier rappel : nous ne vous écrirons plus à ce sujet.',
-      { fiche: FICHE_OFFRE },
-      RIEN_A_INSTALLER,
+      '<b>Votre commande est toujours prête.</b> C\'est notre dernier rappel : nous ne vous écrirons plus à ce sujet.',
+      RAPPEL_PRIX,
     ]],
   };
   const [titre, corps] = textes[etape] || textes[1];
   return message(titre, [bonjour(nom), ...corps], { texte: 'Reprendre ma commande', lien }, {
     desinscription: desinscription || '',
     pourquoi: 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.',
+    sansQuestion: etape === 2, // la question est déjà posée dans le texte
   });
 }
 
@@ -349,10 +348,9 @@ function relancePanier({ etape = 1, nom, formule, lien, desinscription }) {
 function listeAttenteConfirmee({ prenom, telephone, desinscription }) {
   return message('C\'est noté : nous vous prévenons dès qu\'une tablette est prête', [
     bonjour(prenom),
-    'Toutes nos tablettes sont parties, nous en préparons de nouvelles. Dès que l\'une d\'elles est prête pour vous, vous recevez un e-mail avec le lien pour commander.',
-    telephone ? `Vous nous avez aussi laissé le <b>${echapper(telephone)}</b> : nous vous appelons directement si c\'est plus simple.` : null,
-    { fiche: FICHE_OFFRE },
-    'En attendant, votre proche n\'a rien à préparer : la tablette arrive configurée, prête à brancher.',
+    '<b>Vous recevrez un e-mail avec le lien pour commander</b> dès qu\'une tablette est prête pour vous.',
+    telephone ? `Nous avons aussi votre numéro, le <b>${echapper(telephone)}</b> : nous vous appelons si c\'est plus simple.` : null,
+    RAPPEL_PRIX,
   ], { texte: 'Découvrir Papote', lien: SITE }, {
     desinscription: desinscription || '',
     pourquoi: 'Vous recevez cet e-mail car vous avez demandé à être prévenu dès qu\'une tablette Papote est disponible.',
@@ -363,10 +361,9 @@ function listeAttenteConfirmee({ prenom, telephone, desinscription }) {
 function lancement({ prenom, desinscription }) {
   return message('Papote est disponible : vous pouvez commander', [
     bonjour(prenom),
-    'Vous nous aviez demandé de vous prévenir : c\'est le moment, les commandes Papote sont ouvertes.',
-    'La tablette arrive prête à brancher, en point relais près de chez vous ou de chez votre proche. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle, et l\'appel vidéo démarre dès que votre proche regarde l\'écran.',
+    '<b>Les commandes sont ouvertes.</b> Les premières commandes partent en premier.',
+    'La tablette arrive prête à brancher. Votre proche n\'a rien à régler : c\'est la famille qui envoie les photos et qui appelle.',
     { fiche: FICHE_OFFRE },
-    'Nous préparons les tablettes par petits lots : les premières commandes partent en premier.',
   ], { texte: 'Commander ma tablette', lien: `${SITE}/commande.html` }, {
     desinscription: desinscription || '',
     pourquoi: 'Vous recevez cet e-mail car vous vous êtes inscrit à la liste d\'attente de Papote.',
@@ -381,8 +378,8 @@ function nouvelleCommande({ nom, email, telephone, code, relais, proche, formule
     return message(`${reprise ? 'Abonnement repris' : 'Nouvel abonnement'} ${code || ''}`.trim(), [
       { fiche: [...client, ['Offre', OFFRE]] },
       reprise
-        ? 'Abonnement repris après une résiliation, tablette restée chez le proche : rien à envoyer, pas de mise en service. Premier prélèvement dans 30 jours.'
-        : 'Pris dans l\'appli, tablette déjà installée chez le proche : rien à envoyer. Premier prélèvement dans 30 jours.',
+        ? '<b>Rien à envoyer, pas de mise en service.</b> Abonnement repris après une résiliation, tablette restée chez le proche. Premier prélèvement dans 30 jours.'
+        : '<b>Rien à envoyer.</b> Abonnement pris dans l\'appli, tablette déjà installée chez le proche. Premier prélèvement dans 30 jours.',
     ], bouton, { interne: true });
   }
   const couverture = proche ? (/^commune:/.test(proche.couverture4g || '')
@@ -399,7 +396,7 @@ function nouvelleCommande({ nom, email, telephone, code, relais, proche, formule
       proche ? ['Chez le proche', `${echapper(proche.adresse)}<br>4G Bouygues ${couverture} (carte ARCEP)`] : null,
       ['Stock', { stock: 'tablette en stock', precommande: 'plus de tablette en stock, à préparer vite (expédition promise sous 3 à 5 jours ouvrés)', long: 'plus de 10 commandes au-delà du stock, à préparer vite (expédition promise sous 3 à 5 jours ouvrés)' }[delai] || 'tablette en stock'],
     ] },
-    'Tablette à préparer, puis à marquer « envoyée » dans le tableau de bord.',
+    '<b>Tablette à préparer</b>, puis à marquer « envoyée » dans l\'admin.',
   ], bouton, { interne: true });
 }
 
@@ -408,8 +405,8 @@ function rappelJumelage({ nom, numero, code, preparee }) {
   return message(titre, [
     bonjour(nom),
     numero === 1
-      ? 'Votre tablette Papote devrait être arrivée au point relais, mais elle n\'est pas encore reliée à votre famille. Il suffit de la brancher :'
-      : 'Votre tablette Papote n\'est toujours pas reliée à votre famille. Si quelque chose bloque, répondez à cet e-mail : nous vous aidons. Pour rappel :',
+      ? '<b>Votre tablette n\'est pas encore branchée.</b> Elle devrait être arrivée au point relais. Trois gestes :'
+      : '<b>Votre tablette n\'est toujours pas branchée.</b> Si quelque chose bloque, répondez à cet e-mail : nous vous aidons. Pour rappel :',
     gestes(code, preparee),
   ], { texte: 'Ouvrir l\'appli Papote', lien: lienAppli(code) });
 }
@@ -437,7 +434,7 @@ function invitation({ prenom, tablette, lien, email }) {
 function lienConnexion({ email, lien }) {
   return message('Votre lien pour ouvrir Papote', [
     'Bonjour,',
-    `Vous avez demandé à ouvrir Papote avec l'adresse <b>${echapper(email)}</b>. Touchez le bouton ci-dessous : pas de mot de passe à retenir.`,
+    `<b>Touchez le bouton ci-dessous</b> pour ouvrir Papote avec l'adresse <b>${echapper(email)}</b>. Pas de mot de passe à retenir.`,
     { encadre: 'Ce lien marche une seule fois, pendant 1 heure, sur ce téléphone.' },
   ], { texte: 'Ouvrir Papote', lien }, {
     apercu: 'Touchez le bouton pour ouvrir Papote : pas de mot de passe à retenir.',
@@ -452,9 +449,8 @@ function lienConnexion({ email, lien }) {
 function demandeRejoindre({ prenom, email, famille }) {
   return message(`${prenom || 'Quelqu\'un'} veut rejoindre la famille`, [
     'Bonjour,',
-    `Quelqu'un demande à rejoindre la famille ${deOuD(famille || 'votre proche')}<b>${echapper(famille || 'votre proche')}</b> sur Papote :`,
+    `<b>Acceptez ou refusez dans l'appli.</b> D'ici là, cette personne ne peut rien envoyer à la tablette ${deOuD(famille || 'votre proche')}${echapper(famille || 'votre proche')}.`,
     { fiche: [['Prénom', echapper(prenom || 'non indiqué')], ['E-mail', email ? echapper(email) : null]] },
-    'Ouvrez l\'appli pour accepter ou refuser. Tant que vous n\'avez pas accepté, cette personne ne peut rien envoyer à la tablette.',
   ], { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
 }
 
@@ -462,8 +458,7 @@ function demandeRejoindre({ prenom, email, famille }) {
 function demandeAcceptee({ prenom, famille, lien }) {
   return message(`Bienvenue dans la famille ${deOuD(famille || 'votre proche')}${famille || 'votre proche'}`, [
     bonjour(prenom),
-    `Votre demande est acceptée : vous faites maintenant partie de la famille ${deOuD(famille || 'votre proche')}<b>${echapper(famille || 'votre proche')}</b> sur Papote.`,
-    'Vous pouvez dès maintenant envoyer une photo ou un message à la tablette, et l\'appeler en vidéo : la tablette sonne et décroche dès que votre proche regarde l\'écran.',
+    '<b>Votre demande est acceptée.</b> Vous pouvez dès maintenant envoyer une photo ou un message à la tablette, et appeler en vidéo : elle décroche dès que votre proche regarde l\'écran.',
   ], { texte: 'Ouvrir l\'appli Papote', lien: lien || APPLI });
 }
 
@@ -472,14 +467,13 @@ function installationFinie({ prenom, famille, lien }) {
   const qui = echapper(famille || 'votre proche');
   return message(`La tablette ${deOuD(famille || 'votre proche')}${famille || 'votre proche'} est prête`, [
     bonjour(prenom),
-    `C'est fait : la tablette ${deOuD(qui)}<b>${qui}</b> est reliée à votre famille. Gardez cet e-mail, il résume l'essentiel.`,
+    `<b>C'est fait : la tablette ${deOuD(qui)}${qui} est reliée à votre famille.</b>`,
     { etapes: [
-      `<b>Envoyer une photo ou un message</b> : dans l'appli, touchez « Photos » ou « Messages ». La tablette l'affiche tout de suite, avec un petit carillon.`,
-      `<b>Appeler en vidéo</b> : touchez « Appel vidéo ». La tablette sonne ; dès que ${qui} regarde l'écran, l'appel démarre tout seul (ou elle touche « Décrocher »).`,
+      '<b>Envoyer une photo ou un message</b> : touchez « Photos » ou « Messages ». La tablette l\'affiche tout de suite.',
+      `<b>Appeler en vidéo</b> : touchez « Appel vidéo ». La tablette sonne ; l'appel démarre dès que ${qui} regarde l'écran ou touche « Décrocher ».`,
       '<b>Inviter la famille</b> : bouton « Inviter », en haut de l\'accueil. Chacun reçoit un lien et utilise l\'appli Papote sur son téléphone.',
-      `<b>Rester rassuré</b> : si la tablette est débranchée ou si ${qui} appuie sur SOS, vous êtes prévenu sur votre téléphone.`,
+      `<b>Être prévenu</b> : si la tablette est débranchée ou si ${qui} appuie sur SOS, votre téléphone vous prévient.`,
     ] },
-    'Si quelque chose ne marche pas comme prévu, répondez à cet e-mail : nous vous aidons.',
   ], { texte: 'Ouvrir l\'appli Papote', lien: lien || APPLI });
 }
 
@@ -489,14 +483,13 @@ function appelSansTelephone({ nom, sos, lien }) {
   return message(sos ? `SOS : ${nom || 'votre proche'} a appuyé sur SOS, aucun téléphone n'a sonné` : `${nom || 'Votre proche'} a appelé, aucun téléphone n'a sonné`, [
     'Bonjour,',
     sos
-      ? { encadre: `<b>${qui} a appuyé sur le bouton SOS</b> de sa tablette, mais aucun téléphone de la famille n'a pu sonner. Rappelez votre proche dès que possible. En cas d'urgence : 15 ou 112.` }
-      : `${qui} a appelé depuis sa tablette, mais aucun téléphone de la famille n'a pu sonner.`,
+      ? { encadre: `<b>${qui} a appuyé sur le bouton SOS, mais aucun téléphone n'a sonné.</b> Rappelez votre proche dès que possible. En cas d'urgence : 15 ou 112.` }
+      : `<b>${qui} a appelé depuis sa tablette, mais aucun téléphone n'a sonné.</b>`,
     'Pour que les appels sonnent la prochaine fois :',
     { etapes: [
-      'Ouvrez l\'appli Papote sur votre téléphone.',
-      'Touchez Réglages, « Mon profil » puis, sous « Ce téléphone », activez « Notifications ».',
+      'Dans l\'appli Papote : Réglages, « Mon profil ». Sous « Ce téléphone », activez « Notifications ».',
       'Sur iPhone, ajoutez d\'abord l\'appli à l\'écran d\'accueil (bouton Partager, « Sur l\'écran d\'accueil ») : sinon, les notifications n\'arrivent pas.',
-      'Donnez votre numéro de portable dans l\'appli (Réglages, « Mon profil », « Mon numéro de portable ») : la tablette vous appellera alors comme un téléphone.',
+      'Ajoutez votre numéro de portable (« Mon profil », « Mon numéro de portable ») : la tablette vous appellera comme un téléphone.',
     ] },
   ], { texte: 'Ouvrir l\'appli Papote', lien });
 }
@@ -512,8 +505,7 @@ function sosSansProche({ nom, lien, le = Date.now() }) {
   return message(`SOS : ${nom || 'votre proche'} a appuyé sur SOS à ${heure}, personne n'a pu être appelé`, [
     'Bonjour,',
     { encadre: `<b>${qui} a appuyé sur le bouton SOS</b> de sa tablette, ${jour} à <b>${heure}</b>. Appelez votre proche dès que possible.<br><b>S'il y a un danger, appelez tout de suite le 15 (Samu) ou le 112.</b>` },
-    'Personne de la famille n\'est encore entré dans l\'appli Papote : la tablette n\'a donc pu appeler personne.',
-    'Pour que la tablette puisse vous appeler la prochaine fois, ouvrez l\'appli Papote et entrez dans la famille avec l\'adresse e-mail de la commande.',
+    'Personne de la famille n\'est encore entré dans l\'appli Papote : la tablette n\'a pu appeler personne. Pour qu\'elle puisse vous appeler la prochaine fois, ouvrez l\'appli et entrez avec l\'adresse e-mail de la commande.',
   ], { texte: 'Ouvrir l\'appli Papote', lien });
 }
 
@@ -523,13 +515,13 @@ function tabletteSansProche({ nom, lien, client }) {
   const qui = nom && nom !== 'Votre proche' ? echapper(nom) : 'votre proche';
   return message('La tablette est branchée : envoyez la première photo', [
     bonjour(client),
-    `La tablette ${deOuD(qui)}${qui} est branchée et attend la famille, mais personne n'est encore entré dans l'appli Papote. Tant que personne n'y est, aucune photo n'arrive et la tablette ne peut appeler personne.`,
+    `<b>La tablette ${deOuD(qui)}${qui} est branchée, mais personne n'est encore entré dans l'appli.</b> Tant que personne n'y est, aucune photo n'arrive et elle ne peut appeler personne.`,
     { etapes: [
       'Ouvrez l\'appli Papote avec le bouton ci-dessous.',
       'Connectez-vous avec l\'adresse e-mail de la commande.',
       'Envoyez une première photo : elle s\'affiche tout de suite sur la tablette.',
     ] },
-    `Pensez aussi à inviter le reste de la famille : bouton « Inviter », en haut de l'accueil de l'appli. Chacun reçoit un lien et utilise l'appli Papote sur son téléphone : plus vous êtes nombreux, plus ${qui} reçoit de photos et d'appels.`,
+    'Invitez ensuite la famille : bouton « Inviter », en haut de l\'accueil.',
   ], { texte: 'Ouvrir l\'appli Papote', lien });
 }
 
@@ -539,15 +531,12 @@ function tabletteSansProche({ nom, lien, client }) {
 function forfaitPresqueEpuise({ nom, type, fin, lien }) {
   const qui = nom || 'votre proche';
   const date = new Date(fin).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' }).replace(/(^| )1 /, '$11er ');
-  const suite = type === 'bloque'
-    ? `internet sera coupé jusqu'au <b>${date}</b>`
-    : `jusqu'au <b>${date}</b> les appels vidéo seront plus lents`;
   return message(`La tablette ${deOuD(qui)}${qui} a presque utilisé son forfait internet du mois`, [
     'Bonjour,',
-    `La tablette ${deOuD(qui)}<b>${echapper(qui)}</b> a presque utilisé son forfait internet du mois : ${suite} ; branchez-la au Wi-Fi si vous pouvez.`,
     type === 'bloque'
-      ? `Rien n'est cassé : le forfait repart le ${date} et internet revient tout seul. Vous n'avez rien d'autre à faire.`
-      : `Rien n'est cassé : photos et messages continuent d'arriver, et le forfait repart le ${date}. Vous n'avez rien d'autre à faire.`,
+      ? `<b>Jusqu'au ${date}, internet sera coupé sur la tablette</b>, sauf si elle est branchée au Wi-Fi.`
+      : `<b>Jusqu'au ${date}, les appels vidéo seront plus lents.</b> Photos et messages continuent d'arriver.`,
+    `Rien n'est cassé : le forfait repart tout seul le ${date}. Si vous pouvez, branchez la tablette au Wi-Fi.`,
   ], { texte: 'Ouvrir l\'appli Papote', lien: lien || APPLI });
 }
 
@@ -560,13 +549,13 @@ const LIEN_ABONNEMENT = `${APPLI}/?abonnement=1`;
 function paiementEchoue({ nom, famille, pauseLe, lien = LIEN_ABONNEMENT }) {
   return message('Le paiement de Papote n\'a pas abouti', [
     bonjour(nom),
-    `Le prélèvement de l'abonnement Papote${famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : ''} a été refusé par la banque (carte expirée, compte insuffisant, prélèvement contesté…).`,
+    `<b>La banque a refusé le prélèvement de l'abonnement Papote${famille ? ` ${deOuD(famille)}${echapper(famille)}` : ''}.</b>`,
     { encadre: `Tout continue de fonctionner pour l'instant. Sans règlement, la tablette se mettra en pause le <b>${dateEnClair(pauseLe)}</b>.` },
     'Pour régler :',
     { etapes: [
-      'Ouvrez l\'appli Papote, touchez Réglages puis « Mon profil ».',
+      'Dans l\'appli Papote : Réglages, « Mon profil ».',
       'Sous Abonnement, touchez « Régler le paiement ».',
-      'Changez de carte ou de compte bancaire si besoin : le prélèvement est refait automatiquement.',
+      'Changez de carte ou de compte si besoin : le prélèvement est refait tout seul.',
     ] },
   ], { texte: 'Régler le paiement', lien });
 }
@@ -575,9 +564,9 @@ function paiementEchoue({ nom, famille, pauseLe, lien = LIEN_ABONNEMENT }) {
 function papoteEnPause({ nom, famille, lien = LIEN_ABONNEMENT }) {
   return message('Papote est en pause', [
     bonjour(nom),
-    `L'abonnement Papote${famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : ''} n'a pas pu être prélevé, et le délai de sept jours est passé : la tablette est en pause. Elle n'affiche plus les photos ni les messages, et les appels sont coupés. Seul le bouton SOS continue de fonctionner.`,
-    { encadre: 'Dès que le paiement est réglé, tout revient automatiquement, sans rien toucher à la tablette.' },
-    'Pour régler : ouvrez l\'appli Papote, touchez Réglages, « Mon profil » puis, sous Abonnement, « Régler le paiement ».',
+    `<b>La tablette${famille ? ` ${deOuD(famille)}${echapper(famille)}` : ''} est en pause : plus de photos, de messages ni d'appels.</b> Seul le bouton SOS fonctionne. Le prélèvement de l'abonnement est refusé depuis sept jours.`,
+    { encadre: 'Dès que le paiement est réglé, tout revient tout seul, sans toucher à la tablette.' },
+    'Pour régler : dans l\'appli Papote, Réglages, « Mon profil » puis, sous Abonnement, « Régler le paiement ».',
   ], { texte: 'Régler le paiement', lien });
 }
 
@@ -585,8 +574,7 @@ function papoteEnPause({ nom, famille, lien = LIEN_ABONNEMENT }) {
 function pausePrelevements({ nom, famille, jusqua }) {
   return message('Vos prélèvements Papote sont en pause', [
     bonjour(nom),
-    `Comme convenu, les prélèvements de l'abonnement Papote${famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : ''} sont en pause : rien ne sera prélevé pendant cette période.`,
-    { encadre: `Les prélèvements reprennent le <b>${dateEnClair(jusqua)}</b>. La tablette continue de fonctionner normalement d'ici là.` },
+    `<b>Rien ne sera prélevé jusqu'au ${dateEnClair(jusqua)}</b> pour l'abonnement Papote${famille ? ` ${deOuD(famille)}${echapper(famille)}` : ''}. La tablette continue de fonctionner normalement.`,
     'Si la situation change avant cette date, répondez à cet e-mail : nous adaptons.',
   ], { texte: 'Ouvrir l\'appli Papote', lien: `${APPLI}/?abonnement=1` });
 }
@@ -594,26 +582,24 @@ function pausePrelevements({ nom, famille, jusqua }) {
 function reprisePrelevements({ nom, famille }) {
   return message('Vos prélèvements Papote reprennent', [
     bonjour(nom),
-    `La pause de l'abonnement Papote${famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : ''} est terminée : les prélèvements reprennent normalement, ${OFFRE}, sans engagement.`,
-    'Rien à faire de votre côté. Nous espérons que tout va bien.',
+    `<b>La pause de l'abonnement Papote${famille ? ` ${deOuD(famille)}${echapper(famille)}` : ''} est terminée.</b> Les prélèvements reprennent : ${OFFRE}, sans engagement. Rien à faire de votre côté.`,
+    'Nous espérons que tout va bien.',
   ], { texte: 'Ouvrir l\'appli Papote', lien: `${APPLI}/?abonnement=1` });
 }
 
 // Passer de la carte au prélèvement SEPA (Tanguy, 10/11) : 15 jours après le premier prélèvement mensuel par carte,
 // puis une seule relance 30 jours plus tard (relance: true). Le geste se fait dans l'appli : encart doré de l'accueil.
 function passerAuSepa({ nom, famille, relance, lien }) {
-  const de = famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : '';
+  const de = famille ? ` ${deOuD(famille)}${echapper(famille)}` : '';
   return message(relance ? 'Un petit rappel : le prélèvement pour Papote' : 'Plus jamais de souci de carte pour Papote', [
     bonjour(nom),
     relance
-      ? `Il y a un mois, nous vous proposions de régler l'abonnement Papote${de} par prélèvement sur votre compte bancaire plutôt que par carte. Il est encore temps, en une minute.`
-      : `L'abonnement Papote${de} est réglé par carte bancaire. Une carte expire, se perd ou se renouvelle : le paiement échoue alors, et la tablette risque de se mettre en pause.`,
-    { encadre: 'Avec le prélèvement sur votre compte (SEPA), il n\'y a plus rien à mettre à jour, et plus de pause à cause d\'une carte expirée. Même montant, même date, toujours sans engagement.' },
-    'Pour passer au prélèvement :',
+      ? `Il est encore temps de régler l'abonnement Papote${de} par prélèvement plutôt que par carte : une minute suffit.`
+      : `L'abonnement Papote${de} est réglé par carte. Une carte expire ou se perd : le paiement échoue, et la tablette risque de se mettre en pause.`,
+    { encadre: '<b>Avec le prélèvement sur votre compte (SEPA), plus rien à mettre à jour.</b> Même montant, même date, toujours sans engagement.' },
     { etapes: [
       'Ouvrez l\'appli Papote : l\'encart doré est sur l\'accueil.',
       'Touchez « Passer au prélèvement » et entrez votre IBAN (il est sur votre RIB).',
-      'C\'est tout : rien n\'est prélevé en plus, les prochains mois partent de votre compte.',
     ] },
   ], { texte: 'Ouvrir l\'appli Papote', lien: lien || APPLI });
 }
@@ -623,12 +609,12 @@ function sepaRefuse({ nom, email, papote, commande }) {
   if (papote) {
     return message('Commande annulée : prélèvement SEPA refusé', [
       { fiche: [['Client', echapper(nom || '?')], ['E-mail', echapper(email || 'sans e-mail')]] },
-      'La banque a refusé le prélèvement de la mise en service. La commande et l\'abonnement sont annulés : ne pas envoyer la tablette.',
+      '<b>Ne pas envoyer la tablette.</b> La banque a refusé le prélèvement de la mise en service : la commande et l\'abonnement sont annulés.',
     ], commande ? { texte: 'Ouvrir la commande', lien: lienCommandeAdmin(commande) } : null, { interne: true });
   }
   return message('Votre paiement Papote n\'a pas abouti', [
     bonjour(nom),
-    'Votre banque a refusé le prélèvement SEPA de votre commande Papote. La commande est donc annulée et rien ne vous a été prélevé.',
+    '<b>Votre banque a refusé le prélèvement : la commande est annulée et rien ne vous a été prélevé.</b>',
     'Vous pouvez recommander quand vous voulez, par carte bancaire ou avec un autre compte.',
   ], { texte: 'Commander à nouveau', lien: `${SITE}/commande.html` });
 }
@@ -638,9 +624,9 @@ function sepaRefuse({ nom, email, papote, commande }) {
 const CARTON = 'Mettez la tablette, son support, son chargeur et son câble dans un carton';
 const CARTON_ETAPE = `${CARTON}. Inutile d'effacer la tablette : nous nous en chargeons.`;
 const ETAPES_RETOUR_QR = [
-  'Dans l\'appli Papote, Réglages, « Mon profil », Abonnement, touchez « Je renvoie la tablette » : un QR code prépayé s\'affiche.',
+  'Dans l\'appli Papote : Réglages, « Mon profil », Abonnement, « Je renvoie la tablette ». Un QR code prépayé s\'affiche.',
   CARTON_ETAPE,
-  'Déposez le colis dans n\'importe quel point relais Mondial Relay en montrant le QR code sur votre téléphone. Rien à payer, rien à imprimer.',
+  'Déposez le colis dans un point relais Mondial Relay en montrant le QR code. Rien à payer, rien à imprimer.',
 ];
 const APPLI_RETOUR = { texte: 'Ouvrir l\'appli Papote', lien: LIEN_ABONNEMENT };
 const MANQUANTS = 'Chaque élément manquant est facturé : tablette 130 €, chargeur et câble 10 €.';
@@ -664,8 +650,8 @@ function retourTablette({ nom, avant, retractation, montant, deces }) {
   return message('Comment nous rendre la tablette Papote', [
     bonjour(nom),
     retractation != null
-      ? 'Votre commande est bien annulée. Il reste à nous renvoyer la tablette, en trois gestes :'
-      : 'Votre abonnement Papote est terminé. Merci de nous avoir fait confiance ! La tablette est prêtée : il reste à nous la renvoyer, en trois gestes :',
+      ? '<b>Votre commande est annulée.</b> Il reste à nous renvoyer la tablette, en trois gestes :'
+      : 'Votre abonnement est terminé, merci de votre confiance. <b>Il reste à nous renvoyer la tablette prêtée</b>, en trois gestes :',
     { etapes: ETAPES_RETOUR_QR },
     { encadre: `Date limite : <b>${dateEnClair(avant)}</b>.${retractation != null && retractation > 0
       ? ` Dès que la tablette nous parvient, nous vous remboursons <b>${euros(retractation)}</b> sur votre compte.`
@@ -679,15 +665,16 @@ function retourTablette({ nom, avant, retractation, montant, deces }) {
 // Demandée par un responsable qui ne paie pas (Tanguy, 18/11) : par = son prénom dans l'e-mail du payeur ; copie = l'e-mail
 // que reçoit ce responsable (nom = son prénom, payeur = le nom de la commande).
 function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, deces, impaye, montant, par = null, copie = false, payeur = null }) {
+  const de = famille ? ` ${deOuD(famille)}${echapper(famille)}` : '';
   // Arrêt automatique après 30 jours de pause pour impayé (Tanguy, 11/11) : plus rien ne marche déjà, pas de
   // dernier mois, et le retour de la tablette est à faire.
   if (impaye) {
     return message('Papote arrête votre abonnement', [
       bonjour(nom),
-      `Le paiement de l'abonnement Papote${famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : ''} n'a pas pu être fait, et Papote est en pause depuis plus de 30 jours. Nous arrêtons donc l'abonnement : il prend fin le <b>${dateEnClair(le)}</b>, et aucun nouveau mois ne sera prélevé.`,
-      'Les mois déjà dus restent à régler.',
+      `<b>L'abonnement Papote${de} prend fin le ${dateEnClair(le)}</b> : le paiement n'a pas pu être fait, et Papote est en pause depuis plus de 30 jours.`,
+      'Aucun nouveau mois ne sera prélevé. Les mois déjà dus restent à régler.',
       tablettePretee
-        ? { encadre: `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Dans l'appli Papote, Réglages, « Mon profil », Abonnement, touchez « Je renvoie la tablette ». Sans retour dans les 30 jours qui suivent la fin de l'abonnement, le matériel prêté (${euros(montant)}) sera prélevé.` }
+        ? { encadre: `La tablette est à nous renvoyer, sans frais : dans l'appli Papote, Réglages, « Mon profil », Abonnement, « Je renvoie la tablette ». Sans retour dans les 30 jours qui suivent la fin de l'abonnement, le matériel prêté (${euros(montant)}) sera prélevé.` }
         : null,
     ].filter(Boolean), APPLI_RETOUR);
   }
@@ -705,17 +692,13 @@ function resiliationEnregistree({ nom, famille, le, tablettePretee, parPapote, d
   }
   return message(parPapote ? 'Papote arrête votre abonnement' : 'Votre résiliation Papote est enregistrée', [
     bonjour(nom),
-    parPapote
-      ? `Nous arrêtons l'abonnement Papote${famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : ''}.`
-      : par
-        ? `<b>${echapper(par)}</b>, responsable de la famille, a demandé dans l'appli la résiliation de l'abonnement Papote${famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : ''}. Elle est bien enregistrée.`
-        : `Votre demande de résiliation de l'abonnement Papote${famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : ''} est bien enregistrée.`,
+    par && !parPapote ? `<b>${echapper(par)}</b>, responsable de la famille, a demandé dans l'appli la résiliation de l'abonnement Papote${de}.` : null,
+    `<b>L'abonnement Papote${de} s'arrête le ${dateEnClair(le)}.</b> Tout fonctionne jusque-là ; ce dernier mois est prélevé à l'arrêt, puis plus rien.`,
     copie && !parPapote ? copieAuPayeur(payeur) : null,
-    `Tout continue de fonctionner jusqu'au <b>${dateEnClair(le)}</b>. Ce dernier mois est prélevé à l'arrêt, puis plus rien.`,
     tablettePretee
-      ? `La tablette est à nous renvoyer, sans frais : un QR code prépayé, rien à imprimer. Vous pouvez la renvoyer dès maintenant : dans l'appli Papote, Réglages, « Mon profil », Abonnement, touchez « Je renvoie la tablette ». Sinon, nous enverrons le mode d'emploi par e-mail ${copie ? 'à la personne qui paie l\'abonnement' : 'à cette adresse'} le ${dateEnClair(le)}.`
+      ? `La tablette est à nous renvoyer, sans frais. Dès maintenant si vous voulez : dans l'appli Papote, Réglages, « Mon profil », Abonnement, « Je renvoie la tablette ». Sinon, nous enverrons le mode d'emploi par e-mail ${copie ? 'à la personne qui paie l\'abonnement' : 'à cette adresse'} le ${dateEnClair(le)}.`
       : 'La tablette est à vous : vous n\'avez rien à renvoyer.',
-    parPapote ? '' : 'Vous changez d\'avis d\'ici là ? Dans l\'appli Papote, Réglages, « Mon profil », Abonnement, touchez « Garder mon abonnement ».',
+    parPapote ? '' : 'Vous changez d\'avis d\'ici là ? Dans l\'appli, sous Abonnement, touchez « Garder mon abonnement ».',
   ].filter(Boolean), APPLI_RETOUR);
 }
 
@@ -726,12 +709,12 @@ function copieAuPayeur(payeur) {
 
 // Résiliation annulée (« Garder mon abonnement ») : rien ne change. par / copie / payeur : comme resiliationEnregistree.
 function resiliationAnnulee({ nom, famille, par = null, copie = false, payeur = null }) {
-  const de = famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : '';
+  const de = famille ? ` ${deOuD(famille)}${echapper(famille)}` : '';
   return message('Votre abonnement Papote continue', [
     bonjour(nom),
     par
-      ? `<b>${echapper(par)}</b>, responsable de la famille, a annulé dans l'appli la résiliation de l'abonnement Papote${de} : tout continue comme avant, sans rien à faire.`
-      : `La résiliation de l'abonnement Papote${de} est annulée : tout continue comme avant, sans rien à faire.`,
+      ? `<b>${echapper(par)}</b>, responsable de la famille, a annulé dans l'appli la résiliation de l'abonnement Papote${de}. <b>Tout continue comme avant, sans rien à faire.</b>`
+      : `<b>La résiliation de l'abonnement Papote${de} est annulée.</b> Tout continue comme avant, sans rien à faire.`,
     copie ? copieAuPayeur(payeur) : null,
   ], APPLI_RETOUR);
 }
@@ -748,10 +731,10 @@ function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant, pre
   if (qr) {
     return message('Votre QR code pour nous rendre la tablette', [
       bonjour(nom),
-      'Voici le QR code prépayé pour nous renvoyer la tablette : vous n\'avez rien à payer. Il est aussi dans l\'appli Papote, Réglages, « Mon profil », Abonnement.',
+      '<b>Voici le QR code prépayé : rien à payer, rien à imprimer.</b> Il est aussi dans l\'appli Papote, Réglages, « Mon profil », Abonnement.',
       { etapes: [
         CARTON_ETAPE,
-        'Déposez le colis dans n\'importe quel point relais Mondial Relay en montrant ce QR code sur votre téléphone (pas besoin d\'imprimer).',
+        'Déposez le colis dans un point relais Mondial Relay en montrant ce QR code sur votre téléphone.',
       ] },
       avant && !preleve ? { encadre: `Date limite : <b>${dateEnClair(avant)}</b>.${rembourse ? ` ${rembourse}` : ''}` } : (rembourse || null),
     ], { texte: 'Afficher le QR code', lien });
@@ -759,19 +742,19 @@ function etiquetteRetour({ nom, lien, qr, avant, fin, retractation, montant, pre
   return message(fin ? 'Comment nous rendre la tablette Papote' : 'Votre étiquette de retour Papote', [
     bonjour(nom),
     fin ? (retractation != null
-      ? 'Votre commande est bien annulée. Il reste à nous renvoyer la tablette.'
-      : 'Votre abonnement Papote est terminé. Merci de nous avoir fait confiance ! La tablette est prêtée : il reste à nous la renvoyer.') : null,
-    `Voici l'étiquette prépayée pour nous renvoyer ${fin || panne ? 'la tablette' : 'l\'élément à remplacer'} : vous n'avez rien à payer. Imprimez-la avec le bouton ci-dessous (un point relais peut aussi l'imprimer pour vous si vous montrez cet e-mail).`,
+      ? '<b>Votre commande est annulée.</b> Il reste à nous renvoyer la tablette.'
+      : 'Votre abonnement est terminé, merci de votre confiance. <b>Il reste à nous renvoyer la tablette prêtée.</b>') : null,
+    `${fin ? 'L\'étiquette est prépayée : rien à payer.' : `<b>Voici l'étiquette prépayée pour nous renvoyer ${panne ? 'la tablette' : 'l\'élément à remplacer'} : rien à payer.</b>`} Imprimez-la avec le bouton ci-dessous ; un point relais peut aussi l'imprimer si vous montrez cet e-mail.`,
     { etapes: fin ? [
       CARTON_ETAPE,
-      'Collez l\'étiquette dessus et déposez le colis dans n\'importe quel point relais Mondial Relay.',
+      'Collez l\'étiquette dessus et déposez le colis dans un point relais Mondial Relay.',
     ] : panne ? [
       CARTON_ETAPE,
-      'Collez l\'étiquette dessus et déposez le colis dans n\'importe quel point relais Mondial Relay.',
+      'Collez l\'étiquette dessus et déposez le colis dans un point relais Mondial Relay.',
       'Dès que la tablette en panne nous parvient, nous vous envoyons la nouvelle.',
     ] : [
       'Mettez l\'élément à remplacer dans un carton et collez l\'étiquette dessus.',
-      'Déposez le colis dans n\'importe quel point relais Mondial Relay.',
+      'Déposez le colis dans un point relais Mondial Relay.',
       'Gardez la tablette : elle continue de fonctionner.',
     ] },
     fin && avant && !preleve ? { encadre: `Date limite : <b>${dateEnClair(avant)}</b>.${rembourse ? ` ${rembourse}` : (montant ? ` Sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.` : '')}` } : (rembourse || null),
@@ -792,8 +775,7 @@ function rappelRestitution({ nom, avant, lien, qr, montant, deces }) {
   }
   return message('Pensez à nous rendre la tablette Papote', [
     bonjour(nom),
-    'Nous n\'avons pas encore reçu la tablette.',
-    { encadre: `Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.` },
+    { encadre: `<b>Nous n'avons pas encore reçu la tablette.</b> Déposez-la dans un point relais Mondial Relay avant le <b>${dateEnClair(avant)}</b> : sans retour à cette date, ${euros(montant)} seront prélevés sur votre compte.` },
     lien ? `Votre ${qr ? 'QR code' : 'étiquette'} prépayé${qr ? '' : 'e'} est disponible avec le bouton ci-dessous.` : 'Pour obtenir le QR code prépayé :',
     lien ? null : { etapes: ETAPES_RETOUR_QR },
     { petit: 'Si vous avez déjà déposé le colis, ne tenez pas compte de ce message.' },
@@ -806,11 +788,10 @@ function avantEffacement({ nom, famille, le, deces }) {
   return message(deces ? 'Les photos de la famille, à garder' : 'Vos photos Papote seront effacées le ' + dateEnClair(le), [
     bonjour(nom),
     deces ? 'Nous pensons toujours bien à vous et à votre famille, et vous renouvelons nos sincères condoléances.' : null,
-    `Comme prévu après l'arrêt de Papote, les photos, les vidéos et les messages de la famille${famille ? ` ${deOuD(famille)}<b>${echapper(famille)}</b>` : ''} seront effacés de nos serveurs le <b>${dateEnClair(le)}</b>.`,
-    'Pour les garder sur votre téléphone ou votre ordinateur :',
+    `<b>Les photos, les vidéos et les messages de la famille${famille ? ` ${deOuD(famille)}${echapper(famille)}` : ''} seront effacés le ${dateEnClair(le)}.</b> Pour les garder :`,
     { etapes: [
       'Ouvrez l\'appli Papote et touchez Photos.',
-      'Touchez « Tout télécharger » : un fichier avec les photos, les vidéos et les messages s\'enregistre.',
+      'Touchez « Tout télécharger » : tout s\'enregistre sur votre téléphone ou votre ordinateur.',
     ] },
     deces ? 'Si vous avez besoin de plus de temps, répondez simplement à cet e-mail : nous attendrons.'
       : 'Besoin de plus de temps ? Répondez à cet e-mail.',
@@ -823,14 +804,14 @@ function tabletteRecue({ nom, rembourse, manquants, montant, echec }) {
   const liste = manquants && manquants.length ? manquants.map(echapper).join(', ') : '';
   return message('Nous avons bien reçu la tablette', [
     bonjour(nom),
-    'La tablette Papote est bien revenue chez nous. Merci !',
+    '<b>La tablette est bien revenue chez nous. Merci !</b>',
     liste
       ? { encadre: `Il manquait dans le colis : <b>${liste}</b>.${echec
         ? ` Le prélèvement de ${euros(montant)} prévu pour cela n'a pas abouti : nous revenons vers vous.`
         : ` Comme prévu, <b>${euros(montant)}</b> ont été prélevés sur votre compte.`}` }
       : null,
     rembourse ? `Nous venons de vous rembourser <b>${euros(rembourse)}</b> : la somme apparaît sur votre compte sous 5 à 10 jours.`
-      : (liste ? 'À part cela, vous n\'avez plus rien à faire, et plus rien ne sera prélevé.' : 'Vous n\'avez plus rien à faire, et plus rien ne sera prélevé.'),
+      : (liste ? 'À part cela, plus rien ne sera prélevé.' : 'Vous n\'avez plus rien à faire, et plus rien ne sera prélevé.'),
   ]);
 }
 
@@ -838,9 +819,8 @@ function tabletteRecue({ nom, rembourse, manquants, montant, echec }) {
 function materielNonRendu({ nom, montant, avant }) {
   return message('Tablette non rendue : le matériel a été prélevé', [
     bonjour(nom),
-    `Nous n'avons pas reçu la tablette Papote avant le <b>${dateEnClair(avant)}</b>, comme annoncé dans nos précédents e-mails.`,
-    { encadre: `<b>${euros(montant)}</b> ont été prélevés sur votre compte pour le matériel prêté (tablette, chargeur et câble).` },
-    'Si le colis est en route ou si vous pensez qu\'il y a une erreur, répondez à cet e-mail : nous regardons tout de suite.',
+    { encadre: `<b>${euros(montant)} ont été prélevés sur votre compte</b> pour le matériel prêté (tablette, chargeur et câble) : nous n'avons pas reçu la tablette avant le ${dateEnClair(avant)}.` },
+    'Le colis est en route, ou vous pensez qu\'il y a une erreur ? Répondez à cet e-mail : nous regardons tout de suite.',
   ]);
 }
 
@@ -874,10 +854,10 @@ function remplacementPreleve({ nom, montant, raison }) {
   return message('Votre tablette Papote est remplacée', [
     bonjour(nom),
     raison === 'perte'
-      ? 'Une nouvelle tablette Papote part chez vous pour remplacer celle qui a été perdue ou volée.'
-      : 'Une nouvelle tablette Papote part chez vous pour remplacer celle qui est cassée.',
+      ? '<b>Une nouvelle tablette part chez vous</b> pour remplacer celle qui a été perdue ou volée.'
+      : '<b>Une nouvelle tablette part chez vous</b> pour remplacer celle qui est cassée.',
     // Vrai que la banque ait déjà payé ou non (prélèvement SEPA « en attente de la banque ») : jamais « ont été prélevés ».
-    { encadre: `Comme prévu dans nos conditions, le prélèvement de <b>${euros(montant)}</b> pour ${raison === 'perte' ? 'le matériel prêté' : 'la tablette cassée'} est lancé sur votre compte. Selon votre banque, il peut mettre quelques jours à apparaître.` },
+    { encadre: `Comme prévu dans nos conditions, le prélèvement de <b>${euros(montant)}</b> pour ${raison === 'perte' ? 'le matériel prêté' : 'la tablette cassée'} est lancé sur votre compte. Il peut mettre quelques jours à apparaître.` },
     raison === 'perte' ? null : 'Vous recevrez aussi un e-mail pour nous renvoyer l\'ancienne tablette, sans frais.',
   ].filter(Boolean));
 }
@@ -886,7 +866,7 @@ function remplacementPreleve({ nom, montant, raison }) {
 function commandeAnnulee({ nom, rembourse }) {
   return message('Votre commande Papote est annulée', [
     bonjour(nom),
-    'C\'est fait : la commande est annulée et la tablette ne partira pas.',
+    '<b>C\'est fait : la tablette ne partira pas.</b>',
     rembourse ? `Nous vous avons remboursé <b>${euros(rembourse)}</b> : la somme apparaît sur votre compte sous 5 à 10 jours.` : 'Rien ne vous a été prélevé.',
   ]);
 }
@@ -896,7 +876,7 @@ function commandeAnnulee({ nom, rembourse }) {
 function colisRevenu({ nom, rembourse }) {
   return message('Votre colis Papote nous est revenu', [
     bonjour(nom),
-    'Votre colis n\'a pas été retiré et nous est revenu.',
+    '<b>Votre colis n\'a pas été retiré et nous est revenu.</b>',
     rembourse
       ? `Nous vous remboursons ${rembourse === 6000 ? 'les ' : ''}<b>${euros(rembourse)}</b>.`
       : 'Il ne reste rien à vous rembourser.',
@@ -909,7 +889,7 @@ function colisRevenu({ nom, rembourse }) {
 function annulationAvantEnvoi({ nom, email, code, commande }) {
   return message(`Commande annulée ${code || ''}`.trim(), [
     { fiche: [['Client', echapper(nom || '?')], ['E-mail', echapper(email || 'sans e-mail')]] },
-    'Le client a annulé sa commande avant l\'envoi et a été remboursé automatiquement. Ne pas envoyer la tablette.',
+    '<b>Ne pas envoyer la tablette.</b> Le client a annulé avant l\'envoi et a été remboursé automatiquement.',
   ], commande ? { texte: 'Ouvrir la commande', lien: lienCommandeAdmin(commande) } : null, { interne: true });
 }
 
@@ -918,16 +898,19 @@ function resiliation({ nom, email, code, commande, retractation, suivi, lienSuiv
   const qui = nom || email || 'Un client';
   return message(`${qui} a ${retractation != null ? 'annulé sa commande' : 'résilié son abonnement'}${code ? ` (commande ${code})` : ''}`, [
     { fiche: [['Client', echapper(qui)], ['E-mail', email && nom ? echapper(email) : null], ['Commande', code ? echapper(code) : null]] },
-    `Le client a ${retractation != null ? 'annulé sa commande après l\'envoi' : 'résilié son abonnement'}.`,
     lienSuivi
-      ? `Le client a reçu le mode d'emploi et l'étiquette de retour. Suivi du colis de retour : ${lienHtml(lienSuivi, echapper(suivi || 'suivre le colis'))} (aussi sur la page de la commande).`
-      : 'Le client reçoit par e-mail le mode d\'emploi du retour. Le suivi du colis apparaîtra sur la page de la commande.',
+      ? `<b>Rien à faire pour l'instant.</b> Le client a reçu le mode d'emploi et l'étiquette de retour. Suivi du colis : ${lienHtml(lienSuivi, echapper(suivi || 'suivre le colis'))}.`
+      : '<b>Rien à faire pour l\'instant.</b> Le client reçoit le mode d\'emploi du retour ; le suivi du colis apparaîtra sur la page de la commande.',
   ], { texte: 'Ouvrir la commande', lien: lienCommandeAdmin(commande) }, { interne: true });
 }
 
 // Alerte à Papote (prélèvement refusé ou contesté…), avec le lien vers la commande dans l'admin.
 function alerteAdmin({ titre, detail, commande }) {
-  return message(titre, [echapper(detail)], commande
+  // detail : un texte, ou [ce qu'il faut faire ou retenir (en gras), puis les explications] (épuration du 27/11).
+  const blocs = Array.isArray(detail)
+    ? detail.filter(Boolean).map((t, i) => (i === 0 ? `<b>${echapper(t)}</b>` : echapper(t)))
+    : [echapper(detail)];
+  return message(titre, blocs, commande
     ? { texte: 'Ouvrir la commande', lien: lienCommandeAdmin(commande) } : null, { interne: true });
 }
 
@@ -941,16 +924,22 @@ function alerteForfait({ nom, famille, pourCent, conso, plafond, debut, fin, typ
   if (coupee) {
     return alerteAdmin({
       titre: `Tablette ${deOuD(nom || 'Mamie')}${nom || 'Mamie'} : internet sans doute coupé par le forfait`,
-      detail: `La tablette ${deOuD(qui)}${qui} avait utilisé ${pourCent} % de son forfait « internet coupé » et ne donne plus de nouvelles depuis plus de 2 heures : c'est sans doute l'opérateur qui a coupé internet au bout du forfait, pas une panne. Internet revient le ${jourMois(fin)} ; une recharge le rétablit plus tôt. ${utilise}`,
+      detail: [
+        `Ce n'est sans doute pas une panne : internet revient le ${jourMois(fin)}. Une recharge le rétablit plus tôt.`,
+        `La tablette ${deOuD(qui)}${qui} avait utilisé ${pourCent} % de son forfait « internet coupé » et ne donne plus de nouvelles depuis plus de 2 heures. ${utilise}`,
+      ],
       commande,
     });
   }
-  const auBout = type === 'bloque'
-    ? `Forfait « internet coupé » au bout : sans recharge, la tablette n'aura plus internet jusqu'au ${jourMois(fin)} (sauf en wifi).`
-    : `Forfait « débit réduit » au bout : les appels vidéo seront plus lents jusqu'au ${jourMois(fin)}.`;
   return alerteAdmin({
     titre: `Forfait SIM à ${seuil} % : tablette ${deOuD(nom || 'Mamie')}${nom || 'Mamie'}`,
-    detail: `La tablette ${deOuD(qui)}${qui} a utilisé ${pourCent} % de son forfait internet. ${utilise} ${auBout}${seuil >= 95 ? ' La famille est prévenue par e-mail (en journée).' : ''} Recharger ou augmenter le forfait si besoin : admin, Stock, cartes SIM.`,
+    detail: [
+      type === 'bloque'
+        ? `Au bout du forfait, la tablette n'aura plus internet jusqu'au ${jourMois(fin)} (sauf en Wi-Fi) : rechargez si besoin.`
+        : `Rien d'obligatoire : au bout du forfait, les appels vidéo seront seulement plus lents jusqu'au ${jourMois(fin)}.`,
+      `La tablette ${deOuD(qui)}${qui} a utilisé ${pourCent} % de son forfait internet. ${utilise}${seuil >= 95 ? ' La famille est prévenue par e-mail (en journée).' : ''}`,
+      'Pour recharger ou augmenter le forfait : admin, Stock, cartes SIM.',
+    ],
     commande,
   });
 }
@@ -966,16 +955,24 @@ function alerteSimHorsService({ nom, famille, ref, operateur, motif, hote, servi
   if (revenu) {
     return alerteAdmin({
       titre: `Carte SIM revenue : ${tablette}`,
-      detail: `${qui} a de nouveau ${motif === 'antennes' ? 'une antenne de son réseau' : 'du réseau mobile'}, après ${duree} (${cas} depuis le ${quand}). La ligne « À faire » est levée, rien d'autre à faire.`,
+      detail: [
+        'Rien à faire : le réseau est revenu.',
+        `${qui} a de nouveau ${motif === 'antennes' ? 'une antenne de son réseau' : 'du réseau mobile'}, après ${duree} (${cas} depuis le ${quand}).`,
+      ],
       commande,
     });
   }
-  const geste = motif === 'antennes'
-    ? `La tablette n'entend que des antennes d'autres réseaux : la carte ne peut pas s'y accrocher et redémarrer n'y change rien. Changer de carte SIM pour un opérateur présent chez le client (voir les antennes dans l'admin, page de la tablette).${service && service !== 'ok' ? ` Réseau mobile : ${service}.` : ''}`
-    : `Elle a déjà redémarré seule (au bout de 20 min) sans retrouver le réseau. Appeler le client : retirer puis remettre la carte SIM règle souvent le problème (T-003, 12/11) ; sinon, changer de carte.`;
   return alerteAdmin({
     titre: `Carte SIM ${motif === 'antennes' ? 'sans son réseau' : 'hors service'} depuis ${duree} : ${tablette}`,
-    detail: `${qui} est ${cas} depuis le ${quand}. Plus d'appels par la carte SIM ni d'internet mobile : la tablette ne passe plus que par le wifi, s'il y en a un. ${geste} La famille n'est pas prévenue. Un seul e-mail pour cette panne ; un autre quand le réseau revient.`,
+    detail: [
+      motif === 'antennes'
+        ? 'Changer la carte SIM pour un opérateur présent chez le client.'
+        : 'Appeler le client : retirer puis remettre la carte SIM règle souvent le problème. Sinon, changer de carte.',
+      motif === 'antennes'
+        ? `${qui} est ${cas} depuis le ${quand} : elle n'entend que les antennes d'autres réseaux, et redémarrer n'y change rien. Les antennes sont dans l'admin, page de la tablette.${service && service !== 'ok' ? ` Réseau mobile : ${service}.` : ''}`
+        : `${qui} est ${cas} depuis le ${quand}. Elle a déjà redémarré seule sans retrouver le réseau.`,
+      'En attendant, la tablette ne marche qu\'en Wi-Fi, s\'il y en a un. La famille n\'est pas prévenue.',
+    ],
     commande,
   });
 }
@@ -990,18 +987,27 @@ function alerteSimBloquee({ nom, famille, ref, code, depuis, duree, debloquee, c
   if (debloquee) {
     return alerteAdmin({
       titre: `Carte SIM débloquée : ${tablette}`,
-      detail: `${qui} lit de nouveau sa carte SIM, après ${duree} (bloquée depuis le ${quand} : ${quoi}). La ligne « À faire » est levée. Si le réseau mobile ne revient pas, l'alerte « hors service » prendra le relais au bout de 2 h.`,
+      detail: [
+        'Rien à faire : la carte SIM est débloquée.',
+        `${qui} lit de nouveau sa carte SIM, après ${duree} (bloquée depuis le ${quand} : ${quoi}).`,
+      ],
       commande,
     });
   }
-  const geste = {
-    pin: 'La carte demande son code PIN, et l\'écran de Papote cache cette demande : la personne ne peut pas le saisir. Récupérer la carte (ou passer chez le client), la mettre dans un téléphone, saisir le code PIN (sur le support de la carte) et désactiver la demande de code PIN, puis la remettre dans la tablette. Ou envoyer une carte sans code PIN.',
-    puk: 'Trois codes PIN faux ont été saisis : la carte demande son code PUK. Le demander à l\'opérateur (espace client ou service client, avec le numéro de la ligne), le saisir dans un téléphone avec un nouveau code PIN, désactiver la demande de code PIN, puis remettre la carte. Dix codes PUK faux détruisent la carte : sinon, changer de carte.',
-    verrouillee: 'La carte est verrouillée par l\'opérateur (carte refusée par le réseau ou par la tablette). Appeler l\'opérateur pour la faire déverrouiller, sinon changer de carte.',
-  }[code] || 'Regarder la carte dans un téléphone, sinon la changer.';
+  const [geste, comment] = {
+    pin: ['Désactiver le code PIN de la carte, ou envoyer une carte sans code PIN.',
+      'La carte demande son code PIN, et l\'écran de Papote cache cette demande : la personne ne peut pas le saisir. Mettre la carte dans un téléphone, saisir le code PIN (sur le support de la carte), désactiver la demande de code PIN, puis la remettre dans la tablette.'],
+    puk: ['Demander le code PUK à l\'opérateur, ou changer de carte.',
+      'Trois codes PIN faux ont été saisis. Saisir le code PUK dans un téléphone avec un nouveau code PIN, désactiver la demande de code PIN, puis remettre la carte. Attention : dix codes PUK faux détruisent la carte.'],
+    verrouillee: ['Appeler l\'opérateur pour faire déverrouiller la carte, sinon la changer.', null],
+  }[code] || ['Regarder la carte dans un téléphone, sinon la changer.', null];
   return alerteAdmin({
     titre: `Carte SIM bloquée (${code === 'verrouillee' ? 'verrouillée' : quoi}) : ${tablette}`,
-    detail: `${qui} a sa carte SIM bloquée depuis le ${quand} : ${quoi}. Une carte bloquée ne se débloque pas seule : plus d'appels par la carte ni d'internet mobile, la tablette ne passe plus que par le wifi. ${geste} La famille n'est pas prévenue. Un seul e-mail pour ce blocage ; un autre quand la carte est débloquée.`,
+    detail: [
+      geste,
+      comment,
+      `${qui} a sa carte SIM bloquée depuis le ${quand} (${quoi}). Une carte bloquée ne se débloque pas seule : en attendant, la tablette ne marche qu'en Wi-Fi. La famille n'est pas prévenue.`,
+    ],
     commande,
   });
 }
@@ -1012,8 +1018,8 @@ function alerteSimBloquee({ nom, famille, ref, code, depuis, duree, debloquee, c
 function rappelConfirme({ nom, telephone }) {
   return message('Bien reçu : nous vous rappelons', [
     bonjour(nom),
-    `Votre demande est bien arrivée${telephone ? ` : nous vous rappelons au <b>${echapper(telephone)}</b>` : ''}, en général dans la journée (du lundi au samedi).`,
-    'C\'est l\'équipe Papote, qui prépare les tablettes, qui vous appelle. Si c\'est plus simple, répondez à cet e-mail avec votre question.',
+    `<b>${telephone ? `Nous vous rappelons au ${echapper(telephone)}` : 'Votre demande est bien arrivée'}</b>, en général dans la journée (du lundi au samedi).`,
+    'Si c\'est plus simple, répondez à cet e-mail avec votre question.',
   ], { texte: 'Découvrir Papote', lien: SITE });
 }
 
@@ -1030,8 +1036,8 @@ function demandeRappel({ nom, telephone, email, messages }) {
 function bilanSupport({ questions, rappels, sansReponse }) {
   return message(`Support Papote : ${questions} questions cette semaine, ${sansReponse.length} sans réponse`, [
     { fiche: [['Questions au chat', String(questions)], ['Demandes de rappel', String(rappels)], ['Sans réponse', String(sansReponse.length)]] },
-    sansReponse.length ? { section: { titre: 'Questions sans réponse', items: sansReponse.map(echapper) } } : 'Le chat a su répondre à tout.',
-    'Pour que le chat sache y répondre, ajoutez la réponse dans functions/support-connaissances.md (ou donnez-la à Claude).',
+    sansReponse.length ? { section: { titre: 'Questions sans réponse', items: sansReponse.map(echapper) } } : '<b>Le chat a su répondre à tout.</b>',
+    sansReponse.length ? 'Pour que le chat sache y répondre, donnez les réponses à Claude.' : null,
   ], null, { interne: true });
 }
 
@@ -1055,7 +1061,7 @@ function recapSemaine({ lignes, aFaire }) {
 // Livres comptables du mois (fichiers joints par gestion.js) : resume = [[titre, items], …].
 function livresComptables({ resume, titres }) {
   return message(`Papote : livres comptables (${titres.join(', ')})`, [
-    'Le livre des recettes et le registre des achats sont joints (fichiers à ouvrir avec Excel) et rangés dans l\'espace admin, rubrique Comptabilité. Gardez cet e-mail : ce sont les registres obligatoires de la micro-entreprise.',
+    '<b>Gardez cet e-mail : ce sont vos registres obligatoires.</b> Le livre des recettes et le registre des achats sont joints (à ouvrir avec Excel) et rangés dans l\'admin, rubrique Comptabilité.',
     ...resume.map(([titre, items]) => ({ section: { titre, items: items.map(echapper) } })),
   ], { texte: 'Ouvrir la comptabilité', lien: `${ADMIN}#compta` }, { interne: true });
 }
@@ -1065,42 +1071,38 @@ function livresComptables({ resume, titres }) {
 function budget({ palier, montant, paliers, coupee = true }) {
   const lien = 'https://console.cloud.google.com/billing';
   const bouton = { texte: 'Ouvrir la facturation Google Cloud', lien };
+  const relancer = { etapes: [
+    'Trouvez ce qui a coûté (Rapports de facturation).',
+    'Pour tout relancer : Facturation > Gestion des comptes > Papote > Associer un compte de facturation.',
+  ] };
   if (palier === 'alerte') {
     return message(`Papote : la facture Google Cloud du mois atteint ${montant}`, [
       { fiche: [['Facture du mois', montant], ['Alerte', `à partir de ${paliers.alerte} €`], ['Coupure', `à ${paliers.coupure} €`]] },
-      `Rien n'est coupé. Pour information, le coupe-circuit coupera tout à ${paliers.coupure} €.`,
+      `<b>Rien n'est coupé, rien à faire.</b> Tout serait coupé à ${paliers.coupure} €.`,
     ], bouton, { interne: true });
   }
   if (palier === 'avertissement') {
     return message(`Attention : coupe-circuit bientôt, facture Google Cloud à ${montant}`, [
-      { encadre: `Attention, la facture Google Cloud de Papote atteint <b>${montant}</b> ce mois-ci. Le coupe-circuit coupera tout à ${paliers.coupure} € : l'appli famille, les tablettes et le site ne marcheront plus.` },
-      'Si Papote a grandi et que c\'est normal, montez le seuil (PALIERS dans functions/budget.js et le budget dans la console). Sinon, regardez ce qui coûte.',
+      { encadre: `<b>À ${paliers.coupure} €, tout sera coupé : l'appli, les tablettes et le site ne marcheront plus.</b> La facture Google Cloud atteint ${montant} ce mois-ci.` },
+      'Si c\'est normal parce que Papote a grandi, demandez à Claude de monter le seuil. Sinon, regardez ce qui coûte.',
     ], bouton, { interne: true });
   }
   // coupee null : la coupure va être faite ; cet e-mail part avant, tant que les fonctions tournent encore.
   if (coupee === null) {
     return message(`COUPE-CIRCUIT en cours : facture Google Cloud à ${montant}`, [
-      { encadre: `La facture Google Cloud de Papote a atteint <b>${montant}</b> ce mois-ci : le coupe-circuit désactive la facturation du projet maintenant.` },
-      'Les fonctions, l\'appli famille et les tablettes vont s\'arrêter ou être limitées. Les données ne sont pas effacées. Si la coupure échoue, un second e-mail « URGENT » suit.',
-      { etapes: [
-        'Trouvez ce qui a coûté (Rapports de facturation).',
-        'Pour tout relancer : Facturation > Gestion des comptes > Papote > Associer un compte de facturation.',
-      ] },
+      { encadre: `<b>Le coupe-circuit coupe tout maintenant</b> : la facture Google Cloud a atteint ${montant} ce mois-ci. L'appli et les tablettes vont s'arrêter. Les données ne sont pas effacées.` },
+      'Si la coupure échoue, un second e-mail « URGENT » suit.',
+      relancer,
     ], bouton, { interne: true });
   }
   if (!coupee) {
     return message(`URGENT : facture Google Cloud à ${montant}, le coupe-circuit n'a pas pu couper`, [
-      { encadre: `La facture Google Cloud de Papote a atteint <b>${montant}</b>, mais la facturation n'a pas pu être désactivée (rôle « Gestionnaire de facturation de projet » manquant ?).` },
-      'Coupez-la vous-même : Facturation > Gestion des comptes > Papote > Désactiver la facturation.',
+      { encadre: `<b>Coupez la facturation vous-même</b> : Facturation > Gestion des comptes > Papote > Désactiver la facturation. La facture a atteint ${montant} et le coupe-circuit n'a pas pu couper.` },
     ], bouton, { interne: true });
   }
   return message(`COUPE-CIRCUIT : facturation Google Cloud désactivée à ${montant}`, [
-    { encadre: `La facture Google Cloud de Papote a atteint <b>${montant}</b> ce mois-ci : la facturation du projet a été désactivée.` },
-    'Les fonctions, l\'appli famille et les tablettes sont arrêtées ou limitées. Les données ne sont pas effacées.',
-    { etapes: [
-      'Trouvez ce qui a coûté (Rapports de facturation).',
-      'Pour tout relancer : Facturation > Gestion des comptes > Papote > Associer un compte de facturation.',
-    ] },
+    { encadre: `<b>Tout est coupé : l'appli et les tablettes sont arrêtées.</b> La facture Google Cloud a atteint ${montant} ce mois-ci. Les données ne sont pas effacées.` },
+    relancer,
   ], bouton, { interne: true });
 }
 

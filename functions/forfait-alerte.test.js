@@ -76,26 +76,26 @@ test('forfait « internet coupé » passé 95 % puis silencieux : Papote sait qu
   assert.strictEqual(f.decider(f.etatForfait(tablette(900, { lastOnline: vue }), BLOQUE, JOUR), { cycle: '2026-11-05', admin: [80] }, JOUR).note, null);
   const t = f.emailAdmin(f.etatForfait(tablette(980, { lastOnline: vue }), BLOQUE, JOUR), { nom: 'Mamie Jeanne', famille: 'f1', coupee: true });
   assert.strictEqual(t.subject, 'Tablette de Mamie Jeanne : internet sans doute coupé par le forfait');
-  assert.match(t.text, /sans doute l'opérateur qui a coupé internet au bout du forfait, pas une panne\. Internet revient le 5 décembre/);
+  assert.match(t.text, /Ce n'est sans doute pas une panne : internet revient le 5 décembre/);
   assert.doesNotMatch(t.subject + t.text, /hors ligne/i);
 });
 
 test('e-mails à Papote : seuil, conso, ce qui arrive au bout du forfait', () => {
   const e80 = f.emailAdmin(f.etatForfait(tablette(812), REDUIT, JOUR), { nom: 'Mamie Jeanne', famille: 'f1', seuil: 80 });
   assert.strictEqual(e80.subject, 'Forfait SIM à 80 % : tablette de Mamie Jeanne');
-  assert.match(e80.text, /812 Mo utilisés sur 1 Go depuis le 5 novembre\. Forfait « débit réduit » au bout : les appels vidéo seront plus lents jusqu'au 5 décembre\./);
+  assert.match(e80.text, /au bout du forfait, les appels vidéo seront seulement plus lents jusqu'au 5 décembre\.\n\n.*812 Mo utilisés sur 1 Go depuis le 5 novembre\./);
   assert.doesNotMatch(e80.text, /famille est prévenue/);
   const e95 = f.emailAdmin(f.etatForfait(tablette(960), BLOQUE, JOUR), { nom: 'Mamie Jeanne', famille: 'f1', seuil: 95 });
-  assert.match(e95.text, /Forfait « internet coupé » au bout : sans recharge, la tablette n'aura plus internet jusqu'au 5 décembre \(sauf en wifi\)\. La famille est prévenue par e-mail/);
+  assert.match(e95.text, /Au bout du forfait, la tablette n'aura plus internet jusqu'au 5 décembre \(sauf en Wi-Fi\)[^]*La famille est prévenue par e-mail/);
 });
 
 test('e-mail à la famille : calme, adapté au forfait, avec la date', () => {
   const fin = Date.parse('2026-12-05T12:00:00Z');
   const r = mail.forfaitPresqueEpuise({ nom: 'Mamie', type: 'reduit', fin });
   assert.strictEqual(r.subject, 'La tablette de Mamie a presque utilisé son forfait internet du mois');
-  assert.match(r.text, /La tablette de Mamie a presque utilisé son forfait internet du mois : jusqu'au 5 décembre les appels vidéo seront plus lents ; branchez-la au Wi-Fi si vous pouvez\./);
+  assert.match(r.text, /Jusqu'au 5 décembre, les appels vidéo seront plus lents\.[^]*branchez la tablette au Wi-Fi\./);
   const b = mail.forfaitPresqueEpuise({ nom: 'Mamie', type: 'bloque', fin });
-  assert.match(b.text, /La tablette de Mamie a presque utilisé son forfait internet du mois : internet sera coupé jusqu'au 5 décembre ; branchez-la au Wi-Fi si vous pouvez\./);
+  assert.match(b.text, /Jusqu'au 5 décembre, internet sera coupé sur la tablette[^]*branchez la tablette au Wi-Fi\./);
   for (const m of [r, b]) {
     assert.doesNotMatch(m.text, /urgent|attention|!|alerte/i);
     assert.doesNotMatch(m.html, /#f97316|#ea580c|#fb923c|orange|#dc2626/i, 'ni orange ni rouge');

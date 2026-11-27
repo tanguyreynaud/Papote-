@@ -62,10 +62,12 @@ async function alerteSauvegarde({ db, prevenir, maintenant = Date.now() }) {
   const { s, e } = decision;
   await prevenir(
     e.reussie ? `Sauvegarde : aucune réussie depuis ${e.jours} jours` : `Sauvegarde : aucune réussie depuis la mise en route (${e.jours} jours)`,
-    `${e.reussie ? `La dernière sauvegarde réussie de la base date du ${date(e.depuis)}.` : 'Aucune sauvegarde réussie n\'a encore été signalée par le PC.'}`
-      + `${echec(s)} La sauvegarde du dimanche tourne sur le PC (tâche Windows « Papote - sauvegarde hebdomadaire ») : `
-      + 'allumer le PC, lancer outils\\admin\\sauvegarder.bat et regarder journal.txt dans le dossier des sauvegardes. '
-      + 'Cet e-mail ne part qu\'une fois ; la ligne reste dans « À faire » tant qu\'aucune sauvegarde ne réussit.',
+    [
+      'Allumez le PC et lancez sauvegarder.bat (dossier outils\\admin).',
+      `${e.reussie ? `La dernière sauvegarde réussie date du ${date(e.depuis)}.` : 'Le PC n\'a encore signalé aucune sauvegarde réussie.'} Sans sauvegarde, une panne ferait perdre les données des familles.`,
+      echec(s).trim() || null,
+      'Si elle échoue encore, donnez à Claude le fichier journal.txt du dossier des sauvegardes.',
+    ],
   );
   return 'alerte';
 }

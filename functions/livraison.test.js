@@ -67,11 +67,11 @@ test('alerte « pas encore connectée » : délai réglé à un seul endroit (48
   const c = { nom: 'Paul Martin', id: 'sub_1' };
   const retrait = l.alerteConnexion(c, 'retrait');
   assert.strictEqual(retrait.titre, 'Tablette non connectée, colis retiré il y a 48 h : Paul Martin');
-  assert.match(retrait.detail, /^Colis retiré il y a 48 h : .*Papote est prévenu et s'en occupe.*Appelez le client/);
+  assert.match(retrait.detail.join(' '), /^Appelez le client.*Colis retiré il y a 48 h : .*Papote est prévenu et s'en occupe/);
   assert.strictEqual(retrait.aFaire, 'Tablette de Paul Martin pas encore connectée, colis retiré : appeler le client');
   const main = l.alerteConnexion(c, 'main-propre');
   assert.strictEqual(main.titre, 'Tablette non connectée, remise en main propre il y a 48 h : Paul Martin');
-  assert.match(main.detail, /^Remise en main propre il y a 48 h : la tablette n'est toujours pas entrée/);
+  assert.match(main.detail[1], /^Remise en main propre il y a 48 h : la tablette n'est toujours pas entrée/);
   const estimee = l.alerteConnexion({ email: 'p@x.fr' }, 'estimee');
   assert.strictEqual(estimee.titre, 'Tablette non connectée, colis parti sans suivi il y a 5 jours : p@x.fr');
   assert.match(estimee.aFaire, /colis parti sans suivi : appeler le client/);

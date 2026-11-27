@@ -1312,7 +1312,7 @@ exports.retracter = onCall({ secrets: [STRIPE_SECRET, MAIL_MOT_DE_PASSE] }, asyn
     await ref.update({ 'remboursement.statut': 'echec', 'remboursement.erreur': e.message });
     // Papote est prévenu (audit argent, 11/11, A2) : le client vient de lire « nous le faisons à la main ».
     await prevenirPapote(`Remboursement à faire à la main : ${c.nom || c.email || id}`, await ref.get(),
-      `La commande est annulée (avant l'envoi), mais le remboursement de ${mail.euros(montant)} a été refusé par Stripe (${e.message}). À faire depuis Stripe.`);
+      [`Rembourser ${mail.euros(montant)} depuis Stripe.`, `La commande est annulée (avant l'envoi), mais Stripe a refusé le remboursement (${e.message}).`]);
     throw new HttpsError('internal', 'La commande est annulée, mais le remboursement a échoué : nous le faisons à la main.');
   }
 });
@@ -1651,7 +1651,7 @@ async function paiementApresAnnulation(ref, snap) {
     detail = 'le remboursement automatique a échoué : à faire à la main dans Stripe';
   }
   await prevenirPapote(`Paiement reçu pour une commande annulée : ${snap.get('nom') || snap.get('email') || ref.id}`, snap,
-    `La banque a confirmé le prélèvement SEPA d'une commande déjà annulée : ${detail}. Aucune tablette à envoyer.`);
+    ['Aucune tablette à envoyer.', `La banque a confirmé le prélèvement SEPA d'une commande déjà annulée : ${detail}.`]);
 }
 
 // Client qui recommande : même IBAN ou même carte (empreinte Stripe), e-mail, téléphone ou adresse qu'une autre commande.
@@ -1706,7 +1706,7 @@ async function verifierDoublon(ref, session, email) {
   if (alerte.mauvaisPayeur) {
     const snap = await ref.get();
     await prevenirPapote(`Ne pas envoyer : ${snap.get('nom') || email || 'un client'} a déjà été mauvais payeur`, snap,
-      `Nouvelle commande d'un client déjà connu (${alerte.raisons.join(', ')}). Vérifiez avant d'envoyer la tablette.`);
+      ['Vérifiez avant d\'envoyer la tablette.', `Nouvelle commande d'un client déjà connu (${alerte.raisons.join(', ')}).`]);
   }
 }
 
@@ -1809,7 +1809,7 @@ async function paiementAPart(type, objet) {
       'remplacement.majLe': FieldValue.serverTimestamp(),
     });
     await prevenirPapote(`Remplacement payant refusé par la banque : ${snap.get('nom') || snap.get('email') || snap.id}`, snap,
-      `Le prélèvement de ${mail.euros(r.montant || objet.amount || 0)} (${regles.RAISONS_REMPLACEMENT[r.raison] || 'remplacement'}) a été refusé par la banque après le départ de la tablette de remplacement. À relancer depuis Stripe, ou à voir avec le client.`);
+      ['Relancer le prélèvement depuis Stripe, ou voir avec le client.', `La banque a refusé ${mail.euros(r.montant || objet.amount || 0)} (${regles.RAISONS_REMPLACEMENT[r.raison] || 'remplacement'}) après le départ de la tablette de remplacement.`]);
   } else if (type === 'payment_intent.payment_failed' && /non rendu/.test(objet.description || '')) {
     if (!snap.get('restitution')) return;
     await ref.update({
@@ -1843,13 +1843,13 @@ async function contestation(litige) {
     }) });
   }
   await prevenirPapote(`Prélèvement contesté (${mail.euros(litige.amount)}) : ${snap && snap.exists ? snap.get('nom') || snap.get('email') || snap.id : 'commande inconnue'}`,
-    snap && snap.exists ? snap : null, 'Le client a contesté un prélèvement auprès de sa banque. L\'argent est repris par la banque : voir la commande dans l\'admin et le litige dans Stripe.');
+    snap && snap.exists ? snap : null, ['Répondre au litige dans Stripe.', 'Le client a contesté un prélèvement auprès de sa banque, qui reprend l\'argent.']);
 }
 
 async function prevenirPapote(titre, snap, detail) {
   try {
     await envoyerMail(EMAIL_PAPOTE, mail.alerteAdmin({
-      titre, detail: detail || 'Voir la commande dans l\'admin (À faire).', commande: snap ? snap.id : null,
+      titre, detail: detail || ['Voir la commande dans l\'admin (À faire).'], commande: snap ? snap.id : null,
     }));
   } catch (e) {
     logger.error(`Alerte non envoyée : ${titre}`, e.message);
@@ -2410,7 +2410,7 @@ async function restitutions() {
         })).catch((e2) => logger.error(`Commande ${snap.id} : mise en demeure non partie`, e2.message));
       }
       await prevenirPapote(`Tablette non rendue, prélèvement refusé : ${snap.get('nom') || snap.get('email') || snap.id}`, snap,
-        `La tablette n'a pas été rendue avant le ${mail.dateEnClair(r.avant.toMillis())} et le prélèvement de ${mail.euros(regles.penaliteRestitution(snap.data()))} a été refusé (${e.message}). À relancer à la main depuis Stripe, ou à voir avec le client.`);
+        ['Relancer le prélèvement depuis Stripe, ou voir avec le client.', `La tablette n'a pas été rendue avant le ${mail.dateEnClair(r.avant.toMillis())} et le prélèvement de ${mail.euros(regles.penaliteRestitution(snap.data()))} a été refusé (${e.message}).`]);
     }
   }
 }
@@ -2815,7 +2815,7 @@ async function suiviRetour(event, rAvant, r, c) {
   if (r.statut === 'echec' && rAvant.statut !== 'echec' && r.manquants && r.manquants.length && c.email && !c.offerte) {
     const manquants = r.manquants.map((m) => regles.NOMS_MATERIEL[m] || m);
     await prevenirPapote(`Éléments manquants non prélevés : ${c.nom || c.email || id}`, event.data.after,
-      `La tablette est revenue sans ${manquants.join(', ')}, mais le prélèvement de ${mail.euros(r.montant || 0)} a été refusé (${r.erreur || 'raison inconnue'}). À relancer depuis Stripe.`)
+      ['Relancer le prélèvement depuis Stripe.', `La tablette est revenue sans ${manquants.join(', ')}, et le prélèvement de ${mail.euros(r.montant || 0)} a été refusé (${r.erreur || 'raison inconnue'}).`])
       .catch((e) => logger.error(`Commande ${id} : Papote non prévenu`, e.message));
     try {
       await envoyerMail(c.email, mail.tabletteRecue({ nom: c.nom, rembourse: 0, manquants, montant: r.montant || 0, echec: true }));
@@ -2834,7 +2834,7 @@ async function suiviRetour(event, rAvant, r, c) {
         logger.error(`Commande ${id} : remboursement refusé`, e.message);
         await ref.update({ 'remboursement.statut': 'echec', 'remboursement.erreur': e.message });
         await prevenirPapote(`Remboursement à faire à la main : ${c.nom || c.email || id}`, event.data.after,
-          `La tablette est revenue, mais le remboursement de ${mail.euros(retractation)} a été refusé par Stripe (${e.message}). À faire depuis Stripe.`);
+          [`Rembourser ${mail.euros(retractation)} depuis Stripe.`, `La tablette est revenue, mais Stripe a refusé le remboursement (${e.message}).`]);
         return;
       }
     }
@@ -2903,7 +2903,7 @@ async function rappelsJumelage() {
       logger.warn(`Commande ${snap.id} : tablette toujours pas jumelée 20 jours après l'envoi.`);
       // Tanguy prévenu par e-mail (A3) : le premier prélèvement tombe dans 13 jours, à lui d'appeler le client.
       await prevenirPapote(`Tablette pas installée 20 jours après l'envoi : ${c.nom || c.email || snap.id}`, snap,
-        'La tablette est partie il y a 20 jours et n\'est toujours pas reliée à une famille. Appelez le client avant le premier prélèvement (33 jours après l\'envoi). Colis revenu chez vous ? « Colis revenu » sur la commande l\'annule et rembourse les 60 €.');
+        ['Appelez le client avant le premier prélèvement (33 jours après l\'envoi).', 'La tablette est partie il y a 20 jours et n\'est toujours pas reliée à une famille.', 'Colis revenu chez vous ? « Colis revenu » sur la commande l\'annule et rembourse les 60 €.']);
     }
     const numero = livraison.rappelDu(depart, c.rappels, maintenant);
     if (!numero || !c.email) continue;
