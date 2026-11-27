@@ -929,3 +929,22 @@ dialog.dialogue-choix .choix-haut b.choix-droite { flex: none; }
 dialog.dialogue-choix .choix-haut .choix-droite { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 dialog.dialogue-choix button.choix-ligne small { color: var(--muted); font-size: 13px; font-weight: 400; }
 dialog.dialogue-choix .actions { margin-top: 12px; }
+
+/* Ligne en cours de modification (Tanguy 27/11) : plus de bande bleutée qui déborde de la carte et décale la ligne ;
+   la ligne reste à sa place, seul le champ apparaît. « À faire » : les pastilles défilent au doigt, comme ailleurs. */
+.admin-body dl.fiche dt.en-saisie, .admin-body dl.fiche dd.en-saisie { background: none; border-radius: 0; margin-left: 0; margin-right: 0; }
+.admin-body dl.fiche.kv dt.en-saisie { padding: 5px 14px 5px 0; }
+.admin-body dl.fiche.kv dd.en-saisie { padding: 5px 0; }
+@media (max-width: 640px) { .admin-body dl.fiche:not(.kv) dt.en-saisie { padding: 5px 0 0; } .admin-body dl.fiche:not(.kv) dd.en-saisie { padding: 0 0 5px; } }
+@media (max-width: 700px) {
+  .admin-body .carte-taches .filtres { flex-wrap: nowrap; overflow-x: auto; }
+  .admin-body .carte-taches .filtres > * { flex: none; }
+  /* Rangée de pastilles qui défile : elle s'arrête à la marge de droite (plus collée au bord), et la dernière
+     pastille visible s'estompe pour montrer qu'il y a une suite. */
+  .admin-body .filtres, .admin-body .carte-taches .filtres {
+    scrollbar-width: none; margin-right: 0; padding-right: 28px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .admin-body .card:not(.carte-taches) .filtres { padding-right: 0; -webkit-mask-image: none; mask-image: none; }
+}
