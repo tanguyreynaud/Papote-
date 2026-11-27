@@ -298,7 +298,6 @@ function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, rep
         ['Abonnement', `${mensuel}, payés une fois chaque mois écoulé, sans engagement`],
         ['Premier mois', 'prélevé dans 30 jours'],
       ] },
-      reprise ? null : 'D\'ici là, vous pouvez changer d\'avis : rien à payer et les 60 € remboursés.',
       CGV_JOINTES,
     ], { texte: 'Ouvrir l\'appli Papote', lien: APPLI });
   }
@@ -315,8 +314,9 @@ function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, rep
         : 'offerte, à l\'adresse indiquée'],
       ['Réglé', '60 € de mise en service'],
       ['Ensuite', `25 € par mois, tout compris, sans engagement. Chaque mois est payé une fois écoulé, à partir de la réception`],
-      ['Changer d\'avis', '30 jours après la réception : rien à payer, les 60 € remboursés'],
     ] },
+    // Plus de ligne « Changer d'avis » après la vente (Tanguy 27/11) : elle rassure avant l'achat (relances de panier,
+    // site) ; ensuite, les CGV jointes (article sur la rétractation, avec le formulaire) suffisent.
     // Famille préparée (05/11) : l'espace famille existe dès le paiement, la tablette y entrera seule.
     famille
       ? '<b>Votre espace famille est déjà prêt.</b> Ouvrez l\'appli Papote avec cette adresse e-mail : vous pouvez dès maintenant donner le nom de votre proche, préparer les premières photos et inviter la famille. À son arrivée, la tablette se branche et retrouve votre famille toute seule.'
