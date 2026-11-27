@@ -26,7 +26,7 @@ test('Tablette muette : « Que faire ? » donne 3 étapes, puis mène à « Dép
   // La durée est déjà dans le bandeau juste derrière : la fenêtre ne la redit plus (2e épuration, 26/11).
   assert.doesNotMatch(fenetre, /Aucune nouvelle de la tablette/);
   assert.match(fenetre, /Vous êtes loin \? Appelez Mamie Emma ou un voisin.*vérifier que la tablette est branchée et que son écran est allumé/s);
-  assert.match(fenetre, /Écran noir : il faut la rallumer.*appuyer 3 secondes sur le bouton marche\/arrêt/s);
+  assert.match(fenetre, /Écran noir : il faut la rallumer.*appuyer 3 secondes sur le bouton d'allumage/s);
   assert.match(fenetre, /Elle revient toute seule/);
   assert.strictEqual(await julie.page.locator('.dialog-etapes li').count(), 3);
   await julie.page.waitForTimeout(400);
