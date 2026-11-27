@@ -155,3 +155,26 @@ test('panne du lien ou de l\'e-mail : erreur claire, jamais de repli', async () 
   });
   await assert.rejects(c({ data: { email: 'julie@exemple.fr', retour: RETOUR }, rawRequest: { headers: {} } }), (e) => e.code === 'unavailable');
 });
+
+test('plafond du jour : au-delà de 100 liens, rien ne part de Papote et l\'appli reçoit « repli » (Tanguy, 27/11)', async () => {
+  const b = banc();
+  const jour = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  b.db.docs.set(`limites/connexion-jour-${jour}`, { n: LIMITES_CONNEXION.parJour - 1 });
+  assert.deepStrictEqual(await b.appeler({ email: 'julie@exemple.fr', retour: RETOUR }), { ok: true });
+  assert.strictEqual(b.envois.length, 1);
+  assert.strictEqual(b.db.docs.get(`limites/connexion-jour-${jour}`).n, LIMITES_CONNEXION.parJour);
+  assert.deepStrictEqual(await b.appeler({ email: 'paul@exemple.fr', retour: RETOUR }), { ok: true, repli: true });
+  assert.strictEqual(b.envois.length, 1, 'aucun e-mail de Papote au-delà du plafond');
+  assert.strictEqual(b.liens.length, 1, 'aucun lien fabriqué au-delà du plafond');
+  assert.match(b.journal.join('\n'), /plafond du jour atteint/);
+});
+
+test('réserve des e-mails urgents entamée : repli aussi, même sous le plafond du jour', async () => {
+  const envois = [];
+  const f = connexion.creer({
+    db: fausseBase(), auth: { generateSignInWithEmailLink: async () => 'https://x/lien' }, mail,
+    envoyerMail: async (a) => { envois.push(a); }, logger: { warn() {}, error() {} }, reserveEntamee: async () => true,
+  });
+  assert.deepStrictEqual(await f({ data: { email: 'julie@exemple.fr', retour: RETOUR }, rawRequest: { headers: {} } }), { ok: true, repli: true });
+  assert.strictEqual(envois.length, 0);
+});

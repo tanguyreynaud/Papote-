@@ -19,6 +19,7 @@
 // sans dépendance (alertes.test.js).
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { deOuD } = require('./mail');
 const { logger } = require('firebase-functions/v2');
 const { estActif } = require('./abonnement');
 const { db: base } = require('./base');
@@ -92,11 +93,11 @@ function etatAlerte(tablette, maintenant, veille) {
 function message(type, nom, coupee) {
   if (type === 'silence' && coupee) {
     const fin = require('./forfait-alerte').jourTexte(coupee);
-    return { titre: `La tablette de ${nom} n'a sans doute plus internet`, texte: `Son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au Wi-Fi si vous pouvez.` };
+    return { titre: `La tablette ${deOuD(nom)}${nom} n'a sans doute plus internet`, texte: `Son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au Wi-Fi si vous pouvez.` };
   }
   return type === 'silence'
-    ? { titre: `La tablette de ${nom} ne répond plus`, texte: 'Est-elle branchée et connectée au Wi-Fi ?' }
-    : { titre: `La tablette de ${nom} est débranchée`, texte: 'Pensez à rebrancher son chargeur.' };
+    ? { titre: `La tablette ${deOuD(nom)}${nom} ne répond plus`, texte: 'Est-elle branchée et connectée au Wi-Fi ?' }
+    : { titre: `La tablette ${deOuD(nom)}${nom} est débranchée`, texte: 'Pensez à rebrancher son chargeur.' };
 }
 
 // Familles en pause hospitalisation (commandes/{id}.pause, pauseHospitalisation) : aucune alerte de tablette
