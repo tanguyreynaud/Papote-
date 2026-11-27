@@ -263,3 +263,24 @@ test('SOS : ordre retiré dans l\'app (sosOrdre null) : retour à l\'ordre par d
     assert.deepStrictEqual(await appelsTel(b), ['0700000000']);
   } finally { await b.fermer(); }
 });
+
+// Tanguy, 27/11 (revue des règles, grande famille) : SMS à tous, appels aux 5 premiers seulement.
+test('SOS, 7 proches : le SMS part aux 7, les 5 premiers sont appelés, puis la ligne est libre', async () => {
+  const b = await tablette();
+  try {
+    const sept = ['Alice', 'Bruno', 'Chloé', 'David', 'Emma', 'Fanny', 'Gaël'].map((name, i) => ({ uid: 'p' + i, name, tel: '060000000' + i, responsable: i === 0 }));
+    await b.android('onFamily', { faces: {}, birthdays: [], people: sept });
+    await b.toucher('#sos-btn');
+    await b.avancer(5500);
+    const sms = await b.appels('sendSms');
+    assert.strictEqual(sms.length, 1);
+    assert.strictEqual(sms[0].args[0].split(',').length, 7, 'SMS aux 7');
+    for (let i = 0; i < 6; i++) {
+      await b.avancer(19000); // sans réponse : raccroché à 18 s
+      await b.android('onGsm', { etat: 'fin', sortant: true, cause: 'raccroche' });
+      await b.avancer(1000);
+    }
+    assert.deepStrictEqual(await appelsTel(b), ['0600000000', '0600000001', '0600000002', '0600000003', '0600000004'], 'les 5 premiers, pas les 2 derniers');
+    assert.ok((await b.appels('logAppel')).some((a) => /SMS à 7 proches, appels aux 5 premiers/.test(a.args[0])), 'journal');
+  } finally { await b.fermer(); }
+});

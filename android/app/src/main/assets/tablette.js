@@ -3038,9 +3038,12 @@
   // SOS par la carte SIM : un SMS à tous les numéros de la famille, puis un vrai appel au responsable,
   // puis aux autres un à un (18 s sans réponse chacun) jusqu'à ce que quelqu'un décroche. Personne : l'appel par
   // internet d'avant (2e essai), qui fait prévenir toute la famille par le serveur.
+  // Grande famille (Tanguy, 27/11) : le SMS part à tous, mais seuls les 5 premiers de l'ordre du SOS sont
+  // appelés (1 min 30 au pire) ; à 30 proches la ligne restait occupée 10 minutes pour ceux qui rappelaient.
+  var SOS_APPELS_MAX = 5;
   function startSosTelephone() {
     var gens = phonePeople();
-    if (!gens.length && sosEtat && sosEtat.liste) gens = sosEtat.liste;
+    if (!gens.length && sosEtat && (sosEtat.tous || sosEtat.liste)) gens = sosEtat.tous || sosEtat.liste;
     var liste = [];
     var tels = [];
     for (var i = 0; i < gens.length; i++) {
@@ -3058,10 +3061,12 @@
       } catch (e) { sosSmsParti = false; }
       if (sosSmsParti) { try { localStorage.setItem(SOS_SMS_CLE, String(Date.now())); } catch (e) { } }
     }
-    sosNoter({ phase: 'tel', liste: liste, index: -1, sms: sosSmsParti, attendreGsm: false, enLigneDepuis: 0 });
-    sosSuiviDemarrer(liste);
+    var appeles = liste.slice(0, SOS_APPELS_MAX);
+    sosNoter({ phase: 'tel', liste: appeles, tous: liste, index: -1, sms: sosSmsParti, attendreGsm: false, enLigneDepuis: 0 });
+    sosSuiviDemarrer(liste); // le message de fin va à tous ceux qui ont reçu le SMS
+    if (liste.length > appeles.length) noterAppel('SOS : SMS à ' + liste.length + ' proches, appels aux ' + appeles.length + ' premiers');
     renderSos('starting', 'SOS : on prévient la famille…', null, null);
-    sosChaine(liste, 0)(false);
+    sosChaine(appeles, 0)(false);
   }
 
   // La suite de la chaîne à partir du proche n : chaque appel fini (sans vraie réponse) passe au suivant.
