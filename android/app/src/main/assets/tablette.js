@@ -825,7 +825,7 @@
   // une vidéo ou un vocal se lance, la caméra s'éteint, puis l'écran se ferme tout seul à la fin de la
   // durée d'affichage (au moins 1 minute après le visage, voir APRES_VU_MS) s'il n'a pas touché OK.
   // Jamais vu : l'envoi ou le rappel reste affiché, caméra allumée, pendant la durée réglée par la
-  // famille (options.dureeAffichage, 1 à 5 minutes, 3 sans réglage), puis il se ferme quand même
+  // famille (options.dureeAffichage, 1 à 5 minutes, 5 sans réglage : Tanguy, 27/11), puis il se ferme quand même
   // (pasVu) et la caméra s'éteint (Tanguy, 19/11 ; avant : affiché jusqu'à « OK », la caméra 3 minutes
   // puis 1 minute toutes les 5 minutes, sans fin, et il fallait regarder pile au bon moment).
   // Renvoie false quand la tablette ne sait pas regarder (pas de caméra côté page) : la durée compte quand même.
@@ -833,7 +833,7 @@
   // Vue : il reste au moins 1 minute de plus, et 1 minute après la fin d'une vidéo ou d'une lecture à voix haute
   // (Tanguy, 19/11 ; avant : toujours 2 minutes après le visage, même s'il restait du temps).
   var APRES_VU_MS = 60000;
-  var AFFICHAGE_MIN = 1, AFFICHAGE_MAX = 5, AFFICHAGE_DEFAUT = 3; // minutes (mêmes bornes dans Sync.java et l'app famille)
+  var AFFICHAGE_MIN = 1, AFFICHAGE_MAX = 5, AFFICHAGE_DEFAUT = 5; // minutes (mêmes bornes dans Sync.java et l'app famille)
   var watchers = {};
 
   function dureeAffichageMs() {

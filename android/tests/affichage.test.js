@@ -1,10 +1,14 @@
 // Durée d'affichage d'un envoi ou d'un rappel pas encore vu (Tanguy, 19/11) : affiché, caméra allumée, pendant
-// la durée réglée par la famille (options.dureeAffichage, 1 à 5 minutes, 3 sans réglage), puis fermé même sans
+// la durée réglée par la famille (options.dureeAffichage, 1 à 5 minutes, 5 sans réglage depuis le 27/11), puis fermé même sans
 // visage. Un rappel pas vu revient, 3 essais en tout (à l'heure, +15 min, +30 min). Voir banc.js.
 // Lancement : node --test android/tests/affichage.test.js
 const test = require('node:test');
 const assert = require('node:assert');
-const { ouvrir, envoi, lot } = require('./banc');
+const banc = require('./banc');
+const { ouvrir, envoi } = banc;
+// Les scénarios ci-dessous sont écrits pour un réglage de 3 minutes (le défaut jusqu'au 27/11) : il est posé ici.
+// Sans réglage, la durée est de 5 minutes (Tanguy, 27/11) : voir « sans réglage » plus bas.
+const lot = (posts, champs = {}) => banc.lot(posts, { options: { lecture: true, sos: true, meteo: true, rappelsAccueil: true, dureeAffichage: 3 }, ...champs });
 
 async function sansErreur(b) {
   const erreurs = (await b.appels('erreurJS')).concat(await b.appels('logError'));
@@ -16,7 +20,7 @@ async function sansErreur(b) {
 const camera = (b) => b.page.evaluate(() => window.__surveillances.size);
 const ouvrirSansPresence = (heure, etat = {}) => ouvrir(heure, { cameraEnvoisSeule: true, ...etat });
 const visage = (b) => b.page.evaluate(() => window.__visage());
-const avecDuree = (posts, minutes) => lot(posts, { options: { lecture: true, sos: true, meteo: true, rappelsAccueil: true, dureeAffichage: minutes } });
+const avecDuree = (posts, minutes) => banc.lot(posts, { options: { lecture: true, sos: true, meteo: true, rappelsAccueil: true, dureeAffichage: minutes } });
 const rappel = (champs) => ({ id: 'r1', title: 'Cachet du matin', kind: 'medicament', time: '10:30', repeat: 'daily', date: '', days: [], lastAck: '', avanceMin: 0, finLe: '', enPauseJusquau: '', voice: '', ...champs });
 
 test('envoi pas vu : affiché 3 minutes caméra allumée, puis fermé sans « vu », caméra éteinte, le suivant arrive', async () => {
@@ -71,8 +75,8 @@ test('envoi fermé sans être vu, puis page rechargée (mise à jour) : il ne re
   } finally { await b.fermer(); }
 });
 
-test('durée réglée par la famille : 1 minute, 5 minutes ; un réglage hors bornes revient à 3 minutes', async () => {
-  for (const [reglage, attendu] of [[1, 1], [5, 5], [30, 3], ['abc', 3]]) {
+test('durée réglée par la famille : 1 minute, 3 minutes ; un réglage hors bornes ou absent revient à 5 minutes', async () => {
+  for (const [reglage, attendu] of [[1, 1], [3, 3], [30, 5], ['abc', 5], [undefined, 5]]) {
     const b = await ouvrirSansPresence();
     try {
       await b.android('onPosts', avecDuree([envoi({ text: 'Coucou' })], reglage));

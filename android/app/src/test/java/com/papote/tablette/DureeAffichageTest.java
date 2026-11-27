@@ -22,6 +22,6 @@ public class DureeAffichageTest {
         assertEquals(1, Sync.dureeAffichageMin(0));
         assertEquals(1, Sync.dureeAffichageMin(-4));
         assertEquals(5, Sync.dureeAffichageMin(30));
-        assertEquals(3, Sync.dureeAffichageMin(Double.NaN));
+        assertEquals(5, Sync.dureeAffichageMin(Double.NaN));
     }
 }

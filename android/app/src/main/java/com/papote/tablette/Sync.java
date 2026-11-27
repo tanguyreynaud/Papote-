@@ -2644,7 +2644,7 @@ final class Sync {
      * lecture (bouton « Écouter »),
      * radio { active, nom, url }, sos (bouton « SOS famille »). Absentes : tout est désactivé.
      * Sauf lecture, meteo et rappelsAccueil (voix haute, météo et prochain rappel de l'accueil) : actifs sauf si false.
-     * dureeAffichage : minutes d'affichage d'un envoi ou d'un rappel pas vu (1 à 5, 3 sans réglage).
+     * dureeAffichage : minutes d'affichage d'un envoi ou d'un rappel pas vu (1 à 5, 5 sans réglage : Tanguy, 27/11).
      */
     private JSONObject options = new JSONObject();
 
@@ -2687,19 +2687,19 @@ final class Sync {
         publishPosts();
     }
 
-    /** options.dureeAffichage (nombre Firestore, en minutes) ramené entre 1 et 5 ; absent ou illisible : 3. */
+    /** options.dureeAffichage (nombre Firestore, en minutes) ramené entre 1 et 5 ; absent ou illisible : 5. */
     static int dureeAffichage(JSONObject valeur) {
-        double m = 3;
+        double m = 5;
         if (valeur != null) {
-            if (valeur.has("integerValue")) m = valeur.optDouble("integerValue", 3);
-            else if (valeur.has("doubleValue")) m = valeur.optDouble("doubleValue", 3);
+            if (valeur.has("integerValue")) m = valeur.optDouble("integerValue", 5);
+            else if (valeur.has("doubleValue")) m = valeur.optDouble("doubleValue", 5);
         }
         return dureeAffichageMin(m);
     }
 
-    /** Minutes d'affichage entre 1 et 5 (arrondies) ; pas un nombre : 3. */
+    /** Minutes d'affichage entre 1 et 5 (arrondies) ; pas un nombre : 5. */
     static int dureeAffichageMin(double m) {
-        if (Double.isNaN(m)) return 3;
+        if (Double.isNaN(m)) return 5;
         return (int) Math.max(1, Math.min(5, Math.round(m)));
     }
 
