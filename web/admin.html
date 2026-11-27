@@ -227,28 +227,36 @@
           <div id="famille-actions"></div>
         </div>
         </div>
-        <div class="card" data-onglet="email">
-          <h3>E-mail de lancement</h3>
-          <p class="muted small">« Papote est disponible : vous pouvez commander », pour les personnes inscrites sur la liste d'attente du site (avec leur accord, une seule fois chacune).</p>
-          <div class="actions no-print">
-            <button type="button" class="secondary" id="lancement-test">M'envoyer un test</button>
-            <button type="button" class="primary" id="lancement-envoyer">Envoyer à toute la liste d'attente</button>
-          </div>
-          <p id="lancement-msg" class="small" hidden></p>
-          <h3>Autre message</h3>
-          <p class="muted small">Part seulement aux personnes de la liste « Clients » (avec son filtre) qui acceptent les e-mails. {prenom} = le prénom.</p>
-          <form id="f-campagne" class="campagne no-print">
-            <label>Objet <input name="objet" maxlength="150" required></label>
-            <label>Message <textarea name="message" rows="9" required placeholder="Bonjour {prenom},"></textarea></label>
-            <p id="campagne-cible" class="small"></p>
-            <div class="actions">
-              <button type="button" class="secondary" id="campagne-test">M'envoyer un essai</button>
-              <button type="submit" class="primary" id="campagne-envoyer">Envoyer</button>
+        <div data-onglet="email">
+          <!-- Trois cartes, une par geste (Tanguy 27/11 : la page était floue) : prévenir la liste d'attente, écrire un message, relire les envois. -->
+          <div class="card">
+            <h3>Prévenir la liste d'attente</h3>
+            <p><strong>« Une tablette Papote est disponible ».</strong> À envoyer quand il y a de nouveau du stock. Personne ne le reçoit deux fois.</p>
+            <div class="actions no-print">
+              <button type="button" class="secondary" id="lancement-test">M'envoyer un essai</button>
+              <button type="button" class="primary" id="lancement-envoyer">Envoyer à la liste d'attente</button>
             </div>
-            <p class="f-msg small" hidden></p>
-          </form>
-          <h3>Derniers envois</h3>
-          <ul id="campagnes" class="campagnes small"></ul>
+            <p id="lancement-msg" class="small" hidden></p>
+          </div>
+          <div class="card">
+            <h3>Écrire un message</h3>
+            <form id="f-campagne" class="campagne no-print">
+              <label>À qui ? <select id="campagne-a-qui"></select></label>
+              <p id="campagne-cible" class="small"></p>
+              <label>Objet <input name="objet" maxlength="150" required></label>
+              <label>Message <textarea name="message" rows="9" required placeholder="Bonjour {prenom},"></textarea></label>
+              <p class="muted small">{prenom} est remplacé par le prénom de chacun.</p>
+              <div class="actions">
+                <button type="button" class="secondary" id="campagne-test">M'envoyer un essai</button>
+                <button type="submit" class="primary" id="campagne-envoyer">Envoyer</button>
+              </div>
+              <p class="f-msg small" hidden></p>
+            </form>
+          </div>
+          <div class="card">
+            <h3>Derniers envois</h3>
+            <ul id="campagnes" class="campagnes small"></ul>
+          </div>
         </div>
       </section>
 
@@ -314,8 +322,8 @@
             <div class="tete-fiche">
               <h2>Sur la période</h2>
               <div class="tete-actions no-print">
-                <button type="button" class="secondary small-btn" id="x-tout">Exporter pour le comptable</button>
-                <div class="menu-actions" data-titre="Autres actions sur le bilan">
+                <div class="menu-actions" data-titre="Actions sur le bilan">
+                  <button type="button" id="x-tout" data-detail="Bilan, recettes et dépenses de la période, pour Excel">Exporter pour le comptable</button>
                   <button type="button" id="imprimer" data-detail="Le bilan de la période, en PDF">Imprimer / PDF</button>
                 </div>
               </div>
