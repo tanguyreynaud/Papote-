@@ -4481,28 +4481,8 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('.recherche')) $('resultats').hidden = true;
 });
 
-// Scanner depuis la recherche (téléphone) : code-barres du fabricant, étiquette Mondial Relay, n° écrit en QR.
-// Un seul résultat : il s'ouvre ; sinon la liste s'affiche comme si on avait tapé le code.
-if ('BarcodeDetector' in window) {
-  const bouton = h('button', { type: 'button', class: 'secondary small-btn scanner-recherche' }, 'Scanner');
-  $('recherche').after(bouton);
-  $('recherche').parentElement.classList.add('avec-scanner');
-  bouton.addEventListener('click', () => {
-    const champ = $('recherche');
-    champ.value = '';
-    scanner({ elements: { recherche: champ } }, 'recherche', 'Visez un code-barres : n° de série de la tablette, étiquette Mondial Relay…');
-    $('d-scan').addEventListener('close', () => {
-      const lu = champ.value.trim();
-      if (!lu) return;
-      // QR d'une adresse (…?code=ABCD-1234) : on cherche ce qui suit le dernier « = » ou « / ».
-      if (/^https?:\/\//i.test(lu)) champ.value = lu.split(/[=/]/).filter(Boolean).pop() || lu;
-      const r = rechercher(champ.value);
-      if (r.length === 1) { choisir(r[0]); return; }
-      champ.focus();
-      afficherResultats();
-    }, { once: true });
-  });
-}
+// Pas de « Scanner » dans la recherche (retiré le 27/11, Tanguy : on tape plus vite qu'on ne vise) ; il reste dans les
+// fiches où l'on saisit un long numéro (tablette, lot de tablettes, carte SIM).
 
 // ---------- Graphiques ----------
 
