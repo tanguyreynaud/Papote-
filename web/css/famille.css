@@ -2401,11 +2401,11 @@ input.liste-native { position: absolute; width: 1px !important; min-width: 0 !im
 /* Ordre d'appel SOS sur petit écran (iPhone SE 375 px, Android 360 px) : le numéro entier d'un homonyme doit tenir.
    Flèches, pastilles et espaces un peu plus serrés ; sous 350 px, le numéro passe sur deux lignes plutôt que d'être coupé. */
 @media (max-width: 389px) {
-  .sos-ordre-ligne { gap: 6px; padding-left: 8px; }
+  .sos-ordre-ligne { gap: 6px; padding-left: 6px; padding-right: 4px; }
   .sos-ordre-rang { width: 28px; height: 28px; }
   .sos-ordre-tete { width: 32px; height: 32px; }
   .sos-ordre-fleches { gap: 4px; }
-  .sos-ordre-btn { width: 46px; }
+  .sos-ordre-btn { width: 48px; } /* 48 px au moins pour le doigt */
   .sos-ordre-role { font-size: 14px; }
 }
 @media (max-width: 349px) {
