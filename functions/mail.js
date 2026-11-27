@@ -74,10 +74,11 @@ function blocHtml(b) {
   if (b.fiche) {
     const lignes = b.fiche.filter((l) => l && l[1] != null && l[1] !== '');
     if (!lignes.length) return '';
-    // Sans cadre ni fond (Tanguy 27/11) : libellé gris à gauche, valeur à droite, un filet fin entre les lignes.
-    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:2px 0 20px;border-collapse:collapse">
-${lignes.map(([k, v], i) => `<tr><td width="104" valign="top" style="width:104px;padding:9px 12px 9px 0;font-family:${POLICE};font-size:14px;line-height:1.5;color:${C.doux};${i ? `border-top:1px solid ${C.ligne};` : ''}">${insecables(echapper(k))}</td>
-<td valign="top" style="padding:9px 0;font-family:${POLICE};font-size:16px;line-height:1.4;color:${C.texte};word-break:break-word;${i ? `border-top:1px solid ${C.ligne};` : ''}">${insecables(v)}</td></tr>`).join('\n')}
+    // Fond doux sans bordure, libellés en gras à gauche, valeurs sans gras à droite (Tanguy 27/11).
+    const bord = (i) => (i ? `border-top:1px solid ${C.ligne};` : '');
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:2px 0 20px;background:${C.fond};border-radius:12px;border-collapse:separate">
+${lignes.map(([k, v], i) => `<tr><td width="104" valign="top" style="width:104px;padding:${i === 0 ? 13 : 9}px 10px ${i === lignes.length - 1 ? 13 : 9}px 16px;font-family:${POLICE};font-size:15px;line-height:1.45;font-weight:bold;color:${C.texte};${bord(i)}">${insecables(echapper(k))}</td>
+<td valign="top" style="padding:${i === 0 ? 13 : 9}px 16px ${i === lignes.length - 1 ? 13 : 9}px 0;font-family:${POLICE};font-size:16px;line-height:1.4;color:${C.texte};word-break:break-word;${bord(i)}">${insecables(v)}</td></tr>`).join('\n')}
 </table>`;
   }
   // Numéro d'étape : une cellule de 32 × 32 (Outlook ignore la taille d'un <div> ; le rond devient un carré, lisible).
@@ -312,8 +313,8 @@ function commandeConfirmeeTexte({ nom, code, relais, formule, dejaInstallee, rep
       ['Livraison', relais && relais.transporteur
         ? `offerte, au point relais ${relaisEnTexte(relais)}${relais.destinataire ? ` (retrait par ${echapper(relais.destinataire)})` : ''}`
         : 'offerte, à l\'adresse indiquée'],
-      ['Réglé', '<b>60 €</b> de mise en service'],
-      ['Ensuite', `<b>25 € par mois</b>, tout compris, sans engagement. Chaque mois est payé une fois écoulé, à partir de la réception`],
+      ['Réglé', '60 € de mise en service'],
+      ['Ensuite', `25 € par mois, tout compris, sans engagement. Chaque mois est payé une fois écoulé, à partir de la réception`],
       ['Changer d\'avis', '30 jours après la réception : rien à payer, les 60 € remboursés'],
     ] },
     // Famille préparée (05/11) : l'espace famille existe dès le paiement, la tablette y entrera seule.
