@@ -365,7 +365,9 @@ test('Messages : écrit, message rapide, vu par la tablette, réponse de Mamie, 
   await julie.page.locator('#messages li.bubble.mine', { hasText: 'Bonne nuit' }).locator('.bubble-del').click();
   await g.repondre(julie, 'Supprimer');
   await julie.page.locator('#messages li.bubble', { hasText: 'Bonne nuit' }).waitFor({ state: 'detached' });
-  assert.deepStrictEqual((await postsDe(fid, 'message')).map((m) => m.text), ['Bisous de Lyon, à dimanche !']);
+  // La bulle part avant l'accord du serveur (vu une fois dans WebKit, 27/11) : on attend qu'il ait bien supprimé.
+  const restants = await g.attendreBase(async () => { const l = await postsDe(fid, 'message'); return l.length === 1 && l; }, '1 message');
+  assert.deepStrictEqual(restants.map((m) => m.text), ['Bisous de Lyon, à dimanche !']);
 });
 
 test('Emojis : un message avec emojis (famille, teinte, drapeau, cœur) gardé entier, affiché tel quel, même après rechargement', async () => {

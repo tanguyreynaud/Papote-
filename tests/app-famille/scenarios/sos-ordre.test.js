@@ -55,6 +55,10 @@ test('Ordre d\'appel SOS : ↑/↓, double appui, enregistré, relu après actua
 
   await modifier(julie);
   assert.deepStrictEqual(await lignes(julie), ['Julie', 'Léa', 'Paul']);
+  // Tout le monde reçoit le SMS, la tablette n'appelle que les 5 premiers (Tanguy, 27/11) : dit sur l'écran ;
+  // à 3 proches, personne n'est « SMS seulement ».
+  await julie.page.locator('#sos-ordre-zone', { hasText: 'appelle les 5 premiers dans cet ordre' }).waitFor();
+  assert.strictEqual(await julie.page.locator('#sos-ordre-liste .sos-ordre-sms').count(), 0);
   // Même taille pour toutes les flèches ; la première ne monte pas, la dernière ne descend pas.
   const tailles = await julie.page.locator('#sos-ordre-liste .sos-ordre-btn').evaluateAll((bs) => bs.map((b) => `${b.offsetWidth}x${b.offsetHeight}`));
   assert.strictEqual(new Set(tailles).size, 1, `flèches de tailles différentes : ${tailles}`);

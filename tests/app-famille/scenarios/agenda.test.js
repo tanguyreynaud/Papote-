@@ -40,7 +40,7 @@ test('Rappels : ajout, erreurs, modification, pause, confirmation par la tablett
   await julie.page.locator('#sheet-reminder').waitFor({ state: 'hidden' });
   const doliprane = julie.page.locator('#reminders li', { hasText: 'Prendre le Doliprane' });
   await doliprane.waitFor();
-  assert.match(await doliprane.innerText(), /Tous les jours à 09:00/);
+  assert.match(await doliprane.innerText(), /Tous les jours à 9 h/);
   assert.match(await doliprane.innerText(), /Prévenue 15 min avant/);
 
   // Certains jours : il faut au moins un jour.
@@ -61,7 +61,7 @@ test('Rappels : ajout, erreurs, modification, pause, confirmation par la tablett
   await julie.page.click('#btn-reminder');
   const kine = julie.page.locator('#reminders li', { hasText: 'Kiné' });
   await kine.waitFor();
-  assert.match(await kine.innerText(), /Le mar, ven à 14:30/);
+  assert.match(await kine.innerText(), /Le mar, ven à 14 h 30/);
   assert.match(await kine.innerText(), /Prévenue 1 h avant · jusqu'au/);
 
   // Une seule fois, demain.
@@ -86,7 +86,7 @@ test('Rappels : ajout, erreurs, modification, pause, confirmation par la tablett
   await julie.page.fill('#rem-time', '10:30');
   await julie.page.click('#btn-reminder');
   await g.toast(julie, 'Rappel modifié');
-  await doliprane.filter({ hasText: 'Tous les jours à 10:30' }).waitFor();
+  await doliprane.filter({ hasText: 'Tous les jours à 10 h 30' }).waitFor();
 
   // Pause d'une semaine, puis reprise.
   await doliprane.locator('button', { hasText: 'Mettre en pause' }).click();
@@ -100,7 +100,7 @@ test('Rappels : ajout, erreurs, modification, pause, confirmation par la tablett
   // Mamie confirme sur la tablette.
   const id = rappels.find((r) => r.title === 'Prendre le Doliprane').id;
   await s.db.doc(`families/${fid}/reminders/${id}`).update({ lastAck: `${jour(0)}T10:32` });
-  await doliprane.locator('.seen', { hasText: 'Mamie Emma a confirmé aujourd\'hui à 10:32' }).waitFor();
+  await doliprane.locator('.seen', { hasText: 'Mamie Emma a confirmé aujourd\'hui à 10 h 32' }).waitFor();
 
   // Suppression.
   await kine.locator('button[aria-label="Supprimer ce rappel"]').click();

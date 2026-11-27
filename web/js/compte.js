@@ -3,7 +3,7 @@
 import {
   GoogleAuthProvider, EmailAuthProvider, signInWithPopup, linkWithPopup, signInWithCredential,
   signInWithRedirect, linkWithRedirect, getRedirectResult,
-  linkWithCredential, isSignInWithEmailLink, signInWithEmailLink, signOut,
+  linkWithCredential, isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, signOut,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
@@ -63,14 +63,22 @@ export async function finishRedirect() {
 }
 
 // Le lien de connexion part de Papote, en français (fonction lienConnexion, functions/connexion.js), plus de
-// l'e-mail anglais de Firebase (Tanguy, 20/11). Jamais de repli vers sendSignInLinkToEmail : si la fonction échoue,
-// l'erreur remonte et la personne réessaie (famille.js, form-email). Un double appui pendant l'envoi reçoit la même
+// l'e-mail anglais de Firebase (Tanguy, 20/11). Si la fonction échoue, l'erreur remonte et la personne réessaie
+// (famille.js, form-email) : pas de repli sur une panne. Un seul repli, demandé par le serveur lui-même
+// (« repli: true », Tanguy 27/11) : plus de 100 liens partis de Papote aujourd'hui, ou réserve des e-mails urgents
+// entamée. Le lien est alors demandé à Firebase, en français (e-mail de Google, mêmes réglages de retour) :
+// personne n'est bloqué, et les e-mails d'alerte et de SOS gardent leur place. Un double appui pendant l'envoi reçoit la même
 // réponse : un seul e-mail part.
 let envoiEnCours = null;
 export function sendEmailLink(email) {
   if (envoiEnCours) return envoiEnCours;
   envoiEnCours = (async () => {
-    await httpsCallable(getFunctions(getApp(), 'europe-west1'), 'lienConnexion')({ email, retour: `${location.origin}/?lien=1` });
+    const retour = `${location.origin}/?lien=1`;
+    const { data } = await httpsCallable(getFunctions(getApp(), 'europe-west1'), 'lienConnexion')({ email, retour });
+    if (data && data.repli === true) {
+      auth.languageCode = 'fr';
+      await sendSignInLinkToEmail(auth, email, { url: retour, handleCodeInApp: true });
+    }
     try { localStorage.setItem(EMAIL_KEY, email); } catch (e) { /* stockage indisponible */ }
   })().finally(() => { envoiEnCours = null; });
   return envoiEnCours;

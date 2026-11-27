@@ -59,7 +59,7 @@ test('SOS avec carte SIM : un SMS à la famille (le numéro donné par Julie), p
 // A47-2 : Mamie appuie encore sur SOS peu après (inquiète, ou personne ne l'a rassurée) : la famille a déjà le SMS,
 // pas de deuxième dans les 10 minutes, même après un redémarrage de la tablette ; les appels, eux, repartent.
 test('SOS appuyé plusieurs fois (carte SIM) : un seul SMS en 10 min, même tablette rallumée ; l\'appel vers Julie repart à chaque appui', { timeout: 220_000 }, async () => {
-  // L'horloge de la page est tenue par l'essai : un SOS ne compte comme « répondu » qu'après 40 s en ligne (sinon la
+  // L'horloge de la page est tenue par l'essai : un SOS ne compte comme « répondu » qu'après 2 min 15 en ligne (Tanguy, 27/11 ; avant 40 s) (sinon la
   // messagerie du proche arrêterait la chaîne), on les fait passer d'un coup.
   const { mamie, uid } = await familleChezMamie({ etat: { telephone: true }, heure: maintenantAParis() });
   const appelsTel = () => mamie.appels('phoneCall');
@@ -70,7 +70,7 @@ test('SOS appuyé plusieurs fois (carte SIM) : un seul SMS en 10 min, même tabl
     // quelques sonneries, comme une vraie personne.
     await mamie.page.clock.fastForward('00:06');
     await mamie.page.evaluate((x) => window.Papote.onGsm(x), { etat: 'enLigne', ...julie });
-    await mamie.page.clock.fastForward('00:41');
+    await mamie.page.clock.fastForward('02:16');
     await mamie.page.evaluate((x) => window.Papote.onGsm(x), { etat: 'fin', cause: 'raccroche', ...julie });
     await mamie.page.locator('.call-out').waitFor({ state: 'hidden', timeout: 20_000 })
       .catch(async () => assert.fail(`L'écran du SOS reste affiché après l'appel.\n${await diagnostic(mamie)}`));

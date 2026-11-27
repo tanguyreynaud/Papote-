@@ -137,7 +137,6 @@ async function remplirEtape(t, { tablette, lue = tablette.ref }) {
     await g.repondreSim(tablette);
     await p.waitForFunction(() => /La carte marche/.test(document.querySelector('.pc-sim-message')?.textContent || ''), null, { timeout: 15_000 });
   }
-  if (/Enceinte/.test(titre)) await p.locator('input[name=enceinte][value=non]').click();
   if (/Fermer le colis/.test(titre)) await p.locator('.pc-contenu input').fill(lue);
   if (/étiquette/i.test(titre) && await p.getByRole('button', { name: 'Créer l\'étiquette' }).isVisible()) {
     // Double appui : une seule étiquette payée.
@@ -158,7 +157,7 @@ async function commandePrete() {
 
 // ---------- Le matin ----------
 
-test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi » en 12 étapes, mauvais numéro T-… refusé, colis déposé une seule fois', async () => {
+test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi » en 11 étapes, mauvais numéro T-… refusé, colis déposé une seule fois', async () => {
   const { tablette, id } = await commandePrete();
   const t = await ouvrirAdmin('ordinateur');
   const p = t.page;
@@ -172,7 +171,7 @@ test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi 
 
   // Chaque étape : « C'est fait » reste éteint tant que tout n'est pas rempli et coché.
   const vues = [];
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < 10; i++) {
     const titre = await titreEtape(t);
     if (!/Envoi ou main propre/.test(titre)) assert.ok(await p.locator('.pc-suivant').isDisabled(), `étape « ${titre} » : bouton éteint avant les gestes`);
     // Tanguy se trompe de tablette en lisant le numéro collé dessus.
@@ -181,7 +180,7 @@ test('admin, le matin : « À faire » ouvre la commande, « Préparer l\'envoi 
     assert.strictEqual(await suivant(t), '', `étape « ${titre} »`);
   }
   assert.deepStrictEqual(vues, ['Envoi ou main propre ?', 'Choisir la tablette', 'Activer la carte SIM', 'Installer la carte SIM', 'Hors-forfait bloqué ?', 'Blocages chez l\'opérateur', 'La tablette dans le carton',
-    'Enceinte ?', 'Fermer le colis', 'Le numéro au feutre', 'L\'étiquette']);
+    'Fermer le colis', 'Le numéro au feutre', 'L\'étiquette']);
   assert.strictEqual(envois.length, 1, 'double appui sur « Créer l\'étiquette » : une seule étiquette payée');
   assert.strictEqual(nbAppels('gestionEtiquette'), 1);
 
@@ -257,7 +256,7 @@ test('admin, l\'après-midi : abonnement fini, la tablette revient complète («
   const zone = p.locator('.zone-remplacement:not([hidden])');
   assert.match(await zone.innerText(), /la tablette \(130 €\)/);
   assert.match(await zone.innerText(), /le chargeur et son câble \(10 €\)/);
-  assert.doesNotMatch(await zone.innerText(), /enceinte/i, 'pas d\'enceinte dans ce colis : pas proposée');
+  assert.doesNotMatch(await zone.innerText(), /enceinte/i, 'plus d\'enceinte (Tanguy, 27/11)');
   // Double appui sur « Enregistrer le retour » : une seule question, un seul retour.
   await p.getByRole('button', { name: 'Enregistrer le retour' }).dblclick();
   assert.strictEqual(await fenetre(t).count(), 1);

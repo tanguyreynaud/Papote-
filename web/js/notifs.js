@@ -5,6 +5,7 @@ import {
 import {
   db, collection, onSnapshot, toDate, doc, updateDoc, serverTimestamp,
 } from './firebase.js';
+import { heureFr, deOuD } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const WHAT = { photo: 'une photo', video: 'une vidéo', message: 'un message' };
@@ -170,19 +171,19 @@ function events() {
       const qui = c.answer?.uid ? who(c.answer.uid, c.answer.name) : null;
       const repondu = qui && (qui === 'Vous' ? 'vous avez répondu' : `${qui} a répondu`);
       if (repondu) add(date, 'phone', `${grand} a appelé toute la famille : ${repondu}`, moi, false, PAGE.call, true);
-      else if (manque) add(date, 'phone', `Appel manqué de ${grand}`, false, true);
+      else if (manque) add(date, 'phone', `Appel manqué ${deOuD(grand)}${grand}`, false, true);
     } else if (fromTablet) {
       if (c.state === 'ringing') continue;
       const to = who(c.calleeUid, c.calleeName);
-      if (manque) add(date, 'phone', `Appel manqué de ${grand}${to === 'Vous' ? '' : ` pour ${to}`}`, false, true);
+      if (manque) add(date, 'phone', `Appel manqué ${deOuD(grand)}${grand}${to === 'Vous' ? '' : ` pour ${to}`}`, false, true);
       else add(date, 'phone', `${grand} ${to === 'Vous' ? 'vous a appelé' : `a appelé ${to}`}`, false, false, PAGE.call, true);
     } else {
       // Mon propre appel (même sans réponse de la tablette) n'est pas une nouveauté pour moi : hors du chiffre.
       const moi = c.callerUid === session.uid;
       const from = who(c.callerUid, c.callerName);
       const verb = from === 'Vous' ? 'avez' : 'a';
-      if (c.state === 'missed') add(date, 'call', `${grand} n'a pas répondu à ${moi ? 'votre appel' : `l'appel de ${from}`}`, moi, true);
-      else if (c.state === 'declined') add(date, 'call', `${grand} a refusé ${moi ? 'votre appel' : `l'appel de ${from}`}`, moi, true);
+      if (c.state === 'missed') add(date, 'call', `${grand} n'a pas répondu à ${moi ? 'votre appel' : `l'appel ${deOuD(from)}${from}`}`, moi, true);
+      else if (c.state === 'declined') add(date, 'call', `${grand} a refusé ${moi ? 'votre appel' : `l'appel ${deOuD(from)}${from}`}`, moi, true);
       else if (c.state !== 'ringing') add(date, 'call', `${from} ${verb} appelé ${grand}`, moi, false, PAGE.call, true);
     }
   }
@@ -200,7 +201,7 @@ function events() {
 
 function when(date) {
   const now = new Date();
-  const hm = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const hm = heureFr(date);
   if (date.toDateString() === now.toDateString()) return hm;
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);

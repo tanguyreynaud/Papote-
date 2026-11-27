@@ -19,7 +19,11 @@ banc.brancher();
 
 const FENETRE = '.dialog-back:not(.closing) .dialog.dialog-sos';
 const PRENDRE = `${FENETRE} button:has-text("Je m'en occupe")`;
-const heureFr = (ms) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+// L'heure comme l'app la dit : « 10 h 19 », « 10 h » (Tanguy, 27/11).
+const heureFr = (ms) => {
+  const [h, m] = new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).split(':').map(Number);
+  return m ? `${h} h ${String(m).padStart(2, '0')}` : `${h} h`;
+};
 
 async function tabletteDe(fid) {
   const tabs = (await g.liste(`families/${fid}/members`)).filter((m) => m.role === 'tablette');

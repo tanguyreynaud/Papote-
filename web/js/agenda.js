@@ -3,7 +3,7 @@
 import {
   db, doc, getDoc, collection, onSnapshot, serverTimestamp, writeBatch, bumpRev, deleteField,
 } from './firebase.js';
-import { askConfirm, notice, chooseAction, fonduNouveaux, partir } from './ui.js';
+import { askConfirm, notice, chooseAction, fonduNouveaux, partir, heureFr, deOuD } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const JOURS_COURTS = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
@@ -47,18 +47,18 @@ function todayKey() {
 }
 
 function describe(r) {
-  if (r.repeat === 'daily') return `Tous les jours à ${r.time}`;
+  if (r.repeat === 'daily') return `Tous les jours à ${heureFr(r.time)}`;
   if (r.repeat === 'weekly') {
     const days = [1, 2, 3, 4, 5, 6, 0].filter((d) => (r.days || []).includes(d)).map((d) => JOURS_COURTS[d]);
-    return `Le ${days.join(', ')} à ${r.time}`;
+    return `Le ${days.join(', ')} à ${heureFr(r.time)}`;
   }
   const date = r.date ? new Date(`${r.date}T00:00`) : null;
   const label = date ? date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
-  return `Le ${label} à ${r.time}`;
+  return `Le ${label} à ${heureFr(r.time)}`;
 }
 
 const POUR_TOUJOURS = '9999-12-31';
-const dateCourte = (j) => new Date(`${j}T00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+const dateCourte = (j) => new Date(`${j}T00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }).replace(/^1 /, '1er ');
 const enPause = (r) => !!r.enPauseJusquau && r.enPauseJusquau >= todayKey();
 const avanceTexte = (m) => (m === 0 ? 'à l\'heure seulement' : m >= 60 ? `${m / 60} h avant` : `${m} min avant`);
 
@@ -166,7 +166,7 @@ function renderReminders() {
     if (r.lastAck && r.lastAck.startsWith(todayKey())) {
       const ack = document.createElement('p');
       ack.className = 'seen small';
-      ack.textContent = `${session.family.name} a confirmé aujourd'hui à ${r.lastAck.slice(11)} ✓`;
+      ack.textContent = `${session.family.name} a confirmé aujourd'hui à ${heureFr(r.lastAck.slice(11))} ✓`;
       body.append(ack);
     } else if (r.lastSeen && r.lastSeen.startsWith(todayKey())) {
       // La tablette a vu un visage devant le rappel, sans qu'il soit encore confirmé.
@@ -213,9 +213,9 @@ function renderBirthdays() {
     s.className = b.days === 0 ? 'seen small' : 'muted small';
     s.textContent = soon;
     body.append(s);
-    body.append(editButton(`Modifier l'anniversaire de ${b.name}`, () => openEdit('birthdays', b)));
+    body.append(editButton(`Modifier l'anniversaire ${deOuD(b.name)}${b.name}`, () => openEdit('birthdays', b)));
     li.append(deleteButton("Supprimer l'anniversaire", async () => {
-      if (await askConfirm(`Supprimer l'anniversaire de ${b.name} ?`)) { const depart = partir(li); await depart.fini; await remove('birthdays', b.id).catch((e) => { depart.revenir(); throw e; }); }
+      if (await askConfirm(`Supprimer l'anniversaire ${deOuD(b.name)}${b.name} ?`)) { const depart = partir(li); await depart.fini; await remove('birthdays', b.id).catch((e) => { depart.revenir(); throw e; }); }
     }));
     ul.append(li);
   }

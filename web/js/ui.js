@@ -308,13 +308,31 @@ export function queFaireTablette(nom, depuis) {
     title: 'Que faire ?', stack: true, cls: 'dialog-que-faire',
     etapes: [
       { icone: 'i-phone', titre: `Vous êtes loin ? Appelez ${nom} ou un voisin`, texte: 'Demandez de vérifier que la tablette est branchée et que son écran est allumé.' },
-      { icone: 'i-plug', titre: 'Écran noir : il faut la rallumer', texte: 'Brancher le chargeur, puis appuyer 3 secondes sur le bouton marche/arrêt, sur le côté.' },
+      { icone: 'i-plug', titre: 'Écran noir : il faut la rallumer', texte: 'Brancher le chargeur, puis appuyer 3 secondes sur le bouton d\'allumage, sur le côté.' },
       { icone: 'i-wifi', titre: 'Elle revient toute seule', texte: 'En quelques minutes. Ce message disparaît dès qu\'elle est reconnectée.' },
     ],
   });
 }
 
 /** Message d'échec avec « Besoin d'aide ? » : rend 'aide' si la personne le touche. */
+/**
+ * Fiche contact téléchargée sur Android (Tanguy, 27/11) : Chrome n'affiche pas toujours de bouton « Ouvrir » en bas
+ * de l'écran (« ça ne veut rien dire »). La notification « Téléchargement terminé » et l'app Fichiers existent sur
+ * tous les Android : les 3 étapes passent par là, au même dessin que « Que faire ? ».
+ */
+export function etapesFicheContact(nom, fichier) {
+  return dialog('Votre téléphone a téléchargé sa fiche contact. Pour l\'enregistrer :', [
+    { label: 'Compris', value: true, cls: 'primary' },
+  ], {
+    title: `Enregistrer ${nom}`, stack: true, cls: 'dialog-que-faire',
+    etapes: [
+      { icone: 'i-bell', titre: 'Ouvrez vos notifications', texte: 'Faites glisser un doigt du haut de l\'écran vers le bas.' },
+      { icone: 'i-download', titre: `Touchez « ${fichier} »`, texte: 'Pas dans les notifications ? Ouvrez l\'app Fichiers, puis Téléchargements.' },
+      { icone: 'i-user-plus', titre: 'Choisissez Contacts et validez', texte: `Le numéro de ${nom} est alors dans vos contacts.` },
+    ],
+  });
+}
+
 export function noticeAide(message) {
   return dialog(message, [
     { label: 'Besoin d\'aide ?', value: 'aide', cls: 'secondary' },
@@ -385,3 +403,14 @@ export function partir(ligne) {
     revenir() { ligne.classList.remove('part'); if (avant === null) ligne.removeAttribute('style'); else ligne.setAttribute('style', avant); },
   };
 }
+
+// L'heure comme on la dit : « 9 h 30 », « 21 h » (Tanguy, 27/11 : plus de « 09:30 »). Une date, ou un texte « 09:30 ».
+export function heureFr(v) {
+  let h; let m;
+  if (v instanceof Date) { h = v.getHours(); m = v.getMinutes(); } else { [h, m] = String(v || '').split(':').map(Number); }
+  if (!Number.isFinite(h)) return String(v || '');
+  return m ? `${h} h ${String(m).padStart(2, '0')}` : `${h} h`;
+}
+
+// « de Jeanne », « d'Anne », « d'Henri » : l'élision devant une voyelle ou un h (Tanguy, 27/11).
+export const deOuD = (nom) => (/^[aeiouyhàâäéèêëîïôöùûü]/i.test(String(nom || '').trim()) ? 'd\'' : 'de ');

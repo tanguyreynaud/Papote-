@@ -60,14 +60,14 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   await julie.page.waitForTimeout(600);
   assert.strictEqual((await g.lire(`families/${fid}`)).rev, rev0 + 1, 'double appui : une seule écriture');
   assert.strictEqual(await julie.page.isChecked('#opt-lecture'), false);
-  // Écran : durée d'affichage d'un envoi ou d'un rappel pas encore vu, 3 minutes sans réglage, 1 à 5 au choix.
+  // Écran : durée d'affichage d'un envoi ou d'un rappel pas encore vu, 5 minutes sans réglage (Tanguy, 27/11), 1 à 5 au choix.
   await modifier(julie, 'duree-card');
-  assert.strictEqual(await julie.page.inputValue('#opt-duree-affichage'), '3', '3 minutes sans réglage');
+  assert.strictEqual(await julie.page.inputValue('#opt-duree-affichage'), '5', '5 minutes sans réglage');
   assert.deepStrictEqual(await julie.page.locator('#opt-duree-affichage option').allInnerTexts(), ['1 minute', '2 minutes', '3 minutes', '4 minutes', '5 minutes']);
-  await julie.page.selectOption('#opt-duree-affichage', '5');
+  await julie.page.selectOption('#opt-duree-affichage', '2');
   await enregistrer(julie, 'duree-card');
   await g.toast(julie, 'Durée envoyée à la tablette');
-  await julie.page.locator('#duree-value', { hasText: '5 minutes' }).waitFor();
+  await julie.page.locator('#duree-value', { hasText: '2 minutes' }).waitFor();
   // Radio seulement en Wi-Fi (Tanguy, 23/11) : cachée tant que la tablette n'a pas de Wi-Fi, là dès qu'elle en a un.
   assert.strictEqual(await julie.page.locator('#radio-card').isVisible(), false, 'pas de radio sans Wi-Fi');
   const membreTab = (await g.liste(`families/${fid}/members`)).find((m) => m.role === 'tablette');
@@ -111,7 +111,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   // Chaque réglage n'a changé que le sien : rien n'a été écrasé par un autre.
   fam0 = await g.lire(`families/${fid}`);
   const options = fam0.options;
-  assert.strictEqual(options.dureeAffichage, 5, 'durée d\'affichage enregistrée pour la tablette');
+  assert.strictEqual(options.dureeAffichage, 2, 'durée d\'affichage enregistrée pour la tablette');
   assert.strictEqual(options.lecture, false);
   assert.strictEqual(options.sos, true);
   assert.strictEqual(options.meteo, false);
@@ -221,7 +221,7 @@ test('Réglages de la tablette : nom, options et radio, volume, nuit, météo, p
   const apresMeteo = await g.lire(`families/${fid}`);
   assert.strictEqual(apresMeteo.meteoVille.nom, 'Saint-Martin-de-Valamas');
   assert.strictEqual(apresMeteo.options.meteo, true);
-  assert.strictEqual(apresMeteo.options.dureeAffichage, 5, 'les autres options gardées');
+  assert.strictEqual(apresMeteo.options.dureeAffichage, 2, 'les autres options gardées');
 
   // Photo de Mamie (affichée quand elle appelle) : sur les deux fiches de la tablette.
   await julie.page.click('#family-name-card .setting-modify');

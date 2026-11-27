@@ -272,7 +272,7 @@ function prendreFichiers(genre) {
 
 function lienPiece(piece) {
   return h('button', { type: 'button', class: 'piece', title: piece.nom, onclick: (e) => { e.stopPropagation(); return ouvrirPiece(piece); } },
-    '📎 ', piece.nom.length > 28 ? `${piece.nom.slice(0, 25)}…` : piece.nom);
+    h('span', { class: 'piece-icone', 'aria-hidden': 'true' }, '📎'), h('span', { class: 'piece-nom' }, piece.nom));
 }
 
 // ---------- État ----------
@@ -387,8 +387,39 @@ document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) =
     const page = b.closest('[data-panneau]').dataset.panneau;
     history.replaceState(null, '', `#${page}/${b.dataset.onglet}`);
     choisirOnglet(page, b.dataset.onglet);
+    montrerRecherche(page);
   });
 });
+// Rangées de pastilles et d'onglets qui défilent (téléphone) : la classe « suite » estompe le bord droit tant qu'il
+// reste quelque chose à voir de ce côté (admin-ui.css). Recalculé quand la page change, qu'on défile ou qu'on tourne l'écran.
+let suitePrevue = false;
+function majSuites() {
+  suitePrevue = false;
+  for (const r of document.querySelectorAll('.filtres, .onglets')) {
+    if (!r.clientWidth) continue;
+    // L'onglet ou la pastille en cours doit se voir : on l'amène dans la rangée quand il change.
+    const actif = r.querySelector(':scope > .actif');
+    if (actif && actifVu.get(r) !== actif) {
+      actifVu.set(r, actif);
+      const debut = actif.offsetLeft - r.offsetLeft;
+      if (debut < r.scrollLeft || debut + actif.offsetWidth > r.scrollLeft + r.clientWidth - 28) r.scrollLeft = Math.max(0, debut - 16);
+    }
+    r.classList.toggle('suite', r.scrollLeft + r.clientWidth < r.scrollWidth - 2);
+  }
+}
+const actifVu = new WeakMap();
+function prevoirSuites() { if (!suitePrevue) { suitePrevue = true; requestAnimationFrame(majSuites); } }
+new MutationObserver(prevoirSuites).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+window.addEventListener('resize', prevoirSuites);
+document.addEventListener('scroll', (e) => { if (e.target.classList?.contains('filtres') || e.target.classList?.contains('onglets')) prevoirSuites(); }, true);
+prevoirSuites();
+
+// La recherche (commandes, tablettes, dépenses) ne sert pas sur les pages de chiffres : Site, et Comptabilité hors Dépenses.
+function montrerRecherche(page) {
+  const onglet = document.querySelector(`[data-panneau="${page}"] .onglets button[data-onglet].actif`)?.dataset.onglet;
+  const site = page === 'statistiques' || (page === 'clients' && ONGLETS_SITE.includes(onglet));
+  document.querySelector('.contenu-tete .recherche').hidden = site || (page === 'compta' && onglet !== 'depenses');
+}
 
 // Adresses qui ouvrent une page sur un bloc précis (id de l'élément) plutôt qu'en haut.
 const ANCRES = { 'compta/depenses/releve': 'courrier', 'compta/bilan/rentabilite': 'rentabilite', 'compta/urssaf/registres': 'registres' };
@@ -429,6 +460,7 @@ function afficherPage() {
   // Fiche (commande, tablette, carte SIM…) : son propre titre suffit, le lien « ‹ Clients » remonte à la place du grand titre.
   document.querySelector('.contenu').classList.toggle('page-fiche', !!document.querySelector(`[data-panneau="${page}"] > p > a.retour`));
   $('periode').hidden = !AVEC_PERIODE.includes(page);
+  montrerRecherche(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   // Adresse avec une ancre (ANCRES) : la page s'ouvre sur ce bloc ; sinon en haut.
   const ancre = ANCRES[location.hash.slice(1)];
@@ -951,6 +983,8 @@ function afficherAccueil() {
     [donnees.sauvegardeAFaire ? 1 : 0, donnees.sauvegardeAFaire || '', '#accueil', 'ko'],
     // Carte SIM d'une tablette sans réseau depuis plus de 2 h (texte du serveur, sim-hors-service.js), levée au retour.
     ...(donnees.simAFaire || []).map((texte) => [1, texte, '#stock', 'ko']),
+    // Déclarations des familles pas encore traitées (texte du serveur, declaration.js) : ouvre Clients > Déclarations.
+    ...(donnees.declarationsAFaire || []).map((texte) => [1, texte, '#clients/declarations', 'ko']),
     // Même numéro de portable pour deux proches d'une famille (texte du serveur, tel-unique.js) : ouvre la famille.
     ...(donnees.telDoubles || []).map((d) => [1, d.texte, `#clients/familles/${encodeURIComponent(d.fid)}`, '']),
   ].filter(([n]) => n > 0);
@@ -1583,10 +1617,10 @@ function etiquettesDe(c) {
 
 // Matériel revenu : ce qui manque est prélevé au client (tabletteRendue, index.js), la tablette passe
 // « Revenue » (à vérifier) ou « Perdue » si elle manque.
-const PRIX_MATERIEL = { tablette: 130, chargeur: 10, enceinte: 10 };
+const PRIX_MATERIEL = { tablette: 130, chargeur: 10 };
 function zoneMaterielRecu(c, t) {
-  const cases = [['tablette', 'la tablette'], ['chargeur', 'le chargeur et son câble'], c.enceinteFournie === true ? ['enceinte', 'l\'enceinte'] : null]
-    .filter(Boolean).map(([k, v]) => h('label', { class: 'case' }, h('input', { type: 'checkbox', value: k }), ` ${v} (${PRIX_MATERIEL[k]} €)`));
+  const cases = [['tablette', 'la tablette'], ['chargeur', 'le chargeur et son câble']]
+    .map(([k, v]) => h('label', { class: 'case' }, h('input', { type: 'checkbox', value: k }), ` ${v} (${PRIX_MATERIEL[k]} €)`));
   const msg = h('p', { class: 'small error', hidden: true });
   const titre = h('strong', {}, 'Colis de retour reçu. ');
   let enMain = false;
@@ -1702,7 +1736,7 @@ function formulaireRemplacement(c, t) {
     h('option', { value: 'accessoire' }, 'un accessoire'));
   const nouveau = h('select', { 'aria-label': 'Remplacé par', hidden: true });
   // Raison du remplacement de la tablette (Tanguy, 11/11) : même barème que functions/abonnement.js (montantRemplacement).
-  const prixPerte = c.enceinteFournie === true ? 150 : 140;
+  const prixPerte = 140;
   const RAISONS = { panne: 0, casse: 130, perte: prixPerte };
   const gratuit = (r) => c.offerte || !RAISONS[r];
   const raison = h('select', { 'aria-label': 'Raison du remplacement', hidden: true },
@@ -1945,6 +1979,7 @@ function afficherStock() {
       const aSavoir = alertes.length ? h('span', { class: 'texte-ko' }, alertes.join(' · '))
         : t.essai === true ? h('span', { class: 'muted' }, 'tablette d\'essai')
           : DISPONIBLES.includes(t.etat) && dansUneFamille(t) ? h('span', { class: 'muted' }, 'pas à vendre')
+          : tabletteLibre(t) && t.enVente === false ? h('span', { class: 'muted' }, 'pas en vente')
           : t.modele && !/tab 60 pro/i.test(t.modele) ? h('span', { class: 'muted' }, t.modele) : '';
       return {
         onclick: () => ouvrirTablette(t.id),
@@ -2190,7 +2225,7 @@ function remplirPageSim(id) {
             ...ligne('Coût actuel', cout != null && cout !== l.prix ? euros(cout) : null),
             ...modif('Activée le', l.activation ? jour(l.activation) : null, 'activation', { valeur: dateChamp(l.activation), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }),
             ...(l.statut === 'stock' ? modif('À activer avant', l.activerAvant ? jour(l.activerAvant) : null, 'activerAvant', { valeur: dateChamp(l.activerAvant), type: 'date', convertir: (v) => (v ? dateSaisie(v) : null) }) : []),
-            ...modif('Achat', lienAchat(l.depense), 'depense', { valeur: l.depense || '', options: optionsAchats(), convertir: (v) => v || null }),
+            ...modif('Achat', lienAchat(l.depense), 'depense', { valeur: l.depense || '', liste: listeAchats(), titreListe: 'Choisir l\'achat', convertir: (v) => v || null }),
             ...remplis.flatMap(([, ligneSim]) => ligneSim)),
           // Infos facultatives encore vides : repliées, pour ne pas aligner cinq « à compléter » (Tanguy, 20/11).
           vides.length ? h('details', { class: 'aide-repliee a-completer', open: replieOuvert || null },
@@ -2251,87 +2286,63 @@ function carteRecharges(l, modif, vue) {
       ' La tablette reçoit le forfait (Go notés plus haut, 1 Go sinon) et la date de recharge : à 70 % elle réduit l\'image des appels, à 88 % encore plus, à 95 % elle les passe sans image et les vidéos attendent le Wi-Fi.')),
     recharges.length ? h('div', { class: 'table cartes' }, tableRecharges(recharges)) : h('p', { class: 'muted small' }, 'Aucune recharge notée.'));
 }
-// Blocages demandés à l'opérateur (Tanguy, 11/11) : un bouton par blocage, appuyé = activé chez l'opérateur. Notés
-// une fois sur la carte : « Préparer l'envoi » ne les redemande plus, et le serveur refuse l'étiquette et « Colis
-// déposé » tant qu'il en manque un. Même comportement que « À la fin du forfait » : effet tout de suite, une roue
-// pendant l'envoi, un seul envoi même en touchant deux fois.
+// Blocages demandés à l'opérateur (Tanguy, 11/11 et 19/11) : le hors-forfait, obligatoire, puis les quatre autres.
+// Notés une fois sur la carte : « Préparer l'envoi » ne les redemande plus, et le serveur refuse l'étiquette et
+// « Colis déposé » tant qu'il en manque un.
+// Tanguy 27/11 : de vraies cases à cocher (les boutons « appuyés » passaient en texte blanc), et rien n'est envoyé
+// avant « Enregistrer » : on coche ce qu'on veut, on enregistre une fois. Un seul envoi même en touchant deux fois.
 function carteBlocages(l) {
   if (l.statut === 'resiliee') return null;
-  const etat = Object.fromEntries(BLOCAGES_SIM.map(([k]) => [k, !!(l.blocages && l.blocages[k] === true)]));
+  const enregistre = { horsForfait: horsForfaitBloque(l), ...Object.fromEntries(BLOCAGES_SIM.map(([k]) => [k, !!(l.blocages && l.blocages[k] === true)])) };
   let envoi = false;
-  // Une liste à cocher : chaque ligne est un bouton (coché = aria-pressed), le bilan en dessous dit si la carte
-  // peut partir (vert) ou ce qu'il reste (orange).
-  const boutons = BLOCAGES_SIM.map(([k, texte]) => h('button', {
-    type: 'button', class: 'ligne-blocage no-print', 'data-blocage': k, 'aria-pressed': String(etat[k]),
-  }, h('span', { class: 'coche', 'aria-hidden': 'true' }), h('span', {}, texte.charAt(0).toUpperCase() + texte.slice(1))));
-  const resume = h('p', { class: 'small' });
-  const afficher = () => {
-    boutons.forEach((b) => b.setAttribute('aria-pressed', String(etat[b.dataset.blocage])));
-    const reste = BLOCAGES_SIM.filter(([k]) => !etat[k]).length + (horsForfaitBloque(l) ? 0 : 1);
-    resume.textContent = blocagesFaits({ blocages: etat })
-      ? (horsForfaitBloque(l) ? '✓ Tout est bloqué : la carte peut partir.' : 'Les quatre blocages sont notés. Reste le hors-forfait, plus haut.')
-      : `Encore ${reste} à faire : pas d'étiquette ni de « Colis déposé » pour cette carte.`;
-    resume.className = `bilan-blocages ${blocagesFaits({ blocages: etat }) && horsForfaitBloque(l) ? 'ok' : 'a-faire'}`;
+  const caseDe = (cle, texte, attrs = {}) => {
+    const entree = h('input', { type: 'checkbox', checked: enregistre[cle], 'data-blocage': cle, ...attrs });
+    return { cle, entree, ligne: h('label', { class: `ligne-case no-print${cle === 'horsForfait' ? ' case-hors-forfait' : ''}` }, entree, h('span', {}, texte)) };
   };
-  for (const b of boutons) {
-    b.addEventListener('click', async () => {
-      if (envoi) return;
-      envoi = true;
-      const k = b.dataset.blocage;
-      etat[k] = !etat[k];
-      afficher();
-      b.classList.add('charge');
-      const texte = BLOCAGES_SIM.find(([x]) => x === k)[1];
-      const ok = await modifierChampsSim(l.id, { blocages: { ...etat } }, etat[k] ? `Noté : blocage activé (${texte})` : `Noté : blocage retiré (${texte})`);
-      b.classList.remove('charge');
-      if (!ok) { etat[k] = !etat[k]; afficher(); }
-      envoi = false;
-    });
-  }
+  const horsForfait = caseDe('horsForfait', CASE_HORS_FORFAIT, { 'data-hors-forfait': '' });
+  const autres = BLOCAGES_SIM.map(([k, texte]) => caseDe(k, texte.charAt(0).toUpperCase() + texte.slice(1)));
+  const cases = [horsForfait, ...autres];
+  const aide = h('p', { class: 'small', 'data-hors-forfait-aide': '' });
+  aide.textContent = enregistre.horsForfait
+    ? `Noté${l.horsForfaitBloqueLe ? ` le ${jour(l.horsForfaitBloqueLe)}` : ''}${l.horsForfaitBloquePar ? ` par ${l.horsForfaitBloquePar}` : ''} : aucun hors-forfait possible sur cette ligne.`
+    : 'Tant que cette case n\'est pas cochée, la tablette de cette ligne ne part pas. Activez le blocage du hors-forfait dans l\'espace client de l\'opérateur, puis cochez-la.';
+  if (enregistre.horsForfait) aide.classList.add('muted');
+  const resume = h('p', { class: 'small' });
+  const bouton = h('button', { type: 'button', class: 'primary no-print', 'data-enregistrer-blocages': '', disabled: true }, 'Enregistrer');
+  const change = () => cases.some((c) => c.entree.checked !== enregistre[c.cle]);
+  const afficher = () => {
+    bouton.disabled = envoi || !change();
+    const reste = cases.filter((c) => !enregistre[c.cle]).length;
+    resume.textContent = change() ? 'Pas encore enregistré.'
+      : reste ? `Encore ${reste} à faire : pas d'étiquette ni de « Colis déposé » pour cette carte.`
+        : '✓ Tout est bloqué : la carte peut partir.';
+    resume.className = `bilan-blocages ${!change() && !reste ? 'ok' : 'a-faire'}`;
+  };
+  for (const c of cases) c.entree.addEventListener('change', afficher);
+  bouton.addEventListener('click', async () => {
+    if (envoi || !change()) return;
+    envoi = true;
+    cases.forEach((c) => { c.entree.disabled = true; });
+    afficher();
+    const champs = {};
+    if (horsForfait.entree.checked !== enregistre.horsForfait) champs.horsForfaitBloque = horsForfait.entree.checked;
+    if (autres.some((c) => c.entree.checked !== enregistre[c.cle])) champs.blocages = Object.fromEntries(autres.map((c) => [c.cle, c.entree.checked]));
+    // Réussi : la fiche est redessinée avec ce qui est enregistré. Raté : les cases restent comme on les a cochées.
+    boutonCharge(bouton, true);
+    const ok = await modifierChampsSim(l.id, champs, 'Blocages enregistrés');
+    boutonCharge(bouton, false);
+    if (!ok) { envoi = false; cases.forEach((c) => { c.entree.disabled = false; }); afficher(); }
+  });
   afficher();
   return h('div', { class: 'card' },
     h('h2', {}, 'Blocages chez l\'opérateur'),
-    caseHorsForfait(l),
-    h('div', { class: 'liste-blocages', role: 'group', 'aria-label': 'Blocages chez l\'opérateur' }, ...boutons),
+    h('div', { class: 'liste-blocages', role: 'group', 'aria-label': 'Blocages chez l\'opérateur' },
+      h('div', { class: 'bloc-hors-forfait' }, horsForfait.ligne, aide),
+      ...autres.map((c) => c.ligne)),
     resume,
+    bouton,
     h('details', { class: 'aide-repliee' }, h('summary', {}, 'Comment faire ?'),
-      h('p', {}, 'Activez chaque blocage dans l\'espace client de la ligne (ou au service client), puis cochez-le ici. C\'est la seule protection qui tient si quelqu\'un sort de l\'appli de la tablette.')));
-}
-
-// « Hors-forfait bloqué chez l'opérateur » (Tanguy, 19/11) : case obligatoire, non cochée sur les lignes d'avant.
-// Tant qu'elle ne l'est pas, la tablette de la ligne ne part pas (« Préparer l'envoi » et le serveur). Cochée tout de
-// suite, une roue pendant l'envoi, un seul envoi même en touchant deux fois ; le serveur note la date et l'auteur.
-function caseHorsForfait(l) {
-  let envoi = false;
-  let coche = horsForfaitBloque(l);
-  const entree = h('input', { type: 'checkbox', checked: coche, 'data-hors-forfait': '' });
-  const roue = h('span', { class: 'roue-attente', 'aria-hidden': 'true', hidden: true });
-  const etiquette = h('label', { class: 'case-hors-forfait no-print' }, entree, h('span', {}, CASE_HORS_FORFAIT), roue);
-  const aide = h('p', { class: 'small', 'data-hors-forfait-aide': '' });
-  const afficher = () => {
-    entree.checked = coche;
-    aide.textContent = coche
-      ? `Noté${l.horsForfaitBloqueLe && horsForfaitBloque(l) ? ` le ${jour(l.horsForfaitBloqueLe)}` : ''}${l.horsForfaitBloquePar && horsForfaitBloque(l) ? ` par ${l.horsForfaitBloquePar}` : ''} : aucun hors-forfait possible sur cette ligne.`
-      : 'Tant que cette case n\'est pas cochée, la tablette de cette ligne ne part pas. Activez le blocage du hors-forfait dans l\'espace client de l\'opérateur, puis cochez-la.';
-    aide.className = coche ? 'small muted' : 'small';
-  };
-  // Deuxième toucher pendant l'envoi : ignoré (pas de deuxième écriture, la case ne bouge pas).
-  entree.addEventListener('click', (e) => { if (envoi) e.preventDefault(); });
-  entree.addEventListener('change', async () => {
-    if (envoi) return;
-    envoi = true;
-    coche = entree.checked;
-    afficher();
-    etiquette.classList.add('charge');
-    roue.hidden = false;
-    const ok = await modifierChampsSim(l.id, { horsForfaitBloque: coche }, coche ? 'Noté : hors-forfait bloqué chez l\'opérateur' : 'Noté : hors-forfait pas bloqué');
-    etiquette.classList.remove('charge');
-    roue.hidden = true;
-    if (!ok) { coche = !coche; afficher(); }
-    envoi = false;
-  });
-  afficher();
-  return h('div', { class: 'bloc-hors-forfait' }, etiquette, aide);
+      h('p', {}, 'Activez chaque blocage dans l\'espace client de la ligne (ou au service client), cochez-le ici, puis touchez « Enregistrer ». C\'est la seule protection qui tient si quelqu\'un sort de l\'appli de la tablette.')));
 }
 
 // Ce que fait l'opérateur au bout du forfait (Tanguy, 5/11) : débit réduit (Lyca, Bouygues) ou internet coupé
@@ -2610,7 +2621,7 @@ function remplirPageAccessoire(id) {
       ...modif('Alerte sous', a.seuil != null ? String(a.seuil) : null, 'seuil', { valeur: a.seuil ?? '', mode: 'numeric', vide: 'pas d\'alerte', convertir: (v) => nombre(v, true) }),
       ...modif('Prix unitaire', a.prixAchat != null ? euros(a.prixAchat) : null, 'prixAchat', { valeur: enEuros(a.prixAchat), mode: 'decimal', suffixe: '€', convertir: convertirEuros }),
       ...modif('Achats', (a.depenses || []).length ? h('span', {}, ...a.depenses.flatMap((x, i) => [i ? ', ' : null, lienAchat(x)])) : badge('aucun achat lié', 'neutre'),
-        'depenses', { valeur: '', options: optionsAchats('Choisir l\'achat à ajouter'), convertir: (v) => (v ? [...(a.depenses || []), v] : (a.depenses || [])) }),
+        'depenses', { valeur: '', liste: listeAchats(false), titreListe: 'Choisir l\'achat à ajouter', convertir: (v) => (v ? [...(a.depenses || []), v] : (a.depenses || [])) }),
         ))),
       h('div', {}, h('div', { class: 'card' }, h('h2', {}, 'L\'accessoire'),
         h('dl', { class: 'fiche kv' },
@@ -3220,6 +3231,7 @@ function remplirTablette(id) {
       // Attribuée à une commande par « Préparer l'envoi » (SIM, accessoires, étiquette), pas à la main.
       ...ligne('Commande', c ? h('a', { href: `#commande/${encodeURIComponent(c.id)}` }, `Commande ${codeCommande(c.code)}${c.offerte ? ' (offerte)' : ''}`) : dansUneFamille(t) ? null : h('span', { class: 'muted' }, 'pas encore attribuée')),
       ...ligne('Client', c && c.email ? h('a', { href: `#client/${encodeURIComponent(c.email.toLowerCase())}` }, c.nom || c.email) : c ? c.nom : null),
+      ...ligne('Site', ligneVente(t)),
       ),
       groupe('La tablette',
       ...(fichesAchetees(t).length
@@ -3234,7 +3246,7 @@ function remplirTablette(id) {
           }, `${t.ref} rattachée à son achat`, 'Rattachement à l\'achat…') : Promise.resolve(false)),
         })
         : modif('Achat', t.depense ? ligneAchatTablette(t) : badge('aucun achat lié', 'neutre'), 'depense', {
-          valeur: t.depense || '', options: optionsAchats(), convertir: (v) => v || null })),
+          valeur: t.depense || '', liste: listeAchats(), titreListe: 'Choisir l\'achat', convertir: (v) => v || null })),
       ...modif('N° de série', t.numero || t.serieAndroid, 'numero', { valeur: t.numero || t.serieAndroid, vide: 'pas encore noté' }),
       ...modif('Modèle', t.modele, 'modele', { valeur: t.modele }),
       ...ligneModifiable('Carte SIM', simDuKit(t), {
@@ -3278,6 +3290,27 @@ function remplirTablette(id) {
   if (!$('dt-historique').children.length) $('dt-historique').append(h('li', {}, 'Rien de noté pour l\'instant.'));
   $('dt-actions').replaceChildren(actions.menu);
   f.querySelector('.f-msg').hidden = true;
+}
+
+// Vendable par le site ou pas (Tanguy, 25/11) : une tablette ajoutée au stock n'est pas vendue tant qu'il ne l'a
+// pas mise en vente (functions/stock.js). Seulement pour une tablette libre du stock.
+function ligneVente(t) {
+  if (!tabletteLibre(t)) return null;
+  const enVente = t.enVente !== false;
+  const bouton = h('button', { type: 'button', class: 'secondary small-btn', onclick: async (e) => {
+    const b = e.currentTarget;
+    if (b.disabled) return;
+    b.disabled = true;
+    boutonCharge(b, true);
+    try {
+      await enregistrerTablette(() => appeler('gestionStock', { action: 'modifier', id: t.id, champs: { enVente: !enVente } }),
+        enVente ? 'Retirée de la vente' : 'Mise en vente');
+    } finally {
+      b.disabled = false;
+      boutonCharge(b, false);
+    }
+  } }, enVente ? 'Retirer de la vente' : 'Mettre en vente');
+  return h('div', { class: 'ligne-vente' }, badge(enVente ? 'En vente' : 'Pas en vente', enVente ? 'ok' : 'neutre'), bouton);
 }
 
 // Installée par QR : critères manquants (la tablette n'est pas refusée, l'administrateur décide), SIM avec code PIN,
@@ -3418,10 +3451,16 @@ function fichesAchetees(t) {
 const libelleAchetee = (x) => [x.modele || 'Tablette', x.fournisseur, x.acheteeLe ? `achetée le ${jour(x.acheteeLe)}` : null,
   donnees.etats[x.etat] || x.etat, x.numero ? `n° ${x.numero}` : null].filter(Boolean).join(' · ');
 
-function optionsAchats(premier = 'Aucun achat lié') {
-  return [['', premier], ...[...donnees.depenses].sort((a, b) => (b.date || 0) - (a.date || 0)).slice(0, 150)
-    .map((d) => [d.id, [jour(d.date), [d.fournisseur, d.numero ? `n° ${d.numero}` : null].filter(Boolean).join(' '), d.libelle, euros(d.montant)]
-      .filter(Boolean).join(' · ')])];
+// Les mêmes achats pour la fenêtre de choix (Tanguy 27/11 : le menu déroulant était un mur de texte gris) :
+// vendeur et libellé en gras, montant à droite, date et n° de commande en petit. aucun : ajoute « Aucun achat lié ».
+function listeAchats(aucun = true) {
+  return [...(aucun ? [{ valeur: '', titre: 'Aucun achat lié' }] : []),
+    ...[...donnees.depenses].sort((a, b) => (b.date || 0) - (a.date || 0)).slice(0, 150).map((d) => ({
+      valeur: d.id,
+      titre: [d.fournisseur, d.libelle].filter(Boolean).join(' · ') || 'Achat',
+      droite: euros(d.montant),
+      detail: [jour(d.date), d.numero ? `commande n° ${d.numero}` : null].filter(Boolean).join(' · '),
+    }))];
 }
 // Lien vers un achat (vendeur et n° de commande), ou le badge rouge s'il n'y en a pas.
 function lienAchat(id) {
@@ -4442,28 +4481,8 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('.recherche')) $('resultats').hidden = true;
 });
 
-// Scanner depuis la recherche (téléphone) : code-barres du fabricant, étiquette Mondial Relay, n° écrit en QR.
-// Un seul résultat : il s'ouvre ; sinon la liste s'affiche comme si on avait tapé le code.
-if ('BarcodeDetector' in window) {
-  const bouton = h('button', { type: 'button', class: 'secondary small-btn scanner-recherche' }, 'Scanner');
-  $('recherche').after(bouton);
-  $('recherche').parentElement.classList.add('avec-scanner');
-  bouton.addEventListener('click', () => {
-    const champ = $('recherche');
-    champ.value = '';
-    scanner({ elements: { recherche: champ } }, 'recherche', 'Visez un code-barres : n° de série de la tablette, étiquette Mondial Relay…');
-    $('d-scan').addEventListener('close', () => {
-      const lu = champ.value.trim();
-      if (!lu) return;
-      // QR d'une adresse (…?code=ABCD-1234) : on cherche ce qui suit le dernier « = » ou « / ».
-      if (/^https?:\/\//i.test(lu)) champ.value = lu.split(/[=/]/).filter(Boolean).pop() || lu;
-      const r = rechercher(champ.value);
-      if (r.length === 1) { choisir(r[0]); return; }
-      champ.focus();
-      afficherResultats();
-    }, { once: true });
-  });
-}
+// Pas de « Scanner » dans la recherche (retiré le 27/11, Tanguy : on tape plus vite qu'on ne vise) ; il reste dans les
+// fiches où l'on saisit un long numéro (tablette, lot de tablettes, carte SIM).
 
 // ---------- Graphiques ----------
 
@@ -4681,7 +4700,7 @@ function afficherTva(t) {
 
 // Un abonné rapporte chaque mois (prix − Stripe − URSSAF − forfait SIM) et coûte au départ : la tablette et ce qui
 // revient avec elle (achetés une fois, réutilisés), ce qui est consommé à chaque envoi (carton, papier, fiche), le port
-// aller et retour, moins la mise en service. Les accessoires « en option » (enceinte) ne sont pas comptés.
+// aller et retour, moins la mise en service. Les accessoires « en option » ne sont pas comptés.
 function afficherRentabilite() {
   const r = donnees.reglages;
   // Frais Stripe réels de la période (part du montant encaissé), sinon ~3 % : carte, le cas le moins favorable
@@ -4991,6 +5010,14 @@ function afficherClients() {
     { valeur: 'ancien', libelle: 'Anciens clients', n: compte((c) => c.type === 'ancien') },
     { valeur: 'accord', libelle: 'Acceptent les e-mails', n: compte((c) => c.consentement && !c.desinscrit) },
   ], filtre, (v) => { $('filtre-clients').value = v; afficherClients(); });
+  // E-mail d'information : le même choix, posé là où l'on écrit (avant, il fallait le régler dans l'onglet Contacts).
+  const accord = (c) => c.consentement && !c.desinscrit;
+  $('campagne-a-qui').replaceChildren(...[
+    ['', 'Tout le monde', () => true], ['client', 'Les abonnés', (c) => c.type === 'client'], ['attente', "La liste d'attente", (c) => c.type === 'attente'],
+    ['panier', 'Les paniers abandonnés', (c) => c.type === 'panier'], ['chat', 'Les contacts du chat', (c) => c.type === 'chat'],
+    ['ancien', 'Les anciens clients', (c) => c.type === 'ancien'],
+  ].map(([valeur, libelle, f]) => h('option', { value: valeur }, `${libelle} (${compte((c) => f(c) && accord(c))})`)));
+  $('campagne-a-qui').value = filtre === 'accord' ? '' : filtre;
   const desinscrits = compte((c) => c.desinscrit);
   $('clients-suite').textContent = desinscrits ? `${pluriel(desinscrits, 'personne')} désinscrite${desinscrits > 1 ? 's' : ''} des e-mails.` : '';
   const liste = clientsAffiches();
@@ -5012,9 +5039,10 @@ function afficherClients() {
     onclick: () => { location.hash = `#client/${encodeURIComponent(c.email)}`; },
   })), { vide: 'Personne pour ce filtre.' });
   const cible = liste.filter((c) => c.consentement && !c.desinscrit).length;
-  $('campagne-cible').textContent = cible
-    ? `Destinataires : ${pluriel(cible, 'personne')} de la liste affichée (${pluriel(liste.length - cible, 'autre')} sans accord, ignorée${liste.length - cible > 1 ? 's' : ''}).`
-    : 'Personne dans la liste affichée n\'a accepté les e-mails d\'information.';
+  const sans = liste.length - cible;
+  $('campagne-cible').replaceChildren(...(cible
+    ? [h('strong', {}, `Partira à ${pluriel(cible, 'personne')}.`), sans ? ` ${pluriel(sans, 'autre')} n'${sans > 1 ? 'ont' : 'a'} pas accepté les e-mails.` : '']
+    : [h('strong', {}, 'Personne à qui écrire.'), " Aucune de ces personnes n'a accepté les e-mails."]));
   $('campagne-envoyer').disabled = !cible;
   $('campagnes').replaceChildren(...(clients.campagnes.length
     ? clients.campagnes.map((k) => h('li', {}, h('strong', {}, k.objet), ` · ${jour(k.le)} · ${pluriel(k.envoyes || 0, 'envoi')}`,
@@ -5199,20 +5227,21 @@ async function envoyerCampagne(test) {
 }
 
 $('campagne-test').addEventListener('click', () => envoyerCampagne(true));
+$('campagne-a-qui').addEventListener('change', (e) => { $('filtre-clients').value = e.target.value; afficherClients(); });
 
 // E-mail d'ouverture des commandes à la liste d'attente (lancementListeAttente, functions/index.js).
 async function envoyerLancement(test) {
-  if (!test && !await demander("Envoyer l'e-mail « Papote est disponible : vous pouvez commander » à toute la liste d'attente ?\n\n"
-    + "Chaque personne ne le reçoit qu'une fois. Pensez à vous envoyer un test d'abord.")) return;
+  if (!test && !await demander("Envoyer « Une tablette Papote est disponible » à la liste d'attente ?\n\n"
+    + "Seules les personnes pas encore prévenues le reçoivent. Pensez à vous envoyer un essai d'abord.", { oui: 'Envoyer' })) return;
   const msg = $('lancement-msg');
   const boutons = [$('lancement-test'), $('lancement-envoyer')];
   boutons.forEach((b) => { b.disabled = true; });
   msg.hidden = false;
   msg.className = 'small';
-  msg.textContent = test ? 'Envoi du test…' : 'Envoi à la liste d\'attente…';
+  msg.textContent = test ? 'Envoi de l\'essai…' : 'Envoi à la liste d\'attente…';
   try {
     const r = await appeler('lancementListeAttente', test ? { test: true } : {});
-    msg.textContent = test ? 'Test envoyé à votre adresse.'
+    msg.textContent = test ? 'Essai envoyé à votre adresse.'
       : `${pluriel(r.envoyes || 0, 'e-mail')} envoyé${r.envoyes > 1 ? 's' : ''}${r.erreurs ? `, ${pluriel(r.erreurs, 'échec')} (voir les journaux)` : ''}.`;
     if (!test && r.erreurs) msg.className = 'small error';
   } catch (e) {

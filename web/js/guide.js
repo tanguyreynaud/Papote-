@@ -1,4 +1,5 @@
 // Premier lancement : trois écrans courts pour un nouveau membre (une seule fois par téléphone).
+import { deOuD } from './ui.js';
 const KEY = 'papote.guideVu';
 
 // enRoute : famille préparée à la commande, tablette pas encore arrivée (A43) : rien n'est promis « tout de suite ».
@@ -6,8 +7,8 @@ const STEPS = [
   { icon: 'photo', title: 'Envoyer une photo', text: (n, enRoute) => (enRoute
     ? `Touchez « Envoyer une photo », en haut de l'accueil. ${n} la verra sur sa tablette dès son arrivée.`
     : `Touchez « Envoyer une photo », en haut de l'accueil. ${n} la voit tout de suite sur sa tablette.`) },
-  { icon: 'message', title: 'Écrire un message', text: (n) => `Touchez « Messages », écrivez en bas et envoyez. Les réponses de ${n} s'affichent ici.` },
-  { icon: 'call', title: 'Appeler en vidéo', text: (n) => `Touchez « Appel vidéo » : la tablette de ${n} sonne et l'image s'affiche en grand.` },
+  { icon: 'message', title: 'Écrire un message', text: (n) => `Touchez « Messages », écrivez en bas et envoyez. Les réponses ${deOuD(n)}${n} s'affichent ici.` },
+  { icon: 'call', title: 'Appeler en vidéo', text: (n) => `Touchez « Appel vidéo » : la tablette ${deOuD(n)}${n} sonne et l'image s'affiche en grand.` },
 ];
 
 // Déjà vu : les réglages de la tablette ont été la fenêtre de démarrage (une seule à la fois, V8 du 17/11).

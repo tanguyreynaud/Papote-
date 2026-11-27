@@ -16,7 +16,11 @@ banc.brancher();
 const FENETRE = '.dialog-back:not(.closing) .dialog.dialog-sos';
 const RAPPELER = `${FENETRE} button:has-text("Rappeler Mamie Emma")`;
 const appelsDe = async (fid, uid) => (await g.liste(`families/${fid}/calls`)).filter((c) => c.callerUid === uid);
-const heureFr = (ms) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+// L'heure comme l'app la dit : « 10 h 19 », « 10 h » (Tanguy, 27/11).
+const heureFr = (ms) => {
+  const [h, m] = new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).split(':').map(Number);
+  return m ? `${h} h ${String(m).padStart(2, '0')}` : `${h} h`;
+};
 
 /** Vérifie la fenêtre SOS : titre, heure, deux boutons de même taille, aucune autre fenêtre. */
 async function verifierFenetre(t, quand) {

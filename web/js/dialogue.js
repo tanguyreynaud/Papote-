@@ -41,6 +41,50 @@ function boite({ texte, oui, non, danger, saisie }) {
   });
 }
 
+// Un choix dans une liste lisible, à la place d'un <select> aux lignes trop longues (Tanguy 27/11, « Choisir l'achat ») :
+// choix = [{ valeur, titre, droite, detail }] ; le titre et « droite » (le montant) en noir et gras, le détail en petit.
+// Rend la valeur choisie, ou undefined si on annule.
+export function choisirDansListe(titre, choix, { actuel = null } = {}) {
+  return new Promise((resoudre) => {
+    const d = document.createElement('dialog');
+    d.className = 'dialogue-papote dialogue-choix';
+    const t = document.createElement('p');
+    t.className = 'choix-titre';
+    t.textContent = titre;
+    const liste = document.createElement('div');
+    liste.className = 'choix-liste';
+    const fin = (valeur) => { d.close(); d.remove(); resoudre(valeur); };
+    for (const c of choix) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'choix-ligne';
+      if (c.valeur === actuel) b.setAttribute('aria-current', 'true');
+      const haut = document.createElement('span');
+      haut.className = 'choix-haut';
+      const nom = document.createElement('b');
+      nom.textContent = c.titre;
+      haut.append(nom);
+      if (c.droite) { const m = document.createElement('b'); m.className = 'choix-droite'; m.textContent = c.droite; haut.append(m); }
+      b.append(haut);
+      if (c.detail) { const petit = document.createElement('small'); petit.textContent = c.detail; b.append(petit); }
+      b.addEventListener('click', () => fin(c.valeur));
+      liste.append(b);
+    }
+    const boutons = document.createElement('div');
+    boutons.className = 'actions';
+    const non = document.createElement('button');
+    non.type = 'button';
+    non.className = 'secondary';
+    non.textContent = 'Annuler';
+    non.addEventListener('click', () => fin(undefined));
+    boutons.append(non);
+    d.append(t, liste, boutons);
+    d.addEventListener('cancel', (e) => { e.preventDefault(); fin(undefined); });
+    document.body.append(d);
+    d.showModal();
+  });
+}
+
 // Oui ou non : « oui » est le libellé du bouton qui fait l'action.
 export const demander = (texte, { oui = 'Confirmer', non = 'Annuler', danger = false } = {}) => boite({ texte, oui, non, danger });
 // Un texte à saisir : null si annulé.
@@ -210,7 +254,16 @@ export function ligneModifiable(libelle, affiche, opts) {
   };
   // Toute la ligne s'ouvre au clic (sauf un lien dedans, qui garde son rôle).
   dd.addEventListener('click', (e) => { if (!dd.classList.contains('en-saisie') && !e.target.closest('a, button')) saisie(); });
-  const saisie = () => {
+  const saisie = async () => {
+    // opts.liste : le choix se fait dans une fenêtre lisible (choisirDansListe), enregistré dès qu'on touche une ligne.
+    if (opts.liste) {
+      const v = await choisirDansListe(opts.titreListe || libelle, opts.liste, { actuel: opts.valeur || '' });
+      if (v === undefined) return;
+      let valeur;
+      try { valeur = opts.convertir ? opts.convertir(v) : v; } catch (e) { prevenir(e.message); return; }
+      await opts.enregistrer(valeur);
+      return;
+    }
     const champ = opts.options
       ? h('select', {}, ...opts.options.map(([v, t]) => h('option', { value: v, selected: v === (opts.valeur || '') }, t)))
       : opts.long ? h('textarea', { rows: 3 }) : h('input', { type: opts.type || 'text', inputmode: opts.mode || null, placeholder: opts.aide || null });
