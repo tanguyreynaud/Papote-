@@ -90,6 +90,23 @@ test('notifications vues : sur ma fiche seulement, horodatage serveur', async ()
   await assertFails(updateDoc(doc(proche('marc'), `families/${FID}/members/marc`), { notifsVues: serverTimestamp() }));
 });
 
+// Tanguy, 27/11 : « je ne peux rien modifier sur mon profil ». Une valeur enregistrée avant un durcissement des règles
+// (numéro dans un ancien format, genre d'un autre temps) bloquait TOUTE écriture de la fiche, prénom compris.
+test('profil : une ancienne valeur hors règle ne bloque pas les autres champs, et se corrige', async () => {
+  await famille();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `families/${FID}/members/julie`), fiche('julie', { telephone: '+33612345678', genre: 'autre' }));
+  });
+  const moi = doc(proche('julie'), `families/${FID}/members/julie`);
+  await assertSucceeds(updateDoc(moi, { name: 'Tanguy Reynaud' }));
+  await assertSucceeds(updateDoc(moi, { face: 'data:image/jpeg;base64,AAAA' }));
+  // Le champ fautif, lui, reste contrôlé dès qu'on y touche.
+  await assertFails(updateDoc(moi, { telephone: '+33712345678' }));
+  await assertFails(updateDoc(moi, { genre: 'neutre' }));
+  await assertSucceeds(updateDoc(moi, { telephone: '06 12 34 56 78' }));
+  await assertSucceeds(updateDoc(moi, { genre: 'homme' }));
+});
+
 // Mon numéro de téléphone (chantier téléphone 29/10) : écrit par le proche sur sa fiche, à l'inscription ou après.
 test('numéro de téléphone du proche : accepté bien formé, refusé sinon', async () => {
   await famille();
