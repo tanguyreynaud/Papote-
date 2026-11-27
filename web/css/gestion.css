@@ -790,3 +790,5 @@ button.choix-fin-forfait.charge::after { border-color: rgba(255, 255, 255, .45);
 /* Répondeur de la ligne pas encore coupé (19/11) : une phrase discrète sous le verdict, rien d'alarmant. */
 .pc-sim-repondeur { margin: 0; }
 .releve { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 8px 0 0; }
+/* Fiche tablette : « En vente » / « Pas en vente » et son bouton sur la même ligne (Tanguy, 25/11). */
+.ligne-vente { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
