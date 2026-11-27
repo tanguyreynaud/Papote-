@@ -74,9 +74,10 @@ function blocHtml(b) {
   if (b.fiche) {
     const lignes = b.fiche.filter((l) => l && l[1] != null && l[1] !== '');
     if (!lignes.length) return '';
-    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;background:${C.fond};border:1px solid ${C.ligne};border-radius:12px;border-collapse:separate">
-${lignes.map(([k, v], i) => `<tr><td width="96" valign="top" style="width:96px;padding:${i === 0 ? 12 : 7}px 0 ${i === lignes.length - 1 ? 12 : 7}px 16px;font-family:${POLICE};font-size:14px;line-height:1.45;color:${C.doux};${i ? `border-top:1px solid ${C.ligne};` : ''}">${insecables(echapper(k))}</td>
-<td valign="top" style="padding:${i === 0 ? 12 : 7}px 16px ${i === lignes.length - 1 ? 12 : 7}px 10px;font-family:${POLICE};font-size:16px;line-height:1.4;color:${C.texte};word-break:break-word;${i ? `border-top:1px solid ${C.ligne};` : ''}">${insecables(v)}</td></tr>`).join('\n')}
+    // Sans cadre ni fond (Tanguy 27/11) : libellé gris à gauche, valeur à droite, un filet fin entre les lignes.
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:2px 0 20px;border-collapse:collapse">
+${lignes.map(([k, v], i) => `<tr><td width="104" valign="top" style="width:104px;padding:9px 12px 9px 0;font-family:${POLICE};font-size:14px;line-height:1.5;color:${C.doux};${i ? `border-top:1px solid ${C.ligne};` : ''}">${insecables(echapper(k))}</td>
+<td valign="top" style="padding:9px 0;font-family:${POLICE};font-size:16px;line-height:1.4;color:${C.texte};word-break:break-word;${i ? `border-top:1px solid ${C.ligne};` : ''}">${insecables(v)}</td></tr>`).join('\n')}
 </table>`;
   }
   // Numéro d'étape : une cellule de 32 × 32 (Outlook ignore la taille d'un <div> ; le rond devient un carré, lisible).
@@ -129,7 +130,7 @@ function page(titre, blocs, bouton, options = {}) {
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 10px;border-collapse:separate">
 <tr><td align="center" style="background:${C.indigo};border-radius:999px;mso-padding-alt:15px 28px"><a href="${echapper(bouton.lien)}" style="display:inline-block;padding:15px 28px;font-family:${POLICE};font-size:17px;font-weight:bold;line-height:1.2;color:#ffffff;text-decoration:none;border-radius:999px">${insecables(echapper(bouton.texte))}&nbsp;→</a></td></tr></table>`
     : '';
-  const question = options.interne || options.formel || options.sansQuestion || inviteARepondre(blocs) ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? Notre assistant vous répond tout de suite&nbsp;: <a href="${AIDE}" style="color:${C.indigo};font-weight:bold">poser ma question</a>.</p>`;
+  const question = options.interne || options.formel || options.sansQuestion || inviteARepondre(blocs) ? '' : `<p style="margin:22px 0 0;font-size:15px;line-height:1.5;color:${C.doux}">Une question&nbsp;? <a href="${AIDE}" style="color:${C.indigo};text-decoration:none">Demandez à notre assistant&nbsp;→</a></p>`;
   const pourquoi = options.desinscription
     ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:${C.doux}">${insecables(echapper(options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'))} <a href="${echapper(options.desinscription)}" style="color:${C.doux}">Se désinscrire des e-mails d'information</a>.</p>`
     : '';
@@ -189,7 +190,7 @@ ${question}
 function texteBrut(titre, blocs, bouton, options = {}) {
   return [titre, '', ...blocs.map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`), bouton ? `${bouton.texte} : ${bouton.lien}` : '', '',
     ...(options.apres || []).map(blocTexte).filter((t) => t != null).map((t) => `${t}\n`),
-    ...(options.interne ? [`Espace admin : ${ADMIN}`] : options.formel ? [IDENTITE] : options.sansQuestion || inviteARepondre(blocs) ? [] : [`Une question ? Notre assistant vous répond tout de suite : ${AIDE}`]),
+    ...(options.interne ? [`Espace admin : ${ADMIN}`] : options.formel ? [IDENTITE] : options.sansQuestion || inviteARepondre(blocs) ? [] : [`Une question ? Demandez à notre assistant : ${AIDE}`]),
     ...(options.desinscription ? ['', `${options.pourquoi || 'Vous recevez cet e-mail car vous avez accepté les nouvelles de Papote.'}`, `Se désinscrire des e-mails d'information : ${options.desinscription}`] : [])]
     .join('\n').replace(/\n{3,}/g, '\n\n');
 }
