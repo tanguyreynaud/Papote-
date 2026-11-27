@@ -939,12 +939,23 @@ dialog.dialogue-choix .actions { margin-top: 12px; }
 @media (max-width: 700px) {
   .admin-body .carte-taches .filtres { flex-wrap: nowrap; overflow-x: auto; }
   .admin-body .carte-taches .filtres > * { flex: none; }
-  /* Rangée de pastilles qui défile : elle s'arrête à la marge de droite (plus collée au bord), et la dernière
-     pastille visible s'estompe pour montrer qu'il y a une suite. */
-  .admin-body .filtres, .admin-body .carte-taches .filtres {
-    scrollbar-width: none; margin-right: 0; padding-right: 28px;
+  /* Toute rangée de pastilles ou d'onglets (Tanguy 27/11) : une seule ligne qui défile au doigt, jamais deux lignes.
+     Elle s'arrête à la marge de droite, et ce qui dépasse s'estompe pour montrer qu'il y a une suite. */
+  .admin-body .filtres, .admin-body .card .filtres, .admin-body .carte-taches .filtres,
+  .admin-body .onglets, .admin-body nav.onglets-liens:not([hidden]) + .onglets {
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; margin-right: 0; padding-right: 0;
+  }
+  /* .suite : posé par gestion.js tant qu'il reste quelque chose à droite ; au bout de la rangée, plus de fondu. */
+  .admin-body .filtres.suite, .admin-body .onglets.suite {
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
-  .admin-body .card:not(.carte-taches) .filtres { padding-right: 0; -webkit-mask-image: none; mask-image: none; }
+  .admin-body .filtres::-webkit-scrollbar, .admin-body .onglets::-webkit-scrollbar { display: none; }
+  .admin-body .filtres > *, .admin-body .onglets > * { flex: none; }
 }
+}
+
+/* Tanguy 27/11 : recherche masquée sur les pages de chiffres ; e-mail d'information en trois cartes. */
+.admin-body .contenu-tete .recherche[hidden] { display: none; }
+.admin-body .campagne select { width: 100%; }
+.admin-body .campagne #campagne-cible { margin: 0 0 10px; }

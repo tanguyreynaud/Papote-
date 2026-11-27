@@ -387,8 +387,39 @@ document.querySelectorAll('[data-panneau] .onglets [data-onglet]').forEach((b) =
     const page = b.closest('[data-panneau]').dataset.panneau;
     history.replaceState(null, '', `#${page}/${b.dataset.onglet}`);
     choisirOnglet(page, b.dataset.onglet);
+    montrerRecherche(page);
   });
 });
+// Rangées de pastilles et d'onglets qui défilent (téléphone) : la classe « suite » estompe le bord droit tant qu'il
+// reste quelque chose à voir de ce côté (admin-ui.css). Recalculé quand la page change, qu'on défile ou qu'on tourne l'écran.
+let suitePrevue = false;
+function majSuites() {
+  suitePrevue = false;
+  for (const r of document.querySelectorAll('.filtres, .onglets')) {
+    if (!r.clientWidth) continue;
+    // L'onglet ou la pastille en cours doit se voir : on l'amène dans la rangée quand il change.
+    const actif = r.querySelector(':scope > .actif');
+    if (actif && actifVu.get(r) !== actif) {
+      actifVu.set(r, actif);
+      const debut = actif.offsetLeft - r.offsetLeft;
+      if (debut < r.scrollLeft || debut + actif.offsetWidth > r.scrollLeft + r.clientWidth - 28) r.scrollLeft = Math.max(0, debut - 16);
+    }
+    r.classList.toggle('suite', r.scrollLeft + r.clientWidth < r.scrollWidth - 2);
+  }
+}
+const actifVu = new WeakMap();
+function prevoirSuites() { if (!suitePrevue) { suitePrevue = true; requestAnimationFrame(majSuites); } }
+new MutationObserver(prevoirSuites).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+window.addEventListener('resize', prevoirSuites);
+document.addEventListener('scroll', (e) => { if (e.target.classList?.contains('filtres') || e.target.classList?.contains('onglets')) prevoirSuites(); }, true);
+prevoirSuites();
+
+// La recherche (commandes, tablettes, dépenses) ne sert pas sur les pages de chiffres : Site, et Comptabilité hors Dépenses.
+function montrerRecherche(page) {
+  const onglet = document.querySelector(`[data-panneau="${page}"] .onglets button[data-onglet].actif`)?.dataset.onglet;
+  const site = page === 'statistiques' || (page === 'clients' && ONGLETS_SITE.includes(onglet));
+  document.querySelector('.contenu-tete .recherche').hidden = site || (page === 'compta' && onglet !== 'depenses');
+}
 
 // Adresses qui ouvrent une page sur un bloc précis (id de l'élément) plutôt qu'en haut.
 const ANCRES = { 'compta/depenses/releve': 'courrier', 'compta/bilan/rentabilite': 'rentabilite', 'compta/urssaf/registres': 'registres' };
@@ -429,6 +460,7 @@ function afficherPage() {
   // Fiche (commande, tablette, carte SIM…) : son propre titre suffit, le lien « ‹ Clients » remonte à la place du grand titre.
   document.querySelector('.contenu').classList.toggle('page-fiche', !!document.querySelector(`[data-panneau="${page}"] > p > a.retour`));
   $('periode').hidden = !AVEC_PERIODE.includes(page);
+  montrerRecherche(page);
   $('p-etat').hidden = !AVEC_PERIODE.includes(page);
   // Adresse avec une ancre (ANCRES) : la page s'ouvre sur ce bloc ; sinon en haut.
   const ancre = ANCRES[location.hash.slice(1)];
@@ -4975,6 +5007,14 @@ function afficherClients() {
     { valeur: 'ancien', libelle: 'Anciens clients', n: compte((c) => c.type === 'ancien') },
     { valeur: 'accord', libelle: 'Acceptent les e-mails', n: compte((c) => c.consentement && !c.desinscrit) },
   ], filtre, (v) => { $('filtre-clients').value = v; afficherClients(); });
+  // E-mail d'information : le même choix, posé là où l'on écrit (avant, il fallait le régler dans l'onglet Contacts).
+  const accord = (c) => c.consentement && !c.desinscrit;
+  $('campagne-a-qui').replaceChildren(...[
+    ['', 'Tout le monde', () => true], ['client', 'Les abonnés', (c) => c.type === 'client'], ['attente', "La liste d'attente", (c) => c.type === 'attente'],
+    ['panier', 'Les paniers abandonnés', (c) => c.type === 'panier'], ['chat', 'Les contacts du chat', (c) => c.type === 'chat'],
+    ['ancien', 'Les anciens clients', (c) => c.type === 'ancien'],
+  ].map(([valeur, libelle, f]) => h('option', { value: valeur }, `${libelle} (${compte((c) => f(c) && accord(c))})`)));
+  $('campagne-a-qui').value = filtre === 'accord' ? '' : filtre;
   const desinscrits = compte((c) => c.desinscrit);
   $('clients-suite').textContent = desinscrits ? `${pluriel(desinscrits, 'personne')} désinscrite${desinscrits > 1 ? 's' : ''} des e-mails.` : '';
   const liste = clientsAffiches();
@@ -4996,9 +5036,10 @@ function afficherClients() {
     onclick: () => { location.hash = `#client/${encodeURIComponent(c.email)}`; },
   })), { vide: 'Personne pour ce filtre.' });
   const cible = liste.filter((c) => c.consentement && !c.desinscrit).length;
-  $('campagne-cible').textContent = cible
-    ? `Destinataires : ${pluriel(cible, 'personne')} de la liste affichée (${pluriel(liste.length - cible, 'autre')} sans accord, ignorée${liste.length - cible > 1 ? 's' : ''}).`
-    : 'Personne dans la liste affichée n\'a accepté les e-mails d\'information.';
+  const sans = liste.length - cible;
+  $('campagne-cible').replaceChildren(...(cible
+    ? [h('strong', {}, `Partira à ${pluriel(cible, 'personne')}.`), sans ? ` ${pluriel(sans, 'autre')} n'${sans > 1 ? 'ont' : 'a'} pas accepté les e-mails.` : '']
+    : [h('strong', {}, 'Personne à qui écrire.'), " Aucune de ces personnes n'a accepté les e-mails."]));
   $('campagne-envoyer').disabled = !cible;
   $('campagnes').replaceChildren(...(clients.campagnes.length
     ? clients.campagnes.map((k) => h('li', {}, h('strong', {}, k.objet), ` · ${jour(k.le)} · ${pluriel(k.envoyes || 0, 'envoi')}`,
@@ -5183,6 +5224,7 @@ async function envoyerCampagne(test) {
 }
 
 $('campagne-test').addEventListener('click', () => envoyerCampagne(true));
+$('campagne-a-qui').addEventListener('change', (e) => { $('filtre-clients').value = e.target.value; afficherClients(); });
 
 // E-mail d'ouverture des commandes à la liste d'attente (lancementListeAttente, functions/index.js).
 async function envoyerLancement(test) {
