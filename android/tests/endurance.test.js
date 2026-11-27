@@ -119,9 +119,9 @@ test('envoi affiché, Mamie absente 3 h : la caméra ne regarde que pendant la d
       if (await b.page.evaluate(() => window.__surveillances.size > 0)) allumee++;
     }
     console.log(`caméra allumée ${allumee} min sur 180`);
-    // 3 minutes (durée d'affichage sans réglage), puis plus rien (avant le 19/11 : 3 minutes puis 1 minute
-    // sur 5 sans fin, soit ~38 minutes sur 180).
-    assert.ok(allumee >= 2 && allumee <= 3, `caméra allumée ${allumee} min sur 180 pour un envoi pas vu`);
+    // 5 minutes (durée d'affichage sans réglage depuis le 27/11, avant 3), puis plus rien (avant le 19/11 :
+    // 3 minutes puis 1 minute sur 5 sans fin, soit ~38 minutes sur 180).
+    assert.ok(allumee >= 4 && allumee <= 5, `caméra allumée ${allumee} min sur 180 pour un envoi pas vu`);
     assert.ok(!(await b.visible('#overlay')), 'envoi fermé');
     assert.deepStrictEqual(await b.appels('markSeen'), [], 'pas « vu »');
   } finally { await b.fermer(); }
