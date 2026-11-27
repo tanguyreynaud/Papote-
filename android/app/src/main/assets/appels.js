@@ -569,11 +569,20 @@ window.papoteLocateFace = async (video) => {
 // L'image est réduite (plus rapide sur une petite tablette) et, si aucun visage n'est vu,
 // essayée tournée d'un quart de tour : avec la caméra sur le côté, certaines tablettes
 // livrent une image couchée. Le bon sens trouvé est gardé ; sinon on passe au suivant.
+// Angle (0, 90 ou 270) où un visage a été vu la dernière fois, gardé d'un démarrage à l'autre.
+let bonAngle = null;
+try {
+  const garde = Number(localStorage.getItem('papote.angleVisage'));
+  if (localStorage.getItem('papote.angleVisage') !== null && [0, 90, 270].includes(garde)) bonAngle = garde;
+} catch (e) { /* sans stockage */ }
+
 function makeLooker(video, detector) {
   const frame = document.createElement('canvas');
   const fctx = frame.getContext('2d');
   const angles = [0, 90, 270];
   let turn = 0;
+  let coups = 0;
+  let tenu = null; // angle où un visage est vu en ce moment
   const lookAt = (angle) => {
     const w = video.videoWidth;
     const h = video.videoHeight;
@@ -591,9 +600,21 @@ function makeLooker(video, detector) {
     const { detections } = detector.detectForVideo(frame, performance.now());
     return detections.some((d) => d.boundingBox && d.boundingBox.width / side >= FACE_MIN_WIDTH);
   };
+  // Un seul angle par coup d'œil. Avant, les trois angles passaient à tour de rôle : le bon n'était regardé
+  // qu'une fois sur trois, il fallait être devant pile à ce moment-là (Tanguy, 19/11). Maintenant, l'angle
+  // où un visage a déjà été vu sur cette tablette (elle ne change pas de sens) est regardé 3 fois sur 4,
+  // les deux autres le reste du temps ; et tant qu'un visage est là, on reste sur son angle.
   return () => {
-    const seen = lookAt(angles[turn]);
-    if (!seen) turn = (turn + 1) % angles.length;
+    let angle;
+    if (tenu !== null) angle = tenu;
+    else if (bonAngle !== null && coups++ % 4 !== 3) angle = bonAngle;
+    else { angle = angles[turn]; turn = (turn + 1) % angles.length; }
+    const seen = lookAt(angle);
+    tenu = seen ? angle : null;
+    if (seen && bonAngle !== angle) {
+      bonAngle = angle;
+      try { localStorage.setItem('papote.angleVisage', String(angle)); } catch (e) { /* sans stockage : jusqu'au rechargement */ }
+    }
     return seen;
   };
 }
@@ -668,6 +689,12 @@ function stopFaceWatch(keepStream) {
 // Pour tablette.js : un envoi ou un rappel affiché se ferme tout seul un moment après que
 // Mamie a été vue. window.papoteWatchPresence(onSeen) renvoie stop(). La caméra (image seule,
 // sans micro) est partagée entre les surveillances, et laissée à la sonnerie quand un appel arrive.
+// Rapport qualité / puissance (Tanguy, 19/11) : un coup d'œil par seconde (avant : deux), la caméra
+// demandée à 5 images par seconde (avant : 20, toutes décodées pour rien) ; dès qu'un visage apparaît,
+// on regarde toutes les 300 ms pour le confirmer vite (FACE_HOLD_MS).
+const PRESENCE_REPOS_MS = 1000;
+const PRESENCE_VISAGE_MS = 300;
+const PRESENCE_IMAGES_S = 5;
 
 const presence = { watchers: new Set(), stream: null, video: null, timer: null, starting: false };
 
@@ -690,7 +717,8 @@ async function startPresence() {
   if (![...presence.watchers].some((w) => !w.done)) return;
   presence.starting = true;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: CAMERA.video, audio: false });
+    // « ideal » seulement : une caméra qui ne sait pas faire 5 images par seconde donne ce qu'elle peut.
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { ...CAMERA.video, frameRate: { ideal: PRESENCE_IMAGES_S } }, audio: false });
     if (!presence.watchers.size || ringing || active) {
       stream.getTracks().forEach((t) => t.stop());
       return;
@@ -715,8 +743,8 @@ async function startPresence() {
     const look = makeLooker(video, detector);
     const tick = () => {
       if (presence.stream !== stream) return;
+      let seen = false;
       if (video.readyState >= 2 && video.videoWidth) {
-        let seen = false;
         try { seen = look(); } catch (e) { console.warn('Présence : détection', e); }
         const now = Date.now();
         presence.watchers.forEach((w) => {
@@ -730,7 +758,7 @@ async function startPresence() {
         // Tout le monde a été servi : la caméra s'éteint.
         if (![...presence.watchers].some((w) => !w.done)) { stopPresence(); return; }
       }
-      presence.timer = setTimeout(tick, 500);
+      presence.timer = setTimeout(tick, seen ? PRESENCE_VISAGE_MS : PRESENCE_REPOS_MS);
     };
     tick();
   } catch (e) {

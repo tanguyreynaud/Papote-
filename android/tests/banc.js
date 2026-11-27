@@ -104,7 +104,10 @@ function imitation(etat) {
   };
   // Caméra : window.__visage() fait « voir » un visage à toutes les surveillances en cours.
   window.__surveillances = new Set();
+  // etat.cameraEnvoisSeule : le coup d'œil de l'accueil (lookForPresence, 30 s toutes les 15 minutes) n'est pas
+  // compté, pour mesurer la caméra des envois et des rappels seule (affichage.test.js, endurance.test.js).
   window.papoteWatchPresence = (onSeen) => {
+    if (etat.cameraEnvoisSeule && /lookForPresence/.test(new Error().stack)) return () => {};
     const w = { onSeen };
     window.__surveillances.add(w);
     return () => window.__surveillances.delete(w);

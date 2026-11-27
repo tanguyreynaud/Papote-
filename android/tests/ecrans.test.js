@@ -37,7 +37,7 @@ test('file des envois : 5 au plus, du plus ancien au plus récent, OK passe au s
   } finally { await b.fermer(); }
 });
 
-test('visage vu : « vu », lecture dans la voix du proche, puis fermeture 2 minutes après', async () => {
+test('visage vu : « vu », lecture dans la voix du proche, puis fermeture à la fin des 3 minutes d\'affichage', async () => {
   const b = await ouvrir();
   try {
     const a = envoi({ text: 'Bisous de Lyon', voice: 'https://appassets.androidplatform.net/photos/a_voix.mp3', announce: 'https://appassets.androidplatform.net/photos/a_annonce.mp3' });
@@ -52,9 +52,10 @@ test('visage vu : « vu », lecture dans la voix du proche, puis fermeture 2 min
     const sons = (await b.appels('audio')).map((x) => x.args[0]);
     assert.deepStrictEqual(sons, [a.announce, a.voice], 'annonce « Julie vous écrit » puis le message');
     assert.deepStrictEqual(await b.appels('speak'), [], 'pas la voix de secours');
-    await b.avancer(114000);
-    assert.match(await b.texte('#overlay-text'), /Bisous de Lyon/, 'encore affiché avant 2 min');
-    await b.avancer(6000);
+    assert.strictEqual(await b.page.evaluate(() => window.__surveillances.size), 0, 'visage vu : caméra éteinte tout de suite');
+    await b.avancer(172000);
+    assert.match(await b.texte('#overlay-text'), /Bisous de Lyon/, 'encore affiché avant 3 min');
+    await b.avancer(8000);
     assert.match(await b.texte('#overlay-text'), /Et une autre/, 'fermé tout seul, au suivant');
     await sansErreur(b);
   } finally { await b.fermer(); }
@@ -728,7 +729,7 @@ test('carillon d\'un nouvel envoi : pas par-dessus une fenêtre ouverte, normal 
     assert.strictEqual(await fenetre(), false, 'retour à l\'accueil');
     // Rappel à l'heure : fenêtre ouverte.
     await b.android('onReminders', { reminders: [{ id: 'r1', title: 'Cachet', kind: 'medicament', time: '10:20', repeat: 'daily', date: '', days: [], lastAck: '', avanceMin: 0, finLe: '', enPauseJusquau: '', voice: '' }] });
-    await b.avancer(15 * 60000);
+    await b.avancer(11 * 60000); // 10 h 21 : le rappel de 10 h 20 est affiché (il se ferme seul au bout de 3 minutes)
     assert.ok(await b.visible('#reminder-alert'));
     assert.strictEqual(await fenetre(), true, 'rappel');
     await b.toucher('#reminder-done');

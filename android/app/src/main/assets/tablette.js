@@ -809,7 +809,7 @@
     for (var i = posts.length - 1; i >= 0; i--) {
       var p = posts[i];
       // Une photo ou un vocal n'est montré que lorsqu'il est téléchargé.
-      if (p.seen || shownInOverlay[p.id] || (p.type === 'photo' && !p.image) || (p.type === 'voice' && !p.audio) || (p.type === 'video' && !p.video)) continue;
+      if (p.seen || shownInOverlay[p.id] || dejaFerme(p.id) || (p.type === 'photo' && !p.image) || (p.type === 'voice' && !p.audio) || (p.type === 'video' && !p.video)) continue;
       shownInOverlay[p.id] = true;
       overlayQueue.push(p);
     }
@@ -819,57 +819,80 @@
     if (!overlayPost && !inCall() && !asleep) nextOverlay();
   }
 
-  // ---------- Visage vu : « lu », lecture, puis fermeture au bout de 2 minutes ----------
+  // ---------- Visage vu : « lu », lecture, puis fermeture à la fin de la durée d'affichage ----------
   // La caméra (appels.js, window.papoteWatchPresence) regarde si quelqu'un est devant la tablette.
   // Dès que son visage est vu, l'envoi ou le rappel est marqué « lu » pour la famille (onSeen),
-  // une vidéo ou un vocal se lance, puis l'écran se ferme tout seul 2 minutes plus tard s'il n'a
-  // pas touché OK. Jamais vu : il reste affiché, pour qu'elle ne rate rien.
-  // Renvoie false quand la tablette ne sait pas regarder (pas de caméra côté page).
+  // une vidéo ou un vocal se lance, la caméra s'éteint, puis l'écran se ferme tout seul à la fin de la
+  // durée d'affichage (au moins 1 minute après le visage, voir APRES_VU_MS) s'il n'a pas touché OK.
+  // Jamais vu : l'envoi ou le rappel reste affiché, caméra allumée, pendant la durée réglée par la
+  // famille (options.dureeAffichage, 1 à 5 minutes, 3 sans réglage), puis il se ferme quand même
+  // (pasVu) et la caméra s'éteint (Tanguy, 19/11 ; avant : affiché jusqu'à « OK », la caméra 3 minutes
+  // puis 1 minute toutes les 5 minutes, sans fin, et il fallait regarder pile au bon moment).
+  // Renvoie false quand la tablette ne sait pas regarder (pas de caméra côté page) : la durée compte quand même.
 
-  var SEEN_CLOSE_MS = 120000;
-  // Personne devant la tablette : la caméra regarde 3 minutes à l'arrivée de l'envoi, puis 1 minute toutes les
-  // 5 minutes
-  // (avant : allumée, avec la détection du visage 2 fois par seconde, tant que l'envoi n'était pas vu,
-  // toute la journée si Mamie était sortie ; audit endurance du 05/11). Un toucher la relance aussitôt.
-  var CAMERA_D_ABORD_MS = 3 * 60000;
-  var CAMERA_REGARDE_MS = 60000;
-  var CAMERA_REPOS_MS = 4 * 60000;
+  // Vue : il reste au moins 1 minute de plus, et 1 minute après la fin d'une vidéo ou d'une lecture à voix haute
+  // (Tanguy, 19/11 ; avant : toujours 2 minutes après le visage, même s'il restait du temps).
+  var APRES_VU_MS = 60000;
+  var AFFICHAGE_MIN = 1, AFFICHAGE_MAX = 5, AFFICHAGE_DEFAUT = 3; // minutes (mêmes bornes dans Sync.java et l'app famille)
   var watchers = {};
 
-  function watchSeen(slot, onSeen, close) {
+  function dureeAffichageMs() {
+    var m = Math.round(Number(options && options.dureeAffichage));
+    if (!(m >= AFFICHAGE_MIN && m <= AFFICHAGE_MAX)) m = AFFICHAGE_DEFAUT;
+    return m * 60000;
+  }
+
+  // occupe() : une vidéo joue ou la tablette lit à voix haute (on ne ferme pas pendant, ni dans la minute qui suit).
+  function watchSeen(slot, onSeen, close, pasVu, occupe) {
     unwatchSeen(slot);
-    if (typeof window.papoteWatchPresence !== 'function') { console.warn('Caméra : pas de détection de visage'); return false; }
-    var w = { stop: null, timer: null, cycle: null };
+    var w = { stop: null, timer: null, fin: null, finA: 0, vuA: 0, libreA: 0 };
     watchers[slot] = w;
+    var eteindre = function () {
+      try { if (typeof w.stop === 'function') w.stop(); } catch (e) { }
+      w.stop = null;
+    };
+    // Vue : fermeture à la fin de la durée d'affichage, jamais moins d'1 minute après le visage, ni moins
+    // d'1 minute après la fin d'une vidéo ou d'une lecture. Regardé toutes les 2 secondes.
+    var fermerQuandFini = function () {
+      if (watchers[slot] !== w) return;
+      var now = Date.now();
+      var pris = false;
+      try { pris = !!(occupe && occupe()); } catch (e) { }
+      if (pris) w.libreA = now + APRES_VU_MS;
+      if (pris || now < Math.max(w.finA, w.vuA + APRES_VU_MS, w.libreA)) { w.timer = setTimeout(fermerQuandFini, 2000); return; }
+      unwatchSeen(slot);
+      close();
+    };
     var vu = function () {
       if (watchers[slot] !== w || w.timer) return;
-      clearTimeout(w.cycle);
+      clearTimeout(w.fin);
+      eteindre(); // visage vu : la caméra s'éteint tout de suite
       console.warn('Visage vu (' + slot + ')');
       // Elle est là : le carillon d'arrivée s'arrête.
       try { if (android() && android().carillonStop) android().carillonStop(); } catch (e) { }
+      w.vuA = Date.now();
       try { onSeen(); } catch (e) { console.warn('Visage vu : ' + e); }
-      w.timer = setTimeout(function () {
-        if (watchers[slot] !== w) return;
-        unwatchSeen(slot);
-        close();
-      }, SEEN_CLOSE_MS);
+      w.timer = setTimeout(fermerQuandFini, 2000);
     };
-    w.regarder = function (duree) {
-      if (watchers[slot] !== w || w.timer || w.stop) return;
-      clearTimeout(w.cycle);
-      w.stop = window.papoteWatchPresence(vu);
-      w.cycle = setTimeout(w.reposer, duree || CAMERA_REGARDE_MS);
+    // La durée d'affichage : repart de zéro à chaque toucher (elle est là, on ne ferme pas sous son doigt).
+    w.attendre = function () {
+      if (watchers[slot] !== w) return;
+      w.finA = Date.now() + dureeAffichageMs();
+      if (w.timer) return; // déjà vue : fermerQuandFini suit la nouvelle fin
+      clearTimeout(w.fin);
+      w.fin = setTimeout(function () {
+        if (watchers[slot] !== w || w.timer) return;
+        unwatchSeen(slot); // la caméra s'éteint
+        console.warn('Pas de visage (' + slot + ') : fermé sans être vu');
+        try { if (android() && android().carillonStop) android().carillonStop(); } catch (e) { }
+        try { pasVu(); } catch (e) { console.warn('Pas vu : ' + e); }
+      }, dureeAffichageMs());
     };
-    w.reposer = function () {
-      if (watchers[slot] !== w || w.timer) return;
-      try { if (typeof w.stop === 'function') w.stop(); } catch (e) { }
-      w.stop = null;
-      w.cycle = setTimeout(w.regarder, CAMERA_REPOS_MS);
-    };
+    w.attendre();
+    if (typeof window.papoteWatchPresence !== 'function') { console.warn('Caméra : pas de détection de visage'); return false; }
     try {
-      w.regarder(CAMERA_D_ABORD_MS);
+      w.stop = window.papoteWatchPresence(vu);
     } catch (e) {
-      delete watchers[slot];
       return false;
     }
     return true;
@@ -880,14 +903,27 @@
     if (!w) return;
     delete watchers[slot];
     clearTimeout(w.timer);
-    clearTimeout(w.cycle);
+    clearTimeout(w.fin);
     try { if (typeof w.stop === 'function') w.stop(); } catch (e) { }
   }
 
-  // Un toucher : quelqu'un est là, la caméra au repos se remet à regarder tout de suite.
+  // Un toucher : quelqu'un est là, la durée d'affichage repart de zéro.
   document.addEventListener('pointerdown', function () {
-    for (var k in watchers) if (watchers[k] && watchers[k].regarder) watchers[k].regarder(CAMERA_REGARDE_MS);
+    for (var k in watchers) if (watchers[k] && watchers[k].attendre) watchers[k].attendre();
   }, true);
+
+  // Envois fermés sans avoir été vus : ils ne reviennent pas en grand, même après un rechargement de
+  // la page (mise à jour, redémarrage). Gardés dans la page ; seuls les 200 derniers servent.
+  var fermesSansVu = (function () {
+    try { return JSON.parse(localStorage.getItem('papote.envoisFermes')) || []; } catch (e) { return []; }
+  })();
+  function dejaFerme(id) { return fermesSansVu.indexOf(id) >= 0; }
+  function noterFerme(id) {
+    if (dejaFerme(id)) return;
+    fermesSansVu.push(id);
+    if (fermesSansVu.length > 200) fermesSansVu = fermesSansVu.slice(-200);
+    try { localStorage.setItem('papote.envoisFermes', JSON.stringify(fermesSansVu)); } catch (e) { /* sans stockage : jusqu'au rechargement */ }
+  }
 
   // Un appel arrive : la photo ou le message affiché s'efface, sans être compté comme vu ;
   // il revient en tête de file à la fin de l'appel, avec ceux qui attendaient.
@@ -944,6 +980,16 @@
       if (playing && playing.post === p) { setTimeout(closeWhenDone, 10000); return; }
       markSeen(p);
       nextOverlay();
+    }, function fermerSansVu() {
+      if (overlayPost !== p) return;
+      // Une vidéo ou un vocal lancé au doigt n'est pas coupé : on attend la fin.
+      if (playing && playing.post === p) { setTimeout(fermerSansVu, 10000); return; }
+      // Personne pendant la durée réglée : il se ferme sans être « vu » (la famille le voit « pas encore vu »).
+      // Une photo est déjà dans le diaporama ; une vidéo y entre (comme un envoi sauté).
+      if (!p.seen) { noterFerme(p.id); passes[p.id] = true; }
+      nextOverlay();
+    }, function () {
+      return (playing && playing.post === p) || speech !== 'idle';
     });
     var mode = p.image ? 'photo' : p.type === 'voice' ? 'voice' : p.type === 'video' ? 'video' : 'message';
     var media = mode === 'voice' || mode === 'video';
@@ -1328,7 +1374,7 @@
       // La voix d'un envoi arrive souvent après lui : on la note dès qu'elle est là.
       noteVoix(overlayText(posts[j]), posts[j].voice, posts[j].announce);
       // Vidéo : dans le diaporama seulement, une fois vue (la première fois, elle arrive en grand).
-      if (posts[j].video && !posts[j].image && (posts[j].seen || passes[posts[j].id])) { slides.push(posts[j]); continue; }
+      if (posts[j].video && !posts[j].image && (posts[j].seen || passes[posts[j].id] || dejaFerme(posts[j].id))) { slides.push(posts[j]); continue; }
       if (!posts[j].image) continue;
       // Envoi de plusieurs photos : chacune a sa place dans la galerie, avec le même mot.
       var extra = posts[j].images || [];
@@ -1367,13 +1413,19 @@
 
   var reminders = [];
   var EARLY_MIN = 15;            // annonce « Dans 15 minutes » (sauf avanceMin réglé par la famille)
-  var REMINDER_WINDOW_MIN = 60;  // un rappel manqué reste affiché pendant 1 heure
-  var RESOUND_MIN = 5;           // le son est rejoué toutes les 5 minutes tant que ce n'est pas fait
-  var alerting = null;           // { r, key, early, lastSound }
+  var REMINDER_WINDOW_MIN = 60;  // passé 1 heure, un rappel manqué n'est plus montré
+  // Un rappel compte plus qu'une photo : pas vu, il revient, 3 essais en tout (à l'heure, puis 15 et
+  // 30 minutes après). Chaque essai dure la durée d'affichage réglée par la famille et sonne une fois
+  // (Tanguy, 19/11 ; avant : affiché 1 heure, le son rejoué toutes les 5 minutes, 12 fois).
+  var ESSAIS_MAX = 3;
+  var ESSAI_TOUTES_MIN = 15;
+  var alerting = null;           // { r, key, early }
   // Rappels confirmés (handled) et annonces « bientôt » déjà vues (announced) : id|date -> true.
   // Gardés dans la page (localStorage) : après un rechargement, un rappel déjà fermé ne revient pas.
   var handled = loadMarks('papote.rappelsFaits');
   var announced = loadMarks('papote.rappelsAnnonces');
+  // Essais déjà faits à l'heure du rappel : id|date -> { n: combien, a: minute du dernier }.
+  var essais = loadMarks('papote.rappelsEssais');
 
   function loadMarks(name) {
     try { return JSON.parse(localStorage.getItem(name)) || {}; } catch (e) { return {}; }
@@ -1382,12 +1434,13 @@
   function saveMarks() {
     // Seuls les jours récents servent : les plus anciens sont oubliés.
     var limit = dateKey(new Date(Date.now() - 2 * 86400000));
-    [handled, announced].forEach(function (m) {
+    [handled, announced, essais].forEach(function (m) {
       Object.keys(m).forEach(function (k) { if (k.split('|').pop() < limit) delete m[k]; });
     });
     try {
       localStorage.setItem('papote.rappelsFaits', JSON.stringify(handled));
       localStorage.setItem('papote.rappelsAnnonces', JSON.stringify(announced));
+      localStorage.setItem('papote.rappelsEssais', JSON.stringify(essais));
     } catch (e) { /* sans stockage : comme avant */ }
   }
 
@@ -1514,7 +1567,8 @@
     if (alerting && alerting.hidden) {
       var waiting = alerting;
       alerting = null;
-      if (!isDone(waiting.r, waiting.key)) openReminder(waiting.r, waiting.key, nowMin, waiting.early && nowMin < minutesOf(waiting.r.time));
+      // Coupé par un appel : il revient pour une durée entière, sans compter un essai de plus.
+      if (!isDone(waiting.r, waiting.key)) openReminder(waiting.r, waiting.key, nowMin, waiting.early && nowMin < minutesOf(waiting.r.time), !waiting.early);
       return;
     }
     var items = [];
@@ -1531,9 +1585,6 @@
       } else if (alerting.early) {
         // Annonce longtemps à l'avance (avanceMin) : le « Dans… » suit l'heure.
         $('reminder-when').textContent = 'Dans ' + inLabel(-late);
-      } else if (nowMin - alerting.lastSound >= RESOUND_MIN) {
-        alerting.lastSound = nowMin;
-        if (android()) android().alert();
       }
       return;
     }
@@ -1541,13 +1592,24 @@
       var r = items[j];
       var delta = minutesOf(r.time) - nowMin;
       if (isDone(r, key)) continue;
-      if (delta <= 0 && -delta <= REMINDER_WINDOW_MIN + callMinutesSince(key, minutesOf(r.time))) { openReminder(r, key, nowMin, false); return; }
+      if (delta <= 0 && -delta <= REMINDER_WINDOW_MIN + callMinutesSince(key, minutesOf(r.time))) {
+        // Déjà montré sans être vu : il revient 15 minutes après le dernier essai, 3 essais au plus.
+        var e = essais[r.id + '|' + key];
+        if (e && (e.n >= ESSAIS_MAX || nowMin - e.a < ESSAI_TOUTES_MIN)) continue;
+        openReminder(r, key, nowMin, false);
+        return;
+      }
       if (delta > 0 && delta <= earlyMin(r) && !announced[r.id + '|' + key]) { openReminder(r, key, nowMin, true); return; }
     }
   }
 
-  function openReminder(r, key, nowMin, early) {
-    alerting = { r: r, key: key, early: early, lastSound: nowMin };
+  function openReminder(r, key, nowMin, early, reprise) {
+    alerting = { r: r, key: key, early: early };
+    if (!early && !reprise) {
+      var fait = essais[r.id + '|' + key];
+      essais[r.id + '|' + key] = { n: (fait ? fait.n : 0) + 1, a: nowMin };
+      saveMarks();
+    }
     var delta = minutesOf(r.time) - nowMin;
     $('reminder-when').textContent = early ? 'Dans ' + inLabel(delta) : "C'est l'heure !";
     $('reminder-icon').innerHTML = '<span class="icon">' + kindIcon(r.kind) + '</span>';
@@ -1578,7 +1640,14 @@
       saveMarks();
       closeReminder();
       setTimeout(checkReminders, 500);
-    });
+    }, function () {
+      // Personne pendant la durée d'affichage : il se ferme sans être « vu » ni « fait ». L'annonce
+      // « Dans… » ne passe qu'une fois ; à l'heure, il reviendra (voir ESSAIS_MAX).
+      if (!alerting || alerting.r !== r) return;
+      if (alerting.early) { announced[alerting.r.id + '|' + alerting.key] = true; saveMarks(); }
+      closeReminder();
+      setTimeout(checkReminders, 500);
+    }, function () { return speech !== 'idle'; });
   }
 
   function closeReminder() {
@@ -3187,7 +3256,7 @@
   }
 
   // ---------- Options réglées par la famille : Écouter, Radio ----------
-  // families/{fid}.options = { lecture, radio: { nom, url, volume }, sos, meteo, rappelsAccueil } (lu par Sync.java).
+  // families/{fid}.options = { lecture, radio: { nom, url, volume }, sos, meteo, rappelsAccueil, dureeAffichage } (lu par Sync.java).
 
   var options = {};
 
@@ -3796,7 +3865,7 @@
   // Écran d'appel ou de SOS resté 3 minutes sans aucun changement, alors qu'Android ne connaît
   // aucun appel téléphone et qu'aucune visio n'est en conversation : il se ferme, l'accueil revient.
   // Une conversation (téléphone ou visio) n'est jamais coupée, même longue et immobile. Les photos
-  // reçues et les rappels ne sont pas concernés : ils attendent « OK » exprès.
+  // reçues et les rappels ne sont pas concernés : ils ont leur propre durée d'affichage (watchSeen).
   var GARDE_FOU_MS = 3 * 60000;
   var gardeFou = { cle: '', depuis: 0 };
 
