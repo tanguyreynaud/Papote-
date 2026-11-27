@@ -89,6 +89,22 @@ p { margin: 0; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M3 6l5 5 5-5' fill='none' stroke='%234f46e5' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right .9rem center; }
 .pays-ville select:focus, .pays-ville input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Liste déroulante Papote (listes.js, la même que dans l'appli) : le <select> reste là, invisible ; ce bouton le remplace
+   et la liste des villes s'ouvre juste sous lui, au lieu de la liste brute du téléphone. */
+select.liste-native { position: absolute; width: 1px !important; min-width: 0 !important; min-height: 0 !important; height: 1px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; opacity: 0; pointer-events: none; }
+.liste-papote { display: flex; align-items: center; justify-content: space-between; gap: .5rem; width: 100%; min-width: 0; min-height: 3.25rem; padding: .5rem .9rem; font: inherit; text-align: left; color: var(--text); background: var(--bg); border: 2px solid var(--line); border-radius: 14px; cursor: pointer; }
+.liste-papote[hidden] { display: none; }
+.liste-papote.vide .liste-papote-texte { color: var(--muted); }
+.liste-papote.ouverte, .liste-papote:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.liste-papote-texte { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.liste-papote-chevron { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
+.liste-papote.ouverte .liste-papote-chevron { transform: rotate(180deg); }
+.liste-papote-menu { position: fixed; z-index: 2000; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 6px; overflow-y: auto; overscroll-behavior: contain; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 2px 6px rgba(36, 33, 47, .08), 0 14px 34px rgba(36, 33, 47, .18); }
+.liste-papote-menu:focus { outline: none; }
+.liste-papote-choix { flex: none; display: block; width: 100%; min-height: 2.75rem; margin: 0; padding: .6rem .75rem; font: inherit; text-align: left; color: var(--text); background: none; border: 0; border-radius: 10px; cursor: pointer; }
+.liste-papote-choix:hover, .liste-papote-choix:focus-visible { background: var(--accent-soft); outline: none; }
+.liste-papote-choix[aria-selected="true"] { color: var(--accent-strong); font-weight: 700; background: var(--accent-soft); }
+@media (prefers-reduced-motion: reduce) { .liste-papote-chevron { transition: none; } }
 /* 44 px de haut au moins : un lien d'une seule ligne de texte se rate au doigt (audit du 11/11). */
 .lien { min-height: 2.75rem; display: inline-flex; align-items: center; background: none; border: 0; padding: 0; font: inherit; color: var(--accent-strong); font-weight: 700; text-decoration: none; cursor: pointer; text-align: left; }
 .lien[hidden] { display: none; }
@@ -896,6 +912,11 @@ body .ps-bouton { bottom: 6.5rem; }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ranger);
     else ranger();
   })();
+</script>
+<script type="module">
+  // Liste des villes au style Papote, comme dans l'appli (sans ce script, la liste standard du navigateur reste là).
+  import { habillerLesListes } from './listes.js';
+  habillerLesListes();
 </script>
 </body>
 </html>
