@@ -206,6 +206,44 @@ function mesurer({ pasBouton, texteLibre, longLibre, textesLongs }) {
     if (li(es[0]) && li(es[1]) && li(es[0]) !== li(es[1]) && li(es[0]).parentElement === li(es[1]).parentElement) continue;
     out.push({ type: 'doublon', sig: chiffres(t.slice(0, 60)), detail: `affiché ${es.length} fois : « ${t.slice(0, 70)} » (${chemin(es[0])} et ${chemin(es[1])})`, r: union(es[0], es[1]) });
   }
+  // --- Ajouts du 27/11 (Tanguy : « comment une image complètement décalée n'a pas été repérée ? ») ---
+  // Décentré : dans un bloc dont le texte est centré, un enfant seul sur sa ligne (icône, bouton, image) doit être au
+  // milieu lui aussi. « text-align: center » ne centre pas l'enfant d'une colonne flex : c'était le défaut du guide.
+  for (const e of document.querySelectorAll('body *')) {
+    if (!vis(e) || e.children.length < 2 || e.closest('button, a, label, summary')) continue; // icône + texte d'un bouton : pas un bloc
+    const se = getComputedStyle(e);
+    if (se.textAlign !== 'center' || se.display === 'inline') continue;
+    const re = e.getBoundingClientRect();
+    const g = re.left + parseFloat(se.paddingLeft) + parseFloat(se.borderLeftWidth);
+    const d = re.right - parseFloat(se.paddingRight) - parseFloat(se.borderRightWidth);
+    const enfants = [...e.children].filter((c) => vis(c) && !/absolute|fixed/.test(getComputedStyle(c).position));
+    for (const c of enfants) {
+      const sc = getComputedStyle(c);
+      if (sc.display === 'inline' || sc.textAlign !== 'center') continue;
+      const rc = c.getBoundingClientRect();
+      if (rc.width > (d - g) * 0.9 || rc.height < 8) continue;
+      if (enfants.some((o) => o !== c && o.getBoundingClientRect().top < rc.bottom - 1 && o.getBoundingClientRect().bottom > rc.top + 1)) continue; // pas seul sur sa ligne
+      const ecart = (rc.left - g) - (d - rc.right);
+      if (Math.abs(ecart) > 6) out.push({ type: 'decentre', sig: chemin(c), detail: `dans un bloc centré, « ${txt(c, 30) || nom(c)} » est décalé de ${Math.round(Math.abs(ecart) / 2)} px vers la ${ecart < 0 ? 'gauche' : 'droite'}`, r: rect(c) });
+    }
+  }
+  // Bouton seul dans une rangée prévue pour deux (l'autre est caché) : il reste collé d'un côté.
+  for (const e of document.querySelectorAll('body *')) {
+    if (!vis(e)) continue;
+    const se = getComputedStyle(e);
+    if (se.display !== 'grid' || se.gridTemplateColumns.trim().split(/\s+/).length !== 2) continue;
+    const boutons = [...e.children].filter((c) => getComputedStyle(c).display !== 'none' && c.matches('button, a.primary, a.secondary'));
+    const vus = boutons.filter((c) => vis(c));
+    if (boutons.length === e.children.length && vus.length === 1 && vus[0].getBoundingClientRect().width < e.getBoundingClientRect().width * 0.7) {
+      out.push({ type: 'bouton-seul', sig: chemin(vus[0]), detail: `« ${txt(vus[0], 30)} » est seul d'un côté d'une rangée à deux boutons`, r: rect(vus[0]) });
+    }
+  }
+  // Élément standard du téléphone (liste, date, heure) : sa fenêtre est dessinée par le téléphone, hors style Papote,
+  // et aucune capture ne la montre. Interdit : passer par une liste Papote (web/js/listes.js).
+  for (const e of document.querySelectorAll('select, input[type=date], input[type=time], input[type=datetime-local], input[type=month], input[type=week], input[type=color]')) {
+    if (!vis(e)) continue;
+    out.push({ type: 'natif', sig: chemin(e), detail: `élément standard du téléphone : ${e.tagName === 'SELECT' ? 'liste' : e.type} ${nom(e)}`, r: rect(e) });
+  }
   return out;
 }
 
