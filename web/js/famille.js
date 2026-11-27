@@ -420,23 +420,7 @@ function ouvrirAssistant(demande) {
 async function noticeAvecAide(message) {
   if (await noticeAide(message) === 'aide') ouvrirAssistant(`J'ai ce message : « ${message} » Que faire ?`);
 }
-// La demande suit l'endroit exact où l'on est (2e épuration, 26/11) : le réglage ouvert, sinon le panneau de
-// Réglages, sinon la phrase du bouton. Dans Réglages, une tablette muette passe avant tout : c'est le vrai souci.
-function demandeDeLaPage(bouton) {
-  if (!bouton.classList.contains('aide-pastille')) return bouton.dataset.aide || undefined;
-  const ouvert = document.querySelector('.setting.editing .setting-head h2');
-  const surProfil = !$('view-profile').hidden;
-  if (ouvert) {
-    const titre = ouvert.closest('.rg-qui') ? (surProfil ? 'Ma photo et mon prénom' : 'Nom et photo de la tablette') : ouvert.textContent.trim();
-    return `J'ai besoin d'aide pour ce réglage : « ${titre} ».`;
-  }
-  if (surProfil) return "J'ai besoin d'aide pour mon profil ou mon abonnement.";
-  if (panneauReglages() === 'famille') return "J'ai besoin d'aide pour gérer la famille : inviter, retirer ou nommer un responsable.";
-  if ($('remote-card').open) return "La tablette ne marche pas bien. J'ai besoin d'aide pour la dépanner.";
-  if (targetTablet()?.lastOnline && !tabletteEnLigne()) return 'La tablette ne répond plus. Que faire\u00a0?';
-  return "J'ai besoin d'aide pour régler la tablette.";
-}
-document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', () => ouvrirAssistant(demandeDeLaPage(b))));
+document.querySelectorAll('[data-aide]').forEach((b) => b.addEventListener('click', () => ouvrirAssistant(b.dataset.aide || undefined)));
 
 // Un message d'alerte ou d'erreur ne s'affiche plus en un pavé tout en gras (contrôle mesuré du 24/11 : jusqu'à 5
 // lignes) : la première phrase, le fait, reste en gras ; la suite passe en texte normal. Fait une fois pour tous les

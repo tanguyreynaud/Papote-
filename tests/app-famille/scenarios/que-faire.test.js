@@ -47,8 +47,9 @@ test('Assistant pas chargé : « Poser une question à l\'assistant » le dit au
   assert.match(await g.texteFenetre(julie), /L'assistant ne répond pas pour l'instant/);
 });
 
-// 2e épuration (26/11) : « Besoin d'aide ? » envoie tout de suite la demande de l'endroit où l'on est.
-test('« Besoin d\'aide ? » : la demande envoyée dit sur quelle page et quel réglage on bloque', async () => {
+// « Besoin d'aide ? » dans Réglages et Mon profil : la même demande simple partout (Tanguy, 27/11 : une demande
+// différente selon le réglage ouvert « perd plus qu'autre chose »).
+test('« Besoin d\'aide ? » dans Réglages et Mon profil : la même demande simple, quel que soit le réglage ouvert', async () => {
   const julie = await banc.telephone('Julie');
   await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
   await julie.page.evaluate(() => { window.demandes = []; window.papoteChat = { ouvrir: (d) => window.demandes.push(d) }; });
@@ -60,16 +61,15 @@ test('« Besoin d\'aide ? » : la demande envoyée dit sur quelle page et quel r
     await g.attendreVue(julie, vue);
     return derniere();
   };
+  const SIMPLE = "J'ai besoin d'aide avec la tablette.";
   await julie.page.click('#nav-reglages');
   await g.attendreVue(julie, 'view-settings');
-  assert.strictEqual(await aide('view-settings'), "J'ai besoin d'aide pour régler la tablette.");
+  assert.strictEqual(await aide('view-settings'), SIMPLE);
   await julie.page.click('#sleep-card .setting-modify');
-  assert.strictEqual(await aide('view-settings'), "J'ai besoin d'aide pour ce réglage : « Nuit ».");
+  assert.strictEqual(await aide('view-settings'), SIMPLE);
   await julie.page.click('#sleep-card .setting-cancel');
-  await julie.page.click('#view-settings [data-reglages-choix="famille"]');
-  assert.strictEqual(await aide('view-settings'), "J'ai besoin d'aide pour gérer la famille : inviter, retirer ou nommer un responsable.");
   await g.ouvrirProfil(julie);
-  assert.strictEqual(await aide('view-profile'), "J'ai besoin d'aide pour mon profil ou mon abonnement.");
+  assert.strictEqual(await aide('view-profile'), SIMPLE);
   // La page Aide elle-même : l'assistant s'ouvre, sans demande toute faite.
   await julie.page.click('#view-profile .aide-pastille');
   await g.attendreVue(julie, 'view-support');

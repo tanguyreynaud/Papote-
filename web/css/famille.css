@@ -481,7 +481,12 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 /* Délai de l'alerte « pas vue » : cinq choix de la même taille, trois par ligne sur un petit écran. */
 .choice-titre { margin: 14px 0 0; font-weight: 600; }
 .choice-jours { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); margin-top: 8px; }
-.choice-jours label { justify-content: center; min-height: 48px; white-space: nowrap; }
+.choice-jours { gap: 8px; }
+.choice-jours label, .setting-edit .choice-jours label { display: flex; align-items: center; margin: 0; position: relative; justify-content: center; text-align: center; min-height: 48px; padding: 12px 6px; font-size: 16px; font-weight: 600; white-space: nowrap; }
+/* Comme le type de rappel : le rond collé au texte serrait le bouton (Tanguy, 27/11). Case pleine = choisie. */
+.choice-jours input { position: absolute; inset: 0; width: 100% !important; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.choice-jours label:has(input:checked) { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.choice-jours label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
 /* Communes de la météo : une par ligne, le nom entier, à la ligne s'il est long (jamais coupé). */
 .communes-titre { margin: 14px 0 0; font-weight: 600; }
 .communes-liste { flex-direction: column; flex-wrap: nowrap; margin-top: 8px; }
