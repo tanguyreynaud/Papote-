@@ -73,24 +73,24 @@ test('Style Papote : aucune liste standard du téléphone visible ; une liste Pa
   assert.deepStrictEqual(nus, []);
   // Le bouton montre la valeur, la liste s'ouvre juste sous lui (pas de fenêtre), et le choix s'enregistre comme avant.
   const bouton = julie.page.locator('#duree-card .liste-papote');
-  assert.strictEqual((await bouton.innerText()).trim(), '3 minutes');
+  assert.strictEqual((await bouton.innerText()).trim(), '5 minutes'); // 5 minutes par défaut depuis le 27/11
   await bouton.click();
   const menu = julie.page.locator('.liste-papote-menu');
   await menu.waitFor();
   assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing)').count(), 0, 'aucune fenêtre');
   assert.deepStrictEqual(await menu.locator('.liste-papote-choix').allInnerTexts(), ['1 minute', '2 minutes', '3 minutes', '4 minutes', '5 minutes']);
-  assert.strictEqual((await menu.locator('[aria-selected="true"]').innerText()).trim(), '3 minutes');
+  assert.strictEqual((await menu.locator('[aria-selected="true"]').innerText()).trim(), '5 minutes');
   const place = await julie.page.evaluate(() => {
     const b = document.querySelector('#duree-card .liste-papote').getBoundingClientRect();
     const m = document.querySelector('.liste-papote-menu').getBoundingClientRect();
     return { dessous: Math.round(m.top - b.bottom), gauche: Math.round(m.left - b.left), large: Math.round(m.width - b.width), bas: Math.round(window.innerHeight - m.bottom) };
   });
   assert.ok(place.dessous >= 0 && place.dessous <= 8 && place.gauche === 0 && place.large === 0 && place.bas >= 0, `liste collée sous son champ, dans l'écran : ${JSON.stringify(place)}`);
-  await menu.getByRole('option', { name: '5 minutes' }).click();
+  await menu.getByRole('option', { name: '2 minutes' }).click();
   await menu.waitFor({ state: 'detached' });
-  assert.strictEqual((await bouton.innerText()).trim(), '5 minutes');
+  assert.strictEqual((await bouton.innerText()).trim(), '2 minutes');
   await julie.page.click('#duree-card button[type=submit]');
-  await g.attendreBase(async () => (await g.lire(`families/${fid}`)).options?.dureeAffichage === 5, 'durée de 5 minutes enregistrée');
+  await g.attendreBase(async () => (await g.lire(`families/${fid}`)).options?.dureeAffichage === 2, 'durée de 2 minutes enregistrée');
   // Toucher à côté referme sans rien changer ; toucher le bouton une 2e fois aussi.
   await julie.page.click('#duree-card .setting-modify');
   await bouton.click();
@@ -101,5 +101,5 @@ test('Style Papote : aucune liste standard du téléphone visible ; une liste Pa
   await menu.waitFor();
   await bouton.click();
   await menu.waitFor({ state: 'detached' });
-  assert.strictEqual((await bouton.innerText()).trim(), '5 minutes');
+  assert.strictEqual((await bouton.innerText()).trim(), '2 minutes');
 });

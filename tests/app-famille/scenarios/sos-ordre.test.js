@@ -161,6 +161,7 @@ test('Ordre d\'appel SOS : photo ou initiale sur chaque ligne ; deux « Paul » 
     tete: li.querySelector('.sos-ordre-tete').tagName === 'IMG' ? 'photo' : li.querySelector('.sos-ordre-tete').textContent,
     fin: li.querySelector('.sos-ordre-role')?.textContent || '',
     large: li.scrollWidth <= li.clientWidth && [...li.querySelectorAll('.sos-ordre-prenom, .sos-ordre-role')].every((e) => e.scrollWidth <= e.clientWidth),
+    mesures: [li.scrollWidth, li.clientWidth, ...[...li.querySelectorAll('.sos-ordre-prenom, .sos-ordre-role')].flatMap((e) => [e.scrollWidth, e.clientWidth])].join(' '),
   })));
   const de = (uid) => vues.find((v) => v.uid === uid);
   assert.deepStrictEqual(vues.map((v) => v.prenom), ['Julie', 'Paul', 'Paul']);
@@ -169,5 +170,5 @@ test('Ordre d\'appel SOS : photo ou initiale sur chaque ligne ; deux « Paul » 
   assert.strictEqual(de(uidPol).tete, 'photo');
   assert.strictEqual(de(uidPaul).fin, fin(await telDe(uidPaul)));
   assert.strictEqual(de(uidPol).fin, fin(await telDe(uidPol)));
-  assert.ok(vues.every((v) => v.large), 'aucune ligne ne déborde, aucun texte coupé');
+  assert.ok(vues.every((v) => v.large), `aucune ligne ne déborde, aucun texte coupé : ${vues.map((v) => v.mesures).join(' | ')}`);
 });

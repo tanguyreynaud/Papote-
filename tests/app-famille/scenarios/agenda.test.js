@@ -179,7 +179,15 @@ test('Rappel : date choisie dans le calendrier Papote, heure dans les listes, jo
   await cal.locator(`[data-jour="${cible}"]`).click();
   await cal.waitFor({ state: 'detached' });
   assert.strictEqual(await julie.page.inputValue('#rem-date'), cible);
-  await julie.page.locator('#rem-date-jour', { hasText: 'dans 2 jours' }).waitFor();
+  // Plus de 2e ligne bleue : le champ dit le jour en toutes lettres ; « Demain » et « Aujourd'hui » en clair.
+  assert.strictEqual(await julie.page.locator('#rem-date-jour').count(), 0);
+  const attendu = new Date(`${cible}T12:00`).toLocaleDateString('fr-FR', { weekday: 'long' });
+  assert.match((await date.innerText()).trim().toLowerCase(), new RegExp(`^${attendu} \\d`));
+  await julie.page.fill('#rem-date', jour(1));
+  assert.strictEqual((await date.innerText()).trim(), 'Demain');
+  await julie.page.fill('#rem-date', jour(0));
+  assert.strictEqual((await date.innerText()).trim(), 'Aujourd\'hui');
+  await julie.page.fill('#rem-date', cible);
 
   // Heure : 14 h, puis 30.
   await g.choisirDansListe(julie, '.heure-papote .liste-papote >> nth=0', '14 h');
@@ -200,6 +208,25 @@ test('Rappel : date choisie dans le calendrier Papote, heure dans les listes, jo
   assert.ok(jours.every((j) => j.case === '0' && j.w >= 40), `sept cases égales sans case à cocher : ${JSON.stringify(jours)}`);
   await julie.page.locator('#rem-days label', { hasText: 'Mar' }).click();
   assert.strictEqual(await julie.page.locator('#rem-days input[value="2"]').isChecked(), true);
+  // Jour choisi : bleu clair, bord et texte bleus (pas une case pleine).
+  const choisi = await julie.page.locator('#rem-days label', { hasText: 'Mar' }).evaluate((l) => { const c = getComputedStyle(l); return { fond: c.backgroundColor, bord: c.borderTopColor, texte: c.color }; });
+  assert.ok(choisi.bord === choisi.texte && choisi.fond !== choisi.bord, `jour choisi en bleu clair : ${JSON.stringify(choisi)}`);
+  // Petits écrans (Tanguy, 27/11) : 360 px = les sept jours sur une ligne ; 320 px = deux lignes de quatre. Toujours
+  // assez larges pour le doigt, mot entier, rien hors de l'écran ; « Médicament » tient dans sa case.
+  const grand = julie.page.viewportSize();
+  for (const [large, rangs] of [[360, 1], [320, 2]]) {
+    await julie.page.setViewportSize({ width: large, height: grand.height });
+    const m = await julie.page.locator('#rem-days label, #rem-fields .choice-ligne label').evaluateAll((ls) => ls.filter((l) => l.checkVisibility()).map((l) => { const b = l.getBoundingClientRect();
+      return { mot: l.textContent.trim(), jour: !!l.closest('#rem-days'), w: Math.round(b.width), h: Math.round(b.height), y: Math.round(b.top), dehors: b.left < 0 || b.right > innerWidth, coupe: l.scrollWidth > l.clientWidth + 1 }; }));
+    const js = m.filter((x) => x.jour);
+    assert.strictEqual(js.length, 7, `${large} px : sept jours`);
+    assert.strictEqual(new Set(js.map((j) => j.y)).size, rangs, `${large} px : jours sur ${rangs} ligne(s) : ${JSON.stringify(js)}`);
+    assert.ok(js.every((j) => j.w >= 40 && j.h >= 44), `${large} px : jours assez grands pour le doigt : ${JSON.stringify(js)}`);
+    assert.ok(m.every((x) => !x.dehors && !x.coupe), `${large} px : aucun mot coupé ni hors de l'écran : ${JSON.stringify(m)}`);
+    const champs = await julie.page.locator('#rem-fields .liste-papote').evaluateAll((bs) => bs.filter((b) => b.checkVisibility()).map((b) => ({ mot: b.textContent.trim(), coupe: b.scrollWidth > b.clientWidth + 1 || [...b.children].some((c) => c.scrollWidth > c.clientWidth + 1) })));
+    assert.ok(champs.every((c) => !c.coupe), `${large} px : aucun champ au texte coupé : ${JSON.stringify(champs)}`);
+  }
+  await julie.page.setViewportSize(grand);
   // « Jusqu'au (facultatif) » : une date choisie peut être effacée.
   await julie.page.locator('#rem-fin-wrap .date-papote').click();
   await cal.waitFor();

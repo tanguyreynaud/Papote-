@@ -486,7 +486,10 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 .days[hidden] { display: none; }
 .days label { position: relative; justify-content: center; padding: 12px 0; min-height: 48px; font-size: 15px; font-weight: 600; }
 .days input { position: absolute; inset: 0; width: 100% !important; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.days label:has(input:checked) { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+/* Choix fait : bleu clair, bord et texte bleus (Tanguy, 27/11) ; le bleu plein reste aux boutons d'action. */
+.days label:has(input:checked), .choice-deux label:has(input:checked), .setting-edit .choice-deux label:has(input:checked) { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: var(--accent); color: var(--accent); }
+/* Petit écran (moins de 350 px) : sept cases seraient trop étroites pour le doigt, elles passent sur deux lignes. */
+@media (max-width: 349px) { .days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .days label:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
 /* Délai de l'alerte « pas vue » : cinq choix de la même taille, trois par ligne sur un petit écran. */
 .choice-titre { margin: 14px 0 0; font-weight: 600; }
@@ -1761,10 +1764,11 @@ a { text-decoration: none; }
 .sos-ordre-tete { flex: none; width: 36px; height: 36px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; font: 700 16px var(--display); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .sos-ordre-nom { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 17px; font-weight: 600; }
 .sos-ordre-prenom, .sos-ordre-role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Flèches de 50 px de large (au lieu de 54) : avec la marge de page de 20 px, un numéro entier tient sous le prénom. */
 .sos-ordre-sms { font-size: 15px; font-weight: 400; color: var(--muted); }
 .sos-ordre-role { font-size: 15px; font-weight: 400; color: var(--muted); }
 .sos-ordre-fleches { flex: none; display: flex; gap: 6px; }
-.sos-ordre-btn { width: 54px; height: 54px; padding: 0; border-radius: 12px; border: 2px solid var(--accent); color: var(--accent); background: var(--surface); touch-action: manipulation; }
+.sos-ordre-btn { width: 50px; height: 54px; padding: 0; border-radius: 12px; border: 2px solid var(--accent); color: var(--accent); background: var(--surface); touch-action: manipulation; }
 .sos-ordre-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .sos-ordre-btn:active:not(:disabled) { background: var(--accent); color: var(--accent-text); }
 .sos-ordre-btn:disabled { border-color: var(--line); color: var(--muted); opacity: .5; }
@@ -2091,7 +2095,6 @@ details.card.rg > p:last-child { margin-bottom: 16px; }
 }
 .abo-page-etat { margin: 4px 0 6px; font-size: 18px; font-weight: 700; }
 #rem-error { margin: 6px 0 0; }
-.rem-date-jour { margin: -2px 0 8px; font-size: 16px; font-weight: 700; color: var(--accent); }
 /* Téléphone couché (écran très bas) : le bouton qui valide une feuille n'est plus collé en bas, il recouvrait « Quand ? »
    et l'heure du rappel (tests du 21/11, étape 2 : Paul a enregistré 9 h sans voir le champ). Il reprend sa place à la fin. */
 @media (orientation: landscape) and (max-height: 480px) {
@@ -2387,3 +2390,11 @@ input.liste-native { position: absolute; width: 1px !important; min-width: 0 !im
 .guide:not(.intro) > .guide-buttons { margin-top: 0; }
 .guide:not(.intro) > p { flex: none; }
 .station-row .liste-papote { min-height: 46px; padding-top: 10px; padding-bottom: 10px; }
+
+/* Petit écran (moins de 380 px) : « Rendez-vous » passait sur deux lignes et « Médicament » sortait de sa case ;
+   « 15 minutes avant » était coupé à côté de l'heure : texte un peu plus petit, heure et « Prévenir » l'un sous l'autre. */
+@media (max-width: 379px) {
+  .choice-ligne:not(.choice-deux) label { padding-left: 2px; padding-right: 2px; font-size: 14px; }
+  #rem-fields > label:has(#rem-time), #rem-fields > label:has(#rem-avance) { grid-column: 1 / -1; }
+  #rem-fields .heure-papote { grid-template-columns: 1fr 1fr; }
+}
