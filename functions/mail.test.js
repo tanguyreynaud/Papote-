@@ -63,7 +63,7 @@ test('tablette reçue : éléments manquants prélevés, ou prélèvement refus�
   const ok = mail.tabletteRecue({ nom: 'Julie', rembourse: 0, manquants: ['chargeur et câble'], montant: 1000 });
   assert.match(ok.text, /Il manquait dans le colis : chargeur et câble\. Comme prévu, 10 € ont été prélevés/);
   assert.doesNotMatch(ok.text, /^Vous n'avez plus rien à faire/m);
-  const ko = mail.tabletteRecue({ nom: 'Julie', rembourse: 0, manquants: ['enceinte'], montant: 1000, echec: true });
+  const ko = mail.tabletteRecue({ nom: 'Julie', rembourse: 0, manquants: ['chargeur'], montant: 1000, echec: true });
   assert.match(ko.text, /n'a pas abouti : nous revenons vers vous/);
   assert.doesNotMatch(mail.tabletteRecue({ nom: 'Julie', rembourse: 0 }).text, /manquait/);
 });

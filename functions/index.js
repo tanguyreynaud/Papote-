@@ -2426,8 +2426,8 @@ function verifierAdmin(request) {
   if (!estAdmin) throw new HttpsError('permission-denied', 'Réservé à l\'administrateur.');
 }
 
-// manquants (facultatif) : éléments absents du colis retour, parmi 'tablette', 'chargeur', 'enceinte'.
-// Chacun est prélevé à son prix (tablette 130 €, chargeur et câble 10 €, enceinte 10 €).
+// manquants (facultatif) : éléments absents du colis retour, parmi 'tablette', 'chargeur'.
+// Chacun est prélevé à son prix (tablette 130 €, chargeur et câble 10 €).
 exports.tabletteRendue = onCall({ secrets: [STRIPE_SECRET] }, async (request) => {
   verifierAdmin(request);
   const { commande, manquants } = request.data || {};
