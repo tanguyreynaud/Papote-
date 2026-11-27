@@ -202,6 +202,18 @@ function habillerListe(sel) {
 
 // ---------- <input type="date"> : un calendrier ----------
 
+const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+/** « Aujourd'hui », « Demain », « Hier », sinon « Jeudi 3 décembre » (avec l'année si ce n'est pas celle en cours). */
+function enClair(d) {
+  const t = new Date();
+  const ecart = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
+  if (ecart === 0) return 'Aujourd\'hui';
+  if (ecart === 1) return 'Demain';
+  if (ecart === -1) return 'Hier';
+  const jour = JOURS[d.getDay()];
+  return `${jour.charAt(0).toUpperCase()}${jour.slice(1)} ${d.getDate() === 1 ? '1er' : d.getDate()} ${MOIS[d.getMonth()]}${d.getFullYear() === t.getFullYear() ? '' : ` ${d.getFullYear()}`}`;
+}
+
 function habillerDate(champ) {
   const { bouton, texte } = nouveauBouton(CALENDRIER);
   bouton.classList.add('date-papote');
@@ -212,7 +224,7 @@ function habillerDate(champ) {
   };
   const maj = () => {
     const d = lire();
-    texte.textContent = d ? `${d.getDate() === 1 ? '1er' : d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}` : (champ.dataset.vide || 'Choisir une date');
+    texte.textContent = d ? enClair(d) : (champ.dataset.vide || 'Choisir une date');
     bouton.classList.toggle('vide', !d);
     bouton.disabled = champ.disabled;
     bouton.hidden = champ.hidden;
