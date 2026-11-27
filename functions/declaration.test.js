@@ -118,3 +118,13 @@ test('repère « déclaration envoyée » de la bulle reconnu par le serveur, po
     assert.strictEqual(etatMain([{ role: 'user', content: 'Écran cassé' }, { role: 'user', content: fabriquer(m) }]), 'envoyee', m.libelle);
   }
 });
+
+test('« À faire » : une ligne par déclaration pas encore traitée (Tanguy 27/11)', () => {
+  const { lignesAFaire } = require('./declaration');
+  assert.deepStrictEqual(lignesAFaire([
+    { statut: 'nouvelle', motif: 'ecran', famille: 'Mamie Jeanne', auteur: { prenom: 'Julie' } },
+    { statut: 'traitee', motif: 'casse', famille: 'Papi', auteur: { prenom: 'Paul' } },
+    { statut: 'nouvelle', motif: 'vol' },
+  ]), ['Déclaration à traiter : écran fissuré ou cassé, par Julie (famille Mamie Jeanne)', 'Déclaration à traiter : tablette volée ou perdue, par un proche']);
+  assert.deepStrictEqual(lignesAFaire(null), []);
+});

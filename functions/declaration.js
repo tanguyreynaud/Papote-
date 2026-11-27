@@ -374,5 +374,22 @@ async function purgerDeclarations(db, maintenant = Date.now(), store = stockage)
 }
 
 module.exports.declarer = declarer;
+// Lignes « À faire » de l'admin et du récap du lundi (Tanguy 27/11 : les déclarations n'y apparaissaient pas) :
+// une ligne par demande pas encore marquée traitée. lireAFaire : une requête, 50 au plus ; une panne rend [].
+function lignesAFaire(declarations) {
+  return (declarations || []).filter((d) => d && d.statut !== 'traitee').map((d) => {
+    const qui = (d.auteur && (d.auteur.prenom || d.auteur.nom)) || 'un proche';
+    const motif = (MOTIFS[d.motif] && MOTIFS[d.motif].libelle) || d.libelle || 'demande';
+    return `Déclaration à traiter : ${motif.charAt(0).toLowerCase()}${motif.slice(1)}, par ${qui}${d.famille ? ` (famille ${d.famille})` : ''}`;
+  });
+}
+async function lireAFaire(db) {
+  try {
+    const snap = await db.collection('declarations').where('statut', '==', 'nouvelle').limit(50).get();
+    return lignesAFaire(snap.docs.map((d) => d.data()));
+  } catch (e) { return []; }
+}
+module.exports.lignesAFaire = lignesAFaire;
+module.exports.lireAFaire = lireAFaire;
 module.exports.purgerDeclarations = purgerDeclarations;
 module.exports._test = { lireDemande, photoValide, conversationPropre, etatTablette, resumeTablette, idDeclaration, mailEquipe, mailAuteur, gerer, MOTIFS, MAX_PHOTOS, QUOTA_PERSONNE };
