@@ -30,7 +30,7 @@ test('Alerte « pas vue » : 5 jours par défaut, 3 jours choisis (double appui 
 
   await modifier(julie);
   const form = julie.page.locator('#form-alerte-pas-vue');
-  assert.match(await form.innerText(), /Me prévenir si la tablette n'est pas utilisée depuis :/);
+  assert.match(await form.innerText(), /Prévenir les responsables si la tablette n'est pas utilisée depuis :/);
   assert.deepStrictEqual(await julie.page.locator('#alerte-pas-vue-choix label').allInnerTexts(),
     ['1 jour', '2 jours', '3 jours', '4 jours', '5 jours']);
   assert.strictEqual(await coche(julie), '5', '5 jours coché par défaut');

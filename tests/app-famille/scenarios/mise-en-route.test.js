@@ -236,7 +236,7 @@ test('A43 : famille préparée : le nom, puis « Réglons la tablette », une se
   const intro = julie.page.locator('.intro-back');
   await intro.waitFor({ timeout: 15_000 });
   assert.strictEqual(await julie.page.locator('.guide-back:not(.intro-back)').count(), 0, 'le guide attend');
-  assert.match(await intro.locator('[data-step="0"]').innerText(), /Réglons la tablette[\s\S]*Mamie Emma/);
+  assert.match(await intro.locator('[data-step="0"]').innerText(), /Réglons la tablette[\s\S]*Une minute\. Tout reste modifiable dans Réglages\./);
   // V8 : le bas de la fenêtre et ses deux boutons (même taille) restent à la même place à chaque étape.
   const place = async () => {
     await julie.page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished)).then(() => true));
@@ -277,7 +277,7 @@ test('A43 : famille préparée : le nom, puis « Réglons la tablette », une se
   // V7 : la tablette n'est pas encore arrivée : pas « est réglée », les réglages l'attendent.
   assert.strictEqual(await place(), depart, 'rien ne bouge sous le doigt (dernière étape)');
   const fin = await intro.locator('[data-step="5"]').innerText();
-  assert.match(fin, /C'est noté[\s\S]*la tablette de Mamie Emma les prendra dès son arrivée/);
+  assert.match(fin, /C'est noté[\s\S]*a tablette de Mamie Emma prendra ces réglages dès son arrivée/);
   assert.doesNotMatch(fin, /est réglée|C'est prêt/);
   await intro.locator('.intro-prev').click(); // Terminer
   // 3. Pas de deuxième fenêtre : l'accueil, tout simplement.
@@ -327,7 +327,7 @@ test('V7, V8 : « C\'est prêt » seulement quand la tablette est là ; le petit
   await julie.page.locator('#tablette-en-route').waitFor({ state: 'hidden' });
   for (let i = 0; i < 4; i++) await intro.locator('.intro-next').click();
   await intro.locator('[data-step="5"]').waitFor();
-  assert.match(await intro.locator('[data-step="5"]').innerText(), /C'est prêt[\s\S]*La tablette de Mamie Emma est réglée/);
+  assert.match(await intro.locator('[data-step="5"]').innerText(), /C'est prêt[\s\S]*Invitez la famille pour qu'elle envoie des photos\./);
   await intro.locator('.intro-prev').click(); // Terminer
   await intro.waitFor({ state: 'detached' });
   await julie.page.waitForTimeout(800);

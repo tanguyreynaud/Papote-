@@ -34,7 +34,7 @@ test('Forfait de la tablette : rien avant 80 %, puis l\'accueil explique calmeme
   await sim(750, 1);
   await julie.page.locator('#activity').waitFor({ state: 'hidden' });
   await sim(820, 1);
-  await julie.page.locator('#activity.calme', { hasText: 'forfait internet de la tablette de Mamie Emma est utilisé à 82 %' }).waitFor();
+  await julie.page.locator('#activity.calme', { hasText: 'Forfait de la tablette utilisé à 82 %.' }).waitFor();
   assert.ok(!(await julie.page.locator('#activity').evaluate((e) => e.classList.contains('warn'))), 'pas d\'alerte rouge pour le forfait');
   assert.ok((await julie.page.locator('#activity').textContent()).includes(`image réduite jusqu'au ${fin}. Photos et messages passent toujours.`));
   await sim(900, 2);
@@ -42,7 +42,7 @@ test('Forfait de la tablette : rien avant 80 %, puis l\'accueil explique calmeme
   assert.ok((await julie.page.locator('#activity').textContent()).includes(`image très réduite jusqu'au ${fin}. Photos et messages passent toujours.`));
   await sim(960, 3);
   await julie.page.locator('#activity.calme', { hasText: 'utilisé à 96 %' }).waitFor();
-  assert.ok((await julie.page.locator('#activity').textContent()).includes(`jusqu'au ${fin}, les appels passent sans image et les vidéos attendent le Wi-Fi. Photos et messages passent toujours. Branchez-la au Wi-Fi si vous pouvez.`));
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`Appels sans image jusqu'au ${fin}, et les vidéos attendent le Wi-Fi. Branchez-la au Wi-Fi si vous pouvez.`));
   await sim(900, 2);
   await julie.page.locator('#activity.calme', { hasText: 'utilisé à 90 %' }).waitFor();
   await julie.page.click('#tablet-chip');
@@ -66,15 +66,16 @@ test('Forfait « internet coupé » au bout : la date de coupure, puis une table
   });
   await sim(820, 1);
   await julie.page.locator('#activity.calme', { hasText: 'utilisé à 82 %' }).waitFor();
-  assert.ok((await julie.page.locator('#activity').textContent()).includes(`Une fois épuisé, internet sera coupé jusqu'au ${fin} ; branchez-la au Wi-Fi si vous pouvez.`));
+  // Même alerte courte que pour un forfait sans coupure (Tanguy, 27/11) : pas de phrase en plus.
+  assert.strictEqual(await julie.page.locator('#activity').textContent(), `Forfait de la tablette utilisé à 82 %. Appels vidéo en image réduite jusqu'au ${fin}. Photos et messages passent toujours.`);
   await sim(970, 3);
   await julie.page.locator('#activity.calme', { hasText: 'utilisé à 97 %' }).waitFor();
-  assert.ok((await julie.page.locator('#activity').textContent()).includes(`internet sera coupé jusqu'au ${fin}`));
+  assert.ok((await julie.page.locator('#activity').textContent()).includes(`Appels sans image jusqu'au ${fin}, et les vidéos attendent le Wi-Fi. Branchez-la au Wi-Fi si vous pouvez.`));
   // L'opérateur coupe : la tablette ne donne plus de nouvelles depuis 4 h (au-delà des 3 h tolérées la nuit).
   await sim(990, 3, s.Timestamp.fromMillis(Date.now() - 4 * 3600_000));
   await julie.page.locator('#activity.calme', { hasText: 'n\'a sans doute plus internet' }).waitFor();
   const texte = await julie.page.locator('#activity').textContent();
-  assert.strictEqual(texte, `La tablette de Mamie Emma n'a sans doute plus internet : son forfait du mois est épuisé, internet revient le ${fin}. Branchez-la au Wi-Fi si vous pouvez.`);
+  assert.strictEqual(texte, `La tablette n'a sans doute plus internet. Son forfait est épuisé jusqu'au ${fin} : branchez-la au Wi-Fi si vous pouvez.`);
   assert.doesNotMatch(texte, /ne répond plus/);
 });
 

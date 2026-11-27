@@ -301,7 +301,7 @@ export function notice(message) {
  * arrivaient dans Dépanner sans consigne). depuis : « 2 h »… Rend 'depanner' si la personne touche ce lien.
  */
 export function queFaireTablette(nom, depuis) {
-  return dialog(depuis ? `Aucune nouvelle de la tablette depuis ${depuis}.` : '', [
+  return dialog('', [
     { label: 'Compris', value: true, cls: 'primary' },
     { label: 'Plus d\'aide : dépanner la tablette', value: 'depanner', cls: 'link' },
   ], {

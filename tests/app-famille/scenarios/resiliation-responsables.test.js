@@ -46,7 +46,7 @@ test('Un responsable qui ne paie pas voit et utilise « Résilier l\'abonnement 
   await g.ouvrirFamille(julie);
   await julie.page.click('button[aria-label="Actions pour Paul"]');
   await g.repondre(julie, 'Rendre responsable');
-  assert.match(await g.texteFenetre(julie), /Rendre Paul responsable \?.*gérer l'abonnement \(moyen de paiement, factures, résiliation\)/);
+  assert.match(await g.texteFenetre(julie), /Rendre Paul responsable \?.*gérer l'abonnement\./);
   await g.repondre(julie, 'Rendre responsable');
   await g.attendreBase(async () => ((await famille(fid)).admins || []).includes(uidPaul), 'Paul responsable');
 
@@ -59,7 +59,7 @@ test('Un responsable qui ne paie pas voit et utilise « Résilier l\'abonnement 
   // Marie, simple proche : l'état de l'abonnement, sans aucun bouton pour le changer.
   await rechargerPuisProfil(marie);
   await marie.page.locator('#abo-status', { hasText: 'Actif' }).waitFor();
-  await marie.page.locator('#abo-readonly', { hasText: 'Seuls les responsables de la famille peuvent gérer ou résilier l\'abonnement' }).waitFor();
+  await marie.page.locator('#abo-readonly', { hasText: 'Géré par les responsables de la famille.' }).waitFor();
   for (const id of ['#btn-abo-page', '#btn-portail', '#btn-garder', '#btn-resilier', '#btn-resilier-deces']) {
     assert.strictEqual(await marie.page.locator(id).isVisible(), false, `${id} caché pour un simple proche`);
   }

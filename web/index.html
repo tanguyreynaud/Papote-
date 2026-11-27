@@ -122,7 +122,7 @@
   </svg>
 
   <!-- En haut de la page, dans le flux : il pousse l'en-tête « Papote » au lieu de le recouvrir. -->
-  <p id="hors-ligne-bandeau" class="hors-ligne-bandeau" role="status" hidden>Pas de connexion pour le moment. Papote reprend toute seule dès son retour.</p>
+  <p id="hors-ligne-bandeau" class="hors-ligne-bandeau" role="status" hidden>Pas de connexion pour le moment.<span class="alerte-suite"> Papote reprend toute seule dès son retour.</span></p>
   <main>
     <div id="loading" class="splash" role="status" aria-label="Chargement">
       <img class="splash-mark" src="icons/icon.svg" alt="">
@@ -176,8 +176,8 @@
         <label>Adresse e-mail
           <input id="link-email" type="email" autocomplete="email" required>
         </label>
-        <button type="submit" class="primary wide">Se connecter</button>
         <p id="link-error" class="error" hidden></p>
+        <button type="submit" class="primary wide">Se connecter</button>
         <button type="button" class="link lien-aide" data-aide="Je n'arrive pas à me connecter.">Besoin d'aide ?</button>
         <!-- iPhone : lien demandé depuis l'app de l'écran d'accueil, ouvert ici dans Safari. -->
         <div id="link-ios" hidden>
@@ -233,7 +233,7 @@
       <h1 class="brand">Papote</h1>
       <div class="card center">
         <h2>Demande envoyée</h2>
-        <p class="muted">Un responsable de la famille doit accepter votre arrivée. Cette page s'ouvrira toute seule dès qu'il l'aura fait.</p>
+        <p class="muted">Un responsable de la famille doit vous accepter. Cette page s'ouvrira toute seule.</p>
         <span class="spinner pending-spin"></span>
       </div>
       <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille</button>
@@ -254,7 +254,7 @@
       </div>
       <div class="card" id="sans-abo-panel-deja" hidden>
         <h2>Retrouver mon abonnement</h2>
-        <p class="muted small">Entrez le code de commande (dans l'e-mail de confirmation ou sur la facture), ou laissez vide pour chercher avec votre adresse e-mail.</p>
+        <p class="muted small">Entrez le code de commande (dans l'e-mail de confirmation), ou laissez vide pour chercher avec votre adresse e-mail.</p>
         <form class="order-link" data-order-form>
           <input class="order-code" placeholder="ABCD-EFGH" aria-label="Code de commande" autocapitalize="characters" autocomplete="off" spellcheck="false">
           <button type="submit" class="primary small-btn">Relier</button>
@@ -269,7 +269,7 @@
       <div class="card">
         <h2>Une question ?</h2>
         <p class="muted small">L'assistant Papote vous répond tout de suite.</p>
-        <button type="button" class="primary wide" id="sans-abo-aide">Poser une question</button>
+        <button type="button" class="primary wide" id="sans-abo-aide" data-aide="Papote n'est pas encore activé pour ma famille. Que dois-je faire ?">Poser une question</button>
       </div>
       <button type="button" class="link wide" data-action="other-family">Rejoindre une autre famille</button>
       <button type="button" class="link wide" data-action="logout">Se déconnecter</button>
@@ -284,14 +284,14 @@
       <p id="join-account" class="muted small"></p>
       <div class="card">
         <h2 id="join-title">Rejoindre une famille</h2>
-        <p id="join-help" class="muted">Entrez le code famille qu'on vous a envoyé : un responsable acceptera votre arrivée. Le plus simple : demandez-lui de vous inviter avec votre adresse e-mail.</p>
+        <p id="join-help" class="muted">Entrez le code famille reçu. Pas de code ? Demandez à un proche de vous inviter par e-mail.</p>
         <form id="form-join">
           <label id="join-code-wrap">Code famille
             <input id="join-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-1234" required>
           </label>
+          <p id="join-error" class="error" hidden></p>
           <button type="submit" class="primary wide">Rejoindre</button>
           <button type="button" id="join-later" class="secondary wide" hidden>Plus tard</button>
-          <p id="join-error" class="error" hidden></p>
           <button type="button" class="link lien-aide" data-aide="Je n'arrive pas à rejoindre la famille.">Besoin d'aide ?</button>
         </form>
       </div>
@@ -313,7 +313,7 @@
         <p id="abo-banner-text"></p>
         <button type="button" id="abo-banner-btn" class="primary small-btn" hidden>Régler</button>
         <div id="abo-banner-paid" class="order-wrap" hidden>
-          <p class="small">Déjà commandé sur le site ? Entrez le code de commande (sur la page de confirmation ou la facture), ou laissez vide pour chercher avec votre adresse e-mail.</p>
+          <p class="small">Entrez le code de commande (dans l'e-mail de confirmation), ou laissez vide pour chercher avec votre adresse e-mail.</p>
           <form class="order-link" data-order-form>
           <input class="order-code" placeholder="ABCD-EFGH" aria-label="Code de commande" autocapitalize="characters" autocomplete="off" spellcheck="false">
           <button type="submit" class="primary small-btn">Relier</button>
@@ -324,14 +324,14 @@
       <form id="nom-prepare" class="card" hidden novalidate>
         <p class="seen small">Votre espace famille est prêt</p>
         <h2>Comment appelez-vous la personne ?</h2>
-        <p class="muted">Le nom que toute la famille utilise, par exemple « Mamie Emma ». Il s'affichera sur la tablette, pour les appels et les alertes.</p>
+        <p class="muted">Le nom que toute la famille utilise, par exemple « Mamie Emma ».</p>
         <label>Son nom
           <input id="nom-prepare-input" maxlength="40" placeholder="Écrivez son nom ici" required aria-describedby="nom-prepare-error">
         </label>
         <p id="nom-prepare-error" class="error" hidden></p>
         <button type="submit" class="primary wide" id="nom-prepare-btn">Enregistrer</button>
       </form>
-      <p id="tablette-en-route" class="card small" hidden>La tablette est en route. À son arrivée, branchez-la : elle retrouve la famille toute seule. Vous pouvez déjà inviter vos proches.</p>
+      <p id="tablette-en-route" class="card small" hidden>La tablette est en route. À son arrivée, branchez-la : elle retrouve la famille toute seule.</p>
       <p id="activity" class="activity" hidden></p>
       <p id="outbox" class="outbox" hidden></p>
       <!-- Invitations de l'accueil (Tanguy 13/11) : une seule visible à la fois, la plus importante d'abord, au-dessus
@@ -341,11 +341,11 @@
         <span id="badges-compte" class="badges-compte" hidden></span>
         <a id="notifs-nudge" class="card nudge prioritaire" data-badge href="intent://notifications#Intent;scheme=papote;package=fr.mapapote.famille;end" hidden>
           <span class="avatar avatar-empty" aria-hidden="true">&#128277;</span>
-          <span><strong>Votre téléphone ne sonnera pas</strong><br><span class="small">Android bloque les notifications de Papote : <span class="grand-name"></span> ne pourra pas vous appeler. Touchez ici pour les autoriser.</span></span>
+          <span><strong>Votre téléphone ne sonnera pas</strong><br><span class="small">Android bloque les notifications de Papote. Touchez ici pour les autoriser.</span></span>
         </a>
         <button type="button" id="push-nudge" class="card nudge" data-badge hidden>
           <span class="avatar avatar-empty" aria-hidden="true">&#128276;</span>
-          <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small" id="push-nudge-text">Votre téléphone sonnera même app fermée, et vous serez prévenu si la tablette est débranchée</span></span>
+          <span><strong>Recevoir les appels de <span class="grand-name"></span></strong><br><span class="muted small" id="push-nudge-text">Votre téléphone sonnera, même app fermée</span></span>
         </button>
         <button type="button" id="pause-nudge" class="card nudge" data-badge hidden>
           <span class="avatar avatar-empty" aria-hidden="true">&#128241;</span>
@@ -507,7 +507,6 @@
                 <input id="in-tface-gallery" type="file" accept="image/*" hidden>
               </div>
               <label class="choice-titre" for="family-name">Nom de la tablette</label>
-              <p class="muted small">Par exemple « Mamie » ou « Jeanne ».</p>
               <input id="family-name" maxlength="40" required aria-describedby="family-name-error">
               <p id="family-name-error" class="error small" hidden></p>
               <div class="setting-actions">
@@ -590,7 +589,7 @@
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-soleil"/></svg></span><h2>Luminosité</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <p id="luminosite-value" class="setting-value"></p>
             <form id="form-luminosite" class="setting-edit" hidden>
-              <p class="muted small">La journée. Le soir, la tablette baisse d'elle-même à 55 % au plus, pour ne pas éblouir. Plus lumineux, la batterie dure moins longtemps.</p>
+              <p class="muted small">Le soir, la tablette baisse d'elle-même pour ne pas éblouir.</p>
               <div class="setup-son-ligne">
                 <div class="setup-son-tete">
                   <strong>Le jour</strong>
@@ -635,7 +634,7 @@
                   <option value="4">4 minutes</option>
                   <option value="5">5 minutes</option>
                 </select>
-                <span class="station-aide">Le temps qu'il reste en grand à l'écran (au moins 1 minute après qu'elle l'a vu). Ensuite il se ferme tout seul, même s'il n'a pas été vu.</span>
+                <span class="station-aide">Ensuite il se ferme tout seul, même s'il n'a pas été vu.</span>
             </div></div>
             <div class="setting-actions">
               <button type="button" class="secondary setting-cancel">Annuler</button>
@@ -650,23 +649,22 @@
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-meteo"/></svg></span><h2>Météo</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <p id="meteo-current" class="setting-value"></p>
             <form id="form-meteo" class="setting-edit" hidden>
-              <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Afficher la météo</strong><span>Le temps du jour sur l'écran de la tablette</span></span><input type="checkbox" class="toggle" id="opt-meteo"></label></div>
-              <p class="muted small" id="meteo-ville-titre">Pour changer de ville :</p>
-              <label>Code postal
+              <div class="toggle-list"><label class="toggle-row"><span class="toggle-text"><strong>Afficher la météo</strong></span><input type="checkbox" class="toggle" id="opt-meteo"></label></div>
+              <label id="meteo-ville-titre">Code postal de la ville
                 <input id="meteo-cp" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" autocomplete="postal-code" placeholder="32000">
               </label>
+              <p id="meteo-error" class="error small" hidden></p>
               <div id="meteo-commune-wrap" class="communes" hidden>
                 <p class="communes-titre">Commune</p>
                 <div id="meteo-commune" class="choice communes-liste" role="radiogroup" aria-label="Commune"></div>
               </div>
-              <p id="meteo-error" class="error small" hidden></p>
               <div class="setting-actions">
                 <button type="button" class="secondary setting-cancel">Annuler</button>
                 <button type="submit" class="primary">Enregistrer</button>
               </div>
             </form>
           </div>
-          <label class="toggle-row rg-ligne" id="opt-rappels-accueil-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-agenda"/></svg></span><span class="toggle-text"><strong>Afficher le prochain rappel</strong><span id="opt-rappels-accueil-texte">Affiché sur l'accueil</span></span><input type="checkbox" class="toggle" id="opt-rappels-accueil"></label>
+          <label class="toggle-row rg-ligne" id="opt-rappels-accueil-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-agenda"/></svg></span><span class="toggle-text"><strong>Afficher le prochain rappel</strong></span><input type="checkbox" class="toggle" id="opt-rappels-accueil"></label>
           <div id="radio-card" class="card setting rg" hidden>
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-radio"/></svg></span><h2>Radio</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <p id="radio-value" class="setting-value"></p>
@@ -713,8 +711,7 @@
             <div class="setting-head"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-oeil-barre"/></svg></span><h2>Tablette pas utilisée</h2><button type="button" class="link setting-modify"><span class="sr-only">Modifier</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button></div>
             <p id="alerte-pas-vue-value" class="setting-value"></p>
             <form id="form-alerte-pas-vue" class="setting-edit" hidden>
-              <p class="muted small">Quand vous envoyez des photos ou des rappels, les responsables sont prévenus si 3 de suite ne sont pas vus. Si rien n'est envoyé, ils reçoivent une notification si la tablette n'a ni vu ni senti <span class="grand-name"></span> pendant ce temps. C'est vérifié une fois par jour, à 10 h : l'alerte peut arriver jusqu'à un jour plus tard.</p>
-              <p class="choice-titre" id="alerte-pas-vue-titre">Me prévenir si la tablette n'est pas utilisée depuis :</p>
+              <p class="choice-titre" id="alerte-pas-vue-titre">Prévenir les responsables si la tablette n'est pas utilisée depuis :</p>
               <div id="alerte-pas-vue-choix" class="choice choice-jours" role="radiogroup" aria-labelledby="alerte-pas-vue-titre">
                 <label><input type="radio" name="alerte-pas-vue" value="1">1 jour</label>
                 <label><input type="radio" name="alerte-pas-vue" value="2">2 jours</label>
@@ -722,6 +719,7 @@
                 <label><input type="radio" name="alerte-pas-vue" value="4">4 jours</label>
                 <label><input type="radio" name="alerte-pas-vue" value="5">5 jours</label>
               </div>
+              <p class="muted small">Et aussi quand 3 envois de suite ne sont pas vus.</p>
               <div class="setting-actions">
                 <button type="button" class="secondary setting-cancel">Annuler</button>
                 <button type="submit" class="primary">Enregistrer</button>
@@ -738,7 +736,7 @@
           <details id="remote-card" class="card rg" hidden>
             <summary class="rg-ligne"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-outil"/></svg></span><span class="rg-texte"><strong class="rg-titre">Dépanner</strong><span class="rg-valeur">État, redémarrage</span></span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
             <div class="rg-corps">
-            <p id="remote-intro" class="muted small">À utiliser si la tablette ne répond plus ou se comporte bizarrement.</p>
+            <p id="remote-intro" hidden></p>
             <p id="remote-tablet" class="muted small"></p>
             <div class="remote-buttons">
               <button type="button" class="primary" data-cmd="status">Obtenir l'état</button>
@@ -786,10 +784,10 @@
         <h1>Inviter la famille</h1>
       </header>
       <div class="page-pad">
-        <p id="invite-full" class="card error" hidden>La famille est complète : 30 proches au maximum. Pour inviter quelqu'un, un responsable doit d'abord retirer un membre.</p>
+        <p id="invite-full" class="card error" hidden>La famille est complète : 30 proches au maximum. Retirez un membre pour en inviter un autre.</p>
         <div id="invite-email-card" class="card" hidden>
           <h2>Inviter par e-mail</h2>
-          <p class="muted small">Papote lui envoie un e-mail avec un lien. Elle entre directement dans la famille en se connectant avec cette adresse.</p>
+          <p class="muted small">La personne entre directement dans la famille.</p>
           <form id="form-invite" class="inline-field">
             <input id="invite-email" type="email" autocomplete="off" placeholder="adresse@exemple.fr" required>
             <button type="submit" class="primary">Inviter</button>
@@ -799,7 +797,7 @@
         </div>
         <div class="card">
           <h2>Inviter avec le code famille</h2>
-          <p class="muted">Faites scanner ce QR code avec l'appareil photo de la personne, ou envoyez-lui le lien. Un responsable devra accepter son arrivée.</p>
+          <p class="muted">Faites scanner ce QR code, ou envoyez le lien. Un responsable devra accepter son arrivée.</p>
           <div class="invite-code">
             <div id="invite-qr" class="qr" role="img" aria-label="QR code pour rejoindre la famille"></div>
             <div class="invite-code-cote">
@@ -827,7 +825,7 @@
         </div>
         <div class="card">
           <h2>Moyen de paiement</h2>
-          <p class="muted small">Carte bancaire ou compte pour le prélèvement, à changer sur la page sécurisée de Stripe.</p>
+          <p class="muted small">Sur la page sécurisée de Stripe.</p>
           <button type="button" id="btn-portail-page" class="secondary wide">Changer de moyen de paiement</button>
         </div>
         <div class="card">
@@ -864,7 +862,7 @@
             <form id="form-my-name" class="setting-edit" hidden>
               <div id="ma-photo-card" class="rg-qui-photo">
                 <p class="choice-titre">Ma photo</p>
-                <p class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse quand vous envoyez quelque chose ou que vous appelez.</p>
+                <p class="muted small">Pour que <span class="grand-name"></span> vous reconnaisse</p>
                 <div class="face-buttons">
                   <button type="button" class="secondary photo-changer" id="face-changer"><svg><use href="#i-camera"/></svg><span id="face-changer-texte">Ajouter ma photo</span></button>
                   <button type="button" class="secondary photo-retirer-btn" id="face-remove" hidden><svg><use href="#i-trash"/></svg>Retirer</button>
@@ -886,8 +884,8 @@
             <p id="my-tel-value" class="setting-value"></p>
             <form id="form-my-tel" class="setting-edit" hidden>
               <input id="my-tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="0612345678" aria-label="Mon numéro de portable">
-              <p class="muted small">Un portable français (06 ou 07). La tablette de votre proche vous appelle à ce numéro, et seuls les numéros de la famille peuvent l'appeler. Visible par votre famille seulement.</p>
               <p id="my-tel-error" class="error" hidden></p>
+              <p class="muted small">Votre proche vous appelle à ce numéro. Seule la famille le voit.</p>
               <div class="setting-actions">
                 <button type="button" class="secondary setting-cancel">Annuler</button>
                 <button type="submit" class="primary">Enregistrer</button>
@@ -915,12 +913,12 @@
           <div class="rg-ligne rg-abo-tete"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-carte"/></svg></span><span class="rg-texte"><strong id="abo-status" class="abo-status"></strong><span id="abo-details" class="rg-valeur"></span></span></div>
           <button type="button" id="btn-abo-page" class="rg-ligne rg-bouton" hidden><span class="rg-ico" aria-hidden="true"><svg><use href="#i-download"/></svg></span><span class="rg-titre">Gérer le paiement et les factures</span><svg class="rg-chev" aria-hidden="true"><use href="#i-chev"/></svg></button>
           <div class="rg-corps rg-abo-corps">
-          <p id="abo-readonly" class="muted small" hidden>Seuls les responsables de la famille peuvent gérer ou résilier l'abonnement : demandez à l'un d'eux.</p>
+          <p id="abo-readonly" class="muted small" hidden>Géré par les responsables de la famille.</p>
           <button type="button" id="btn-portail" class="primary wide" hidden>Régler le paiement</button>
           <button type="button" id="btn-garder" class="secondary wide" hidden>Garder mon abonnement</button>
           <div id="retour-box" class="abo-retour" hidden>
             <p id="retour-text" class="abo-retour-title"></p>
-            <p id="retour-aide" class="muted small" hidden>Quand le colis est prêt, touchez ce bouton : un QR code prépayé s'affiche, à montrer au point relais Mondial Relay. Pas besoin d'imprimer.</p>
+            <p id="retour-aide" class="muted small" hidden>Colis prêt ? Ce bouton affiche un QR code prépayé, à montrer au point relais Mondial Relay.</p>
             <div id="retour-adresse" hidden>
               <p class="muted small">Mondial Relay demande votre adresse pour le QR code de retour.</p>
               <label>Numéro et rue
@@ -980,7 +978,7 @@
             <p class="muted"><strong>Qui les voit</strong> : les membres de la famille et la tablette. Papote n'y accède que pour vous dépanner. Aucune publicité, rien n'est revendu.</p>
             <p class="muted"><strong>Combien de temps</strong> : les 200 dernières photos et les 40 dernières vidéos ; les plus anciennes s'effacent toutes seules. Un envoi supprimé disparaît aussi de la tablette.</p>
             <p class="muted"><strong>Où</strong> : sur les serveurs Google Firebase.</p>
-            <p class="muted"><strong>Une question, une demande</strong> : écrivez au support depuis la page Support.</p>
+            <p class="muted"><strong>Une question, une demande</strong> : posez-la depuis la page Aide.</p>
             <p id="delete-family-info" class="muted" hidden><strong>Effacer toutes les données</strong> : écrivez-nous à <a id="btn-delete-family" href="mailto:contact@mapapote.fr">contact@mapapote.fr</a>. Nous en parlons ensemble avant d'effacer, car c'est définitif pour toute la famille.</p>
           </details>
           <button type="button" class="rg-ligne rg-bouton" data-action="logout"><span class="rg-ico" aria-hidden="true"><svg><use href="#i-sortie"/></svg></span><span class="rg-titre">Se déconnecter</span></button>
@@ -1015,7 +1013,7 @@
           </details>
           <details>
             <summary>La tablette ne répond plus</summary>
-            <p>Vérifiez que la tablette est branchée. Si elle utilise le Wi-Fi de la maison, vérifiez que la box est allumée ; sinon, vérifiez qu'elle est posée à un endroit où un téléphone capte. Si le problème continue, un responsable peut la redémarrer depuis Réglages > Dépanner la tablette. Sur place, on peut aussi rester appuyé 10 secondes sur le bouton volume bas de la tablette, puis toucher « Oui ».</p>
+            <p>Vérifiez que la tablette est branchée. Si elle utilise le Wi-Fi de la maison, vérifiez que la box est allumée ; sinon, vérifiez qu'elle est posée à un endroit où un téléphone capte. Si le problème continue, un responsable peut la redémarrer depuis Réglages > Dépanner. Sur place, on peut aussi rester appuyé 10 secondes sur le bouton volume bas de la tablette, puis toucher « Oui ».</p>
           </details>
           <details>
             <summary>L'appel vidéo ne fonctionne pas</summary>
@@ -1283,7 +1281,7 @@
   <div id="hors-ligne" class="hors-ligne" role="status" hidden>
     <img class="splash-mark" src="icons/icon.svg" alt="">
     <h1>Pas de connexion internet</h1>
-    <p>Votre téléphone n'est pas relié à internet pour le moment. Papote s'ouvrira toute seule dès que la connexion reviendra.</p>
+    <p>Papote s'ouvrira toute seule dès son retour.</p>
     <p class="hors-ligne-aide">Vérifiez le Wi-Fi ou les données mobiles.</p>
     <p class="hors-ligne-verif">On vérifie la connexion <span class="splash-dots"><span></span><span></span><span></span></span></p>
     <button type="button" id="hors-ligne-reessayer" class="primary">Réessayer</button>
