@@ -8,6 +8,8 @@ import {
 
 const $ = (id) => document.getElementById(id);
 const WHAT = { photo: 'une photo', video: 'une vidéo', message: 'un message' };
+// Appels d'un même SOS (« SOS », « SOS 2 », relances) : regroupés sur 30 min, comme le suivi du SOS dans l'app.
+const SOS_MEME_MS = 30 * 60_000;
 const WHAT_OF = { photo: 'la photo', video: 'la vidéo', message: 'le message' };
 
 let session = null;
@@ -45,9 +47,21 @@ export function pageVue(page) {
 }
 
 const heure = (ts) => toDate(ts)?.getTime() || 0;
+// Copie sur ce téléphone de l'heure du dernier passage (Tanguy, 27/11 : sur son Pixel, le « 9+ » revenait à chaque
+// actualisation). Quand l'écriture sur la fiche est refusée ou n'est pas encore partie (hors ligne, fiche ancienne),
+// la cloche ne retombe plus en « non lu » : le plus récent des deux fait foi.
+const cleVues = () => `papote.notifsVues.${session.fid}.${session.uid}`;
+let vuLocal = 0;
+function lireVues() {
+  vuLocal = 0;
+  try {
+    const lu = Number(localStorage.getItem(cleVues()));
+    if (Number.isFinite(lu) && lu > 0 && lu <= Date.now() + 60_000) vuLocal = lu;
+  } catch (e) { /* stockage indisponible : la fiche seule */ }
+}
 function lastRead() {
   const moi = members.find((m) => m.id === session.uid);
-  return Math.max(vuIci, heure(session.member?.notifsVues), heure(moi?.notifsVues));
+  return Math.max(vuIci, vuLocal, heure(session.member?.notifsVues), heure(moi?.notifsVues));
 }
 
 // Page Notifications ouverte : une écriture au plus par ouverture, et seulement s'il y avait du nouveau (données
@@ -57,6 +71,8 @@ export function markNotifsRead() {
   const avant = lastRead();
   const nouveau = !envoisLus || !avant || events().some((e) => !e.mine && !e.info && e.date.getTime() > avant);
   vuIci = Date.now();
+  vuLocal = vuIci;
+  try { localStorage.setItem(cleVues(), String(vuIci)); } catch (e) { /* rien */ }
   render();
   if (!nouveau) return;
   updateDoc(doc(db, 'families', session.fid, 'members', session.uid), { notifsVues: serverTimestamp() })
@@ -64,7 +80,9 @@ export function markNotifsRead() {
 }
 
 // Page ouverte quand on touche la notification (famille.js) : ce dont elle parle.
-const PAGE = { photo: 'photos', video: 'videos', message: 'messages', call: 'home', member: 'settings', agenda: 'agenda' };
+const PAGE = {
+  photo: 'photos', video: 'videos', message: 'messages', call: 'home', phone: 'home', sos: 'home', member: 'settings', agenda: 'agenda',
+};
 
 function who(uid, name) {
   return uid === session.uid ? 'Vous' : name;
@@ -105,29 +123,67 @@ function events() {
   // La tablette appelle un proche (calleeUid), ou toute la famille et le SOS (sans calleeUid, comme les appels
   // des proches vers la tablette : on les reconnaît à l'appelant).
   const tablettes = new Set(members.filter((m) => m.role === 'tablette').map((m) => m.id));
+  // SOS : une seule ligne par SOS, avec sa vraie fin. Avant, chaque essai d'appel (« SOS », « SOS 2 ») faisait sa
+  // ligne, et un SOS réglé au téléphone ou par « Je m'en occupe » restait écrit « personne n'a pu répondre », ou
+  // n'apparaissait pas s'il n'était plus dans les derniers appels (Tanguy, 27/11). Le dernier SOS est lu sur la fiche
+  // de la tablette (sos : { debut, fin, uid, nom }) et sur families.sosPris ; les plus anciens, sur leurs appels.
+  const soses = []; // { debut, fin, uid, nom } du plus récent au plus ancien
+  const sosFiche = members.filter((m) => m.role === 'tablette').map((m) => m.sos)
+    .filter((x) => x && Number.isSafeInteger(x.debut) && x.debut > 0).sort((a, b) => b.debut - a.debut)[0];
+  if (sosFiche) {
+    const pris = session.family.sosPris;
+    const s = { debut: sosFiche.debut, fin: sosFiche.fin || '', uid: sosFiche.uid || '', nom: sosFiche.nom || '' };
+    if (!s.fin && pris && pris.debut === s.debut) Object.assign(s, { fin: 'pris', uid: pris.uid || '', nom: pris.nom || '' });
+    soses.push(s);
+  }
+  const appelsSos = calls.filter((c) => !c.calleeUid && tablettes.has(c.callerUid) && /^SOS/.test(c.calleeName || '') && toDate(c.createdAt))
+    .sort((a, b) => toDate(a.createdAt) - toDate(b.createdAt));
+  for (const c of appelsSos) {
+    const t = toDate(c.createdAt).getTime();
+    // Les appels d'un même SOS se suivent en quelques minutes (horloge de la tablette : 2 min d'écart tolérées).
+    let s = soses.find((x) => t > x.debut - 2 * 60_000 && t < x.debut + SOS_MEME_MS);
+    if (!s) { s = { debut: t, fin: '', uid: '', nom: '' }; soses.push(s); }
+    if (c.state === 'ringing') s.sonne = true;
+    else s.essais = (s.essais || 0) + 1;
+    if (!s.fin && c.answer?.uid) Object.assign(s, { fin: 'repondu', uid: c.answer.uid, nom: c.answer.name || '' });
+  }
+  for (const s of soses) {
+    const moi = !!s.uid && s.uid === session.uid;
+    const qui = s.nom || 'un proche';
+    const suite = s.fin === 'repondu' ? (moi ? 'vous avez répondu' : `${qui} a répondu`)
+      : s.fin === 'pris' ? (moi ? 'vous vous en occupez' : `${qui} s'en occupe`)
+        : s.fin === 'arrete' ? 'SOS arrêté sur la tablette'
+          // Sans fin connue : rien de plus tant que ça sonne, ou tant qu'aucun essai n'est fini sur un SOS récent.
+          : s.sonne || (!s.essais && Date.now() - s.debut < SOS_MEME_MS) ? '' : 'personne n\'a pu répondre';
+    add(new Date(s.debut), 'sos', `${grand} a appuyé sur SOS${suite ? ` : ${suite}` : ''}`, moi, !s.fin);
+  }
+  // La tablette appelle un proche (calleeUid), ou toute la famille (sans calleeUid, comme les appels des proches vers
+  // la tablette : on les reconnaît à l'appelant). Ces appels sont en audio : icône téléphone, pas caméra.
   for (const c of calls) {
     const fromTablet = !!c.calleeUid || tablettes.has(c.callerUid);
     const date = toDate(c.endedAt) || toDate(c.createdAt);
     // Un appel sans réponse (personne n'a décroché, ou refusé) est un appel manqué.
     const manque = !c.answer && ['missed', 'declined', 'ended'].includes(c.state);
     if (fromTablet && !c.calleeUid) {
-      if (c.state === 'ringing') continue;
+      if (c.state === 'ringing' || /^SOS/.test(c.calleeName || '')) continue;
+      const moi = c.answer?.uid === session.uid;
       const qui = c.answer?.uid ? who(c.answer.uid, c.answer.name) : null;
       const repondu = qui && (qui === 'Vous' ? 'vous avez répondu' : `${qui} a répondu`);
-      if (/^SOS/.test(c.calleeName || '')) add(date, 'call', `${grand} a appuyé sur SOS : ${repondu || 'personne n\'a pu répondre'}`, false, !repondu);
-      else if (repondu) addInfo(date, 'call', `${grand} a appelé toute la famille : ${repondu}`);
-      else if (manque) add(date, 'call', `Appel manqué de ${grand}`, false, true);
+      if (repondu) add(date, 'phone', `${grand} a appelé toute la famille : ${repondu}`, moi, false, PAGE.call, true);
+      else if (manque) add(date, 'phone', `Appel manqué de ${grand}`, false, true);
     } else if (fromTablet) {
       if (c.state === 'ringing') continue;
       const to = who(c.calleeUid, c.calleeName);
-      if (manque) add(date, 'call', `Appel manqué de ${grand}${to === 'Vous' ? '' : ` pour ${to}`}`, false, true);
-      else addInfo(date, 'call', `${grand} a appelé ${to === 'Vous' ? 'vous' : to}`);
+      if (manque) add(date, 'phone', `Appel manqué de ${grand}${to === 'Vous' ? '' : ` pour ${to}`}`, false, true);
+      else add(date, 'phone', `${grand} ${to === 'Vous' ? 'vous a appelé' : `a appelé ${to}`}`, false, false, PAGE.call, true);
     } else {
+      // Mon propre appel (même sans réponse de la tablette) n'est pas une nouveauté pour moi : hors du chiffre.
+      const moi = c.callerUid === session.uid;
       const from = who(c.callerUid, c.callerName);
       const verb = from === 'Vous' ? 'avez' : 'a';
-      if (c.state === 'missed') add(date, 'call', `${grand} n'a pas répondu à l'appel de ${from === 'Vous' ? 'vous' : from}`, false, true);
-      else if (c.state === 'declined') add(date, 'call', `${grand} a refusé l'appel de ${from === 'Vous' ? 'vous' : from}`, false, true);
-      else if (c.state !== 'ringing') add(date, 'call', `${from} ${verb} appelé ${grand}`, from === 'Vous', false, PAGE.call, true);
+      if (c.state === 'missed') add(date, 'call', `${grand} n'a pas répondu à ${moi ? 'votre appel' : `l'appel de ${from}`}`, moi, true);
+      else if (c.state === 'declined') add(date, 'call', `${grand} a refusé ${moi ? 'votre appel' : `l'appel de ${from}`}`, moi, true);
+      else if (c.state !== 'ringing') add(date, 'call', `${from} ${verb} appelé ${grand}`, moi, false, PAGE.call, true);
     }
   }
   for (const m of members) {
@@ -177,7 +233,7 @@ function render() {
     li.className = `notif n-${e.icon}${isFresh(e) ? ' fresh' : ''}${e.missed ? ' missed' : ''}`;
     if (e.page) li.dataset.page = e.page;
     li.innerHTML = `<span class="notif-icon"><svg><use href="#i-${{
-      photo: 'photo', video: 'video', message: 'message', seen: 'eye', call: 'call', member: 'user', agenda: 'agenda',
+      photo: 'photo', video: 'video', message: 'message', seen: 'eye', call: 'call', phone: 'phone', sos: 'sos', member: 'user', agenda: 'agenda',
     }[e.icon]}"/></svg></span>`;
     const body = document.createElement('div');
     body.className = 'notif-body';
@@ -200,12 +256,13 @@ export function startNotifs(current) {
   session = current;
   vuIci = 0;
   lirePages();
+  lireVues();
   const base = (name) => collection(db, 'families', session.fid, name);
   const read = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
   stops.push(onSnapshot(query(base('posts'), orderBy('createdAt', 'desc'), limit(30)),
     (snap) => { posts = read(snap); envoisLus = true; render(); },
     (err) => console.error('Notifications : envois illisibles', err)));
-  stops.push(onSnapshot(query(base('calls'), orderBy('createdAt', 'desc'), limit(10)),
+  stops.push(onSnapshot(query(base('calls'), orderBy('createdAt', 'desc'), limit(30)),
     (snap) => { calls = read(snap); render(); },
     (err) => console.error('Notifications : appels illisibles', err)));
 }
@@ -219,4 +276,5 @@ export function stopNotifs() {
   envoisLus = false;
   dessinee = null;
   vuPages = {};
+  vuLocal = 0;
 }

@@ -823,6 +823,8 @@ button.incomplet.primary { background: var(--surface); color: var(--accent); box
 .n-message { --c: var(--c-message); }
 .n-seen { --c: var(--ok); }
 .n-call { --c: var(--c-call); }
+.n-phone { --c: var(--c-call); }
+.n-sos { --c: var(--danger); }
 .n-agenda { --c: var(--c-agenda); }
 .n-member { --c: var(--c-settings); }
 

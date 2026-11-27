@@ -220,3 +220,94 @@ test('Cloche : ce qui a été vu dans Messages n\'est plus compté, même après
   await notifsArrivees(julie, ['Bisous']);
   assert.strictEqual(await badge(julie), '1', 'la suivante compte');
 });
+
+// Tanguy, 27/11 : sur son Pixel, cloche ouverte, fermée, page actualisée : le « 9+ » revient. L'heure du passage n'était
+// gardée que sur sa fiche, et l'écriture y était refusée (fiche ancienne). Elle est aussi gardée sur le téléphone :
+// même si la fiche ne peut pas être écrite, ce qui a été vu reste vu.
+test('Cloche : vue une fois, elle reste vide après rechargement même si la fiche n\'a pas pu être écrite', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const uid = (await g.liste(`families/${fid}/members`)).find((m) => m.email === 'julie@exemple.fr').id;
+  await voirLesNotifs(julie);
+  await g.attendreBase(async () => (await s.lire(`families/${fid}/members/${uid}`))?.notifsVues, 'premier passage écrit');
+  const premier = (await s.lire(`families/${fid}/members/${uid}`)).notifsVues.toMillis();
+  await julie.page.waitForTimeout(1200);
+  await reponseDeMamie(fid, tab, 'Merci ma chérie');
+  await reponseDeMamie(fid, tab, 'Il fait beau ici');
+  await notifsArrivees(julie, ['Merci ma chérie', 'Il fait beau ici']);
+  assert.strictEqual(await badge(julie), '2', 'deux réponses non lues');
+  // Les écritures vers la base ne passent plus (comme une fiche refusée par les règles).
+  await julie.context.route(/Firestore\/Write\//, (r) => r.abort());
+  await voirLesNotifs(julie);
+  await julie.page.waitForTimeout(1500);
+  assert.strictEqual((await s.lire(`families/${fid}/members/${uid}`)).notifsVues.toMillis(), premier, 'la fiche n\'a pas été écrite');
+  await julie.page.reload();
+  await g.attendreVue(julie, 'view-home');
+  await notifsArrivees(julie, ['Merci ma chérie', 'Il fait beau ici']);
+  assert.strictEqual(await badge(julie), null, 'déjà vues : pas de chiffre après rechargement');
+  await reponseDeMamie(fid, tab, 'Bisous');
+  await notifsArrivees(julie, ['Bisous']);
+  assert.strictEqual(await badge(julie), '1', 'la suivante compte');
+  banc.tolerer(julie, /Firestore|ERR_FAILED|net::|WebChannel|Notifications vues/);
+});
+
+// Tanguy, 27/11 : un SOS auquel un proche a répondu n'était pas dans la liste, les SOS avaient une icône de caméra,
+// et ses propres appels comptaient dans le chiffre. Un SOS = une ligne, avec sa vraie fin (lue sur la fiche de la
+// tablette), l'icône du SOS ; les appels de la tablette (audio) ont l'icône du téléphone.
+test('Cloche : un SOS = une ligne avec sa fin et son icône ; mon appel sans réponse ne compte pas', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid, tab } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  const marc = await banc.telephone('Marc');
+  await g.rejoindre(julie, fid, marc, { email: 'marc@exemple.fr', prenom: 'Marc' });
+  await marc.context.close();
+  await voirLesNotifs(julie);
+  const membres = await g.liste(`families/${fid}/members`);
+  const uJulie = membres.find((m) => m.email === 'julie@exemple.fr').id;
+  const uMarc = membres.find((m) => m.email === 'marc@exemple.fr').id;
+  await julie.page.waitForTimeout(1500);
+  const il = (min) => banc.admin.firestore.Timestamp.fromMillis(Date.now() - min * 60_000);
+  const ligne = (texte) => julie.page.locator('#notifs li', { hasText: texte });
+  const icone = (texte) => ligne(texte).locator('use').getAttribute('href');
+
+  // Mon propre appel, resté sans réponse : dans la liste, pas dans le chiffre.
+  await s.db.collection(`families/${fid}/calls`).add({
+    callerUid: uJulie, callerName: 'Julie', state: 'missed', answer: null, createdAt: s.FieldValue.serverTimestamp(), endedAt: s.FieldValue.serverTimestamp(),
+  });
+  await notifsArrivees(julie, ['Mamie Emma n\'a pas répondu à votre appel']);
+  assert.strictEqual(await badge(julie), null, 'mon appel ne compte pas');
+
+  // SOS d'il y a 40 min, réglé au téléphone par Marc : aucun appel dans l'app, seulement la fiche de la tablette.
+  const debut = Date.now() - 40 * 60_000;
+  await s.db.doc(`families/${fid}/members/${tab.tabletUid}`).update({ sos: { debut, fin: 'repondu', uid: uMarc, nom: 'Marc' } });
+  await notifsArrivees(julie, ['Mamie Emma a appuyé sur SOS : Marc a répondu']);
+  assert.strictEqual(await icone('a appuyé sur SOS'), '#i-sos', 'icône du SOS');
+  assert.strictEqual(await badge(julie), null, 'SOS d\'avant son dernier passage : pas de chiffre');
+  // Les deux essais d'appel de ce SOS (sans réponse dans l'app) ne font pas de ligne en plus.
+  for (const [nom, min] of [['SOS', 39], ['SOS 2', 37]]) {
+    await s.db.collection(`families/${fid}/calls`).add({
+      callerUid: tab.tabletUid, callerName: 'Mamie Emma', calleeUid: null, calleeName: nom, state: 'missed', answer: null, createdAt: il(min), endedAt: il(min - 1),
+    });
+  }
+  // SOS plus ancien (3 h) : 1er essai manqué, 2e décroché par Julie. Une seule ligne, qui ne compte pas (c'est elle).
+  await s.db.collection(`families/${fid}/calls`).add({
+    callerUid: tab.tabletUid, callerName: 'Mamie Emma', calleeUid: null, calleeName: 'SOS', state: 'missed', answer: null, createdAt: il(180), endedAt: il(179),
+  });
+  await s.db.collection(`families/${fid}/calls`).add({
+    callerUid: tab.tabletUid, callerName: 'Mamie Emma', calleeUid: null, calleeName: 'SOS 2', state: 'ended', answer: { uid: uJulie, name: 'Julie' }, createdAt: il(178), endedAt: il(170),
+  });
+  // Appel ordinaire de la tablette, manqué : icône du téléphone (appel audio).
+  await s.db.collection(`families/${fid}/calls`).add({
+    callerUid: tab.tabletUid, callerName: 'Mamie Emma', calleeUid: uJulie, calleeName: 'Julie', state: 'missed', answer: null,
+    createdAt: s.FieldValue.serverTimestamp(), endedAt: s.FieldValue.serverTimestamp(),
+  });
+  await notifsArrivees(julie, ['Mamie Emma a appuyé sur SOS : vous avez répondu', 'Appel manqué de Mamie Emma']);
+  assert.strictEqual(await ligne('a appuyé sur SOS').count(), 2, 'une ligne par SOS');
+  assert.strictEqual(await ligne('personne n\'a pu répondre').count(), 0, 'pas de « personne n\'a pu répondre » pour un SOS réglé');
+  assert.strictEqual(await icone('Appel manqué de Mamie Emma'), '#i-phone', 'icône du téléphone');
+  assert.strictEqual(await badge(julie), '1', 'l\'appel manqué');
+
+  // « Je m'en occupe » d'un proche sur un SOS qui court.
+  await s.db.doc(`families/${fid}/members/${tab.tabletUid}`).update({ sos: { debut: Date.now(), fin: 'pris', uid: uMarc, nom: 'Marc' } });
+  await notifsArrivees(julie, ['Mamie Emma a appuyé sur SOS : Marc s\'en occupe']);
+  assert.strictEqual(await badge(julie), '2', 'le nouveau SOS compte');
+});
