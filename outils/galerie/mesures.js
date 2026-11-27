@@ -7,6 +7,7 @@
 //   long        explication de 4 lignes ou plus
 //   deux-lignes bouton dont le mot passe sur deux lignes
 //   doublon     la même phrase affichée deux fois sur le même écran
+//   coupe       bouton trop étroit pour son mot (27/11 : l'appli est aussi mesurée en 360 et 320 px)
 // Un écart = une signature (mesure, élément, texte, taille d'écran) : le même défaut sur 40 écrans compte une fois, avec
 // une capture de la première fois (sortie/mesures/). Les écarts regardés et acceptés sont dans mesures-acceptes.txt
 // (« partie | mesure | taille | début de la signature | pourquoi ») ; tout autre écart fait échouer le balayage.
@@ -105,6 +106,12 @@ function mesurer({ pasBouton, texteLibre, longLibre, textesLongs }) {
   for (const b of boutons) {
     const n = lignes(b, true);
     if (n >= 2) out.push({ type: 'deux-lignes', sig: chemin(b) + '|' + chiffres(txt(b, 40)), detail: `bouton sur ${n} lignes : « ${txt(b)} »`, r: rect(b) });
+  }
+
+  // 11. Bouton dont le mot est coupé ou touche le bord (petits écrans surtout) : le texte dépasse de la place qu'il a.
+  for (const b of boutons) {
+    if (getComputedStyle(b).textOverflow === 'ellipsis' || [...b.querySelectorAll('*')].some((x) => getComputedStyle(x).textOverflow === 'ellipsis')) continue; // nom long coupé à la fin : voulu
+    if (b.scrollWidth > b.clientWidth + 1) out.push({ type: 'coupe', sig: chemin(b) + '|' + chiffres(txt(b, 40)), detail: `bouton trop étroit pour son mot (${b.scrollWidth} px dans ${b.clientWidth} px) : « ${txt(b)} »`, r: rect(b) });
   }
 
   // 2. Alignement. a) blocs empilés dans le même parent dont le bord gauche diffère de 2 à 10 px ;
@@ -247,9 +254,14 @@ function mesurer({ pasBouton, texteLibre, longLibre, textesLongs }) {
   return out;
 }
 
+const PETITS = ['boutons', 'alignement', 'deux-lignes', 'coupe', 'decentre', 'bouton-seul', 'outil'];
+
 function taillesDe(partie, mod) {
   if (partie === 'admin') return [mod.TAILLES.tel, mod.TAILLES.pc];
-  if (partie === 'famille') return [mod.TAILLES ? mod.TAILLES[0] : { nom: 'telephone', width: 390, height: 780, mobile: true }];
+  // Appli : l'écran courant (390 px), puis deux petits écrans (360 px : petit Android ; 320 px : le plus étroit en service).
+  // Sur les petits écrans, seules les mesures de forme comptent (PETITS) : un texte y prend forcément plus de lignes.
+  if (partie === 'famille') return [mod.TAILLES ? mod.TAILLES[0] : { nom: 'telephone', width: 390, height: 780, mobile: true },
+    { nom: 'petit-360', width: 360, height: 780, mobile: true, court: '360' }, { nom: 'petit-320', width: 320, height: 780, mobile: true, court: '320' }];
   return mod.TAILLES; // site : téléphone et ordinateur
 }
 
@@ -268,7 +280,7 @@ async function balayer({ browser, base, partie, progression }) {
   async function ouvrier() {
     for (let job = travaux.shift(); job; job = travaux.shift()) {
       const { scene, taille, i } = job;
-      const court = taille.mobile ? 'tel' : 'pc';
+      const court = taille.court || (taille.mobile ? 'tel' : 'pc');
       let o;
       try {
         o = partie === 'famille' ? await mod.ouvrir(browser, base, scene, taille, await videoDe(browser)) : await mod.ouvrir(browser, base, scene, taille);
@@ -283,6 +295,7 @@ async function balayer({ browser, base, partie, progression }) {
         // Les textes de loi (CGV, mentions, confidentialité) sont longs par nature.
         const trouves = await page.evaluate(mesurer, { pasBouton: reg.pasBouton || '', texteLibre: reg.texteLibre || '', longLibre: reg.longLibre || '', textesLongs: scene.groupe === 'Textes' });
         for (const d of trouves) {
+          if (taille.court && !PETITS.includes(d.type)) continue;
           const cle = `${d.type}§${court}§${d.sig}`;
           if (vus.has(cle)) { vus.get(cle).ecrans++; continue; }
           const c = { type: d.type, taille: court, sig: d.sig, detail: d.detail, scene: `${i + 1}. ${scene.groupe || ''} / ${scene.titre}`, ecrans: 1, img: null };
@@ -314,7 +327,9 @@ async function balayer({ browser, base, partie, progression }) {
     }
   }
   await Promise.all([ouvrier(), ouvrier(), ouvrier(), ouvrier()]);
-  return { total, constats };
+  // Un écart déjà présent sur l'écran courant n'est pas redit pour chaque petit écran.
+  const grand = new Set(constats.filter((c) => !/^\d+$/.test(c.taille)).map((c) => `${c.type}§${c.sig}`));
+  return { total, constats: constats.filter((c) => !/^\d+$/.test(c.taille) || !grand.has(`${c.type}§${c.sig}`)) };
 }
 
 let video;
@@ -327,7 +342,7 @@ function acceptes() {
     .map((l) => l.split(' | ').map((x) => x.trim())).map(([partie, type, taille, sig]) => ({ partie, type, taille, sig }));
 }
 
-const TITRES = { boutons: 'Boutons d’un même groupe de hauteurs différentes', alignement: 'Alignements', colles: 'Blocs collés sans espace', gras: 'Gras sur 3 lignes ou plus', long: 'Explications de 4 lignes ou plus', 'deux-lignes': 'Boutons sur deux lignes', doublon: 'Même phrase deux fois', outil: 'Écran non mesuré' };
+const TITRES = { boutons: 'Boutons d’un même groupe de hauteurs différentes', alignement: 'Alignements', colles: 'Blocs collés sans espace', gras: 'Gras sur 3 lignes ou plus', long: 'Explications de 4 lignes ou plus', 'deux-lignes': 'Boutons sur deux lignes', coupe: 'Boutons trop étroits pour leur mot', doublon: 'Même phrase deux fois', outil: 'Écran non mesuré' };
 
 function rapport(parties, dossier) {
   const ok = acceptes();
