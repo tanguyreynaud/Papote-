@@ -315,6 +315,24 @@ export function queFaireTablette(nom, depuis) {
 }
 
 /** Message d'échec avec « Besoin d'aide ? » : rend 'aide' si la personne le touche. */
+/**
+ * Fiche contact téléchargée sur Android (Tanguy, 27/11) : Chrome n'affiche pas toujours de bouton « Ouvrir » en bas
+ * de l'écran (« ça ne veut rien dire »). La notification « Téléchargement terminé » et l'app Fichiers existent sur
+ * tous les Android : les 3 étapes passent par là, au même dessin que « Que faire ? ».
+ */
+export function etapesFicheContact(nom, fichier) {
+  return dialog('Votre téléphone a téléchargé sa fiche contact. Pour l\'enregistrer :', [
+    { label: 'Compris', value: true, cls: 'primary' },
+  ], {
+    title: `Enregistrer ${nom}`, stack: true, cls: 'dialog-que-faire',
+    etapes: [
+      { icone: 'i-bell', titre: 'Ouvrez vos notifications', texte: 'Faites glisser un doigt du haut de l\'écran vers le bas.' },
+      { icone: 'i-download', titre: `Touchez « ${fichier} »`, texte: 'Pas dans les notifications ? Ouvrez l\'app Fichiers, puis Téléchargements.' },
+      { icone: 'i-user-plus', titre: 'Choisissez Contacts et validez', texte: `Le numéro de ${nom} est alors dans vos contacts.` },
+    ],
+  });
+}
+
 export function noticeAide(message) {
   return dialog(message, [
     { label: 'Besoin d\'aide ?', value: 'aide', cls: 'secondary' },

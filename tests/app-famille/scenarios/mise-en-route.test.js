@@ -105,9 +105,19 @@ test('M8 : « Enregistrez le numéro de Mamie Emma » sur l\'accueil dès que la
   } else {
     assert.match(fichier.suggestedFilename(), /Mamie Emma\.vcf/);
   }
-  // Plus de fenêtre « Fiche contact … prête » (bug du 22/11) : sur Android, une phrase courte montre « Ouvrir » de Chrome.
-  if (!banc.WEBKIT) await g.toast(julie, 'Touchez « Ouvrir » en bas de l\'écran');
-  assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing) .dialog').count(), 0, 'aucune fenêtre à fermer');
+  if (banc.WEBKIT) {
+    // iPhone : la fiche Apple s'ouvre, aucune fenêtre de l'app.
+    assert.strictEqual(await julie.page.locator('.dialog-back:not(.closing) .dialog').count(), 0, 'aucune fenêtre à fermer');
+  } else {
+    // Android (Tanguy, 27/11) : 3 étapes qui passent par la notification ou l'app Fichiers, plus de « Ouvrir en bas ».
+    const txt = await g.texteFenetre(julie);
+    assert.match(txt, /Enregistrer Mamie Emma/);
+    assert.match(txt, /Ouvrez vos notifications/);
+    assert.match(txt, /Touchez « Mamie Emma\.vcf »/);
+    assert.match(txt, /Choisissez Contacts/);
+    assert.doesNotMatch(txt, /en bas de l'écran/);
+    await g.repondre(julie, 'Compris');
+  }
   await julie.page.locator('#contact-encart').waitFor({ state: 'hidden' });
   await julie.page.reload();
   await g.attendreVue(julie, 'view-home', 30_000);
