@@ -151,7 +151,7 @@ function gestionDonnees(o = {}) {
     genresAlerte: { debranchee: 'Tablette débranchée', neRepondPlus: 'Tablette qui ne répond plus', pasVue: 'Photo pas vue depuis 48 h', sos: 'SOS famille', forfait: 'Forfait internet presque épuisé' },
     alertesJours: 90,
     genresGardeFou: { ecran: 'écran bloqué', page: 'page rechargée', appli: 'appli relancée', redemarrage: 'tablette redémarrée', autre: 'autre' },
-    reglages: { seuilTva: 3750000, tauxUrssaf: 21.2, forfaitSim: 499, vieTablette: 24, poidsColis: 1500, miseEnService: 6000, fraisEnvoi: 799, fraisRetour: 800, masquees: [], expediteur: { nom: 'Papote', adresse: '1 rue de la Paix', cp: '69001', ville: 'Lyon', telephone: '06 00 00 00 00', email: 'contact@mapapote.fr' } },
+    reglages: { seuilTva: 3750000, tauxIs: 15, forfaitSim: 499, vieTablette: 24, poidsColis: 1500, miseEnService: 6000, fraisEnvoi: 799, fraisRetour: 800, masquees: [], expediteur: { nom: 'Papote', adresse: '1 rue de la Paix', cp: '69001', ville: 'Lyon', telephone: '06 00 00 00 00', email: 'contact@mapapote.fr' } },
     automatique: { le: il(0.2), factures: ['PAP-0004'], avoirs: [], depenses: 1, stock: ['T-001 chez le client'], etiquettes: [], livres: ['Sophie Bernard'],
       erreurs: ['Relance du colis CMD-RT22 : Sendcloud n’a pas répondu'] },
     courrier: { le: il(0.1), boite: 'factures@mapapote.fr', recus: 5, pourFactures: 2, rangees: ['Lyca, recharge 4,99 €'], ignorees: ['Publicité Cdiscount'], erreurs: [], precedent: null },
@@ -516,7 +516,7 @@ const SCENES = [
     await p.waitForSelector('.bulle-annonce.visible', { timeout: 5000 });
   } },
   { groupe: 'Comptabilité', titre: 'Achat : facture d\'un autre montant que la commande, à vérifier', page: '#depense/D-S6', tailles: ['pc'], plein: true, donnees: () => donnees() },
-  { groupe: 'Comptabilité', titre: 'URSSAF et TVA', page: '#compta/urssaf', tailles: ['pc'], plein: true, donnees: () => donnees() },
+  { groupe: 'Comptabilité', titre: 'Impôts et TVA', page: '#compta/impots', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Rentabilité', page: '#compta/rentabilite', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Registres', page: '#compta/registres', tailles: ['pc'], plein: true, donnees: () => donnees() },
   { groupe: 'Comptabilité', titre: 'Ajouter une dépense', page: '#nouveau/depense', tailles: ['pc', 'tel'], plein: true, donnees: () => donnees() },

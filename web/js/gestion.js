@@ -211,7 +211,7 @@ function pageCourante() {
   return TITRES[p] ? p : 'accueil';
 }
 
-// Onglets d'une page (#compta/urssaf) : un seul bloc affiché à la fois, le dernier choisi est retenu.
+// Onglets d'une page (#compta/impots) : un seul bloc affiché à la fois, le dernier choisi est retenu.
 function choisirOnglet(page, nom) {
   const panneau = document.querySelector(`[data-panneau="${page}"]`);
   const boutons = [...panneau.querySelectorAll('.onglets [data-onglet]')];
@@ -316,6 +316,7 @@ async function chargerMois() {
     const debutMois = new Date(n.getFullYear(), n.getMonth(), 1).getTime();
     stripeMois = { ...stripeAnnee, mouvements: stripeAnnee.mouvements.filter((m) => m.le >= debutMois) };
     afficherAccueil();
+    if (donnees) afficherImpots();
   } catch (e) {
     console.warn('Stripe (mois en cours)', e);
   }
@@ -337,7 +338,7 @@ function afficherTout() {
     afficherFactures();
     afficherCompta();
     afficherGraphiques();
-    afficherUrssaf();
+    afficherImpots();
     afficherRentabilite();
   }
 }
@@ -566,7 +567,7 @@ function afficherAccueil() {
     [sansFacture, `${pluriel(sansFacture, 'tablette')} reçue${sansFacture > 1 ? 's' : ''} sans facture depuis 5 jours : transférez la facture du vendeur à factures@mapapote.fr`, '#stock', 'ko'],
     [aVerifierMail, `${pluriel(aVerifierMail, 'facture')} reçue${aVerifierMail > 1 ? 's' : ''} par e-mail à vérifier`, '#compta/depenses', ''],
     [erreursMail, `${pluriel(erreursMail, 'problème')} au dernier relevé de factures@mapapote.fr (détail en bas de page)`, '#accueil', 'ko'],
-    [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/urssaf', 'ko'],
+    [tva && tva.alerte ? 1 : 0, tva ? tva.alerte : '', '#compta/impots', 'ko'],
     [problemes, `${pluriel(problemes, 'problème')} lors du dernier passage automatique`, '#outils/automatique', 'ko'],
     // Sauvegarde du dimanche sans réussite depuis plus de 8 jours (texte calculé par le serveur, sauvegarde-alerte.js).
     [donnees.sauvegardeAFaire ? 1 : 0, donnees.sauvegardeAFaire || '', '#accueil', 'ko'],
@@ -2209,46 +2210,68 @@ function afficherGraphiques() {
   ]);
 }
 
-// ---------- Déclarations URSSAF ----------
+// ---------- Impôt sur les sociétés ----------
 
-$('u-rythme').value = memoire.lire('papote-urssaf-rythme', 'mois');
+// Papote Famille est une SASU à l'impôt sur les sociétés (Tanguy 28/11/2026) : rien n'est dû sur le chiffre
+// d'affaires, l'impôt se calcule une fois par an sur le bénéfice. Exercice = année civile.
+// Une tablette louée aux clients ne passe pas en charge le jour de l'achat : son prix est réparti sur 3 ans
+// (amortissement), jour par jour à partir de la date d'achat.
+const IS_PLAFOND_REDUIT = 4250000; // bénéfice (centimes) jusqu'auquel le taux réduit s'applique
+const IS_TAUX_NORMAL = 25;
+const AMORTISSEMENT_TABLETTE = 3 * 365 * 864e5;
 
-function afficherUrssaf() {
-  const taux = donnees.reglages.tauxUrssaf;
-  const ca = new Map();
-  for (const m of stripe.mouvements) {
-    if (ENCAISSEMENTS.includes(m.nature) || m.nature === 'remboursement' || m.nature === 'litige') {
-      ca.set(moisCle(m.le), (ca.get(moisCle(m.le)) || 0) + m.montant);
-    }
+// Part du prix des tablettes qui pèse sur la période [debut, fin[.
+function amortissementTablettes(stock, debut, fin) {
+  let total = 0;
+  for (const t of stock) {
+    if (!(t.prixAchat > 0) || !t.acheteeLe) continue;
+    const jours = Math.max(0, Math.min(fin, t.acheteeLe + AMORTISSEMENT_TABLETTE) - Math.max(debut, t.acheteeLe));
+    total += (t.prixAchat * jours) / AMORTISSEMENT_TABLETTE;
   }
-  const trimestre = $('u-rythme').value === 'trimestre';
-  const groupes = new Map();
-  for (const cle of moisDeLaPeriode()) {
-    const [a, m] = cle.split('-').map(Number);
-    const g = trimestre ? `${a}-T${Math.floor((m - 1) / 3) + 1}` : cle;
-    const fin = trimestre ? new Date(a, Math.floor((m - 1) / 3) * 3 + 3, 1) : new Date(a, m, 1);
-    if (!groupes.has(g)) groupes.set(g, { g, fin, ca: 0 });
-    groupes.get(g).ca += ca.get(cle) || 0;
-  }
-  const lignes = [...groupes.values()];
-  const cotis = (c) => (Number.isFinite(taux) ? Math.round((Math.max(0, c) * taux) / 100) : null);
-  const nom = (x) => (trimestre ? `${x.g.slice(6)}e trimestre ${x.g.slice(0, 4)}`.replace('1e', '1er') : moisNom(x.g));
-  remplirTable($('t-urssaf'), [
-    { titre: trimestre ? 'Trimestre' : 'Mois' }, { titre: 'Chiffre d\'affaires à déclarer', n: 1 },
-    { titre: 'Cotisations estimées', n: 1 }, { titre: 'À déclarer avant le' },
-  ], lignes.map((x) => [
-    h('span', {}, nom(x), x.fin.getTime() > Date.now() ? h('span', { class: 'muted' }, ' (en cours)') : null),
-    euros(x.ca), euros(cotis(x.ca)),
-    // Fin du mois qui suit la période déclarée.
-    jour(new Date(x.fin.getFullYear(), x.fin.getMonth() + 1, 0).getTime()),
-  ]), {
-    total: lignes.length ? ['Total', euros(lignes.reduce((s, x) => s + x.ca, 0)), euros(cotis(lignes.reduce((s, x) => s + x.ca, 0))), ''] : null,
-  });
+  return Math.round(total);
 }
-$('u-rythme').addEventListener('change', () => {
-  memoire.ecrire('papote-urssaf-rythme', $('u-rythme').value);
-  if (stripe) afficherUrssaf();
-});
+
+function impotSocietes(benefice, tauxReduit) {
+  const b = Math.max(0, benefice);
+  return Math.round((Math.min(b, IS_PLAFOND_REDUIT) * tauxReduit + Math.max(0, b - IS_PLAFOND_REDUIT) * IS_TAUX_NORMAL) / 100);
+}
+
+function afficherImpots() {
+  if (!stripeAnnee) {
+    remplirTable($('t-is'), [{ titre: 'Année en cours' }, { titre: 'Montant', n: 1 }], [], { vide: 'Lecture de Stripe…' });
+    return;
+  }
+  const taux = donnees.reglages.tauxIs;
+  const n = new Date();
+  const debut = new Date(n.getFullYear(), 0, 1).getTime();
+  const fin = Date.now();
+  const deps = donnees.depenses.filter((d) => d.date >= debut && d.date < fin);
+  // Les achats de tablettes sortent des charges : ils y reviennent petit à petit par l'amortissement.
+  const tablettes = deps.filter((d) => d.categorie === 'tablettes').reduce((s, d) => s + d.montant, 0);
+  const t = totaux(stripeAnnee.mouvements, deps);
+  const autres = t.depenses - tablettes;
+  const amorti = amortissementTablettes(donnees.stock, debut, fin);
+  const benefice = t.net - autres - amorti;
+  const impot = impotSocietes(benefice, taux);
+  const signe = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
+  remplirTable($('t-is'), [{ titre: `Du 1er janvier ${n.getFullYear()} à aujourd'hui` }, { titre: 'Montant', n: 1 }], [
+    ['Encaissé, remboursements déduits', euros(t.encaisse - t.rembourse)],
+    ['Frais Stripe', euros(-t.frais)],
+    ['Dépenses, hors achat de tablettes', euros(-autres)],
+    ['Usure des tablettes (prix réparti sur 3 ans)', euros(-amorti)],
+    [benefice < 0 ? 'Perte' : 'Bénéfice', signe(benefice)],
+    [`Impôt sur les sociétés estimé (${String(taux).replace('.', ',')} %)`, euros(impot)],
+  ], { total: ['Reste dans la société', signe(benefice - impot)] });
+  $('is-note').textContent = benefice < 0
+    ? 'Une perte ne coûte aucun impôt, et elle se déduit des bénéfices des années suivantes. Estimation, à confirmer au bilan.'
+    : `${String(taux).replace('.', ',')} % jusqu'à ${euros(IS_PLAFOND_REDUIT)} de bénéfice par an, ${IS_TAUX_NORMAL} % au-delà. Aucune cotisation sur le chiffre d'affaires. `
+      + 'Estimation, à confirmer au bilan. Taux réglable dans Réglages, Calculs.';
+  $('is-echeances').replaceChildren(...[
+    'Mi-mai : envoyer la liasse fiscale de l\'année passée et payer l\'impôt sur les sociétés.',
+    'Avant le 30 juin : approuver les comptes (décision de l\'associé unique), puis les déposer au greffe dans le mois.',
+    '15 décembre : cotisation foncière des entreprises (rien à payer l\'année de création).',
+  ].map((x) => h('li', null, x)));
+}
 
 // ---------- Scan des numéros de série ----------
 
@@ -2349,7 +2372,7 @@ function afficherTva(t) {
 
 // ---------- Rentabilité par formule ----------
 
-// Un abonné rapporte chaque mois (prix − Stripe − URSSAF − forfait SIM) et coûte au départ : la tablette et ce qui
+// Un abonné rapporte chaque mois (prix − Stripe − forfait SIM, avant l'impôt sur les sociétés) et coûte au départ : la tablette et ce qui
 // revient avec elle (achetés une fois, réutilisés), ce qui est consommé à chaque envoi (carton, papier, fiche), le port
 // aller et retour, moins la mise en service. Les accessoires « en option » (enceinte) ne sont pas comptés.
 function afficherRentabilite() {
@@ -2364,7 +2387,7 @@ function afficherRentabilite() {
   const forfait = enService.length ? Math.round(enService.reduce((s, l) => s + coutSim(l.t), 0) / enService.length) : r.forfaitSim;
   const payants = stripe.abonnements.filter((a) => ['active', 'past_due'].includes(a.statut));
   const somme = (liste) => liste.reduce((s, a) => s + (a.prixAchat || 0), 0);
-  const charges = (montant) => Math.round(montant * tauxFrais) + Math.round((montant * r.tauxUrssaf) / 100);
+  const charges = (montant) => Math.round(montant * tauxFrais);
   const lignes = Object.entries(FORMULES).map(([cle, nom]) => {
     const abos = payants.filter((a) => a.formule === cle);
     const prix = abos.length ? Math.round(abos.reduce((s, a) => s + a.mensuel, 0) / abos.length) : (cle === 'sim' ? 3000 : 2000);
@@ -2381,7 +2404,7 @@ function afficherRentabilite() {
   });
   const signe = (c) => h('span', { class: c < 0 ? 'neg' : null }, euros(c));
   remplirTable($('t-rentabilite'), [
-    { titre: 'Formule' }, { titre: 'Abonnés', n: 1 }, { titre: 'Prix', n: 1 }, { titre: 'Stripe, URSSAF, SIM', n: 1 },
+    { titre: 'Formule' }, { titre: 'Abonnés', n: 1 }, { titre: 'Prix', n: 1 }, { titre: 'Stripe, SIM', n: 1 },
     { titre: 'Reste / mois', n: 1 }, { titre: 'Coût de départ', n: 1 },
     { titre: 'Remboursé en', n: 1 }, { titre: 'Reste amorti / mois', n: 1 }, { titre: 'Total / mois', n: 1 },
   ], lignes.map((l) => [l.nom, String(l.n), euros(l.prix), euros(l.charges), signe(l.parMois), signe(l.depart), l.mois == null ? 'jamais' : `${l.mois} mois`, signe(l.amorti), signe(l.amorti * l.n)]), {
@@ -2405,7 +2428,7 @@ function afficherRentabilite() {
   const f = $('f-reglages');
   if (!f.contains(document.activeElement)) {
     f.seuilTva.value = enEuros(r.seuilTva);
-    f.tauxUrssaf.value = String(r.tauxUrssaf).replace('.', ',');
+    f.tauxIs.value = String(r.tauxIs).replace('.', ',');
     f.forfaitSim.value = enEuros(r.forfaitSim);
     f.vieTablette.value = r.vieTablette;
     f.miseEnService.value = enEuros(r.miseEnService);
@@ -2420,7 +2443,7 @@ $('f-reglages').addEventListener('submit', async (e) => {
   const nombre = (v) => Number(String(v).replace(/\s|€|%/g, '').replace(',', '.'));
   const valeurs = {
     seuilTva: enCentimes(f.seuilTva.value),
-    tauxUrssaf: nombre(f.tauxUrssaf.value),
+    tauxIs: nombre(f.tauxIs.value),
     forfaitSim: enCentimes(f.forfaitSim.value),
     vieTablette: nombre(f.vieTablette.value),
     miseEnService: enCentimes(f.miseEnService.value),
@@ -2534,7 +2557,7 @@ function afficherArchives() {
     remplirTable($('t-impots'), [
       { titre: 'Déclaration de revenus' }, { titre: 'Chiffre d\'affaires encaissé', n: 1 }, { titre: 'Où le reporter' }, { titre: 'Fichiers de l\'année' },
     ], annees.map(([an, f]) => [`Revenus ${an}`, euros(f.recettes.total),
-      '2042-C-PRO, case 5KP (ou 5TB avec versement libératoire), à vérifier', fichiers(f)]));
+      'Liasse fiscale de la société (2065 et 2033), à vérifier', fichiers(f)]));
   }
 }
 

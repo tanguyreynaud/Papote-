@@ -274,14 +274,14 @@
         </div>
       </section>
 
-      <!-- ---------- Argent : bilan, factures, dépenses, URSSAF ---------- -->
+      <!-- ---------- Argent : bilan, factures, dépenses, impôts ---------- -->
       <section data-panneau="compta" hidden>
         <h2 class="titre-print" id="bilan-titre">Bilan</h2>
         <div class="onglets no-print" role="tablist">
           <button type="button" data-onglet="bilan">Bilan</button>
           <button type="button" data-onglet="factures">Factures</button>
           <button type="button" data-onglet="depenses">Dépenses</button>
-          <button type="button" data-onglet="urssaf">URSSAF et TVA</button>
+          <button type="button" data-onglet="impots">Impôts et TVA</button>
           <button type="button" data-onglet="rentabilite">Rentabilité</button>
           <button type="button" data-onglet="registres">Registres</button>
         </div>
@@ -322,26 +322,24 @@
         </div>
         </div>
         <div class="card" data-onglet="rentabilite">
-          <p class="muted small">Par abonné : ce qui reste chaque mois après frais Stripe, URSSAF et forfait SIM ; ce que coûte un nouveau client au départ (matériel, colis, envoi et retour, moins la mise en service) ; et en combien de mois il est remboursé.</p>
+          <p class="muted small">Par abonné : ce qui reste chaque mois après frais Stripe et forfait SIM, avant l'impôt sur les sociétés ; ce que coûte un nouveau client au départ (matériel, colis, envoi et retour, moins la mise en service) ; et en combien de mois il est remboursé.</p>
           <div class="table"><table id="t-rentabilite"></table></div>
           <h3>Contenu du colis</h3>
           <div id="rentabilite-colis"></div>
         </div>
-        <div data-onglet="urssaf">
+        <div data-onglet="impots">
           <div class="card">
             <h2>Franchise de TVA</h2>
             <div id="tva"></div>
           </div>
           <div class="card">
-            <div class="tete">
-              <h2>Déclarations URSSAF</h2>
-              <select id="u-rythme" class="no-print" aria-label="Rythme des déclarations">
-                <option value="mois">Mensuelles</option>
-                <option value="trimestre">Trimestrielles</option>
-              </select>
-            </div>
-            <div class="table"><table id="t-urssaf"></table></div>
-            <p class="muted small">Chiffre d'affaires encaissé, sans déduire frais ni dépenses. Taux à vérifier sur autoentrepreneur.urssaf.fr (réglable dans Réglages).</p>
+            <h2>Impôt sur les sociétés</h2>
+            <div class="table"><table id="t-is"></table></div>
+            <p class="muted small" id="is-note"></p>
+          </div>
+          <div class="card">
+            <h2>À faire chaque année</h2>
+            <ul class="small" id="is-echeances"></ul>
           </div>
         </div>
         <div class="card" data-onglet="depenses">
@@ -412,7 +410,7 @@
           <h2>Calculs de la comptabilité</h2>
           <form id="f-reglages" class="grille no-print">
             <label>Seuil de franchise de TVA (€) <input name="seuilTva" inputmode="decimal"></label>
-            <label>Taux URSSAF (%) <input name="tauxUrssaf" inputmode="decimal"></label>
+            <label>Impôt sur les sociétés (%) <input name="tauxIs" inputmode="decimal"></label>
             <label>Forfait SIM par défaut (€/mois) <input name="forfaitSim" inputmode="decimal"></label>
             <label>Durée de vie d'une tablette (mois) <input name="vieTablette" inputmode="numeric"></label>
             <label>Mise en service (€) <input name="miseEnService" inputmode="decimal"></label>
