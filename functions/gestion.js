@@ -10,7 +10,7 @@
 //   gestionAccessoire  accessoires (clé 4G, prise…), sortis du stock à chaque envoi de leur formule
 //   gestionPiece    pièces jointes (facture d'achat, bon de livraison…) d'une tablette ou d'une dépense
 //   gestionLireFacture  lit une facture d'achat (PDF ou photo) avec Claude pour préremplir la saisie
-//   gestionReglages réglages de la gestion (seuil de TVA, taux URSSAF, coût d'un forfait SIM…)
+//   gestionReglages réglages de la gestion (seuil de TVA, taux d'impôt sur les sociétés, coût d'un forfait SIM…)
 //   gestionRecap    le lundi : récapitulatif de la semaine par e-mail (gestionRecapMaintenant : tout de suite)
 //   gestionCourrier toutes les heures : factures envoyées à factures@mapapote.fr, lues et rangées
 //                   (« à vérifier ») ; gestionCourrierMaintenant : tout de suite
@@ -208,7 +208,9 @@ function moisSuivant(le, jour) {
 // Réglages modifiables depuis la page (gestion/reglages). Montants en centimes.
 const REGLAGES = {
   seuilTva: 3750000, // franchise en base de TVA des prestations de services (à vérifier chaque année)
-  tauxUrssaf: 21.2, // % du chiffre d'affaires, micro-entreprise
+  // Papote Famille est une SASU à l'impôt sur les sociétés (Tanguy 28/11/2026) : plus aucune cotisation URSSAF sur le
+  // chiffre d'affaires. Taux réduit des petites sociétés, sur le bénéfice (à vérifier chaque année).
+  tauxIs: 15,
   forfaitSim: 700, // coût mensuel d'un forfait SIM quand la ligne n'a pas son propre coût
   vieTablette: 24, // durée de vie d'une tablette, en mois
   poidsColis: 1500, // poids d'un colis tablette, en grammes (étiquettes Sendcloud)
@@ -3692,7 +3694,7 @@ async function cloturer(maintenant, refaire) {
       pieces.push(...pa);
       resume.push([`Année ${a}`, [
         `Chiffre d'affaires encaissé (paiements reçus moins remboursements) : ${eurosTexte(ficheAnnee.recettes.total)}`,
-        'À reporter sur la déclaration de revenus, formulaire 2042-C-PRO (micro-entreprise, case des prestations de services BIC : 5KP, ou 5TB avec le versement libératoire). À vérifier sur impots.gouv.fr.',
+        'Société à l\'impôt sur les sociétés : ce chiffre d\'affaires va dans le compte de résultat de la liasse fiscale (formulaires 2065 et 2033), à envoyer mi-mai. À vérifier sur impots.gouv.fr.',
         `Achats de l'année : ${eurosTexte(ficheAnnee.achats.total)}`,
       ]]);
     }

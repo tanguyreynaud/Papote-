@@ -81,9 +81,11 @@ test('lecture d\'une facture vers le formulaire', () => {
 
 test('réglages de la gestion', () => {
   assert.strictEqual(g.lireReglages(undefined).seuilTva, 3750000);
-  const r = g.lireReglages({ seuilTva: 4000000, tauxUrssaf: -1, forfaitSim: 'x' });
+  const r = g.lireReglages({ seuilTva: 4000000, tauxIs: -1, forfaitSim: 'x' });
   assert.strictEqual(r.seuilTva, 4000000);
-  assert.strictEqual(r.tauxUrssaf, 21.2);
+  assert.strictEqual(r.tauxIs, 15);
+  // L'ancien taux URSSAF de la micro-entreprise n'existe plus (SASU à l'impôt sur les sociétés).
+  assert.strictEqual(g.lireReglages({ tauxUrssaf: 21.2 }).tauxUrssaf, undefined);
   assert.strictEqual(r.forfaitSim, 700);
 });
 
