@@ -10,6 +10,9 @@
        sans tenir compte de la couleur choisie par l'app. La page met elle-même une bande grise dessous
        (.app-android, famille.css). -->
   <script>try { if (/[?&](natif|pause)=/.test(location.search) || document.referrer.startsWith('android-app://fr.mapapote.famille')) sessionStorage.setItem('papote.app', '1'); if (sessionStorage.getItem('papote.app') === '1' || (/Android/.test(navigator.userAgent) && matchMedia('(display-mode: standalone)').matches)) document.documentElement.classList.add('app-android'); } catch (e) { /* rien */ }</script>
+  <!-- Gros caractères d'Android (zoom de toute la page) : l'écran devient plus étroit que le plus petit téléphone ;
+       famille.css resserre alors les écrans (.gros-texte). Rien ne change à la taille normale. -->
+  <script>(function () { var m = matchMedia('(max-width: 300px)'); function f() { document.documentElement.classList.toggle('gros-texte', m.matches); } f(); if (m.addEventListener) m.addEventListener('change', f); })();</script>
   <title>Papote</title>
   <meta name="theme-color" content="#fdfaf5" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#121110" media="(prefers-color-scheme: dark)">

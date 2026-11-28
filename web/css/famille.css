@@ -2411,3 +2411,43 @@ input.liste-native { position: absolute; width: 1px !important; min-width: 0 !im
 @media (max-width: 349px) {
   .sos-ordre-role { white-space: normal; }
 }
+
+/* ---------- Gros caractères du téléphone (revue mesurée du 28/11) ----------
+   Android peut grossir l'appli (réglage « Taille de la police »). Ce qui se bloque est bloqué ici (text-size-adjust) ;
+   le zoom de toute la page ne se refuse pas : l'écran devient alors plus étroit que le plus petit téléphone (moins de
+   300 px), et index.html pose .gros-texte sur <html>. Toutes les règles ci-dessous ne jouent que là : rien ne change
+   à la taille normale (contrôlé au pixel, écran par écran, en 320, 360 et 390 px). */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* Accueil : dès qu'un mot ne tient plus à côté de son icône (famille.js le mesure et pose .serre), deux colonnes
+   égales et l'icône au-dessus du mot, en petit. */
+.tiles.serre { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tiles.serre .tile { min-width: 0; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 6px; overflow-wrap: anywhere; }
+.tiles.serre .tile-icon { width: 34px; height: 34px; padding: 7px; border-radius: 11px; }
+/* Barre du bas et choix en haut des Réglages : parts égales, le mot ne pousse plus rien hors de l'écran. */
+.gros-texte .nav-item, .gros-texte .seg { min-width: 0; overflow-wrap: anywhere; }
+/* Fenêtres : deux boutons côte à côte tant qu'ils tiennent, l'un sous l'autre sinon (jamais hors de la fenêtre). */
+.gros-texte .dialog-buttons:not(.stack) { display: flex; flex-wrap: wrap; }
+.gros-texte .dialog-buttons:not(.stack) > button { flex: 1 1 0; min-width: min(100%, min-content); }
+.gros-texte .dialog { max-width: calc(100vw - 24px); overflow-wrap: break-word; }
+.gros-texte .dialog-buttons button { white-space: normal; overflow-wrap: anywhere; }
+/* Écran d'appel : le prénom et la ligne d'état passent à la ligne ; « Refuser / Répondre », « Vidéo / Raccrocher »
+   passent l'un sous l'autre plutôt que de sortir de l'écran. */
+.gros-texte :is(.incoming-name, .call-name, .call-status, .incoming-sub) { max-width: 100%; overflow-wrap: anywhere; }
+.gros-texte .call-actions { flex-wrap: wrap; max-width: 100%; }
+.gros-texte :is(.call.sonne .call-hangup, .call.audio .call-hangup, .call.audio .call-video, .round-btn) { flex: 1 1 0; min-width: min(100%, min-content); }
+/* Photos : la date ne se coupe plus (« 24 oct. à 10 h… ») ; « Vu ✓ » passe dessous s'il n'a plus la place. */
+.gros-texte .shot-meta { flex-wrap: wrap; }
+.gros-texte .shot-meta .shot-info { flex: 1 1 7.5em; }
+/* Inviter : le code et « Partager le lien » passent sous le QR code plutôt que de sortir de l'écran. */
+.gros-texte .invite-code { display: flex; flex-wrap: wrap; }
+.gros-texte .invite-code .qr { flex: none; }
+.gros-texte .invite-code-cote { flex: 1 1 0; min-width: min(100%, min-content); }
+/* Factures : le montant et « Télécharger » passent sous la date s'ils n'ont plus la place. */
+.gros-texte .factures li { flex-wrap: wrap; }
+.gros-texte .facture-quand { flex: 1 1 100%; }
+/* Jour, mois, année (« Vos informations », anniversaire de l'agenda) : une liste par ligne, l'année ne sort plus de l'écran. */
+.gros-texte :is(.moi-date, .bday-date) { grid-template-columns: minmax(0, 1fr); }
+.gros-texte .facture-montant { white-space: nowrap; }
+/* Appel de Mamie, téléphone en mode sombre : l'écran reste crème, « Répondre » garde donc son vert foncé
+   (avec le vert clair du mode sombre, le mot blanc ne se lisait plus : contraste 1,7). */
+.round-btn.answer { background: #15803d; }

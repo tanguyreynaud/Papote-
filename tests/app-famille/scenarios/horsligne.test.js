@@ -107,3 +107,25 @@ test('Sans réseau, mon message en attente se supprime (19/11) : il ne part pas 
   // Une fois parti, mon message garde sa poubelle.
   await julie.page.locator('#messages li.bubble.mine:not(.en-route)', { hasText: 'À garder' }).locator('.bubble-del').waitFor();
 });
+
+test('Sans réseau, un rappel ajouté (revue du 28/11) : la fenêtre se ferme avec un mot, le rappel est dans la liste et part une seule fois au retour du réseau', async () => {
+  const julie = await banc.telephone('Julie');
+  const { fid } = await g.familleInstallee(julie, { email: 'julie@exemple.fr', prenom: 'Julie' });
+  banc.tolerer(julie, RESEAU);
+  await g.ouvrirTuile(julie, 'agenda');
+  await g.reseau(julie, true);
+  await julie.page.click('#add-reminder');
+  await julie.page.locator('#sheet-reminder').waitFor({ state: 'visible' });
+  await julie.page.fill('#rem-title', 'Arroser les fleurs');
+  // Double appui : un seul rappel.
+  await g.doubleAppui(julie, '#btn-reminder');
+  await g.toast(julie, 'Pas de réseau : enregistré dès son retour');
+  await julie.page.locator('#sheet-reminder').waitFor({ state: 'hidden' });
+  await julie.page.locator('#reminders li', { hasText: 'Arroser les fleurs' }).waitFor();
+  assert.strictEqual((await g.liste(`families/${fid}/reminders`)).length, 0, 'rien dans la base tant que le réseau est coupé');
+
+  await g.reseau(julie, false);
+  const rappels = await g.attendreBase(async () => { const l = await g.liste(`families/${fid}/reminders`); return l.length && l; }, 'rappel parti');
+  assert.deepStrictEqual(rappels.map((r) => r.title), ['Arroser les fleurs'], 'parti une seule fois');
+  assert.strictEqual(await julie.page.locator('#reminders li', { hasText: 'Arroser les fleurs' }).count(), 1);
+});

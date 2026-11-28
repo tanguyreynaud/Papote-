@@ -7281,7 +7281,11 @@ function showInvitations(invitations) {
     if (inv.preparee) card.querySelector('button[type=submit]').textContent = 'Entrer dans ma famille';
     card.addEventListener('submit', async (e) => {
       e.preventDefault();
-      card.querySelector('button[type=submit]').disabled = true;
+      const entrer = card.querySelector('button[type=submit]');
+      const mot = entrer.textContent;
+      entrer.disabled = true;
+      // Réseau lent : le bouton grisé seul ne disait pas que ça travaille (revue du 28/11).
+      entrer.textContent = 'Un instant…';
       try {
         await acceptInvitation(inv, savedPrenom());
         saveFamilyId(inv.fid);
@@ -7291,7 +7295,8 @@ function showInvitations(invitations) {
         const p = card.querySelector('.error');
         p.textContent = "Impossible de rejoindre pour le moment. L'invitation a peut-être été annulée.";
         p.hidden = false;
-        card.querySelector('button[type=submit]').disabled = false;
+        entrer.textContent = mot;
+        entrer.disabled = false;
       }
     });
     return card;
@@ -7567,3 +7572,23 @@ function barreDefilement(el) {
 }
 ['wifi-list', 'logs', 'form-post', 'form-reminder'].forEach((id) => barreDefilement($(id)));
 barreDefilement(document.querySelector('#sheet-wifi .sheet-body'));
+
+// Gros caractères du téléphone (revue du 28/11) : si un mot des cases de l'accueil ne tient plus à côté de son icône
+// (« Messages » sortait de l'écran dès +30 % sur un petit Android), l'icône passe au-dessus du mot. Rien ne change
+// tant que tout tient.
+{
+  const cases = document.querySelector('#view-home .tiles');
+  const mesurer = () => {
+    if (!cases || !cases.clientWidth) return;
+    cases.classList.remove('serre');
+    const bord = cases.getBoundingClientRect().right + 1;
+    const deborde = cases.scrollWidth > cases.clientWidth + 1
+      || [...cases.children].some((c) => c.getBoundingClientRect().right > bord || c.scrollWidth > c.clientWidth + 1);
+    cases.classList.toggle('serre', deborde);
+  };
+  if (cases && window.ResizeObserver) {
+    let prevu = 0;
+    new ResizeObserver(() => { cancelAnimationFrame(prevu); prevu = requestAnimationFrame(mesurer); }).observe(cases);
+    document.fonts?.ready.then(mesurer);
+  }
+}

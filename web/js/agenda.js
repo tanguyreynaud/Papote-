@@ -481,8 +481,16 @@ $('form-reminder').addEventListener('submit', async (e) => {
       batch.set(doc(collection(db, 'families', session.fid, seg === 'reminder' ? 'reminders' : 'birthdays')), data);
     }
     bumpRev(batch, session.fid);
-    await batch.commit();
-    if (editing) toastAgenda(editing.coll === 'reminders' ? 'Rappel modifié' : 'Anniversaire modifié');
+    // Sans réseau, l'écriture ne répond jamais : le bouton restait grisé et la fenêtre ouverte, sans un mot (revue du
+    // 28/11). Elle est pourtant déjà dans la mémoire de l'appli (la liste la montre) et partira toute seule au retour
+    // du réseau, même appli fermée : on ferme et on le dit, comme pour un message. Pareil si le serveur reste muet 15 s.
+    const ecriture = batch.commit();
+    const parti = await Promise.race([ecriture.then(() => true),
+      new Promise((r) => setTimeout(() => r(false), navigator.onLine ? 15_000 : 600))]);
+    if (!parti) {
+      ecriture.catch((err) => console.warn('Agenda : écriture en attente refusée', err));
+      toastAgenda('Pas de réseau : enregistré dès son retour');
+    } else if (editing) toastAgenda(editing.coll === 'reminders' ? 'Rappel modifié' : 'Anniversaire modifié');
     else toastAgenda(seg === 'reminder' ? 'Rappel ajouté' : 'Anniversaire ajouté');
     editing = null;
     $('rem-title').value = '';

@@ -72,18 +72,27 @@ function poser(bouton, panneau, { largeMin = 140, hautMax = HAUT_MAX, plein = fa
     document.removeEventListener('pointerdown', dehors, true);
     document.removeEventListener('keydown', echap, true);
     window.removeEventListener('scroll', defile, true);
-    window.removeEventListener('resize', sansMain);
+    window.removeEventListener('resize', taille);
     window.removeEventListener('popstate', sansMain);
     if (rendreLaMain) bouton.focus({ preventScroll: true });
   };
   const sansMain = () => fermer(false);
+  // Le clavier du téléphone qui se referme (on vient de taper son numéro, on touche « Jour ») change la hauteur de
+  // la page et la fait parfois glisser : la liste reste ouverte et se replace sous son champ, au lieu de se refermer
+  // sous le doigt (revue du 28/11). Téléphone tourné (la largeur change) : elle se referme, comme avant.
+  const ouvertA = performance.now();
+  const largeur0 = window.innerWidth;
+  const taille = () => { if (window.innerWidth === largeur0) placer(); else fermer(false); };
   const dehors = (e) => {
     if (panneau.contains(e.target)) return;
     // Toucher le bouton referme (son clic ne rouvre pas) ; toucher ailleurs referme sans rien choisir.
     if (bouton.contains(e.target)) bouton.dataset.fermeAuDoigt = '1';
     fermer(false);
   };
-  const defile = (e) => { if (!panneau.contains(e.target)) fermer(false); };
+  const defile = (e) => {
+    if (panneau.contains(e.target)) return;
+    if (performance.now() - ouvertA < 700) placer(); else fermer(false);
+  };
   const echap = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fermer(); } else if (e.key === 'Tab') fermer();
   };
@@ -91,7 +100,7 @@ function poser(bouton, panneau, { largeMin = 140, hautMax = HAUT_MAX, plein = fa
   document.addEventListener('pointerdown', dehors, true);
   document.addEventListener('keydown', echap, true);
   window.addEventListener('scroll', defile, true);
-  window.addEventListener('resize', sansMain);
+  window.addEventListener('resize', taille);
   window.addEventListener('popstate', sansMain);
   return { fermer, placer };
 }
