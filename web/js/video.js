@@ -23,7 +23,7 @@ function waitFor(el, event) {
 }
 
 // iPhone (Safari) : une vidéo avec du son et le Web Audio ne démarrent que pendant un toucher.
-// unlockVideo() est appelé au toucher de « Filmer » ou « Choisir une vidéo » : la vidéo et le son
+// unlockVideo() est appelé au toucher de « Filmer » ou « Galerie » : la vidéo et le son
 // débloqués pendant ce geste servent ensuite à prepareVideo, une fois le fichier choisi.
 let pret = null;
 export function unlockVideo() {

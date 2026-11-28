@@ -2411,3 +2411,11 @@ input.liste-native { position: absolute; width: 1px !important; min-width: 0 !im
 @media (max-width: 349px) {
   .sos-ordre-role { white-space: normal; }
 }
+/* Tanguy, 28/11 : très petits écrans (320 px), un bouton reste sur une ligne (marges intérieures et texte un peu réduits). */
+@media (max-width: 349px) {
+  #btn-google, #btn-share, #btn-portail-page, #support-assistant { padding-left: 10px; padding-right: 10px; white-space: nowrap; }
+  #btn-google { padding-left: 34px; font-size: 15px; }
+  #btn-share { font-size: 15px; }
+  #support-assistant { font-size: 16px; }
+  .dialog-buttons .photo-case { padding-left: 4px; padding-right: 4px; font-size: 15px; white-space: nowrap; }
+}

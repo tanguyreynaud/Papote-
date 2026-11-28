@@ -1598,7 +1598,7 @@ function openAdd(kind, titre) {
   pendingVideo = null;
   $('post-title').textContent = titre || (kind === 'photo' ? 'Envoyer une photo' : 'Envoyer une vidéo');
   $('pick-camera-label').textContent = kind === 'photo' ? 'Prendre une photo' : 'Filmer';
-  $('pick-gallery-label').textContent = kind === 'photo' ? 'Choisir dans la galerie' : 'Choisir une vidéo';
+  $('pick-gallery-label').textContent = kind === 'photo' ? 'Choisir dans la galerie' : 'Galerie';
   $('post-text').value = '';
   compterLegende();
   setStatus('');
