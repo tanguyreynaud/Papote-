@@ -11,6 +11,7 @@
 // Un scénario ajouté doit être rangé ici dans un morceau, sinon la CI est rouge (aucun scénario oublié). Morceaux
 // équilibrés sur les durées mesurées en CI (pour chaque fichier, la plus longue de Chromium, run 44517288935, et de WebKit
 // iPhone 15 et SE, run 44522085882, du 19/11 : ~13 min de scénarios par morceau) : garder des totaux proches.
+// 28/11 : touchers et wifi passés du morceau 3 au 2 (WebKit iPhone 15, morceau 3 : tout vert mais 25 min, coupé par la limite).
 
 const { execSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -27,12 +28,12 @@ const MORCEAUX = [
     'accueil.test.js', 'admin-hors-forfait.test.js', 'admin-journee.test.js', 'agenda.test.js', 'alerte-pas-vue.test.js', 'appels.test.js',
     'badges.test.js', 'chat-aller.test.js', 'clavier-bas.test.js', 'debordement.test.js', 'installation.test.js',
     'largeur.test.js', 'mauvais-jours.test.js', 'mes-informations.test.js', 'photos-multiples.test.js',
-    'resiliation.test.js', 'retour-balayage.test.js',
+    'resiliation.test.js', 'retour-balayage.test.js', 'touchers.test.js', 'wifi.test.js',
   ],
   [
     'abonnement.test.js', 'admin-sim-bloquee.test.js', 'appel-android.test.js', 'declaration.test.js', 'liens-invitation.test.js',
     'deconnexion.test.js', 'forfait.test.js', 'que-faire.test.js', 'horsligne.test.js', 'mise-en-route.test.js', 'notifs-reconnexion.test.js', 'lien-connexion.test.js', 'panne.test.js',
-    'partage.test.js', 'plusieurs-proches.test.js', 'renvoi.test.js', 'retour.test.js', 'sepa.test.js', 'touchers.test.js', 'wifi.test.js',
+    'partage.test.js', 'plusieurs-proches.test.js', 'renvoi.test.js', 'retour.test.js', 'sepa.test.js',
   ],
 ];
 
