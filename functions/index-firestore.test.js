@@ -277,4 +277,17 @@ test('l\'analyseur reconnaît les cas qui demandent un index', () => {
     { fieldPath: 'type', order: 'ASCENDING' }, { fieldPath: 'createdAt', order: 'DESCENDING' }] }] }).ok, true);
 });
 
+// Le bouton Publier doit publier les index, pas seulement les règles : « --only firestore:rules » seul les écarte
+// (firebase-tools) ; ils n'étaient jamais partis et le ménage quotidien a échoué en ligne le 25/11.
+test('le bouton Publier publie aussi les index Firestore', () => {
+  const yml = fs.readFileSync(path.join(RACINE, '.github', 'workflows', 'publier.yml'), 'utf8');
+  const cibles = [...yml.matchAll(/firebase deploy --only "([^"]+)"/g)].map((m) => m[1].split(','))
+    .filter((c) => c.some((x) => x.startsWith('firestore')));
+  assert.ok(cibles.length > 0, 'aucune publication Firestore trouvée dans publier.yml');
+  for (const c of cibles) {
+    assert.ok(!c.includes('firestore:rules') || c.includes('firestore:indexes') || c.includes('firestore'),
+      `« ${c.join(',')} » publie les règles sans les index`);
+  }
+});
+
 module.exports = { toutesLesRequetes, verifier, decrire };

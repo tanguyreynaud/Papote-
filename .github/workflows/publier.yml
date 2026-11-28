@@ -166,13 +166,19 @@ jobs:
         if: env.APP == 'true'
         working-directory: admin
         # Deux bases dans firebase.json (« (default) » et « europe ») : « --only firestore:rules » seul n'y vise AUCUNE
-        # base et ne publiait rien sans le dire (trouvé le 8/11). On nomme les bases ; « firestore:rules » écarte les index.
+        # base et ne publiait rien sans le dire (trouvé le 8/11). On nomme les bases.
+        # « firestore:rules » seul écarte les index (firebase-tools : excludeIndexes) : ils n'étaient jamais publiés, et
+        # le ménage quotidien a échoué en ligne le 25/11 (« The query requires an index », calls et commands). On ajoute
+        # « firestore:indexes ». --non-interactive sans --force : un index en ligne absent du fichier n'est jamais effacé.
         run: |
           set -o pipefail
-          firebase deploy --only "hosting,storage,firestore:rules,firestore:europe,firestore:(default)" --project "$PROJET" --non-interactive 2>&1 | tee "$RUNNER_TEMP/admin.log"
+          firebase deploy --only "hosting,storage,firestore:rules,firestore:indexes,firestore:europe,firestore:(default)" --project "$PROJET" --non-interactive 2>&1 | tee "$RUNNER_TEMP/admin.log"
           if ! grep -q 'released rules.*firestore.rules.*cloud.firestore' "$RUNNER_TEMP/admin.log" \
              && ! grep -q 'firestore.rules.*already up to date' "$RUNNER_TEMP/admin.log"; then
             echo "::error::Règles Firestore pas publiées."; exit 1
+          fi
+          if ! grep -q 'deployed indexes in.*firestore.indexes.json.*successfully for europe database' "$RUNNER_TEMP/admin.log"; then
+            echo "::error::Index Firestore pas publiés sur la base europe."; exit 1
           fi
       - name: Noter ce qui est en ligne
         working-directory: main
